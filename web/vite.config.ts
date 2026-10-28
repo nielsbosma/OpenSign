@@ -4,7 +4,18 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 const api = process.env.API_PROXY_TARGET ?? 'http://localhost:3000';
-const proxied = ['/api', '/mcp', '/.well-known', '/oauth/register', '/oauth/authorize', '/oauth/token', '/oauth/revoke', '/restapi', '/scrive/api', '/docusign/restapi'];
+const proxied = [
+  '/api',
+  '/mcp',
+  '/.well-known',
+  '/oauth/register',
+  '/oauth/authorize',
+  '/oauth/token',
+  '/oauth/revoke',
+  '/restapi',
+  '/scrive/api',
+  '/docusign/restapi',
+];
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
