@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use chrono::{DateTime, Utc};
+use opensign_crypto::{KeyPurpose, Keys};
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
@@ -100,12 +101,20 @@ pub struct ChainedFields<'a> {
     pub metadata: &'a Value,
 }
 
-pub fn chain_hash(prev: &[u8], fields: &ChainedFields<'_>) -> [u8; 32] {
-    let canonical = serde_json::to_vec(&serde_json::to_value(fields).unwrap_or(Value::Null)).unwrap_or_default();
-    let mut hasher = Sha256::new();
-    hasher.update(prev);
-    hasher.update(canonical);
-    hasher.finalize().into()
+fn canonical(prev: &[u8], fields: &ChainedFields<'_>) -> Vec<u8> {
+    let mut data = prev.to_vec();
+    data.extend(serde_json::to_vec(&serde_json::to_value(fields).unwrap_or(Value::Null)).unwrap_or_default());
+    data
+}
+
+/// HMAC-SHA256 keyed from `APP_SECRET`: without the key, a changed entry cannot be re-chained.
+pub fn chain_hash(keys: &Keys, prev: &[u8], fields: &ChainedFields<'_>) -> [u8; 32] {
+    keys.mac(KeyPurpose::AuditChain, &canonical(prev, fields))
+}
+
+/// The unkeyed links of entries written before the chain was keyed.
+fn legacy_chain_hash(prev: &[u8], fields: &ChainedFields<'_>) -> [u8; 32] {
+    Sha256::digest(canonical(prev, fields)).into()
 }
 
 fn timestamp(at: &DateTime<Utc>) -> String {
@@ -150,6 +159,7 @@ pub async fn audit(ctx: &Ctx, conn: &mut PgConnection, entry: Entry<'_>) -> Resu
     let prev: Option<Vec<u8>> = sqlx::query_scalar("select hash from audit_log order by id desc limit 1").fetch_optional(&mut *tx).await?;
     let prev = prev.unwrap_or_else(|| GENESIS.to_vec());
     let hash = chain_hash(
+        ctx.keys(),
         &prev,
         &ChainedFields {
             occurred_at: timestamp(&occurred_at),
@@ -165,8 +175,8 @@ pub async fn audit(ctx: &Ctx, conn: &mut PgConnection, entry: Entry<'_>) -> Resu
         },
     );
     let id: i64 = sqlx::query_scalar(
-        "insert into audit_log (occurred_at, actor_id, actor_label, surface, action, entity_type, entity_id, before, after, metadata, prev_hash, hash)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) returning id",
+        "insert into audit_log (occurred_at, actor_id, actor_label, surface, action, entity_type, entity_id, before, after, metadata, prev_hash, hash, hash_alg)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'hmac-sha256') returning id",
     )
     .bind(occurred_at)
     .bind(actor_id)
@@ -193,6 +203,8 @@ pub struct ChainReport {
     /// The first entry whose stored hash does not match its contents or its predecessor.
     pub broken_at: Option<i64>,
     pub head: Option<String>,
+    /// Hourly time-stamped heads that no longer match the entry they were taken from.
+    pub broken_anchors: Vec<i64>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -210,11 +222,14 @@ struct Row {
     metadata: Option<Value>,
     prev_hash: Vec<u8>,
     hash: Vec<u8>,
+    hash_alg: String,
 }
 
-/// Recomputes the whole chain. Anyone with read access to the rows can run the same check.
-pub async fn verify_chain(conn: &mut PgConnection) -> Result<ChainReport> {
+/// Recomputes the whole chain with the audit key, and checks the time-stamped anchors against it.
+/// Unkeyed entries are accepted only before the first keyed one.
+pub async fn verify_chain(conn: &mut PgConnection, keys: &Keys) -> Result<ChainReport> {
     let mut expected_prev = GENESIS.to_vec();
+    let mut keyed = false;
     let mut entries = 0;
     let mut last_id = 0i64;
     loop {
@@ -227,28 +242,44 @@ pub async fn verify_chain(conn: &mut PgConnection) -> Result<ChainReport> {
             entries += 1;
             last_id = row.id;
             let null = Value::Null;
-            let computed = chain_hash(
-                &expected_prev,
-                &ChainedFields {
-                    occurred_at: timestamp(&row.occurred_at),
-                    actor_id: row.actor_id.map(|id| id.to_string()),
-                    actor_label: &row.actor_label,
-                    surface: &row.surface,
-                    action: &row.action,
-                    entity_type: &row.entity_type,
-                    entity_id: row.entity_id.as_deref(),
-                    before: row.before.as_ref().unwrap_or(&null),
-                    after: row.after.as_ref().unwrap_or(&null),
-                    metadata: row.metadata.as_ref().unwrap_or(&null),
-                },
-            );
-            if row.prev_hash != expected_prev || row.hash != computed {
-                return Ok(ChainReport { entries, valid: false, broken_at: Some(row.id), head: None });
+            let fields = ChainedFields {
+                occurred_at: timestamp(&row.occurred_at),
+                actor_id: row.actor_id.map(|id| id.to_string()),
+                actor_label: &row.actor_label,
+                surface: &row.surface,
+                action: &row.action,
+                entity_type: &row.entity_type,
+                entity_id: row.entity_id.as_deref(),
+                before: row.before.as_ref().unwrap_or(&null),
+                after: row.after.as_ref().unwrap_or(&null),
+                metadata: row.metadata.as_ref().unwrap_or(&null),
+            };
+            let computed = match row.hash_alg.as_str() {
+                "hmac-sha256" => {
+                    keyed = true;
+                    Some(chain_hash(keys, &expected_prev, &fields))
+                }
+                "sha256" if !keyed => Some(legacy_chain_hash(&expected_prev, &fields)),
+                _ => None,
+            };
+            if row.prev_hash != expected_prev || computed.is_none_or(|c| row.hash != c) {
+                return Ok(ChainReport { entries, valid: false, broken_at: Some(row.id), head: None, broken_anchors: Vec::new() });
             }
             expected_prev = row.hash;
         }
     }
-    Ok(ChainReport { entries, valid: true, broken_at: None, head: (entries > 0).then(|| hex::encode(&expected_prev)) })
+    let broken_anchors: Vec<i64> = sqlx::query_scalar(
+        "select a.id from audit_anchors a left join audit_log l on l.id = a.audit_id where l.hash is distinct from a.head_hash order by a.id",
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+    Ok(ChainReport {
+        entries,
+        valid: broken_anchors.is_empty(),
+        broken_at: None,
+        head: (entries > 0).then(|| hex::encode(&expected_prev)),
+        broken_anchors,
+    })
 }
 
 #[cfg(test)]
@@ -281,9 +312,13 @@ mod tests {
             after: &null,
             metadata: &null,
         };
-        let a = chain_hash(&GENESIS, &fields("a.b"));
-        assert_eq!(a, chain_hash(&GENESIS, &fields("a.b")));
-        assert_ne!(a, chain_hash(&GENESIS, &fields("a.c")));
-        assert_ne!(a, chain_hash(&[1u8; 32], &fields("a.b")));
+        let keys = Keys::derive("test-secret-test-secret-test-secret-0123").unwrap_or_else(|_| unreachable!());
+        let other = Keys::derive("another-secret-another-secret-another-0").unwrap_or_else(|_| unreachable!());
+        let a = chain_hash(&keys, &GENESIS, &fields("a.b"));
+        assert_eq!(a, chain_hash(&keys, &GENESIS, &fields("a.b")));
+        assert_ne!(a, chain_hash(&keys, &GENESIS, &fields("a.c")));
+        assert_ne!(a, chain_hash(&keys, &[1u8; 32], &fields("a.b")));
+        assert_ne!(a, chain_hash(&other, &GENESIS, &fields("a.b")));
+        assert_ne!(a, legacy_chain_hash(&GENESIS, &fields("a.b")));
     }
 }

@@ -221,6 +221,34 @@ pub fn decrypt_personal_number(keys: &Keys, party: &PartyRow) -> Option<String> 
     keys.decrypt_str(KeyPurpose::Settings, &personal_number_context(party.id), sealed).ok().map(|s| s.to_string())
 }
 
+fn identity_context(party_id: Uuid) -> String {
+    format!("party:{party_id}:identity")
+}
+
+/// What a party's identification proved can include their personal number, so it is stored
+/// encrypted in the party's evidence.
+pub fn seal_identity(keys: &Keys, party_id: Uuid, identity: &str) -> String {
+    keys.encrypt_str(KeyPurpose::Settings, &identity_context(party_id), identity)
+}
+
+pub fn open_identity(keys: &Keys, party: &PartyRow) -> Option<String> {
+    let stored = party.evidence.as_ref()?["identity"].as_str()?;
+    match keys.decrypt_str(KeyPurpose::Settings, &identity_context(party.id), stored) {
+        Ok(plain) => Some(plain.to_string()),
+        Err(_) if !stored.starts_with("v1.") => Some(stored.to_string()),
+        Err(_) => None,
+    }
+}
+
+/// For identity checks: a personal number that is set but does not decrypt is an error, never
+/// "no number", which would let any eID through.
+pub fn required_personal_number(keys: &Keys, party: &PartyRow) -> Result<Option<String>> {
+    let Some(sealed) = party.personal_number.as_deref() else { return Ok(None) };
+    keys.decrypt_str(KeyPurpose::Settings, &personal_number_context(party.id), sealed)
+        .map(|n| Some(n.to_string()))
+        .map_err(crate::error::AppError::internal)
+}
+
 pub fn mask(value: &str) -> String {
     let chars: Vec<char> = value.chars().filter(|c| !c.is_whitespace()).collect();
     if chars.len() <= 4 {

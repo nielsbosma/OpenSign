@@ -25,6 +25,10 @@ fn invalid_login() -> AppError {
     AppError::new(ErrorKind::Unauthorized, "Wrong email or password")
 }
 
+fn locked() -> AppError {
+    AppError::new(ErrorKind::TooManyRequests, "Too many attempts. Try again in a few minutes, or reset your password.")
+}
+
 fn lock_minutes(failures: i32) -> i64 {
     if failures < MAX_FAILURES { 0 } else { (1i64 << (failures - MAX_FAILURES).min(6)).min(60) }
 }
@@ -63,15 +67,20 @@ pub(crate) async fn start_session(ctx: &Ctx, conn: &mut PgConnection, user: &Use
     Ok(LoginResult::SignedIn { token: session.token, expires_at: session.expires_at })
 }
 
+/// Counts in the database, so parallel guesses cannot all read the same count and skip the lockout.
 async fn record_failure(ctx: &Ctx, conn: &mut PgConnection, user: &UserRow) -> Result<()> {
-    let failures = user.failed_login_count + 1;
-    let locked_until = (lock_minutes(failures) > 0).then(|| ctx.now + Duration::minutes(lock_minutes(failures)));
-    sqlx::query("update users set failed_login_count = $2, locked_until = $3 where id = $1")
-        .bind(user.id)
-        .bind(failures)
-        .bind(locked_until)
-        .execute(&mut *conn)
-        .await?;
+    let failures: i32 =
+        sqlx::query_scalar("update users set failed_login_count = failed_login_count + 1 where id = $1 returning failed_login_count")
+            .bind(user.id)
+            .fetch_one(&mut *conn)
+            .await?;
+    if lock_minutes(failures) > 0 {
+        sqlx::query("update users set locked_until = greatest(locked_until, $2) where id = $1")
+            .bind(user.id)
+            .bind(ctx.now + Duration::minutes(lock_minutes(failures)))
+            .execute(&mut *conn)
+            .await?;
+    }
     audit(ctx, conn, Entry::new("auth.sign_in_failed", "user", user.id).metadata(serde_json::json!({ "failures": failures }))).await?;
     Ok(())
 }
@@ -91,10 +100,7 @@ impl Service for Login {
         };
         if user.locked_until.is_some_and(|t| t > ctx.now) {
             burn_password_check(&input.password);
-            return Err(AppError::new(
-                ErrorKind::TooManyRequests,
-                "Too many attempts. Try again in a few minutes, or reset your password.",
-            ));
+            return Err(locked());
         }
         let password_ok = user.password_hash.as_deref().is_some_and(|h| verify_password(h, &input.password));
         if user.password_hash.is_none() {
@@ -154,6 +160,9 @@ impl Service for VerifyTwoFactor {
             return Err(expired());
         }
         let user = user_by_id(conn, user_id).await?.filter(|u| u.active).ok_or_else(expired)?;
+        if user.locked_until.is_some_and(|t| t > ctx.now) {
+            return Err(locked());
+        }
         if !check_second_factor(ctx, conn, &user, &input.code).await? {
             record_failure(ctx, conn, &user).await?;
             return Err(AppError::new(ErrorKind::Unauthorized, "That code is not right"));

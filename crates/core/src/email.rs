@@ -129,10 +129,15 @@ pub async fn send(app: &App, settings: &EmailSettings, org: &OrgSettings, messag
     if api_key.is_empty() || from_address.is_empty() {
         return Err(AppError::new(ErrorKind::Unavailable, "Email is not set up. An admin adds a Resend API key in Admin settings."));
     }
-    let from =
-        if from_name.is_empty() { from_address.clone() } else { format!("{} <{}>", from_name.replace(['<', '>', '"'], ""), from_address) };
+    let from = if from_name.is_empty() {
+        from_address.clone()
+    } else {
+        format!("{} <{}>", from_name.replace(['<', '>', '"', ',', ';'], ""), from_address)
+    };
     let to = match &message.to_name {
-        Some(name) if !name.is_empty() => format!("{} <{}>", header_safe(name).replace(['<', '>', '"'], ""), header_safe(&message.to)),
+        Some(name) if !name.is_empty() => {
+            format!("{} <{}>", header_safe(name).replace(['<', '>', '"', ',', ';'], ""), header_safe(&message.to))
+        }
         _ => header_safe(&message.to),
     };
     let mut body = json!({
