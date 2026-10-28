@@ -172,6 +172,6 @@ async fn setup_login_lockout_two_factor_and_api_keys() {
     assert_eq!(kind(locked), ErrorKind::TooManyRequests, "the right password is refused while locked");
 
     call::<auth::RequestPasswordReset>(&anon, auth::EmailInput { email: "nobody@example.com".into() }).await.unwrap();
-    let chain = opensign_core::audit::verify_chain(&mut conn).await.unwrap();
+    let chain = opensign_core::audit::verify_chain(&mut conn, &app.keys).await.unwrap();
     assert!(chain.valid, "{chain:?}");
 }

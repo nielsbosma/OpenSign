@@ -376,7 +376,7 @@ impl Service for VerifyAudit {
         Access::Permission(Permission::AuditRead),
     );
 
-    async fn run(_ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<ChainReport> {
-        verify_chain(conn).await
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<ChainReport> {
+        verify_chain(conn, ctx.keys()).await
     }
 }
