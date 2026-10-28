@@ -1,0 +1,105 @@
+# Local development and testing only. Production is the single image plus your own Postgres and S3 bucket
+# (and Gotenberg on a private network for Word documents).
+#
+#   pnpm infra:up                         Postgres, S3 (RustFS), Mailpit and Gotenberg for `pnpm dev`
+#   docker compose --profile prod up -d   also runs the production image at http://localhost:8090
+#
+# Mailpit's inbox: http://localhost:8026 (dev email goes there instead of Resend).
+# S3 (RustFS) at http://localhost:9310 (opensign / opensign-secret).
+
+name: opensign
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: opensign
+      POSTGRES_PASSWORD: opensign
+      POSTGRES_DB: opensign
+    ports:
+      - "5480:5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opensign -d opensign"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  s3:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: opensign
+      RUSTFS_SECRET_KEY: opensign-secret
+    ports:
+      - "9310:9000"
+    volumes:
+      - s3:/data
+
+  s3-init:
+    image: amazon/aws-cli:latest
+    profiles: [tools]
+    depends_on: [s3]
+    environment:
+      AWS_ACCESS_KEY_ID: opensign
+      AWS_SECRET_ACCESS_KEY: opensign-secret
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: >
+      /bin/sh -c "for i in $$(seq 1 30); do aws --endpoint-url http://s3:9000 s3 ls >/dev/null 2>&1 && break; sleep 1; done;
+      for b in opensign opensign-test opensign-prod; do aws --endpoint-url http://s3:9000 s3 mb s3://$$b 2>/dev/null || true; done; echo buckets ready"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8026:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Converts Word and other office files to PDF. It has no access to keys or the database,
+  # and in production it sits on a private network with no outbound internet.
+  converter:
+    image: gotenberg/gotenberg:8
+    command:
+      - gotenberg
+      - --api-timeout=60s
+      - --chromium-disable-routes=true
+      - --libreoffice-disable-routes=false
+      - --webhook-disable=true
+      - --prometheus-disable-collect=true
+    ports:
+      - "3320:3000"
+
+  app:
+    profiles: [prod]
+    build: .
+    image: ${OPENSIGN_IMAGE:-opensign:local}
+    read_only: true
+    tmpfs: [/tmp]
+    environment:
+      DATABASE_URL: postgres://opensign:opensign@postgres:5432/opensign_prod
+      S3_ENDPOINT: http://s3:9000
+      S3_BUCKET: opensign-prod
+      S3_ACCESS_KEY: opensign
+      S3_SECRET_KEY: opensign-secret
+      S3_REGION: us-east-1
+      APP_SECRET: local-prod-profile-secret-change-me-0123456789
+      APP_URL: http://localhost:8090
+      CONVERTER_URL: http://converter:3000
+      ROLE: ${OPENSIGN_ROLE:-all}
+    ports:
+      - "8090:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      s3:
+        condition: service_started
+      converter:
+        condition: service_started
+
+volumes:
+  postgres:
+  s3:

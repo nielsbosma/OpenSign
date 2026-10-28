@@ -1,0 +1,16 @@
+/target/
+node_modules/
+dist/
+storybook-static/
+.turbo/
+coverage/
+test-results/
+playwright-report/
+*.log
+.env
+.env.local
+.env.*.local
+.DS_Store
+screenshots/
+fuzz/artifacts/
+fuzz/corpus/

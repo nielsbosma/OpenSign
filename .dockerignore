@@ -1,0 +1,17 @@
+target
+**/node_modules
+**/dist
+**/.turbo
+**/storybook-static
+**/test-results
+**/playwright-report
+.git
+.github
+.env
+.env.local
+*.log
+**/e2e
+**/*.stories.tsx
+**/.storybook
+fuzz
+docker-compose.yml
