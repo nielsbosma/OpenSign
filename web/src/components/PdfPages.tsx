@@ -2,6 +2,7 @@ import * as pdfjs from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Spinner } from '@/components/common';
+import { cn } from '@/lib/utils';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -70,11 +71,17 @@ export function PdfPages({
   pages,
   overlay,
   onPageClick,
+  dropType,
+  onPageDrop,
 }: {
   pages: Page[];
   overlay?: (index: number) => ReactNode;
   onPageClick?: (index: number, x: number, y: number) => void;
+  /** The drag data type pages accept, such as a field kind dragged from a toolbar. */
+  dropType?: string;
+  onPageDrop?: (index: number, x: number, y: number, data: string) => void;
 }) {
+  const [dropTarget, setDropTarget] = useState<number | null>(null);
   const container = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
@@ -90,12 +97,32 @@ export function PdfPages({
         <div
           key={i}
           data-page={i}
-          className="relative overflow-hidden rounded-sm bg-white shadow-sm ring-1 ring-border"
+          className={cn(
+            'relative overflow-hidden rounded-sm bg-white shadow-sm ring-1 ring-border',
+            dropTarget === i && 'ring-2 ring-primary',
+          )}
           style={{ aspectRatio: `${page.width} / ${page.height}` }}
           onClick={(e) => {
             if (!onPageClick || e.target !== e.currentTarget.firstChild) return;
             const rect = e.currentTarget.getBoundingClientRect();
             onPageClick(i, (e.clientX - rect.left) / rect.width, (e.clientY - rect.top) / rect.height);
+          }}
+          onDragOver={(e) => {
+            if (!onPageDrop || !dropType || !e.dataTransfer.types.includes(dropType)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            setDropTarget(i);
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTarget(null);
+          }}
+          onDrop={(e) => {
+            setDropTarget(null);
+            const data = dropType && e.dataTransfer.getData(dropType);
+            if (!onPageDrop || !data) return;
+            e.preventDefault();
+            const rect = e.currentTarget.getBoundingClientRect();
+            onPageDrop(i, (e.clientX - rect.left) / rect.width, (e.clientY - rect.top) / rect.height, data);
           }}
         >
           <PageCanvas page={page} width={width} />

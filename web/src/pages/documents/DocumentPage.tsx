@@ -421,6 +421,8 @@ function EditableTitle({ doc, editable }: { doc: DocumentView; editable: boolean
   );
 }
 
+const FIELD_DRAG_TYPE = 'application/x-opensign-field';
+
 export function DocumentPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
@@ -497,16 +499,17 @@ export function DocumentPage() {
   const saveParties = (next: PartyInput[]) => setParties.mutate({ documentId: doc.id, parties: next });
   const allParties = () => doc.parties.map((p) => partyToInput(p));
 
-  const place = (page: number, x: number, y: number) => {
+  const place = (page: number, x: number, y: number, kind: FieldKind | null = armed) => {
     if (!draft) return;
-    if (!armed) return setSelected(null);
-    const spec = FIELD_KINDS.find((k) => k.kind === armed)!;
+    if (!kind) return setSelected(null);
+    const spec = FIELD_KINDS.find((k) => k.kind === kind);
+    if (!spec) return;
     const field: EditableField = {
       key: crypto.randomUUID(),
-      kind: armed,
+      kind,
       page,
       partyId: placingFor,
-      required: armed !== 'checkbox',
+      required: kind !== 'checkbox',
       x: clamp(x - spec.width / 2, 0, 1 - spec.width),
       y: clamp(y - spec.height / 2, 0, 1 - spec.height),
       width: spec.width,
@@ -653,6 +656,12 @@ export function DocumentPage() {
                     size="sm"
                     variant={armed === k.kind ? 'default' : 'ghost'}
                     onClick={() => setArmed(armed === k.kind ? null : k.kind)}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(FIELD_DRAG_TYPE, k.kind);
+                      e.dataTransfer.effectAllowed = 'copy';
+                    }}
+                    className="cursor-grab active:cursor-grabbing"
                     style={armed === k.kind ? undefined : { color: partyColor(doc.parties, placingFor) }}
                   >
                     {k.label}
@@ -660,7 +669,7 @@ export function DocumentPage() {
                 ),
               )}
               <span className="ml-auto text-xs text-muted-foreground">
-                {armed ? 'Click on the page to place it' : 'Pick a field, then click the page'}
+                {armed ? 'Click on the page to place it' : 'Drag a field onto the page, or pick one and click'}
               </span>
             </div>
           )}
@@ -687,6 +696,8 @@ export function DocumentPage() {
               <PdfPages
                 pages={pdf.pages}
                 onPageClick={draft ? place : undefined}
+                dropType={draft ? FIELD_DRAG_TYPE : undefined}
+                onPageDrop={(page, x, y, kind) => place(page, x, y, kind as FieldKind)}
                 // The sealed copy has the values drawn into it.
                 overlay={(page) =>
                   doc.status !== 'completed' && (
