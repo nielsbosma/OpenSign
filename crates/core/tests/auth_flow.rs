@@ -175,3 +175,30 @@ async fn setup_login_lockout_two_factor_and_api_keys() {
     let chain = opensign_core::audit::verify_chain(&mut conn, &app.keys).await.unwrap();
     assert!(chain.valid, "{chain:?}");
 }
+
+#[tokio::test]
+async fn parallel_guesses_all_count_toward_the_lockout() {
+    let Some(app) = app().await else { return };
+    let anon = web(&app);
+    let input = setup::CompleteInput {
+        setup_code: app.keys.setup_code(),
+        org_name: "Acme AB".into(),
+        name: "Ada Admin".into(),
+        email: "ada@example.com".into(),
+        password: PASSWORD.into(),
+    };
+    call::<setup::Complete>(&anon, input).await.unwrap();
+    let guesses: Vec<_> = (0..6)
+        .map(|i| {
+            let anon = anon.clone();
+            tokio::spawn(async move { call::<auth::Login>(&anon, login("ada@example.com", &format!("wrong password number {i}"))).await })
+        })
+        .collect();
+    for guess in guesses {
+        assert!(guess.await.unwrap().is_err());
+    }
+    let failures: i32 =
+        sqlx::query_scalar("select failed_login_count from users where email = 'ada@example.com'").fetch_one(&app.db).await.unwrap();
+    assert_eq!(failures, 6);
+    assert_eq!(kind(call::<auth::Login>(&anon, login("ada@example.com", PASSWORD)).await), ErrorKind::TooManyRequests);
+}
