@@ -69,6 +69,11 @@ pub(crate) fn satisfied(required: AuthMethod, session: Option<&SignerSession>) -
     }
 }
 
+/// The document's status under a row lock, so a signature and a decline or cancel cannot both win.
+async fn locked_status(conn: &mut PgConnection, document_id: Uuid) -> Result<String> {
+    Ok(sqlx::query_scalar("select status from documents where id = $1 for update").bind(document_id).fetch_one(&mut *conn).await?)
+}
+
 pub(crate) struct Resolved {
     pub party: PartyRow,
     pub document: DocumentRow,
@@ -242,6 +247,7 @@ impl Service for RequestCode {
             return Err(bad_request("This party does not use SMS codes"));
         }
         let phone = party.phone.clone().ok_or_else(|| bad_request("There is no phone number for you. Ask the sender to add one."))?;
+        sqlx::query("select 1 from parties where id = $1 for update").bind(party.id).execute(&mut *conn).await?;
         let recent: i64 = sqlx::query_scalar("select count(*) from sms_challenges where party_id = $1 and created_at > $2")
             .bind(party.id)
             .bind(ctx.now - Duration::hours(1))
@@ -410,8 +416,7 @@ impl Service for Sign {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SignInput) -> Result<SignOutput> {
         let Resolved { party, document, session } = resolve(ctx, conn, &input.token, input.session.as_deref()).await?;
-        sqlx::query("select 1 from documents where id = $1 for update").bind(document.id).execute(&mut *conn).await?;
-        if document.status != status::PENDING {
+        if locked_status(conn, document.id).await? != status::PENDING {
             return Err(conflict("This document is no longer waiting for signatures"));
         }
         if !party.must_act() {
@@ -542,7 +547,9 @@ impl Service for Decline {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: DeclineInput) -> Result<super::Ok_> {
         let Resolved { party, document, session } = resolve(ctx, conn, &input.token, input.session.as_deref()).await?;
-        if document.status != status::PENDING || !party.must_act() || party.signed_at.is_some() || party.declined_at.is_some() {
+        let pending = locked_status(conn, document.id).await? == status::PENDING;
+        let party = crate::documents::party(conn, party.id).await?.ok_or_else(invalid_link)?;
+        if !pending || !party.must_act() || party.signed_at.is_some() || party.declined_at.is_some() {
             return Err(conflict("You cannot decline this document now"));
         }
         if !satisfied(party.auth_to_view(), session.as_ref()) {
