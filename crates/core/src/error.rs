@@ -46,6 +46,11 @@ impl AppError {
         Self { kind, message: message.into(), cause: None }
     }
 
+    pub fn with_cause(mut self, cause: impl Into<anyhow::Error>) -> Self {
+        self.cause = Some(cause.into());
+        self
+    }
+
     pub fn internal(cause: impl Into<anyhow::Error>) -> Self {
         Self { kind: ErrorKind::Internal, message: "Something went wrong on our side".into(), cause: Some(cause.into()) }
     }

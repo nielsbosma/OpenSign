@@ -153,6 +153,11 @@ pub fn append_content(doc: &mut Document, page: ObjectId, content: Vec<u8>) -> R
     Ok(())
 }
 
+/// Checks a signature image when the signer submits it, so a bad image cannot stall sealing later.
+pub fn check_signature_image(png_bytes: &[u8]) -> Result<()> {
+    png_image(&mut Document::with_version("1.7"), png_bytes).map(|_| ())
+}
+
 /// Decodes a PNG (limited size) into an RGB image XObject with an alpha mask.
 pub fn png_image(doc: &mut Document, png_bytes: &[u8]) -> Result<ObjectId> {
     let mut decoder = png::Decoder::new(png_bytes);

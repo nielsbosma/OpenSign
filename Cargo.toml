@@ -61,3 +61,10 @@ zeroize = { version = "1", features = ["derive"] }
 lto = "thin"
 codegen-units = 1
 strip = true
+
+# Argon2 with production parameters takes seconds per hash unoptimised.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3

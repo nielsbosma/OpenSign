@@ -178,7 +178,7 @@ async fn check_second_factor(ctx: &Ctx, conn: &mut PgConnection, user: &UserRow,
             .await?;
         return Ok(updated.rows_affected() == 1);
     }
-    let normalized = compact.to_lowercase();
+    let normalized = compact.to_lowercase().replace('-', "");
     let used = sqlx::query("update recovery_codes set used_at = now() where user_id = $1 and code_hash = $2 and used_at is null")
         .bind(user.id)
         .bind(sha256_hex(&normalized))
@@ -420,6 +420,7 @@ impl Service for RequestPasswordReset {
                 ],
                 button: Some(("Choose a New Password".into(), link)),
                 footer: Some("If you did not ask for this, ignore this email; your password stays the same.".into()),
+                attachments: vec![],
             },
         )
         .await;

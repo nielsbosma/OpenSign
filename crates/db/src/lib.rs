@@ -82,17 +82,23 @@ pub async fn migrate(db: &Db) -> Result<(), DbError> {
 }
 
 /// A fresh, empty schema per test on `TEST_DATABASE_URL`, or `None` (and the test is skipped)
-/// when no test database is configured.
+/// when no test database is configured. A configured database that cannot be reached fails loudly.
 #[cfg(feature = "testing")]
 pub async fn test_db() -> Option<Db> {
     let url = std::env::var("TEST_DATABASE_URL").ok()?;
-    let admin = connect(&url, 1).await.ok()?;
+    let admin = connect(&url, 1).await.expect("TEST_DATABASE_URL is set but the database cannot be reached");
     let schema = format!("t_{}", std::process::id()) + &format!("_{}", NEXT_SCHEMA.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
-    sqlx::query(&format!("drop schema if exists {schema} cascade; create schema {schema}")).execute(&admin).await.ok()?;
+    sqlx::raw_sql(&format!("drop schema if exists {schema} cascade; create schema {schema}"))
+        .execute(&admin)
+        .await
+        .expect("create a test schema");
     admin.close().await;
-    let options: PgConnectOptions =
-        url.parse::<PgConnectOptions>().ok()?.disable_statement_logging().options([("search_path", schema.as_str())]);
-    PgPoolOptions::new().max_connections(5).connect_with(options).await.ok()
+    let options: PgConnectOptions = url
+        .parse::<PgConnectOptions>()
+        .expect("TEST_DATABASE_URL is a valid URL")
+        .disable_statement_logging()
+        .options([("search_path", schema.as_str())]);
+    Some(PgPoolOptions::new().max_connections(5).connect_with(options).await.expect("connect to the test schema"))
 }
 
 #[cfg(feature = "testing")]

@@ -16,7 +16,7 @@ async fn migrates_an_empty_database_and_is_idempotent() {
 async fn audit_log_is_append_only() {
     let Some(db) = test_db().await else { return };
     migrate(&db).await.unwrap();
-    sqlx::query("insert into audit_log (actor_label, surface, action, entity_type, prev_hash, hash) values ('system', 'system', 'x.y', 'x', '\x00', '\x01')")
+    sqlx::query("insert into audit_log (actor_label, surface, action, entity_type, prev_hash, hash) values ('system', 'system', 'x.y', 'x', '\\x00', '\\x01')")
         .execute(&db)
         .await
         .unwrap();
@@ -30,7 +30,7 @@ async fn refuses_a_newer_database() {
     let Some(db) = test_db().await else { return };
     migrate(&db).await.unwrap();
     sqlx::query(
-        "insert into _sqlx_migrations (version, description, success, checksum, execution_time) values (99999, 'future', true, '\x00', 0)",
+        "insert into _sqlx_migrations (version, description, success, checksum, execution_time) values (99999, 'future', true, '\\x00', 0)",
     )
     .execute(&db)
     .await

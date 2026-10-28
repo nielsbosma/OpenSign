@@ -1,0 +1,1359 @@
+use async_trait::async_trait;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as B64;
+use chrono::{DateTime, Duration, Utc};
+use opensign_crypto::{KeyPurpose, sha256_hex};
+use opensign_pdf::SignatureCheck;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use sqlx::PgConnection;
+use uuid::Uuid;
+
+use super::{Ok_, settings};
+use crate::audit::{Entry, audit};
+use crate::auth::normalize_email;
+use crate::context::Ctx;
+use crate::documents::{
+    AuthMethod, Delivery, DocumentRow, DocumentView, FieldKind, Need, PartyRole, PartyRow, PartyView, VISIBLE, current_turn,
+    decrypt_personal_number, files, load_document, notify, parties, personal_number_context, signer_url, status, upload, view, visibility,
+};
+use crate::error::{AppError, ErrorKind, Result, bad_request, conflict, forbidden, not_found};
+use crate::permissions::Permission;
+use crate::service::{Access, Meta, Service};
+use crate::settings::{EidSettings, EmailSettings, SecuritySettings, SmsSettings};
+use crate::storage::{FileRecord, NewFile, file_record, read_file, store_file};
+
+const MAX_PARTIES: usize = 50;
+const MAX_FIELDS: usize = 500;
+const MAX_DOWNLOAD: i64 = 20 * 1024 * 1024;
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct IdInput {
+    pub id: Uuid,
+}
+
+fn require_draft(document: &DocumentRow) -> Result<()> {
+    if document.status != status::DRAFT {
+        return Err(conflict("Only drafts can be changed. Cancel the document and make a copy to change it."));
+    }
+    Ok(())
+}
+
+fn clean_text(value: &str, what: &str, max: usize) -> Result<String> {
+    let value = value.trim();
+    if value.chars().count() > max {
+        return Err(bad_request(format!("{what} is too long (at most {max} characters)")));
+    }
+    if value.chars().any(|c| c.is_control() && c != '\n' && c != '\t') {
+        return Err(bad_request(format!("{what} contains characters that are not allowed")));
+    }
+    Ok(value.to_string())
+}
+
+fn title(value: &str) -> Result<String> {
+    let title = clean_text(value, "The title", 200)?.replace(['\n', '\t'], " ");
+    if title.is_empty() {
+        return Err(bad_request("Give the document a title"));
+    }
+    Ok(title)
+}
+
+async fn reload(ctx: &Ctx, conn: &mut PgConnection, id: Uuid) -> Result<DocumentView> {
+    let document = load_document(ctx, conn, id, Need::Read).await?;
+    view(ctx, conn, document).await
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ListInput {
+    /// draft, pending, completed, declined, canceled or expired.
+    pub status: Option<String>,
+    /// Matches the title, or an exact external id.
+    pub search: Option<String>,
+    /// List templates instead of documents.
+    #[serde(default)]
+    pub templates: bool,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+#[derive(Serialize, JsonSchema, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentSummary {
+    pub id: Uuid,
+    pub title: String,
+    pub status: String,
+    pub is_template: bool,
+    pub owner_name: Option<String>,
+    pub external_id: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub sent_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub parties_total: i64,
+    pub parties_done: i64,
+}
+
+fn like_pattern(search: &str) -> String {
+    let escaped = search.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+    format!("%{escaped}%")
+}
+
+pub struct List;
+
+#[async_trait]
+impl Service for List {
+    type Input = ListInput;
+    type Output = Vec<DocumentSummary>;
+    const META: Meta = Meta::query(
+        "documents.list",
+        "List documents (or templates) you can see, newest first, optionally filtered by status or a search on the title.",
+        Access::Authenticated,
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ListInput) -> Result<Vec<DocumentSummary>> {
+        let (read_all, user_id, can_create) = visibility(ctx)?;
+        let search = input.search.as_deref().map(str::trim).filter(|s| !s.is_empty());
+        Ok(sqlx::query_as(&format!(
+            "select d.id, d.title, d.status, d.is_template, u.name as owner_name, d.external_id, d.created_at, d.sent_at, d.completed_at, d.expires_at,
+                    (select count(*) from parties p where p.document_id = d.id and p.role <> 'viewer') as parties_total,
+                    (select count(*) from parties p where p.document_id = d.id and p.role <> 'viewer' and p.signed_at is not null) as parties_done
+             from documents d left join users u on u.id = d.owner_id
+             where {VISIBLE} and d.is_template = $4 and ($5::text is null or d.status = $5)
+               and ($6::text is null or d.title ilike $7 escape '\\' or d.external_id = $6)
+             order by d.created_at desc limit $8 offset $9"
+        ))
+        .bind(read_all)
+        .bind(user_id)
+        .bind(can_create)
+        .bind(input.templates)
+        .bind(input.status)
+        .bind(search)
+        .bind(search.map(like_pattern))
+        .bind(input.limit.unwrap_or(50).clamp(1, 200))
+        .bind(input.offset.unwrap_or(0).max(0))
+        .fetch_all(&mut *conn)
+        .await?)
+    }
+}
+
+pub struct Get;
+
+#[async_trait]
+impl Service for Get {
+    type Input = IdInput;
+    type Output = DocumentView;
+    const META: Meta =
+        Meta::query("documents.get", "Get a document or template with its files, parties, fields and status.", Access::Authenticated);
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<DocumentView> {
+        reload(ctx, conn, input.id).await
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateInput {
+    pub title: String,
+    pub message: Option<String>,
+    pub language: Option<String>,
+    /// Copy files, parties and fields from this template.
+    pub template_id: Option<Uuid>,
+    /// Create a reusable template instead of a document.
+    #[serde(default)]
+    pub is_template: bool,
+    pub sequential: Option<bool>,
+    /// Your own reference, e.g. a CRM id. Searchable.
+    pub external_id: Option<String>,
+    pub metadata: Option<Value>,
+}
+
+fn language(value: Option<&str>) -> Result<String> {
+    let lang = value.unwrap_or("en").trim().to_lowercase();
+    if lang.len() < 2 || lang.len() > 5 || !lang.chars().all(|c| c.is_ascii_lowercase() || c == '-') {
+        return Err(bad_request("Use a language code such as en or sv"));
+    }
+    Ok(lang)
+}
+
+fn metadata(value: Option<Value>) -> Result<Value> {
+    let value = value.unwrap_or_else(|| json!({}));
+    if !value.is_object() || value.to_string().len() > 16 * 1024 {
+        return Err(bad_request("Metadata must be a JSON object of at most 16 KB"));
+    }
+    Ok(value)
+}
+
+pub struct Create;
+
+#[async_trait]
+impl Service for Create {
+    type Input = CreateInput;
+    type Output = DocumentView;
+    const META: Meta = Meta::mutation(
+        "documents.create",
+        "Create a draft document, optionally from a template, or a new template. Add files, parties and fields next, then send it.",
+        Access::Permission(Permission::DocumentsCreate),
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CreateInput) -> Result<DocumentView> {
+        if input.is_template && !ctx.can(Permission::TemplatesManage) {
+            return Err(forbidden());
+        }
+        let template = match input.template_id {
+            Some(id) => {
+                let t = load_document(ctx, conn, id, Need::Read).await?;
+                if !t.is_template {
+                    return Err(bad_request("That document is not a template"));
+                }
+                Some(t)
+            }
+            None => None,
+        };
+        let id = Uuid::now_v7();
+        let message = match (&input.message, &template) {
+            (Some(m), _) => clean_text(m, "The message", 4000)?,
+            (None, Some(t)) => t.message.clone(),
+            (None, None) => String::new(),
+        };
+        sqlx::query(
+            "insert into documents (id, title, is_template, template_id, owner_id, message, language, sequential, reminder_days, external_id, metadata)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+        )
+        .bind(id)
+        .bind(title(&input.title)?)
+        .bind(input.is_template)
+        .bind(template.as_ref().map(|t| t.id))
+        .bind(ctx.actor()?.user_id)
+        .bind(message)
+        .bind(language(input.language.as_deref().or(template.as_ref().map(|t| t.language.as_str())))?)
+        .bind(input.sequential.or(template.as_ref().map(|t| t.sequential)).unwrap_or(false))
+        .bind(template.as_ref().and_then(|t| t.reminder_days))
+        .bind(input.external_id.as_deref().map(|e| clean_text(e, "The external id", 200)).transpose()?.filter(|e| !e.is_empty()))
+        .bind(metadata(input.metadata)?)
+        .execute(&mut *conn)
+        .await?;
+        if let Some(t) = &template {
+            copy_template(ctx, conn, t.id, id).await?;
+        }
+        audit(
+            ctx,
+            conn,
+            Entry::new("document.created", "document", id)
+                .metadata(json!({ "template": input.template_id, "isTemplate": input.is_template })),
+        )
+        .await?;
+        reload(ctx, conn, id).await
+    }
+}
+
+async fn copy_template(ctx: &Ctx, conn: &mut PgConnection, from: Uuid, to: Uuid) -> Result<()> {
+    sqlx::query("insert into document_files (document_id, file_id, position) select $2, file_id, position from document_files where document_id = $1")
+        .bind(from)
+        .bind(to)
+        .execute(&mut *conn)
+        .await?;
+    let mut ids = std::collections::HashMap::new();
+    for p in parties(conn, from).await? {
+        let new_id = Uuid::now_v7();
+        ids.insert(p.id, new_id);
+        let personal_number = decrypt_personal_number(ctx.keys(), &p)
+            .map(|n| ctx.keys().encrypt_str(KeyPurpose::Settings, &personal_number_context(new_id), &n));
+        sqlx::query(
+            "insert into parties (id, document_id, role, name, email, phone, personal_number, company, sign_order, delivery, auth_to_view, auth_to_sign)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+        )
+        .bind(new_id)
+        .bind(to)
+        .bind(&p.role)
+        .bind(&p.name)
+        .bind(&p.email)
+        .bind(&p.phone)
+        .bind(personal_number)
+        .bind(&p.company)
+        .bind(p.sign_order)
+        .bind(&p.delivery)
+        .bind(&p.auth_to_view)
+        .bind(&p.auth_to_sign)
+        .execute(&mut *conn)
+        .await?;
+    }
+    for f in crate::documents::fields(conn, from).await? {
+        sqlx::query(
+            "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+        )
+        .bind(Uuid::now_v7())
+        .bind(to)
+        .bind(f.party_id.and_then(|p| ids.get(&p).copied()))
+        .bind(&f.kind)
+        .bind(f.page)
+        .bind(f.x)
+        .bind(f.y)
+        .bind(f.width)
+        .bind(f.height)
+        .bind(f.required)
+        .bind(&f.label)
+        .bind(&f.value)
+        .bind(&f.options)
+        .execute(&mut *conn)
+        .await?;
+    }
+    Ok(())
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadInput {
+    pub document_id: Uuid,
+    /// The file name, e.g. "Agreement.docx".
+    pub name: String,
+    /// The file's bytes, base64. PDF, .docx, .doc, .odt or .rtf.
+    pub content_base64: String,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadOutput {
+    pub file: FileRecord,
+    pub pages: usize,
+    /// Active content taken out of the file, e.g. "JavaScript".
+    pub removed: Vec<String>,
+}
+
+fn pdf_name(name: &str) -> String {
+    let stem = name.rsplit(['/', '\\']).next().unwrap_or(name);
+    let stem = stem.rsplit_once('.').map(|(s, _)| s).unwrap_or(stem);
+    format!("{}.pdf", notify::sanitize_filename(stem))
+}
+
+/// Converts and sanitizes an upload, then attaches it to a draft. Conversion happens before the
+/// transaction so a slow converter holds no locks.
+pub async fn add_file(ctx: &Ctx, document_id: Uuid, name: &str, bytes: Vec<u8>) -> Result<UploadOutput> {
+    let mut conn = ctx.db().acquire().await?;
+    let document = load_document(ctx, &mut conn, document_id, Need::Edit).await?;
+    require_draft(&document)?;
+    let security: SecuritySettings = settings(ctx, &mut conn).await?;
+    drop(conn);
+    let original_sha256 = sha256_hex(&bytes);
+    let clean = upload::prepare(&ctx.app, bytes, security.max_upload_mb).await?;
+
+    let mut tx = ctx.db().begin().await?;
+    let state: Option<String> =
+        sqlx::query_scalar("select status from documents where id = $1 for update").bind(document_id).fetch_optional(&mut *tx).await?;
+    if state.as_deref() != Some(status::DRAFT) {
+        return Err(conflict("Only drafts can be changed"));
+    }
+    let name = pdf_name(name);
+    let file = store_file(
+        &mut tx,
+        &ctx.app.storage,
+        ctx.keys(),
+        NewFile {
+            kind: "document",
+            name: &name,
+            content_type: "application/pdf",
+            body: &clean.pdf,
+            uploaded_by: ctx.actor.as_ref().map(|a| a.user_id),
+        },
+    )
+    .await?;
+    sqlx::query("insert into document_files (document_id, file_id, position) select $1, $2, coalesce(max(position), 0) + 1 from document_files where document_id = $1")
+        .bind(document_id)
+        .bind(file.id)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("update documents set updated_at = now() where id = $1").bind(document_id).execute(&mut *tx).await?;
+    audit(
+        ctx,
+        &mut tx,
+        Entry::new("document.file_added", "document", document_id).metadata(
+            json!({ "file": file.id, "name": name, "uploadSha256": original_sha256, "sha256": file.sha256, "removed": clean.removed }),
+        ),
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(UploadOutput { file, pages: clean.pages.len(), removed: clean.removed })
+}
+
+pub struct Upload;
+
+#[async_trait]
+impl Service for Upload {
+    type Input = UploadInput;
+    type Output = UploadOutput;
+    const META: Meta = Meta::mutation(
+        "documents.upload",
+        "Add a file (PDF or Word, base64) to a draft. Word files are converted to PDF; scripts, attachments and forms are removed.",
+        Access::Permission(Permission::DocumentsCreate),
+    )
+    .without_transaction();
+
+    async fn run(ctx: &Ctx, _conn: &mut PgConnection, input: UploadInput) -> Result<UploadOutput> {
+        if input.content_base64.len() > 140 * 1024 * 1024 {
+            return Err(bad_request("The file is too large"));
+        }
+        let bytes = B64.decode(input.content_base64.trim()).map_err(|_| bad_request("contentBase64 is not valid base64"))?;
+        add_file(ctx, input.document_id, &input.name, bytes).await
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoveFileInput {
+    pub document_id: Uuid,
+    pub file_id: Uuid,
+}
+
+pub struct RemoveFile;
+
+#[async_trait]
+impl Service for RemoveFile {
+    type Input = RemoveFileInput;
+    type Output = DocumentView;
+    const META: Meta =
+        Meta::mutation("documents.remove_file", "Remove a file from a draft.", Access::Permission(Permission::DocumentsCreate));
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: RemoveFileInput) -> Result<DocumentView> {
+        let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
+        require_draft(&document)?;
+        let done = sqlx::query("delete from document_files where document_id = $1 and file_id = $2")
+            .bind(document.id)
+            .bind(input.file_id)
+            .execute(&mut *conn)
+            .await?;
+        if done.rows_affected() == 0 {
+            return Err(not_found("File"));
+        }
+        audit(ctx, conn, Entry::new("document.file_removed", "document", document.id).metadata(json!({ "file": input.file_id }))).await?;
+        reload(ctx, conn, document.id).await
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateInput {
+    pub id: Uuid,
+    pub title: Option<String>,
+    pub message: Option<String>,
+    pub language: Option<String>,
+    /// Parties sign one sign-order group at a time.
+    pub sequential: Option<bool>,
+    /// When the signing links stop working and the document expires.
+    pub expires_at: Option<DateTime<Utc>>,
+    /// Remind parties who have not signed every this many days; 0 turns reminders off.
+    pub reminder_days: Option<i32>,
+    pub external_id: Option<String>,
+    pub metadata: Option<Value>,
+}
+
+pub struct Update;
+
+#[async_trait]
+impl Service for Update {
+    type Input = UpdateInput;
+    type Output = DocumentView;
+    const META: Meta = Meta::mutation(
+        "documents.update",
+        "Change a draft's title, message, language, signing order, expiry, reminders, external id or metadata.",
+        Access::Permission(Permission::DocumentsCreate),
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: UpdateInput) -> Result<DocumentView> {
+        let document = load_document(ctx, conn, input.id, Need::Edit).await?;
+        require_draft(&document)?;
+        if let Some(at) = input.expires_at
+            && at <= ctx.now + Duration::hours(1)
+        {
+            return Err(bad_request("The expiry must be at least an hour from now"));
+        }
+        if input.reminder_days.is_some_and(|d| !(0..=60).contains(&d)) {
+            return Err(bad_request("Reminders can be every 1 to 60 days, or 0 for none"));
+        }
+        sqlx::query(
+            "update documents set title = coalesce($2, title), message = coalesce($3, message), language = coalesce($4, language),
+                sequential = coalesce($5, sequential), expires_at = coalesce($6, expires_at), reminder_days = coalesce($7, reminder_days),
+                external_id = coalesce($8, external_id), metadata = coalesce($9, metadata), updated_at = now() where id = $1",
+        )
+        .bind(document.id)
+        .bind(input.title.as_deref().map(title).transpose()?)
+        .bind(input.message.as_deref().map(|m| clean_text(m, "The message", 4000)).transpose()?)
+        .bind(input.language.as_deref().map(|l| language(Some(l))).transpose()?)
+        .bind(input.sequential)
+        .bind(input.expires_at)
+        .bind(input.reminder_days)
+        .bind(input.external_id.as_deref().map(|e| clean_text(e, "The external id", 200)).transpose()?)
+        .bind(input.metadata.map(|m| metadata(Some(m))).transpose()?)
+        .execute(&mut *conn)
+        .await?;
+        audit(ctx, conn, Entry::new("document.updated", "document", document.id)).await?;
+        reload(ctx, conn, document.id).await
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PartyInput {
+    /// Keep an existing party (and its fields) by passing its id.
+    pub id: Option<Uuid>,
+    #[serde(default = "default_role")]
+    pub role: PartyRole,
+    pub name: String,
+    pub email: Option<String>,
+    /// With country code, e.g. +46701234567. Needed for SMS delivery and SMS codes.
+    pub phone: Option<String>,
+    /// A national id number to match against the eID result, e.g. a Swedish personnummer. Stored encrypted.
+    pub personal_number: Option<String>,
+    pub company: Option<String>,
+    /// In sequential documents, lower numbers sign first. Equal numbers sign in parallel.
+    pub sign_order: Option<i32>,
+    #[serde(default = "default_delivery")]
+    pub delivery: Delivery,
+    #[serde(default = "default_view_auth")]
+    pub auth_to_view: AuthMethod,
+    #[serde(default = "default_sign_auth")]
+    pub auth_to_sign: AuthMethod,
+}
+
+fn default_role() -> PartyRole {
+    PartyRole::Signer
+}
+fn default_delivery() -> Delivery {
+    Delivery::Email
+}
+fn default_view_auth() -> AuthMethod {
+    AuthMethod::None
+}
+fn default_sign_auth() -> AuthMethod {
+    AuthMethod::Standard
+}
+
+fn personal_number(value: &str) -> Result<String> {
+    let cleaned: String = value.chars().filter(|c| !c.is_whitespace()).collect();
+    if cleaned.is_empty() || cleaned.len() > 20 || !cleaned.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '+') {
+        return Err(bad_request("The personal number is not valid"));
+    }
+    Ok(cleaned)
+}
+
+struct CleanParty {
+    id: Uuid,
+    role: PartyRole,
+    name: String,
+    email: Option<String>,
+    phone: Option<String>,
+    personal_number: Option<String>,
+    company: Option<String>,
+    sign_order: i32,
+    delivery: Delivery,
+    auth_to_view: AuthMethod,
+    auth_to_sign: AuthMethod,
+}
+
+fn clean_party(input: PartyInput, existing: &[PartyRow]) -> Result<CleanParty> {
+    let id = match input.id {
+        Some(id) if existing.iter().any(|p| p.id == id) => id,
+        Some(_) => return Err(not_found("Party")),
+        None => Uuid::now_v7(),
+    };
+    let name = clean_text(&input.name, "The name", 200)?.replace(['\n', '\t'], " ");
+    if name.is_empty() {
+        return Err(bad_request("Every party needs a name"));
+    }
+    if input.auth_to_view == AuthMethod::Standard {
+        return Err(bad_request("authToView is none, sms_pin, se_bankid, freja or broker"));
+    }
+    if input.auth_to_sign == AuthMethod::None {
+        return Err(bad_request("authToSign is standard, sms_pin, se_bankid, freja or broker"));
+    }
+    Ok(CleanParty {
+        id,
+        role: input.role,
+        name,
+        email: input.email.as_deref().map(str::trim).filter(|e| !e.is_empty()).map(normalize_email).transpose()?,
+        phone: input.phone.as_deref().map(str::trim).filter(|p| !p.is_empty()).map(crate::sms::normalize_phone).transpose()?,
+        personal_number: input.personal_number.as_deref().map(str::trim).filter(|p| !p.is_empty()).map(personal_number).transpose()?,
+        company: input.company.as_deref().map(|c| clean_text(c, "The company", 200)).transpose()?.filter(|c| !c.is_empty()),
+        sign_order: input.sign_order.unwrap_or(1).clamp(1, 100),
+        delivery: input.delivery,
+        auth_to_view: input.auth_to_view,
+        auth_to_sign: input.auth_to_sign,
+    })
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SetPartiesInput {
+    pub document_id: Uuid,
+    /// The complete list. Parties left out are removed with their fields.
+    pub parties: Vec<PartyInput>,
+}
+
+pub struct SetParties;
+
+#[async_trait]
+impl Service for SetParties {
+    type Input = SetPartiesInput;
+    type Output = Vec<PartyView>;
+    const META: Meta = Meta::mutation(
+        "documents.set_parties",
+        "Set who signs, approves or receives a copy of a draft, how each gets their link, and how each must identify themselves.",
+        Access::Permission(Permission::DocumentsCreate),
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SetPartiesInput) -> Result<Vec<PartyView>> {
+        let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
+        require_draft(&document)?;
+        if input.parties.len() > MAX_PARTIES {
+            return Err(bad_request(format!("A document can have at most {MAX_PARTIES} parties")));
+        }
+        let existing = parties(conn, document.id).await?;
+        let cleaned: Vec<CleanParty> = input.parties.into_iter().map(|p| clean_party(p, &existing)).collect::<Result<_>>()?;
+        let keep: Vec<Uuid> = cleaned.iter().map(|p| p.id).collect();
+        sqlx::query("delete from parties where document_id = $1 and not (id = any($2))")
+            .bind(document.id)
+            .bind(&keep)
+            .execute(&mut *conn)
+            .await?;
+        for p in &cleaned {
+            let personal =
+                p.personal_number.as_deref().map(|n| ctx.keys().encrypt_str(KeyPurpose::Settings, &personal_number_context(p.id), n));
+            sqlx::query(
+                "insert into parties (id, document_id, role, name, email, phone, personal_number, company, sign_order, delivery, auth_to_view, auth_to_sign)
+                 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                 on conflict (id) do update set role = excluded.role, name = excluded.name, email = excluded.email, phone = excluded.phone,
+                   personal_number = excluded.personal_number, company = excluded.company, sign_order = excluded.sign_order,
+                   delivery = excluded.delivery, auth_to_view = excluded.auth_to_view, auth_to_sign = excluded.auth_to_sign, updated_at = now()",
+            )
+            .bind(p.id)
+            .bind(document.id)
+            .bind(p.role.as_str())
+            .bind(&p.name)
+            .bind(&p.email)
+            .bind(&p.phone)
+            .bind(personal)
+            .bind(&p.company)
+            .bind(p.sign_order)
+            .bind(p.delivery.as_str())
+            .bind(p.auth_to_view.as_str())
+            .bind(p.auth_to_sign.as_str())
+            .execute(&mut *conn)
+            .await?;
+        }
+        sqlx::query("update fields set party_id = null where document_id = $1 and party_id is not null and not (party_id = any($2))")
+            .bind(document.id)
+            .bind(&keep)
+            .execute(&mut *conn)
+            .await?;
+        audit(
+            ctx,
+            conn,
+            Entry::new("document.parties_set", "document", document.id).after(
+                cleaned
+                    .iter()
+                    .map(|p| json!({ "id": p.id, "name": p.name, "email": p.email, "role": p.role, "authToSign": p.auth_to_sign }))
+                    .collect::<Vec<_>>(),
+            ),
+        )
+        .await?;
+        Ok(parties(conn, document.id).await?.iter().map(|p| PartyView::from_row(ctx.keys(), p)).collect())
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FieldInput {
+    /// The party who fills it in. Leave out for text the sender fills in now.
+    pub party_id: Option<Uuid>,
+    pub kind: FieldKind,
+    /// Zero-based page index in the combined document.
+    pub page: i32,
+    /// Position and size as fractions of the page (0 to 1), origin top-left.
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub required: Option<bool>,
+    pub label: Option<String>,
+    /// A prefilled value.
+    pub value: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SetFieldsInput {
+    pub document_id: Uuid,
+    /// The complete list; it replaces the draft's fields.
+    pub fields: Vec<FieldInput>,
+}
+
+fn check_box(f: &FieldInput) -> Result<()> {
+    let values = [f.x, f.y, f.width, f.height];
+    if values.iter().any(|v| !v.is_finite())
+        || f.x < 0.0
+        || f.y < 0.0
+        || f.width <= 0.0
+        || f.height <= 0.0
+        || f.x + f.width > 1.0001
+        || f.y + f.height > 1.0001
+    {
+        return Err(bad_request("Every field must lie inside its page (fractions from 0 to 1)"));
+    }
+    if f.width < 0.005 || f.height < 0.005 {
+        return Err(bad_request("A field is too small"));
+    }
+    if !(0..10_000).contains(&f.page) {
+        return Err(bad_request("A field's page is out of range"));
+    }
+    Ok(())
+}
+
+pub struct SetFields;
+
+#[async_trait]
+impl Service for SetFields {
+    type Input = SetFieldsInput;
+    type Output = DocumentView;
+    const META: Meta = Meta::mutation(
+        "documents.set_fields",
+        "Place the fields of a draft: signatures, initials, text, dates, checkboxes, names, emails and companies, each assigned to a party.",
+        Access::Permission(Permission::DocumentsCreate),
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SetFieldsInput) -> Result<DocumentView> {
+        let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
+        require_draft(&document)?;
+        if input.fields.len() > MAX_FIELDS {
+            return Err(bad_request(format!("A document can have at most {MAX_FIELDS} fields")));
+        }
+        let all = parties(conn, document.id).await?;
+        sqlx::query("delete from fields where document_id = $1").bind(document.id).execute(&mut *conn).await?;
+        for f in &input.fields {
+            check_box(f)?;
+            let party = match f.party_id {
+                Some(id) => Some(all.iter().find(|p| p.id == id).ok_or_else(|| not_found("Party"))?),
+                None => None,
+            };
+            if matches!(f.kind, FieldKind::Signature | FieldKind::Initials) && !party.is_some_and(|p| p.role() == PartyRole::Signer) {
+                return Err(bad_request("Signature and initials fields belong to a signer"));
+            }
+            let value = f.value.as_deref().map(|v| clean_text(v, "A field value", 2000)).transpose()?.filter(|v| !v.is_empty());
+            if f.kind == FieldKind::Checkbox && value.as_deref().is_some_and(|v| v != "true" && v != "false") {
+                return Err(bad_request("A checkbox value is true or false"));
+            }
+            sqlx::query(
+                "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value)
+                 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+            )
+            .bind(Uuid::now_v7())
+            .bind(document.id)
+            .bind(f.party_id)
+            .bind(f.kind.as_str())
+            .bind(f.page)
+            .bind(f.x)
+            .bind(f.y)
+            .bind(f.width)
+            .bind(f.height)
+            .bind(f.required.unwrap_or(f.kind != FieldKind::Checkbox))
+            .bind(f.label.as_deref().map(|l| clean_text(l, "A field label", 200)).transpose()?.unwrap_or_default())
+            .bind(value)
+            .execute(&mut *conn)
+            .await?;
+        }
+        audit(ctx, conn, Entry::new("document.fields_set", "document", document.id).metadata(json!({ "count": input.fields.len() })))
+            .await?;
+        reload(ctx, conn, document.id).await
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SendInput {
+    pub id: Uuid,
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SignerLink {
+    pub party_id: Uuid,
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SendOutput {
+    pub document: DocumentView,
+    /// Links for parties with `link` delivery, to hand over yourself.
+    pub links: Vec<SignerLink>,
+}
+
+fn email_ready(ctx: &Ctx, settings: &EmailSettings) -> bool {
+    ctx.app.env.development || (settings.api_key.as_deref().is_some_and(|k| !k.is_empty()) && !settings.from_address.is_empty())
+}
+
+async fn check_auth_available(ctx: &Ctx, conn: &mut PgConnection, method: AuthMethod, party: &PartyRow) -> Result<()> {
+    match method {
+        AuthMethod::None | AuthMethod::Standard => Ok(()),
+        AuthMethod::SmsPin => {
+            let sms: SmsSettings = settings(ctx, conn).await?;
+            if party.phone.is_none() {
+                return Err(bad_request(format!("{} needs a phone number for SMS codes", party.name)));
+            }
+            if !crate::sms::is_configured(&sms) && !ctx.app.env.development {
+                return Err(bad_request("SMS is not set up. An admin chooses an SMS provider in Admin settings."));
+            }
+            Ok(())
+        }
+        AuthMethod::SeBankid | AuthMethod::Freja | AuthMethod::Broker => {
+            let eid: EidSettings = settings(ctx, conn).await?;
+            let enabled = match method {
+                AuthMethod::SeBankid => eid.bankid_enabled,
+                AuthMethod::Freja => eid.freja_enabled,
+                _ => eid.broker_enabled,
+            };
+            if !enabled {
+                return Err(bad_request(format!("{} is not set up. An admin enables it in Admin settings.", method.label())));
+            }
+            Ok(())
+        }
+    }
+}
+
+pub struct Send;
+
+#[async_trait]
+impl Service for Send {
+    type Input = SendInput;
+    type Output = SendOutput;
+    const META: Meta = Meta::mutation(
+        "documents.send",
+        "Send a draft for signing. Its files are combined into one PDF that can no longer change, and parties are notified in signing order.",
+        Access::Permission(Permission::DocumentsCreate),
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SendInput) -> Result<SendOutput> {
+        let document = load_document(ctx, conn, input.id, Need::Edit).await?;
+        if document.is_template {
+            return Err(bad_request("Templates cannot be sent. Create a document from it first."));
+        }
+        require_draft(&document)?;
+        sqlx::query("select 1 from documents where id = $1 for update").bind(document.id).execute(&mut *conn).await?;
+        let records = files(conn, document.id).await?;
+        if records.is_empty() {
+            return Err(bad_request("Add a file before sending"));
+        }
+        let all = parties(conn, document.id).await?;
+        if !all.iter().any(PartyRow::must_act) {
+            return Err(bad_request("Add at least one party who signs or approves"));
+        }
+        let email_settings: EmailSettings = settings(ctx, conn).await?;
+        for p in &all {
+            match Delivery::parse(&p.delivery) {
+                Some(Delivery::Email) if p.email.is_none() => return Err(bad_request(format!("{} needs an email address", p.name))),
+                Some(Delivery::Email) if !email_ready(ctx, &email_settings) => {
+                    return Err(bad_request("Email is not set up. An admin adds a Resend API key in Admin settings."));
+                }
+                Some(Delivery::Sms) if p.phone.is_none() => return Err(bad_request(format!("{} needs a phone number", p.name))),
+                _ => {}
+            }
+            check_auth_available(ctx, conn, p.auth_to_view(), p).await?;
+            check_auth_available(ctx, conn, p.auth_to_sign(), p).await?;
+        }
+        let expires_at = input.expires_at.or(document.expires_at);
+        if expires_at.is_some_and(|at| at <= ctx.now + Duration::hours(1)) {
+            return Err(bad_request("The expiry must be at least an hour from now"));
+        }
+
+        let mut bodies = Vec::with_capacity(records.len());
+        for record in &records {
+            bodies.push(read_file(&ctx.app.storage, ctx.keys(), record).await?);
+        }
+        let combined = tokio::task::spawn_blocking(move || {
+            opensign_pdf::merge(&bodies).and_then(|m| opensign_pdf::sanitize(&m, opensign_pdf::Limits::default()))
+        })
+        .await
+        .map_err(AppError::internal)?
+        .map_err(upload::pdf_failure)?;
+        let page_count = combined.pages.len() as i32;
+        for f in crate::documents::fields(conn, document.id).await? {
+            if f.page >= page_count {
+                return Err(bad_request(format!("A field is on page {} but the document has {page_count} pages", f.page + 1)));
+            }
+            if f.party_id.is_none() && f.required && f.value.is_none() {
+                return Err(bad_request("Fill in the sender's fields before sending"));
+            }
+        }
+        let source = store_file(
+            conn,
+            &ctx.app.storage,
+            ctx.keys(),
+            NewFile {
+                kind: "source",
+                name: &format!("{}.pdf", notify::sanitize_filename(&document.title)),
+                content_type: "application/pdf",
+                body: &combined.pdf,
+                uploaded_by: ctx.actor.as_ref().map(|a| a.user_id),
+            },
+        )
+        .await?;
+        let security: SecuritySettings = settings(ctx, conn).await?;
+        let link_expires = expires_at.unwrap_or(ctx.now + Duration::days(security.signer_link_days.max(1) as i64));
+        sqlx::query(
+            "update documents set status = 'pending', source_file_id = $2, original_sha256 = $3, page_count = $4, sent_at = $5, expires_at = $6, updated_at = now() where id = $1",
+        )
+        .bind(document.id)
+        .bind(source.id)
+        .bind(&source.sha256)
+        .bind(page_count)
+        .bind(ctx.now)
+        .bind(expires_at)
+        .execute(&mut *conn)
+        .await?;
+        sqlx::query("update parties set link_expires_at = $2, updated_at = now() where document_id = $1")
+            .bind(document.id)
+            .bind(link_expires)
+            .execute(&mut *conn)
+            .await?;
+        audit(
+            ctx,
+            conn,
+            Entry::new("document.sent", "document", document.id)
+                .metadata(json!({ "sha256": source.sha256, "pages": page_count, "parties": all.len() })),
+        )
+        .await?;
+        let document = load_document(ctx, conn, document.id, Need::Read).await?;
+        notify::notify_turn(conn, &document).await?;
+        notify::emit(
+            conn,
+            "document.sent",
+            json!({ "documentId": document.id, "title": document.title, "externalId": document.external_id }),
+        )
+        .await?;
+        let links = parties(conn, document.id)
+            .await?
+            .iter()
+            .filter(|p| p.delivery == Delivery::Link.as_str())
+            .map(|p| SignerLink { party_id: p.id, name: p.name.clone(), url: signer_url(ctx, ctx.keys(), p) })
+            .collect();
+        Ok(SendOutput { document: view(ctx, conn, document).await?, links })
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelInput {
+    pub id: Uuid,
+    pub reason: Option<String>,
+}
+
+pub struct Cancel;
+
+#[async_trait]
+impl Service for Cancel {
+    type Input = CancelInput;
+    type Output = DocumentView;
+    const META: Meta = Meta::mutation(
+        "documents.cancel",
+        "Stop signing a pending document. Every signing link stops working and notified parties are told.",
+        Access::Permission(Permission::DocumentsCreate),
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CancelInput) -> Result<DocumentView> {
+        let document = load_document(ctx, conn, input.id, Need::Edit).await?;
+        let done = sqlx::query(
+            "update documents set status = 'canceled', canceled_at = $2, updated_at = now() where id = $1 and status = 'pending'",
+        )
+        .bind(document.id)
+        .bind(ctx.now)
+        .execute(&mut *conn)
+        .await?;
+        if done.rows_affected() == 0 {
+            return Err(conflict("Only pending documents can be canceled"));
+        }
+        sqlx::query("update parties set link_version = link_version + 1, status = case when signed_at is null then 'canceled' else status end, updated_at = now() where document_id = $1")
+            .bind(document.id)
+            .execute(&mut *conn)
+            .await?;
+        let reason = input.reason.as_deref().map(|r| clean_text(r, "The reason", 1000)).transpose()?;
+        audit(ctx, conn, Entry::new("document.canceled", "document", document.id).metadata(json!({ "reason": reason }))).await?;
+        crate::jobs::enqueue(conn, "notify_canceled", json!({ "document": document.id }), None, None).await?;
+        notify::emit(conn, "document.canceled", json!({ "documentId": document.id, "externalId": document.external_id })).await?;
+        reload(ctx, conn, document.id).await
+    }
+}
+
+pub struct Remind;
+
+#[async_trait]
+impl Service for Remind {
+    type Input = IdInput;
+    type Output = Ok_;
+    const META: Meta = Meta::mutation(
+        "documents.remind",
+        "Send a reminder now to every party whose turn it is and who has not signed.",
+        Access::Permission(Permission::DocumentsCreate),
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<Ok_> {
+        let document = load_document(ctx, conn, input.id, Need::Edit).await?;
+        if document.status != status::PENDING {
+            return Err(conflict("Only pending documents have parties to remind"));
+        }
+        let all = parties(conn, document.id).await?;
+        for id in current_turn(&document, &all) {
+            crate::jobs::enqueue(conn, "notify_party", json!({ "party": id, "reminder": true }), None, Some(&format!("notify:{id}")))
+                .await?;
+        }
+        audit(ctx, conn, Entry::new("document.reminded", "document", document.id)).await?;
+        Ok(Ok_::default())
+    }
+}
+
+pub struct Delete;
+
+#[async_trait]
+impl Service for Delete {
+    type Input = IdInput;
+    type Output = Ok_;
+    const META: Meta = Meta::mutation(
+        "documents.delete",
+        "Delete a document or template that is not pending. Signed documents can only be deleted by someone who manages all documents.",
+        Access::Permission(Permission::DocumentsCreate),
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<Ok_> {
+        let document = load_document(ctx, conn, input.id, Need::Edit).await?;
+        if document.status == status::PENDING {
+            return Err(conflict("Cancel the document before deleting it"));
+        }
+        if document.status == status::COMPLETED && !ctx.can(Permission::DocumentsManageAll) {
+            return Err(forbidden());
+        }
+        sqlx::query("delete from documents where id = $1").bind(document.id).execute(&mut *conn).await?;
+        audit(
+            ctx,
+            conn,
+            Entry::new("document.deleted", "document", document.id)
+                .before(json!({ "title": document.title, "status": document.status, "sealedSha256": document.sealed_sha256 })),
+        )
+        .await?;
+        Ok(Ok_::default())
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ShareInput {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    #[serde(default)]
+    pub can_edit: bool,
+}
+
+pub struct Share;
+
+#[async_trait]
+impl Service for Share {
+    type Input = ShareInput;
+    type Output = Ok_;
+    const META: Meta = Meta::mutation(
+        "documents.share",
+        "Let a colleague see a document, and optionally change it.",
+        Access::Permission(Permission::DocumentsCreate),
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ShareInput) -> Result<Ok_> {
+        let document = load_document(ctx, conn, input.id, Need::Edit).await?;
+        let exists: Option<bool> =
+            sqlx::query_scalar("select active from users where id = $1").bind(input.user_id).fetch_optional(&mut *conn).await?;
+        if exists != Some(true) {
+            return Err(not_found("User"));
+        }
+        sqlx::query("insert into document_access (document_id, user_id, can_edit) values ($1, $2, $3) on conflict (document_id, user_id) do update set can_edit = excluded.can_edit")
+            .bind(document.id)
+            .bind(input.user_id)
+            .bind(input.can_edit)
+            .execute(&mut *conn)
+            .await?;
+        audit(
+            ctx,
+            conn,
+            Entry::new("document.shared", "document", document.id).metadata(json!({ "user": input.user_id, "canEdit": input.can_edit })),
+        )
+        .await?;
+        Ok(Ok_::default())
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UnshareInput {
+    pub id: Uuid,
+    pub user_id: Uuid,
+}
+
+pub struct Unshare;
+
+#[async_trait]
+impl Service for Unshare {
+    type Input = UnshareInput;
+    type Output = Ok_;
+    const META: Meta =
+        Meta::mutation("documents.unshare", "Stop sharing a document with a colleague.", Access::Permission(Permission::DocumentsCreate));
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: UnshareInput) -> Result<Ok_> {
+        let document = load_document(ctx, conn, input.id, Need::Edit).await?;
+        sqlx::query("delete from document_access where document_id = $1 and user_id = $2")
+            .bind(document.id)
+            .bind(input.user_id)
+            .execute(&mut *conn)
+            .await?;
+        audit(ctx, conn, Entry::new("document.unshared", "document", document.id).metadata(json!({ "user": input.user_id }))).await?;
+        Ok(Ok_::default())
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Version {
+    /// The sealed PDF with signatures and evidence. Only for completed documents.
+    Signed,
+    /// The PDF exactly as it was sent for signing.
+    Original,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadInput {
+    pub id: Uuid,
+    pub version: Option<Version>,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadOutput {
+    pub name: String,
+    pub content_type: String,
+    pub sha256: String,
+    pub content_base64: String,
+}
+
+/// The file record for a document's signed or original PDF, after the read check.
+pub async fn document_file(ctx: &Ctx, conn: &mut PgConnection, id: Uuid, version: Version) -> Result<FileRecord> {
+    let document = load_document(ctx, conn, id, Need::Read).await?;
+    let file_id = match version {
+        Version::Signed => document.sealed_file_id.ok_or_else(|| conflict("The document is not signed yet"))?,
+        Version::Original => document.source_file_id.ok_or_else(|| conflict("The document has not been sent yet"))?,
+    };
+    let record = file_record(conn, file_id).await?;
+    audit(
+        ctx,
+        conn,
+        Entry::new("document.downloaded", "document", document.id).metadata(json!({ "version": format!("{version:?}").to_lowercase() })),
+    )
+    .await?;
+    Ok(record)
+}
+
+pub struct Download;
+
+#[async_trait]
+impl Service for Download {
+    type Input = DownloadInput;
+    type Output = DownloadOutput;
+    const META: Meta = Meta::query(
+        "documents.download",
+        "Download a document's signed PDF (default) or the original as sent, base64. Every download is audited.",
+        Access::Authenticated,
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: DownloadInput) -> Result<DownloadOutput> {
+        let record = document_file(ctx, conn, input.id, input.version.unwrap_or(Version::Signed)).await?;
+        if record.size_bytes > MAX_DOWNLOAD {
+            return Err(bad_request("The file is too large to return here. Download it from the web app or the REST API."));
+        }
+        let body = read_file(&ctx.app.storage, ctx.keys(), &record).await?;
+        Ok(DownloadOutput { name: record.name, content_type: record.content_type, sha256: record.sha256, content_base64: B64.encode(body) })
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SigningLinkInput {
+    pub document_id: Uuid,
+    pub party_id: Uuid,
+    /// Revoke the party's earlier links first, e.g. when one was forwarded by mistake.
+    #[serde(default)]
+    pub rotate: bool,
+}
+
+pub struct IssueSigningLink;
+
+#[async_trait]
+impl Service for IssueSigningLink {
+    type Input = SigningLinkInput;
+    type Output = SignerLink;
+    const META: Meta = Meta::mutation(
+        "documents.signing_link",
+        "Get a party's personal signing link to hand over yourself, optionally revoking the old one.",
+        Access::Permission(Permission::DocumentsCreate),
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SigningLinkInput) -> Result<SignerLink> {
+        let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
+        if document.status != status::PENDING {
+            return Err(conflict("Signing links exist only while a document is pending"));
+        }
+        if input.rotate {
+            sqlx::query("update parties set link_version = link_version + 1 where id = $1 and document_id = $2")
+                .bind(input.party_id)
+                .bind(document.id)
+                .execute(&mut *conn)
+                .await?;
+        }
+        let party = parties(conn, document.id).await?.into_iter().find(|p| p.id == input.party_id).ok_or_else(|| not_found("Party"))?;
+        audit(
+            ctx,
+            conn,
+            Entry::new("party.link_issued", "document", document.id)
+                .metadata(json!({ "party": party.id, "name": party.name, "rotated": input.rotate })),
+        )
+        .await?;
+        Ok(SignerLink { party_id: party.id, name: party.name.clone(), url: signer_url(ctx, ctx.keys(), &party) })
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyInput {
+    /// A PDF, base64.
+    pub content_base64: String,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifiedDocument {
+    pub id: Uuid,
+    pub title: String,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyOutput {
+    pub sha256: String,
+    #[schemars(with = "Vec<Value>")]
+    pub signatures: Vec<SignatureCheck>,
+    /// The document this exact file was sealed for, when OpenSign sealed it.
+    pub document: Option<VerifiedDocument>,
+}
+
+/// Checks a PDF's signatures and whether this server sealed exactly these bytes.
+pub async fn verify_pdf(conn: &mut PgConnection, bytes: Vec<u8>) -> Result<VerifyOutput> {
+    if !bytes.windows(5).take(1024).any(|w| w == b"%PDF-") {
+        return Err(bad_request("This is not a PDF file"));
+    }
+    let sha256 = sha256_hex(&bytes);
+    let signatures = tokio::task::spawn_blocking(move || opensign_pdf::verify_signatures(&bytes))
+        .await
+        .map_err(AppError::internal)?
+        .map_err(|_| bad_request("This PDF could not be read"))?;
+    let document = sqlx::query_as::<_, (Uuid, String, Option<DateTime<Utc>>)>(
+        "select id, title, completed_at from documents where sealed_sha256 = $1 and status = 'completed'",
+    )
+    .bind(&sha256)
+    .fetch_optional(&mut *conn)
+    .await?
+    .map(|(id, title, completed_at)| VerifiedDocument { id, title, completed_at });
+    Ok(VerifyOutput { sha256, signatures, document })
+}
+
+pub struct Verify;
+
+#[async_trait]
+impl Service for Verify {
+    type Input = VerifyInput;
+    type Output = VerifyOutput;
+    const META: Meta = Meta::query(
+        "documents.verify",
+        "Check a signed PDF (base64): whether its signatures are intact and whether this server sealed exactly this file.",
+        Access::Authenticated,
+    );
+
+    async fn run(_ctx: &Ctx, conn: &mut PgConnection, input: VerifyInput) -> Result<VerifyOutput> {
+        if input.content_base64.len() > 70 * 1024 * 1024 {
+            return Err(bad_request("The file is too large"));
+        }
+        let bytes = B64.decode(input.content_base64.trim()).map_err(|_| bad_request("contentBase64 is not valid base64"))?;
+        verify_pdf(conn, bytes).await
+    }
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SealInfo {
+    pub subject: String,
+    pub not_after: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+}
+
+pub struct GetSeal;
+
+#[async_trait]
+impl Service for GetSeal {
+    type Input = super::Empty;
+    type Output = Option<SealInfo>;
+    const META: Meta = Meta::query(
+        "seal.get",
+        "Show the certificate that seals completed documents. None until the first document is sealed.",
+        Access::Permission(Permission::SettingsManage),
+    );
+
+    async fn run(_ctx: &Ctx, conn: &mut PgConnection, _: super::Empty) -> Result<Option<SealInfo>> {
+        Ok(sqlx::query_as::<_, (String, DateTime<Utc>, DateTime<Utc>)>(
+            "select subject, not_after, created_at from seal_identities where active",
+        )
+        .fetch_optional(&mut *conn)
+        .await?
+        .map(|(subject, not_after, created_at)| SealInfo { subject, not_after, created_at }))
+    }
+}
+
+pub struct RegenerateSeal;
+
+#[async_trait]
+impl Service for RegenerateSeal {
+    type Input = super::Empty;
+    type Output = SealInfo;
+    const META: Meta = Meta::mutation(
+        "seal.regenerate",
+        "Replace the document seal with a new self-signed certificate in the organisation's current name. Documents already sealed are unaffected.",
+        Access::Permission(Permission::SettingsManage),
+    )
+    .not_a_tool();
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, _: super::Empty) -> Result<SealInfo> {
+        let org: crate::settings::OrgSettings = settings(ctx, conn).await?;
+        let signing: crate::settings::SigningSettings = settings(ctx, conn).await?;
+        let name = if signing.seal_name.trim().is_empty() { org.name.clone() } else { signing.seal_name.clone() };
+        let identity = opensign_pdf::generate_seal_identity(&name, &org.country, 10).map_err(AppError::internal)?;
+        crate::documents::seal::store_identity(ctx, conn, &identity).await?;
+        GetSeal::run(ctx, conn, super::Empty {}).await?.ok_or_else(|| AppError::new(ErrorKind::Internal, "The seal was not stored"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pdf_names_and_like_patterns() {
+        assert_eq!(pdf_name("C:\\Users\\x\\Avtal 2026.docx"), "Avtal 2026.pdf");
+        assert_eq!(pdf_name("../../evil"), "evil.pdf");
+        assert_eq!(like_pattern("50%_off\\"), "%50\\%\\_off\\\\%");
+    }
+}

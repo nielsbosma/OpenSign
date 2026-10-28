@@ -4,6 +4,7 @@
 mod cert;
 mod evidence;
 mod geometry;
+mod merge;
 mod sanitize;
 mod seal;
 mod stamp;
@@ -16,9 +17,10 @@ mod tests;
 pub use cert::{SealIdentity, generate_seal_identity};
 pub use evidence::{EvidenceEvent, EvidenceParty, EvidenceReport, append_evidence};
 pub use geometry::PageBox;
+pub use merge::merge;
 pub use sanitize::{Limits, Sanitized, sanitize};
 pub use seal::{Prepared, SealOptions, Signed, finish, prepare, seal, sign};
-pub use stamp::{Stamp, StampContent, stamp};
+pub use stamp::{Stamp, StampContent, check_signature_image, stamp};
 pub use tsa::{TimestampError, build_request as build_timestamp_request, parse_response as parse_timestamp_response, token_time};
 pub use verify::{SignatureCheck, verify_signatures};
 

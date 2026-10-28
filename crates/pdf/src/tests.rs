@@ -298,3 +298,18 @@ fn seals_with_a_time_stamp() {
     assert!(parse_timestamp_response(&fake_tsa(&request, b"sig", false), b"sig", &nonce).is_err(), "wrong nonce");
     assert!(parse_timestamp_response(&fake_tsa(&request, b"other", true), b"sig", &nonce).is_err(), "wrong imprint");
 }
+
+#[test]
+fn merges_documents_in_order() {
+    let a = sanitize(&sample_pdf(false), Limits::default()).unwrap().pdf;
+    let b =
+        stamp(&a, &[Stamp { page: 0, x: 0.1, y: 0.1, width: 0.2, height: 0.05, content: StampContent::Text("Second".into()) }]).unwrap();
+    let merged = merge(&[a.clone(), b, a]).unwrap();
+    let clean = sanitize(&merged, Limits::default()).unwrap();
+    assert_eq!(clean.pages.len(), 3);
+    assert!(clean.pages.iter().all(|p| p.width == 595.0 && p.height == 842.0));
+    let doc = Document::load_mem(&clean.pdf).unwrap();
+    let second = doc.get_pages()[&2];
+    let content = doc.get_page_content(second);
+    assert!(content.windows(6).any(|w| w == b"Second"));
+}

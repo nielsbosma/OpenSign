@@ -12,12 +12,14 @@ workspace = true
 [dependencies]
 opensign-crypto = { workspace = true }
 opensign-db = { workspace = true }
+opensign-pdf = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 hex = { workspace = true }
+hmac = { workspace = true }
 object_store = { version = "0.12", default-features = false, features = ["aws"] }
 reqwest = { workspace = true }
 schemars = { workspace = true }
@@ -36,3 +38,4 @@ testing = ["opensign-db/testing"]
 
 [dev-dependencies]
 opensign-core = { path = ".", features = ["testing"] }
+lopdf = { version = "0.46", default-features = false }

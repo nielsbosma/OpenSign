@@ -227,6 +227,7 @@ impl Service for SendTestEmail {
                 paragraphs: vec!["Email from OpenSign works. Signing invitations and notifications will be sent like this.".into()],
                 button: None,
                 footer: None,
+                attachments: vec![],
             },
         )
         .await?;

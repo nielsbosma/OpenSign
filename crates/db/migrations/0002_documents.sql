@@ -60,8 +60,9 @@ create table parties (
   auth_to_view text not null default 'none',
   auth_to_sign text not null default 'standard',
   status text not null default 'waiting',
-  token_hash text unique,
-  token_expires_at timestamptz,
+  -- Signer links are MACs over the party id and this version; bumping it revokes every link.
+  link_version integer not null default 0,
+  link_expires_at timestamptz,
   notified_at timestamptz,
   viewed_at timestamptz,
   signed_at timestamptz,
@@ -72,6 +73,7 @@ create table parties (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint parties_role_check check (role in ('signer', 'approver', 'viewer')),
+  constraint parties_delivery_check check (delivery in ('email', 'sms', 'link', 'none')),
   constraint parties_status_check check (status in ('waiting', 'notified', 'viewed', 'signed', 'declined', 'canceled'))
 );
 create index parties_document_idx on parties (document_id, sign_order);
@@ -96,6 +98,20 @@ create table fields (
 );
 create index fields_document_idx on fields (document_id);
 
+-- The organisation's document seal. The private key is encrypted with a key derived from APP_SECRET.
+create table seal_identities (
+  id uuid primary key,
+  private_key text not null,
+  -- DER certificates, base64, the seal's own first.
+  chain text[] not null,
+  subject text not null,
+  not_after timestamptz not null,
+  active boolean not null default true,
+  created_by uuid references users (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create unique index seal_identities_active on seal_identities (active) where active;
+
 create table sms_challenges (
   id uuid primary key,
   party_id uuid not null references parties (id) on delete cascade,
@@ -110,6 +126,7 @@ create table sms_challenges (
 create table webhooks (
   id uuid primary key,
   url text not null,
+  -- Encrypted.
   secret text not null,
   events text[] not null,
   active boolean not null default true,

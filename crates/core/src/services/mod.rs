@@ -1,7 +1,10 @@
 pub mod admin;
 pub mod auth;
+pub mod documents;
 pub mod setup;
+pub mod signing;
 pub mod users;
+pub mod webhooks;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -59,6 +62,34 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<admin::SendTestEmail>(),
         erase::<admin::ListAudit>(),
         erase::<admin::VerifyAudit>(),
+        erase::<documents::List>(),
+        erase::<documents::Get>(),
+        erase::<documents::Create>(),
+        erase::<documents::Upload>(),
+        erase::<documents::RemoveFile>(),
+        erase::<documents::Update>(),
+        erase::<documents::SetParties>(),
+        erase::<documents::SetFields>(),
+        erase::<documents::Send>(),
+        erase::<documents::Cancel>(),
+        erase::<documents::Remind>(),
+        erase::<documents::Delete>(),
+        erase::<documents::Share>(),
+        erase::<documents::Unshare>(),
+        erase::<documents::Download>(),
+        erase::<documents::IssueSigningLink>(),
+        erase::<documents::Verify>(),
+        erase::<documents::GetSeal>(),
+        erase::<documents::RegenerateSeal>(),
+        erase::<signing::Open>(),
+        erase::<signing::RequestCode>(),
+        erase::<signing::VerifyCode>(),
+        erase::<signing::Sign>(),
+        erase::<signing::Decline>(),
+        erase::<webhooks::List>(),
+        erase::<webhooks::Create>(),
+        erase::<webhooks::Delete>(),
+        erase::<webhooks::Test>(),
     ]
 }
 

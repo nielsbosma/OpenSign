@@ -32,6 +32,23 @@ pub struct Message {
     pub paragraphs: Vec<String>,
     pub button: Option<(String, String)>,
     pub footer: Option<String>,
+    pub attachments: Vec<Attachment>,
+}
+
+pub struct Attachment {
+    pub filename: String,
+    pub content: Vec<u8>,
+}
+
+fn encoded_attachments(message: &Message, name_key: &str, content_key: &str) -> serde_json::Value {
+    use base64::Engine;
+    serde_json::Value::Array(
+        message
+            .attachments
+            .iter()
+            .map(|a| json!({ name_key: header_safe(&a.filename).replace(['/', '\\'], "_"), content_key: base64::engine::general_purpose::STANDARD.encode(&a.content) }))
+            .collect(),
+    )
 }
 
 pub struct Rendered {
@@ -98,6 +115,7 @@ pub async fn send(app: &App, settings: &EmailSettings, org: &OrgSettings, messag
                 "Subject": header_safe(&message.subject),
                 "HTML": rendered.html,
                 "Text": rendered.text,
+                "Attachments": encoded_attachments(message, "Filename", "Content"),
             }))
             .send()
             .await
@@ -124,6 +142,9 @@ pub async fn send(app: &App, settings: &EmailSettings, org: &OrgSettings, messag
         "html": rendered.html,
         "text": rendered.text,
     });
+    if !message.attachments.is_empty() {
+        body["attachments"] = encoded_attachments(message, "filename", "content");
+    }
     if !settings.reply_to.is_empty() {
         body["reply_to"] = json!(header_safe(&settings.reply_to));
     }
@@ -153,6 +174,7 @@ mod tests {
                 paragraphs: vec!["<script>alert(1)</script>".into()],
                 button: Some(("Sign".into(), "javascript:alert(1)".into())),
                 footer: None,
+                attachments: vec![],
             },
             &org,
         );
