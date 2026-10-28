@@ -116,6 +116,12 @@ async fn sends_signs_seals_and_verifies() {
     .await
     .unwrap();
     let id = document.document.id;
+    let update =
+        |external_id: &str| serde_json::from_value::<docs::UpdateInput>(serde_json::json!({ "id": id, "externalId": external_id }));
+    let tagged = call::<docs::Update>(&sender, update("CRM-1").unwrap()).await.unwrap();
+    assert_eq!(tagged.document.external_id.as_deref(), Some("CRM-1"));
+    let cleared = call::<docs::Update>(&sender, update("").unwrap()).await.unwrap();
+    assert_eq!(cleared.document.external_id, None);
 
     let first = call::<docs::Upload>(
         &sender,

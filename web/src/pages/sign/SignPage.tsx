@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { type AttachmentRequest, type AuthMethod, call, errorMessage, fetchPdf, type SignerView } from '@/lib/api';
+import { ApiError, type AttachmentRequest, type AuthMethod, call, errorMessage, fetchPdf, type SignerView } from '@/lib/api';
 import { saveBytes } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { FormError } from '../auth/AuthLayout';
@@ -333,6 +333,7 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
       setResult(out.completed ? 'completed' : 'signed');
     } catch (e) {
       setSignError(errorMessage(e));
+      if (e instanceof ApiError && e.status === 401) setSession('');
     } finally {
       setBusy(false);
     }
@@ -344,6 +345,7 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
       setResult('declined');
     } catch (e) {
       setSignError(errorMessage(e));
+      if (e instanceof ApiError && e.status === 401) setSession('');
     } finally {
       setBusy(false);
       setDeclining(false);
