@@ -16,6 +16,27 @@ pub struct Identity {
     pub personal_number: Option<String>,
 }
 
+/// Whether `method` is switched on and has what it needs to work, with the reason when not.
+pub fn ready(settings: &crate::settings::EidSettings, method: crate::documents::AuthMethod) -> crate::error::Result<()> {
+    use crate::documents::AuthMethod;
+    match method {
+        AuthMethod::SeBankid => bankid::BankId::from_settings(settings).map(|_| ()),
+        AuthMethod::Freja => freja::Freja::from_settings(settings).map(|_| ()),
+        AuthMethod::Broker => {
+            let complete = settings.broker_enabled
+                && !settings.broker_issuer.trim().is_empty()
+                && !settings.broker_client_id.trim().is_empty()
+                && settings.broker_client_secret.as_deref().is_some_and(|s| !s.is_empty());
+            if complete {
+                Ok(())
+            } else {
+                Err(crate::error::bad_request("The eID broker is not set up. An admin completes it in Admin settings."))
+            }
+        }
+        _ => Ok(()),
+    }
+}
+
 /// A Swedish personal identity (or coordination) number as 12 digits, if the check digit is right.
 /// `+` before the last four digits marks someone 100 or older.
 pub fn se_personal_number(input: &str, this_year: i32) -> Option<String> {

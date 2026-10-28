@@ -818,15 +818,7 @@ async fn check_auth_available(ctx: &Ctx, conn: &mut PgConnection, method: AuthMe
         }
         AuthMethod::SeBankid | AuthMethod::Freja | AuthMethod::Broker => {
             let eid: EidSettings = settings(ctx, conn).await?;
-            let enabled = match method {
-                AuthMethod::SeBankid => eid.bankid_enabled,
-                AuthMethod::Freja => eid.freja_enabled,
-                _ => eid.broker_enabled,
-            };
-            if !enabled {
-                return Err(bad_request(format!("{} is not set up. An admin enables it in Admin settings.", method.label())));
-            }
-            Ok(())
+            crate::eid::ready(&eid, method).map_err(|e| bad_request(format!("{} cannot be used yet: {}", method.label(), e.message)))
         }
     }
 }
@@ -857,13 +849,9 @@ impl Service for ListAuthMethods {
         if crate::sms::is_configured(&sms) || ctx.app.env.development {
             available.push(AuthMethod::SmsPin);
         }
-        for (on, method) in
-            [(eid.bankid_enabled, AuthMethod::SeBankid), (eid.freja_enabled, AuthMethod::Freja), (eid.broker_enabled, AuthMethod::Broker)]
-        {
-            if on {
-                available.push(method);
-            }
-        }
+        available.extend(
+            [AuthMethod::SeBankid, AuthMethod::Freja, AuthMethod::Broker].into_iter().filter(|m| crate::eid::ready(&eid, *m).is_ok()),
+        );
         Ok(AuthMethods { available })
     }
 }
