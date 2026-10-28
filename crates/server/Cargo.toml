@@ -1,0 +1,37 @@
+[package]
+name = "opensign-server"
+description = "The HTTP server and the background worker."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "opensign"
+path = "src/main.rs"
+
+[dependencies]
+opensign-core = { workspace = true }
+opensign-crypto = { workspace = true }
+opensign-db = { workspace = true }
+anyhow = { workspace = true }
+axum = { workspace = true }
+bytes = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true, features = ["util"] }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+opensign-core = { workspace = true, features = ["testing"] }
+http-body-util = "0.1"
+lopdf = "0.46"

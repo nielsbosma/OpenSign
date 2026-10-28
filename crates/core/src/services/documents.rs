@@ -1181,6 +1181,31 @@ impl Service for Download {
     }
 }
 
+/// The PDF to show in the editor: the sent document once there is one, otherwise the draft's files
+/// combined the way sending will combine them.
+pub async fn preview_pdf(ctx: &Ctx, id: Uuid) -> Result<(String, Vec<u8>)> {
+    let mut conn = ctx.db().acquire().await?;
+    let document = load_document(ctx, &mut conn, id, Need::Read).await?;
+    let name = format!("{}.pdf", notify::sanitize_filename(&document.title));
+    if let Some(file_id) = document.sealed_file_id.or(document.source_file_id) {
+        let record = file_record(&mut conn, file_id).await?;
+        return Ok((name, read_file(&ctx.app.storage, ctx.keys(), &record).await?));
+    }
+    let records = files(&mut conn, document.id).await?;
+    if records.is_empty() {
+        return Err(not_found("File"));
+    }
+    let mut bodies = Vec::with_capacity(records.len());
+    for record in &records {
+        bodies.push(read_file(&ctx.app.storage, ctx.keys(), record).await?);
+    }
+    let merged = tokio::task::spawn_blocking(move || opensign_pdf::merge(&bodies))
+        .await
+        .map_err(AppError::internal)?
+        .map_err(upload::pdf_failure)?;
+    Ok((name, merged))
+}
+
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SigningLinkInput {
