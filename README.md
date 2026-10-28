@@ -7,7 +7,7 @@ An open source electronic signing service you run yourself. Upload a Word or PDF
 - **Identification**: email link, SMS code (46elks or Twilio), Swedish BankID, Freja eID, and other Nordic eIDs through an OpenID Connect broker (Idura/Criipto, Signicat). With a personal number on the party, only that person can sign.
 - **Sealed PDFs**: PAdES (ETSI.CAdES.detached) seal over the whole file, RFC 3161 time stamp, appended evidence pages, and a verify page and API that check any OpenSign document.
 - **Word and PDF uploads**: Word, ODT and RTF are converted by Gotenberg on a private network; every PDF is sanitized (no JavaScript, forms actions, embedded files or XFA) before anyone sees it.
-- **APIs**: a REST API with OpenAPI, plus drop-in compatible endpoints for **Scrive** (`/api/v2`) and **DocuSign** eSignature (`/restapi/v2.1`), signed webhooks, and idempotency keys.
+- **APIs**: a REST API with OpenAPI, plus drop-in compatible endpoints for **Scrive** (`/scrive/api/v2`) and **DocuSign** eSignature (`/docusign/restapi/v2.1`), signed webhooks, and idempotency keys.
 - **MCP**: everything you can do in the app is available to Claude and other MCP clients, with your permissions and in the audit trail.
 - **AI (optional)**: an assistant over your own tools, and an LLM review of a document before you send it. Off until an admin picks a provider; document text is only sent if an admin allows it.
 - **Multi-user with roles**: admin, manager, sender, auditor and viewer. One organisation per install.
@@ -79,7 +79,14 @@ Create an API key under **Settings → API Keys**, then:
 curl -H "Authorization: Bearer osk_..." https://sign.example.com/api/v1/documents
 ```
 
-The OpenAPI document is at `/api/v1/openapi.json`. Existing Scrive or DocuSign integrations can point at OpenSign instead: use an OpenSign API key as the bearer token, and the Scrive or DocuSign base path above.
+The OpenAPI document is at `/api/v1/openapi.json`. Existing Scrive or DocuSign integrations can point at OpenSign by swapping the base URL and using an OpenSign API key as the bearer token (Scrive's OAuth header takes it as `oauth_token`):
+
+| API | Vendor base URL | OpenSign base URL |
+| --- | --- | --- |
+| Scrive v2 | `https://scrive.com/api/v2` | `https://sign.example.com/scrive/api/v2` |
+| DocuSign eSignature v2.1 | `https://demo.docusign.net/restapi/v2.1` | `https://sign.example.com/docusign/restapi/v2.1` |
+
+The older `/api/v2` and `/restapi/v2.1` paths still work as aliases.
 
 ## Connecting Claude
 

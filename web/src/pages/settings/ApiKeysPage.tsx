@@ -149,7 +149,7 @@ export function ApiKeysPage() {
       description={
         <>
           For your own integrations. OpenSign speaks its own REST API at <code>/api/v1</code>, and drop-in compatible Scrive (
-          <code>/api/v2</code>) and DocuSign (<code>/restapi/v2.1</code>) APIs.
+          <code>/scrive/api/v2</code>) and DocuSign (<code>/docusign/restapi/v2.1</code>) APIs.
         </>
       }
     >
