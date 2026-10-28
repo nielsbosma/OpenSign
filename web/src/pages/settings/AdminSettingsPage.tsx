@@ -2,19 +2,21 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmButton, Field, Spinner } from '@/components/common';
+import { SearchSelect } from '@/components/SearchSelect';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { type Group, useApi, useApiMutation } from '@/lib/api';
 import { formatDate, formatDateTime, LANGUAGES } from '@/lib/format';
+import { countryOptions, timeZoneOptions } from '@/lib/regions';
 import { SettingsCard } from './SettingsLayout';
 
 type Spec = {
   key: string;
   label: string;
   /** `file` is a secret PEM or PKCS#12 file, `pem` a public one such as a CA certificate. */
-  type?: 'text' | 'secret' | 'bool' | 'number' | 'select' | 'file' | 'pem' | 'color';
+  type?: 'text' | 'secret' | 'bool' | 'number' | 'select' | 'file' | 'pem' | 'color' | 'country' | 'timeZone';
   hint?: string;
   options?: [string, string][];
   placeholder?: string;
@@ -31,8 +33,8 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
     fields: [
       { key: 'name', label: 'Name' },
       { key: 'registrationNumber', label: 'Registration Number' },
-      { key: 'country', label: 'Country', placeholder: 'SE' },
-      { key: 'timeZone', label: 'Time Zone', placeholder: 'Europe/Stockholm' },
+      { key: 'country', label: 'Country', type: 'country' },
+      { key: 'timeZone', label: 'Time Zone', type: 'timeZone' },
       {
         key: 'locale',
         label: 'Language for Signers',
@@ -399,6 +401,21 @@ export function AdminSettingsPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                  </Field>
+                );
+              }
+              if (f.type === 'country' || f.type === 'timeZone') {
+                const country = f.type === 'country';
+                return (
+                  <Field key={f.key} label={f.label} htmlFor={id} hint={hint}>
+                    <SearchSelect
+                      id={id}
+                      value={String(value(f.key) ?? '')}
+                      onChange={(v) => set(f.key, v)}
+                      options={country ? countryOptions() : timeZoneOptions()}
+                      searchPlaceholder={country ? 'Search countries…' : 'Search by city or offset…'}
+                      disabled={locked}
+                    />
                   </Field>
                 );
               }
