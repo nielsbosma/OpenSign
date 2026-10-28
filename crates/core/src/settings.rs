@@ -197,11 +197,17 @@ pub struct EidSettings {
     pub broker_client_secret: Option<String>,
     /// Picks the eID at the broker, e.g. `urn:grn:authn:no:bankid`. Empty lets the signer choose.
     pub broker_acr_values: String,
+    /// Swedish BankID through TIC Identity (id.tic.io), used when BankID above is off.
+    pub tic_enabled: bool,
+    /// The tenant's name at TIC, as in `https://id.tic.io/<tenant>`.
+    pub tic_tenant: String,
+    pub tic_client_id: String,
+    pub tic_client_secret: Option<String>,
 }
 
 impl SettingsGroup for EidSettings {
     const NAME: &'static str = "eid";
-    const SECRETS: &'static [&'static str] = &["bankidCertificate", "frejaCertificate", "brokerClientSecret"];
+    const SECRETS: &'static [&'static str] = &["bankidCertificate", "frejaCertificate", "brokerClientSecret", "ticClientSecret"];
 }
 
 const TTL: Duration = Duration::from_secs(5);

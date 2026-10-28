@@ -4,7 +4,7 @@ An open source electronic signing service you run yourself. Upload a Word or PDF
 
 - **Signing flows**: signers, approvers and viewers, in order or all at once; email, SMS or link delivery, or in person on your own device; reminders, expiry, decline with a reason; templates. Signers can be asked for attachments (an ID copy, a certificate), which are cleaned and sealed into the signed PDF. Signers see everything in English or Swedish.
 - **Bulk send**: send a template to every row of a CSV or Excel file. Columns are matched to parties and fields by name (Swedish or English), optionally with AI, and every row is checked before anything is sent.
-- **Identification**: email link, SMS code (46elks or Twilio), Swedish BankID, Freja eID, and other Nordic eIDs through an OpenID Connect broker (Idura/Criipto, Signicat). With a personal number on the party, only that person can sign.
+- **Identification**: email link, SMS code (46elks or Twilio), Swedish BankID (with your own agreement or through TIC Identity), Freja eID, and other Nordic eIDs through an OpenID Connect broker (Idura/Criipto, Signicat). With a personal number on the party, only that person can sign.
 - **Sealed PDFs**: PAdES B-LTA: a seal over the whole file with an RFC 3161 time stamp, the certificates and OCSP or CRL answers needed to validate it offline, and an archive time stamp over everything. Evidence pages, and a verify page and API that check any OpenSign document and flag any change made after a signature other than validation data.
 - **Word and PDF uploads**: Word, ODT and RTF are converted by Gotenberg on a private network; every PDF is sanitized (no JavaScript, forms actions, embedded files or XFA) before anyone sees it.
 - **APIs**: a REST API with OpenAPI, plus drop-in compatible endpoints for **Scrive** (`/scrive/api/v2`) and **DocuSign** eSignature (`/docusign/restapi/v2.1`), signed webhooks, and idempotency keys.
@@ -83,6 +83,7 @@ Back up the database before a major version. Turn off the GitHub check in **Sett
 - **Swedish BankID**: turn it on with **Use the BankID test environment** and it works right away with BankID's public test certificate and a [test BankID](https://developers.bankid.com/test-portal). For production, upload the `.p12` your bank gives you and type its password; BankID's server root is built in.
 - **Freja eID**: upload the `.pfx` from Freja with its password, and Freja's result-signing certificate. Results whose signature does not check out are refused.
 - **Broker**: issuer URL, client id and secret. Register `https://<your-install>/api/eid/callback` as the redirect URI. `acr_values` picks a specific eID.
+- **BankID through [TIC Identity](https://id.tic.io)**: for BankID without an agreement with a bank. Turn on OIDC for your tenant in TIC's portal, register `https://<your-install>/api/eid/callback` as the redirect URI, and enter the tenant name, client id and secret. Parties still choose Swedish BankID; it goes through TIC whenever BankID with your own certificate is off.
 
 ## Using the API
 
