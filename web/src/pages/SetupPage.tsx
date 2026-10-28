@@ -5,6 +5,8 @@ import { Navigate, useNavigate } from 'react-router';
 import { Field, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { call, useApi } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { AuthLayout, FormError, PASSWORD_HINT } from './auth/AuthLayout';
@@ -73,17 +75,39 @@ function AdminStep() {
   );
 }
 
+type EmailValues = {
+  provider?: string;
+  apiKey?: boolean;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpSecurity?: string;
+  smtpUsername?: string;
+  smtpPassword?: boolean;
+  fromAddress?: string;
+  fromName?: string;
+};
+
 function EmailStep() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const current = useApi('settings.get', { group: 'email' });
-  const values = (current.data?.values ?? {}) as { fromAddress?: string; fromName?: string; apiKey?: boolean };
+  const values = (current.data?.values ?? {}) as EmailValues;
+  const [provider, setProvider] = useState<string>();
   const [apiKey, setApiKey] = useState('');
+  const [smtpHost, setSmtpHost] = useState<string>();
+  const [smtpPort, setSmtpPort] = useState<string>();
+  const [smtpSecurity, setSmtpSecurity] = useState<string>();
+  const [smtpUsername, setSmtpUsername] = useState<string>();
+  const [smtpPassword, setSmtpPassword] = useState('');
   const [fromAddress, setFromAddress] = useState<string>();
   const [fromName, setFromName] = useState<string>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+
+  const chosen = provider ?? values.provider ?? 'resend';
+  const smtp = chosen === 'smtp';
+  const security = smtpSecurity ?? values.smtpSecurity ?? 'starttls';
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -93,7 +117,16 @@ function EmailStep() {
       await call('settings.update', {
         group: 'email',
         values: {
-          apiKey: apiKey.trim() || null,
+          provider: chosen,
+          ...(smtp
+            ? {
+                smtpHost: (smtpHost ?? values.smtpHost ?? '').trim(),
+                smtpPort: Number(smtpPort ?? values.smtpPort ?? 587),
+                smtpSecurity: security,
+                smtpUsername: (smtpUsername ?? values.smtpUsername ?? '').trim(),
+                smtpPassword: smtpPassword || null,
+              }
+            : { apiKey: apiKey.trim() || null }),
           fromAddress: (fromAddress ?? values.fromAddress ?? '').trim(),
           fromName: fromName ?? values.fromName ?? '',
         },
@@ -123,30 +156,114 @@ function EmailStep() {
 
   return (
     <AuthLayout
-      title="Connect Resend"
-      description="OpenSign sends signing invitations, codes and signed documents through Resend. It needs a working setup before anyone can sign."
+      title="Set Up Email"
+      description="OpenSign sends signing invitations, codes and signed documents by email. It needs a working setup before anyone can sign."
       wide
     >
       <Steps step={2} />
       <form onSubmit={submit} className="grid gap-4">
         <FormError message={error} />
-        <Field
-          label="Resend API Key"
-          htmlFor="apiKey"
-          hint={values.apiKey ? 'A key is saved. Leave empty to keep it.' : 'Create one at resend.com with permission to send email.'}
-        >
-          <Input
-            id="apiKey"
-            type="password"
-            autoComplete="off"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="re_..."
-            className="font-mono"
-          />
-        </Field>
+        <Tabs value={chosen} onValueChange={setProvider}>
+          <TabsList className="w-full">
+            <TabsTrigger value="resend">Resend</TabsTrigger>
+            <TabsTrigger value="smtp">SMTP Server</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {smtp ? (
+          <>
+            <div className="grid gap-4 sm:grid-cols-[1fr_7rem]">
+              <Field label="SMTP Server" htmlFor="smtpHost">
+                <Input
+                  id="smtpHost"
+                  value={smtpHost ?? values.smtpHost ?? ''}
+                  onChange={(e) => setSmtpHost(e.target.value)}
+                  placeholder="smtp.example.com"
+                  autoComplete="off"
+                  required
+                />
+              </Field>
+              <Field label="Port" htmlFor="smtpPort">
+                <Input
+                  id="smtpPort"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={smtpPort ?? String(values.smtpPort ?? 587)}
+                  onChange={(e) => setSmtpPort(e.target.value)}
+                  required
+                />
+              </Field>
+            </div>
+            <Field
+              label="Security"
+              hint={
+                security === 'tls' ? 'TLS from the first byte, usually port 465.' : 'Upgrades to TLS before signing in, usually port 587.'
+              }
+            >
+              <Select
+                value={security}
+                onValueChange={(v) => {
+                  setSmtpSecurity(v);
+                  const port = smtpPort ?? String(values.smtpPort ?? 587);
+                  if (port === '587' || port === '465') setSmtpPort(v === 'tls' ? '465' : '587');
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="starttls">STARTTLS</SelectItem>
+                  <SelectItem value="tls">TLS</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Username" htmlFor="smtpUsername" hint="Leave empty if the server needs no sign-in.">
+                <Input
+                  id="smtpUsername"
+                  autoComplete="off"
+                  value={smtpUsername ?? values.smtpUsername ?? ''}
+                  onChange={(e) => setSmtpUsername(e.target.value)}
+                />
+              </Field>
+              <Field
+                label="Password"
+                htmlFor="smtpPassword"
+                hint={values.smtpPassword ? 'A password is saved. Leave empty to keep it.' : undefined}
+              >
+                <Input
+                  id="smtpPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  value={smtpPassword}
+                  onChange={(e) => setSmtpPassword(e.target.value)}
+                />
+              </Field>
+            </div>
+          </>
+        ) : (
+          <Field
+            label="Resend API Key"
+            htmlFor="apiKey"
+            hint={values.apiKey ? 'A key is saved. Leave empty to keep it.' : 'Create one at resend.com with permission to send email.'}
+          >
+            <Input
+              id="apiKey"
+              type="password"
+              autoComplete="off"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="re_..."
+              className="font-mono"
+            />
+          </Field>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="From Address" htmlFor="fromAddress" hint="On a domain you verified in Resend.">
+          <Field
+            label="From Address"
+            htmlFor="fromAddress"
+            hint={smtp ? 'An address the server may send from.' : 'On a domain you verified in Resend.'}
+          >
             <Input
               id="fromAddress"
               type="email"

@@ -114,6 +114,20 @@ async fn sessions_csrf_rate_limits_and_api_keys() {
     let (_, status) = client.call("setup.status", json!({}), auth).await;
     assert_eq!(status["emailConfigured"], false, "a new sender needs a new test");
 
+    let url = json!({ "group": "email", "values": { "provider": "smtp", "smtpHost": "smtp://mail.example.com" } });
+    let (response, _) = client.call("settings.update", url, auth).await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST, "a URL is not a host name");
+    let plain = json!({ "group": "email", "values": { "provider": "smtp", "smtpHost": "mail.example.com", "smtpSecurity": "none" } });
+    let (response, _) = client.call("settings.update", plain, auth).await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST, "unencrypted SMTP is refused");
+    let smtp = json!({ "group": "email", "values": {
+        "provider": "smtp", "smtpHost": "mail.example.com", "smtpPort": 465, "smtpSecurity": "tls", "smtpUsername": "opensign", "smtpPassword": "hunter2"
+    } });
+    let (response, saved) = client.call("settings.update", smtp, auth).await;
+    assert_eq!(response.status(), StatusCode::OK, "{saved}");
+    assert_eq!(saved["values"]["smtpPassword"], true, "the password is never returned");
+    assert_eq!(saved["values"]["smtpHost"], "mail.example.com");
+
     let (response, _) = client.call("auth.logout", json!({}), &[("cookie", &cookie), ("origin", ORIGIN)]).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert!(response.headers().get(header::SET_COOKIE).unwrap().to_str().unwrap().contains("Max-Age=0"));

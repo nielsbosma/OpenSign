@@ -97,11 +97,32 @@ fn dev_mailpit_url() -> String {
     std::env::var("MAILPIT_URL").unwrap_or_else(|_| "http://localhost:8026".into())
 }
 
-/// Sends through Resend. In development without a Resend key, mail goes to Mailpit instead.
+const NOT_SET_UP: &str = "Email is not set up. An admin connects Resend or an SMTP server in Admin settings.";
+
+pub fn is_smtp(settings: &EmailSettings) -> bool {
+    settings.provider == "smtp"
+}
+
+pub fn is_configured(settings: &EmailSettings) -> bool {
+    !settings.from_address.is_empty()
+        && if is_smtp(settings) {
+            !settings.smtp_host.trim().is_empty() && settings.smtp_port != 0
+        } else {
+            settings.api_key.as_deref().is_some_and(|k| !k.is_empty())
+        }
+}
+
+/// Sends through Resend or SMTP. In development without a Resend key, mail goes to Mailpit instead.
 pub async fn send(app: &App, settings: &EmailSettings, org: &OrgSettings, message: &Message) -> Result<()> {
     let rendered = render(message, org);
     let from_name = header_safe(if settings.from_name.is_empty() { &org.name } else { &settings.from_name });
     let from_address = header_safe(&settings.from_address);
+    if is_smtp(settings) {
+        if !is_configured(settings) {
+            return Err(AppError::new(ErrorKind::Unavailable, NOT_SET_UP));
+        }
+        return smtp::send(app, settings, &from_name, &from_address, message, rendered).await;
+    }
     let api_key = settings.api_key.clone().unwrap_or_default();
 
     if api_key.is_empty() && app.env.development {
@@ -127,7 +148,7 @@ pub async fn send(app: &App, settings: &EmailSettings, org: &OrgSettings, messag
     }
 
     if api_key.is_empty() || from_address.is_empty() {
-        return Err(AppError::new(ErrorKind::Unavailable, "Email is not set up. An admin adds a Resend API key in Admin settings."));
+        return Err(AppError::new(ErrorKind::Unavailable, NOT_SET_UP));
     }
     let from = if from_name.is_empty() {
         from_address.clone()
@@ -164,6 +185,187 @@ pub async fn send(app: &App, settings: &EmailSettings, org: &OrgSettings, messag
     Ok(())
 }
 
+mod smtp {
+    use std::net::SocketAddr;
+    use std::time::Duration;
+
+    use lettre::message::header::ContentType;
+    use lettre::message::{Attachment, Mailbox, MultiPart};
+    use lettre::transport::smtp::authentication::Credentials;
+    use lettre::transport::smtp::client::{Tls, TlsParameters};
+    use lettre::transport::smtp::extension::ClientId;
+    use lettre::{AsyncSmtpTransport, AsyncTransport, Tokio1Executor};
+
+    use super::{Message, Rendered, header_safe};
+    use crate::context::App;
+    use crate::error::{AppError, ErrorKind, Result, bad_request};
+    use crate::settings::EmailSettings;
+
+    /// A host name or IP address, without a scheme, port or path.
+    pub fn valid_host(host: &str) -> bool {
+        let host = host.trim_start_matches('[').trim_end_matches(']');
+        !host.is_empty()
+            && host.len() <= 253
+            && (host.parse::<std::net::IpAddr>().is_ok() || host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-'))
+    }
+
+    fn mailbox(name: &str, address: &str) -> Result<Mailbox> {
+        let address = address.parse().map_err(|_| bad_request(format!("{address} is not an address an email can go to")))?;
+        let name = name.replace(['<', '>', '"', ',', ';'], "");
+        Ok(Mailbox::new((!name.is_empty()).then_some(name), address))
+    }
+
+    /// Resolves once and connects to that address, so a name cannot point somewhere else between the
+    /// check and the connection. TLS still verifies the certificate against the configured host name.
+    async fn resolve(host: &str, port: u16, allow_private: bool) -> Result<SocketAddr> {
+        let unreachable = || AppError::new(ErrorKind::Unavailable, format!("{host} could not be found"));
+        let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host, port)).await.map_err(|e| unreachable().with_cause(e))?.collect();
+        if addrs.is_empty() {
+            return Err(unreachable());
+        }
+        addrs.into_iter().find(|a| allow_private || !crate::net::is_forbidden(a.ip())).ok_or_else(|| {
+            AppError::new(
+                ErrorKind::Unavailable,
+                format!("{host} resolves only to private or reserved addresses, which OpenSign does not connect to"),
+            )
+        })
+    }
+
+    fn describe(host: &str, e: lettre::transport::smtp::Error) -> AppError {
+        let message = if e.is_timeout() {
+            format!("{host} did not answer in time")
+        } else if e.is_tls() {
+            format!("A secure connection to {host} failed. Check the security setting and that its certificate is valid for {host}.")
+        } else if e.is_client() {
+            format!("{host} cannot be used as configured ({e})")
+        } else if e.is_permanent() || e.is_transient() {
+            format!("The SMTP server refused the email: {e}")
+        } else {
+            format!("{host} is not reachable on that port")
+        };
+        AppError::new(ErrorKind::Unavailable, message).with_cause(e)
+    }
+
+    pub async fn send(
+        app: &App,
+        settings: &EmailSettings,
+        from_name: &str,
+        from_address: &str,
+        message: &Message,
+        rendered: Rendered,
+    ) -> Result<()> {
+        let host = settings.smtp_host.trim();
+        if !valid_host(host) {
+            return Err(bad_request("Enter the SMTP server's host name, such as smtp.example.com"));
+        }
+        let mut builder = lettre::Message::builder()
+            .from(mailbox(from_name, from_address)?)
+            .to(mailbox(&message.to_name.as_deref().map(header_safe).unwrap_or_default(), &header_safe(&message.to))?)
+            .subject(header_safe(&message.subject));
+        if !settings.reply_to.is_empty() {
+            builder = builder.reply_to(mailbox("", &header_safe(&settings.reply_to))?);
+        }
+        let body = MultiPart::alternative_plain_html(rendered.text, rendered.html);
+        let email = if message.attachments.is_empty() {
+            builder.multipart(body)
+        } else {
+            let mut mixed = MultiPart::mixed().multipart(body);
+            for a in &message.attachments {
+                let filename = header_safe(&a.filename).replace(['/', '\\'], "_");
+                let mime = if filename.to_ascii_lowercase().ends_with(".pdf") { "application/pdf" } else { "application/octet-stream" };
+                let content_type = ContentType::parse(mime).map_err(AppError::internal)?;
+                mixed = mixed.singlepart(Attachment::new(filename).body(a.content.clone(), content_type));
+            }
+            builder.multipart(mixed)
+        }
+        .map_err(AppError::internal)?;
+        let hello = reqwest::Url::parse(&app.public_url())
+            .ok()
+            .and_then(|u| u.host_str().map(str::to_string))
+            .map_or_else(ClientId::default, ClientId::Domain);
+        deliver(settings, email, app.env.development, hello).await
+    }
+
+    async fn deliver(settings: &EmailSettings, email: lettre::Message, allow_private: bool, hello: ClientId) -> Result<()> {
+        let host = settings.smtp_host.trim().trim_start_matches('[').trim_end_matches(']');
+        let addr = resolve(host, settings.smtp_port, allow_private).await?;
+        let tls = TlsParameters::new(host.into()).map_err(|e| describe(host, e))?;
+        let tls = if settings.smtp_security == "tls" { Tls::Wrapper(tls) } else { Tls::Required(tls) };
+        let mut transport = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(addr.ip().to_string())
+            .port(addr.port())
+            .tls(tls)
+            .hello_name(hello)
+            .timeout(Some(Duration::from_secs(30)));
+        if !settings.smtp_username.is_empty() {
+            transport =
+                transport.credentials(Credentials::new(settings.smtp_username.clone(), settings.smtp_password.clone().unwrap_or_default()));
+        }
+        transport.build().send(email).await.map_err(|e| describe(host, e))?;
+        Ok(())
+    }
+
+    #[cfg(test)]
+    #[allow(clippy::unwrap_used)]
+    mod tests {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+        use super::*;
+
+        fn settings(port: u16) -> EmailSettings {
+            EmailSettings {
+                provider: "smtp".into(),
+                smtp_host: "127.0.0.1".into(),
+                smtp_port: port,
+                smtp_username: "user".into(),
+                smtp_password: Some("secret".into()),
+                ..Default::default()
+            }
+        }
+
+        fn email() -> lettre::Message {
+            lettre::Message::builder()
+                .from(mailbox("", "a@example.com").unwrap())
+                .to(mailbox("", "b@example.com").unwrap())
+                .subject("s")
+                .body(String::from("b"))
+                .unwrap()
+        }
+
+        #[tokio::test]
+        async fn refuses_private_addresses_outside_development() {
+            let err = deliver(&settings(25), email(), false, ClientId::default()).await.unwrap_err();
+            assert!(err.message.contains("private or reserved"), "{}", err.message);
+        }
+
+        #[tokio::test]
+        async fn never_falls_back_to_plain_text() {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let server = tokio::spawn(async move {
+                let (stream, _) = listener.accept().await.unwrap();
+                let (read, mut write) = stream.into_split();
+                let mut lines = BufReader::new(read).lines();
+                let mut seen = Vec::new();
+                write.write_all(b"220 test ESMTP\r\n").await.unwrap();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    seen.push(line.clone());
+                    let reply: &[u8] = if line.starts_with("EHLO") { b"250-test\r\n250 AUTH PLAIN LOGIN\r\n" } else { b"221 bye\r\n" };
+                    if write.write_all(reply).await.is_err() || line.starts_with("QUIT") {
+                        break;
+                    }
+                }
+                seen
+            });
+            let err = deliver(&settings(port), email(), true, ClientId::default()).await.unwrap_err();
+            assert!(err.message.contains("STARTTLS"), "{}", err.message);
+            let seen = server.await.unwrap();
+            assert!(seen.iter().all(|l| !l.starts_with("AUTH") && !l.starts_with("MAIL")), "{seen:?}");
+        }
+    }
+}
+
+pub use smtp::valid_host as valid_smtp_host;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -187,6 +389,17 @@ mod tests {
         assert!(!rendered.html.contains("javascript:"));
         assert!(!rendered.html.contains("url(x)"));
         assert!(rendered.html.contains("&lt;Acme&gt;"));
+    }
+
+    #[test]
+    fn smtp_hosts_are_bare_names() {
+        assert!(valid_smtp_host("smtp.example.com"));
+        assert!(valid_smtp_host("10.0.0.5"));
+        assert!(valid_smtp_host("[::1]"));
+        assert!(!valid_smtp_host("smtp://smtp.example.com"));
+        assert!(!valid_smtp_host("smtp.example.com:587"));
+        assert!(!valid_smtp_host("smtp.example.com/x"));
+        assert!(!valid_smtp_host(""));
     }
 
     #[test]
