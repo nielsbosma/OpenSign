@@ -101,7 +101,9 @@ fn field(party_id: Option<Uuid>, kind: FieldKind, page: i32, y: f64) -> FieldInp
 #[tokio::test]
 async fn sends_signs_seals_and_verifies() {
     let Some(app) = app().await else { return };
-    {
+    // TEST_LIVE_TSA=1 uses the default time stamp authority and its OCSP responder: PAdES B-LTA.
+    let live = std::env::var("TEST_LIVE_TSA").is_ok();
+    if !live {
         let mut conn = app.db.acquire().await.unwrap();
         let no_tsa = SigningSettings { tsa_url: String::new(), ..SigningSettings::default() };
         app.settings.save(&mut conn, &app.keys, &no_tsa, None).await.unwrap();
@@ -392,8 +394,8 @@ async fn sends_signs_seals_and_verifies() {
     let mut conn = app.db.acquire().await.unwrap();
     let verified = docs::verify_pdf(&mut conn, sealed.clone()).await.unwrap();
     assert_eq!(verified.document.map(|d| d.id), Some(id));
-    assert_eq!(verified.signatures.len(), 1);
-    assert!(verified.signatures[0].is_intact(), "{:?}", verified.signatures[0]);
+    assert_eq!(verified.signatures.len(), if live { 2 } else { 1 }, "{:?}", verified.signatures);
+    assert!(verified.signatures.iter().all(|s| s.is_intact() && s.problems.is_empty()), "{:?}", verified.signatures);
 
     let mut tampered = sealed;
     let n = tampered.len();

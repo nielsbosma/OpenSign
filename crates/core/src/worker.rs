@@ -103,7 +103,7 @@ async fn anchor_audit(ctx: &Ctx, conn: &mut sqlx::PgConnection) -> Result<()> {
     if url.is_empty() {
         return Ok(());
     }
-    let token = seal::timestamp(ctx, url, &hash).await?;
+    let token = seal::timestamp(ctx, url, &<sha2::Sha256 as sha2::Digest>::digest(&hash).into()).await?;
     sqlx::query("insert into audit_anchors (audit_id, head_hash, tsa_token, tsa_url) values ($1, $2, $3, $4)")
         .bind(head_id)
         .bind(&hash)

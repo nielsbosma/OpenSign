@@ -9,7 +9,6 @@ use const_oid::db::rfc5912::ID_SHA_256;
 use der::asn1::{Any, GeneralizedTime, Int, OctetString, SetOfVec};
 use der::{Decode, Encode, Sequence};
 use lopdf::{Document, Object, Stream, StringFormat, dictionary};
-use sha2::{Digest, Sha256};
 use spki::AlgorithmIdentifierOwned;
 
 use crate::*;
@@ -256,8 +255,8 @@ struct Response {
     token: ContentInfo,
 }
 
-/// A response shaped like a real TSA's, without the TSA's signature (which OpenSign leaves to readers).
-fn fake_tsa(request: &[u8], data: &[u8], echo_nonce: bool) -> Vec<u8> {
+/// A response shaped like a real TSA's but unsigned; `ltv_tests` has a signing one.
+fn fake_tsa(request: &[u8], digest: &[u8; 32], echo_nonce: bool) -> Vec<u8> {
     let fields: Vec<Any> = Vec::from_der(request).unwrap();
     let mut nonce: Int = fields[2].decode_as().unwrap();
     if !echo_nonce {
@@ -268,7 +267,7 @@ fn fake_tsa(request: &[u8], data: &[u8], echo_nonce: bool) -> Vec<u8> {
         policy: ObjectIdentifier::new_unwrap("1.2.3.4"),
         message_imprint: Imprint {
             hash_algorithm: AlgorithmIdentifierOwned { oid: ID_SHA_256, parameters: None },
-            hashed_message: OctetString::new(Sha256::digest(data).to_vec()).unwrap(),
+            hashed_message: OctetString::new(digest.to_vec()).unwrap(),
         },
         serial_number: Int::new(&[7]).unwrap(),
         gen_time: GeneralizedTime::from_unix_duration(std::time::Duration::from_secs(1_800_000_000)).unwrap(),
@@ -294,19 +293,20 @@ fn seals_with_a_time_stamp() {
     let identity = generate_seal_identity("Acme AB", "SE", 2).unwrap();
     let input = sanitize(&sample_pdf(false), Limits::default()).unwrap().pdf;
     let nonce = [0xA5u8; 16];
-    let sealed = seal(&input, &identity, &options(), |signature| {
-        let request = build_timestamp_request(signature, &nonce);
-        let response = fake_tsa(&request, signature, true);
-        Ok(Some(parse_timestamp_response(&response, signature, &nonce).map_err(|e| PdfError::Timestamp(e.to_string()))?))
+    let sealed = seal(&input, &identity, &options(), |digest| {
+        let request = build_timestamp_request(digest, &nonce);
+        let response = fake_tsa(&request, digest, true);
+        Ok(Some(parse_timestamp_response(&response, digest, &nonce).map_err(|e| PdfError::Timestamp(e.to_string()))?))
     })
     .unwrap();
     let check = &verify_signatures(&sealed).unwrap()[0];
     assert!(check.is_intact(), "{check:?}");
     assert_eq!(check.timestamp.unwrap().timestamp(), 1_800_000_000);
 
-    let request = build_timestamp_request(b"sig", &nonce);
-    assert!(parse_timestamp_response(&fake_tsa(&request, b"sig", false), b"sig", &nonce).is_err(), "wrong nonce");
-    assert!(parse_timestamp_response(&fake_tsa(&request, b"other", true), b"sig", &nonce).is_err(), "wrong imprint");
+    let (sig, other) = ([1u8; 32], [2u8; 32]);
+    let request = build_timestamp_request(&sig, &nonce);
+    assert!(parse_timestamp_response(&fake_tsa(&request, &sig, false), &sig, &nonce).is_err(), "wrong nonce");
+    assert!(parse_timestamp_response(&fake_tsa(&request, &other, true), &sig, &nonce).is_err(), "wrong imprint");
 }
 
 #[test]

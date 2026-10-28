@@ -1035,6 +1035,7 @@ dependencies = [
  "ff 0.13.1",
  "generic-array",
  "group 0.13.0",
+ "hkdf",
  "pem-rfc7468 0.7.0",
  "pkcs8 0.10.2",
  "rand_core 0.6.4",
@@ -2327,17 +2328,21 @@ dependencies = [
  "lopdf",
  "p256 0.13.2",
  "p256 0.14.0",
+ "p384",
  "png",
  "qrcode",
  "rand 0.8.8",
+ "rsa",
  "serde",
  "serde_json",
+ "sha1",
  "sha2 0.10.9",
  "signature 2.2.0",
  "signature 3.0.0",
  "spki 0.7.3",
  "thiserror",
  "x509-cert",
+ "x509-ocsp",
 ]
 
 [[package]]
@@ -2420,6 +2425,18 @@ dependencies = [
  "primefield",
  "primeorder 0.14.0",
  "sha2 0.11.1",
+]
+
+[[package]]
+name = "p384"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe42f1670a52a47d448f14b6a5c61dd78fce51856e68edaa38f7ae3a46b8d6b6"
+dependencies = [
+ "ecdsa 0.16.9",
+ "elliptic-curve 0.13.8",
+ "primeorder 0.13.6",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -4633,6 +4650,18 @@ dependencies = [
  "signature 2.2.0",
  "spki 0.7.3",
  "tls_codec",
+]
+
+[[package]]
+name = "x509-ocsp"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e54e695a31f0fecb826cf59ae2093c941d7ef932a1f8508185dd23b29ce2e2e"
+dependencies = [
+ "const-oid 0.9.6",
+ "der 0.7.10",
+ "spki 0.7.3",
+ "x509-cert",
 ]
 
 [[package]]

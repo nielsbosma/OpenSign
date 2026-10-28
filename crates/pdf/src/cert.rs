@@ -21,7 +21,7 @@ const ID_KP_DOCUMENT_SIGNING: const_oid::ObjectIdentifier = const_oid::ObjectIde
 pub struct SealKey(p256_ct::ecdsa::SigningKey);
 
 impl SealKey {
-    fn random() -> Self {
+    pub(crate) fn random() -> Self {
         loop {
             let mut bytes = [0u8; 32];
             rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut bytes);

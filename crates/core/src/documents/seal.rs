@@ -6,6 +6,7 @@ use opensign_pdf::{
     EvidenceAttachment, EvidenceEvent, EvidenceParty, EvidenceReport, PdfError, SealIdentity, SealOptions, Stamp, StampContent,
 };
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
@@ -77,7 +78,8 @@ pub async fn active_identity(ctx: &Ctx, conn: &mut PgConnection) -> Result<SealI
     SealIdentity::from_parts(&key, &chain).map_err(pdf_err)
 }
 
-pub(crate) async fn timestamp(ctx: &Ctx, url: &str, signature: &[u8]) -> Result<Vec<u8>> {
+/// An RFC 3161 time stamp token over a SHA-256 digest.
+pub(crate) async fn timestamp(ctx: &Ctx, url: &str, digest: &[u8; 32]) -> Result<Vec<u8>> {
     let parsed = reqwest::Url::parse(url).map_err(|_| AppError::new(ErrorKind::BadRequest, "The time stamp URL is not valid"))?;
     if !matches!(parsed.scheme(), "http" | "https") {
         return Err(AppError::new(ErrorKind::BadRequest, "The time stamp URL must use http or https"));
@@ -89,7 +91,7 @@ pub(crate) async fn timestamp(ctx: &Ctx, url: &str, signature: &[u8]) -> Result<
         .public
         .post(parsed)
         .header("content-type", "application/timestamp-query")
-        .body(opensign_pdf::build_timestamp_request(signature, &nonce))
+        .body(opensign_pdf::build_timestamp_request(digest, &nonce))
         .send()
         .await
         .map_err(|e| AppError::new(ErrorKind::Unavailable, "The time stamp authority is not reachable").with_cause(e))?;
@@ -100,7 +102,7 @@ pub(crate) async fn timestamp(ctx: &Ctx, url: &str, signature: &[u8]) -> Result<
     if body.len() > 64 * 1024 {
         return Err(AppError::new(ErrorKind::Unavailable, "The time stamp response is too large"));
     }
-    opensign_pdf::parse_timestamp_response(&body, signature, &nonce).map_err(|e| AppError::new(ErrorKind::Unavailable, e.to_string()))
+    opensign_pdf::parse_timestamp_response(&body, digest, &nonce).map_err(|e| AppError::new(ErrorKind::Unavailable, e.to_string()))
 }
 
 fn initials(name: &str) -> String {
@@ -286,7 +288,7 @@ pub async fn seal_document(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid
     let token = if signing.tsa_url.trim().is_empty() {
         None
     } else {
-        match timestamp(ctx, signing.tsa_url.trim(), &signed.signature).await {
+        match timestamp(ctx, signing.tsa_url.trim(), &Sha256::digest(&signed.signature).into()).await {
             Ok(token) => Some(token),
             Err(e) if attempt < TIMESTAMP_ATTEMPTS => return Err(e),
             Err(e) => {
@@ -297,6 +299,17 @@ pub async fn seal_document(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid
     };
     let timestamped = token.is_some();
     let sealed = opensign_pdf::finish(prepared, &identity, signed, token).map_err(pdf_err)?;
+    let (sealed, level, unchecked) = if timestamped {
+        match super::ltv::extend(ctx, sealed.clone(), &signing.tsa_url).await {
+            Ok(extended) => (extended.pdf, extended.level, extended.unchecked),
+            Err(e) => {
+                tracing::warn!(document = %document.id, error = %e, "sealed without long-term validation data");
+                (sealed, super::ltv::Level::BT, Vec::new())
+            }
+        }
+    } else {
+        (sealed, super::ltv::Level::BB, Vec::new())
+    };
 
     let record = store_file(
         conn,
@@ -325,7 +338,7 @@ pub async fn seal_document(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid
         ctx,
         conn,
         Entry::new("document.completed", "document", document.id)
-            .metadata(json!({ "sealedSha256": record.sha256, "timestamped": timestamped })),
+            .metadata(json!({ "sealedSha256": record.sha256, "timestamped": timestamped, "padesLevel": level.as_str(), "revocationUnchecked": unchecked })),
     )
     .await?;
     enqueue(conn, "notify_completed", json!({ "document": document.id }), None, Some(&format!("completed:{}", document.id))).await?;
