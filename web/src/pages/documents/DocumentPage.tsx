@@ -490,6 +490,21 @@ export function DocumentPage() {
   useEffect(() => {
     if (doc && placingFor !== null && !doc.parties.some((p) => p.id === placingFor)) setPlacingFor(null);
   }, [doc, placingFor]);
+  useEffect(() => {
+    if (!draft || !selected) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return;
+      if (e.key === 'Escape') setSelected(null);
+      else if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        update(fields.filter((f) => f.key !== selected));
+        setSelected(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [draft, selected, fields, update]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: only when the parties change
   useEffect(() => {
     if (doc && placingFor === null) setPlacingFor(doc.parties.find((p) => p.role !== 'viewer')?.id ?? null);

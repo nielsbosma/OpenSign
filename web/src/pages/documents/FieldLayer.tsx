@@ -6,7 +6,7 @@ import { clamp, type EditableField, kindLabel, partyColor } from './fields';
 
 type Drag = { key: string; mode: 'move' | 'resize'; startX: number; startY: number; field: EditableField; rect: DOMRect };
 
-/** The fields on one page. Editable fields drag to move and resize from the corner; Delete removes the selected one. */
+/** The fields on one page. Editable fields drag to move and resize from the corner; Delete removes the selected one (handled by the page). */
 export function FieldLayer({
   page,
   fields,
@@ -68,9 +68,6 @@ export function FieldLayer({
               onPointerDown={(e) => start(e, f, 'move')}
               onPointerMove={(e) => move(e)}
               onPointerUp={(e) => move(e, true)}
-              onKeyDown={(e) => {
-                if (editable && (e.key === 'Delete' || e.key === 'Backspace')) onRemove(f.key);
-              }}
               className={cn(
                 'pointer-events-auto absolute flex items-center overflow-hidden rounded-[3px] border text-[10px] leading-none select-none',
                 editable && 'cursor-move touch-none',
