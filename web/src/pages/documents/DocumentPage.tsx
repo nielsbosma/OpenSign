@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   Download,
+  Eye,
   HandHelping,
   History,
   Link2,
@@ -67,6 +68,7 @@ import { clamp, type EditableField, FIELD_KINDS, partyColor, toEditable, toInput
 import { FileDrop } from './NewDocumentDialog';
 import { PartyDialog, partyToInput } from './PartyDialog';
 import { Checks, ReviewPanel } from './ReviewPanel';
+import { SigningPreviewDialog } from './SigningPreviewDialog';
 
 function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -97,7 +99,10 @@ function useFields(doc: DocumentView | undefined, editable: boolean) {
     (next: EditableField[]) => {
       if (!doc || !editable) return;
       clearTimeout(timer.current);
-      timer.current = setTimeout(() => save.mutate({ documentId: doc.id, fields: toInput(next) }), 500);
+      timer.current = setTimeout(() => {
+        timer.current = undefined;
+        save.mutate({ documentId: doc.id, fields: toInput(next) });
+      }, 500);
     },
     [doc, editable, save],
   );
@@ -106,7 +111,13 @@ function useFields(doc: DocumentView | undefined, editable: boolean) {
     if (persist) commit(next);
   };
   const reload = (doc: DocumentView) => setFields(toEditable(doc.fields));
-  return { fields, update, reload, saving: save.isPending };
+  const flush = () => {
+    if (!timer.current || !doc || !editable) return;
+    clearTimeout(timer.current);
+    timer.current = undefined;
+    save.mutate({ documentId: doc.id, fields: toInput(fields) });
+  };
+  return { fields, update, reload, flush, saving: save.isPending };
 }
 
 function PartyCard({
@@ -432,7 +443,7 @@ export function DocumentPage() {
   const doc = query.data;
   const draft = !!doc && doc.status === 'draft' && doc.canEdit;
   const pending = !!doc && doc.status === 'pending';
-  const { fields, update, saving } = useFields(doc, draft);
+  const { fields, update, flush, saving } = useFields(doc, draft);
   const [selected, setSelected] = useState<string | null>(null);
   const [armed, setArmed] = useState<FieldKind | null>(null);
   const [placingFor, setPlacingFor] = useState<string | null>(null);
@@ -448,6 +459,7 @@ export function DocumentPage() {
   const [holding, setHolding] = useState(false);
   const [holdReason, setHoldReason] = useState('');
   const [showActivity, setShowActivity] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
 
   const setParties = useApiMutation('documents.set_parties', { invalidates: ['documents.'] });
   const removeFile = useApiMutation('documents.remove_file', { invalidates: ['documents.'] });
@@ -580,6 +592,19 @@ export function DocumentPage() {
           {doc.isTemplate && can('documents.create') && (
             <Button variant="outline" onClick={() => setBulkSending(true)}>
               <Users /> Bulk Send
+            </Button>
+          )}
+          {doc.files.length > 0 && doc.status !== 'completed' && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                flush();
+                setPreviewing(true);
+              }}
+              disabled={!doc.parties.length}
+              title={doc.parties.length ? 'See the signing page as a party will' : 'Add a party to preview the signing page'}
+            >
+              <Eye /> Preview
             </Button>
           )}
           {draft && !doc.isTemplate && (
@@ -817,6 +842,7 @@ export function DocumentPage() {
         onSave={(p) => saveParties(partyDialog.party ? allParties().map((x) => (x.id === p.id ? p : x)) : [...allParties(), p])}
       />
       <SendDialog doc={doc} open={sending} onOpenChange={setSending} onSent={setLinks} />
+      <SigningPreviewDialog doc={doc} open={previewing} onOpenChange={setPreviewing} />
       {doc.isTemplate && <BulkSendDialog templateId={doc.id} templateTitle={doc.title} open={bulkSending} onOpenChange={setBulkSending} />}
       <LinksDialog links={links} onClose={() => setLinks([])} />
       <Dialog open={showActivity} onOpenChange={setShowActivity}>

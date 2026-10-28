@@ -771,6 +771,52 @@ export type DocumentsSigningLinkInput = {
 
 export type DocumentsSigningLinkOutput = SignerLink;
 
+export type DocumentsSigningPreviewInput = {
+  documentId: string;
+  partyId: string;
+};
+
+export type SignerDocument = {
+  brandColor: string;
+  id: string;
+  language: string;
+  message?: string | null;
+  organisation: string;
+  pageCount?: number | null;
+  sender?: string | null;
+  status: string;
+  title: string;
+};
+
+export type SignerParty = {
+  company?: string | null;
+  email?: string | null;
+  id: string;
+  /** The party signs on the sender's device, which is handed over to them. */
+  inPerson: boolean;
+  name: string;
+  role: string;
+  signedAt?: string | null;
+  status: string;
+};
+
+export type DocumentsSigningPreviewOutput = SignerView;
+
+export type SignerView = {
+  /** Files the party is asked to upload before signing. */
+  attachments: Array<AttachmentRequest>;
+  canDownload: boolean;
+  document: SignerDocument;
+  /** The party's own fields, and the sender's prefilled text for context. */
+  fields: Array<FieldRow>;
+  /** Set when the party must identify before seeing the document; nothing else is filled in. */
+  needsAuthentication?: AuthMethod | null;
+  party: SignerParty;
+  /** Set when the party must identify before signing. */
+  signAuthentication?: AuthMethod | null;
+  yourTurn: boolean;
+};
+
 export type DocumentsUnshareInput = {
   id: string;
   userId: string;
@@ -1009,46 +1055,7 @@ export type SigningOpenInput = {
   token: string;
 };
 
-export type SignerDocument = {
-  brandColor: string;
-  id: string;
-  language: string;
-  message?: string | null;
-  organisation: string;
-  pageCount?: number | null;
-  sender?: string | null;
-  status: string;
-  title: string;
-};
-
-export type SignerParty = {
-  company?: string | null;
-  email?: string | null;
-  id: string;
-  /** The party signs on the sender's device, which is handed over to them. */
-  inPerson: boolean;
-  name: string;
-  role: string;
-  signedAt?: string | null;
-  status: string;
-};
-
 export type SigningOpenOutput = SignerView;
-
-export type SignerView = {
-  /** Files the party is asked to upload before signing. */
-  attachments: Array<AttachmentRequest>;
-  canDownload: boolean;
-  document: SignerDocument;
-  /** The party's own fields, and the sender's prefilled text for context. */
-  fields: Array<FieldRow>;
-  /** Set when the party must identify before seeing the document; nothing else is filled in. */
-  needsAuthentication?: AuthMethod | null;
-  party: SignerParty;
-  /** Set when the party must identify before signing. */
-  signAuthentication?: AuthMethod | null;
-  yourTurn: boolean;
-};
 
 export type SigningRemoveAttachmentInput = {
   /** The attachment request whose upload to remove. */
@@ -1326,6 +1333,7 @@ export interface Services {
   "documents.share": { kind: "mutation"; input: DocumentsShareInput; output: DocumentsShareOutput };
   "documents.sign_in_person": { kind: "mutation"; input: DocumentsSignInPersonInput; output: DocumentsSignInPersonOutput };
   "documents.signing_link": { kind: "mutation"; input: DocumentsSigningLinkInput; output: DocumentsSigningLinkOutput };
+  "documents.signing_preview": { kind: "query"; input: DocumentsSigningPreviewInput; output: DocumentsSigningPreviewOutput };
   "documents.unshare": { kind: "mutation"; input: DocumentsUnshareInput; output: DocumentsUnshareOutput };
   "documents.update": { kind: "mutation"; input: DocumentsUpdateInput; output: DocumentsUpdateOutput };
   "documents.upload": { kind: "mutation"; input: DocumentsUploadInput; output: DocumentsUploadOutput };
