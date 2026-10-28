@@ -261,13 +261,8 @@ impl Service for RequestCode {
         let org: OrgSettings = settings(ctx, conn).await?;
         let sms: SmsSettings = settings(ctx, conn).await?;
         let org_name = if org.name.is_empty() { "OpenSign" } else { org.name.as_str() };
-        crate::sms::send(
-            &ctx.app,
-            &sms,
-            &phone,
-            &format!("{code} is your code for \u{201c}{}\u{201d} from {org_name}. Never share it.", document.title),
-        )
-        .await?;
+        crate::sms::send(&ctx.app, &sms, &phone, &crate::i18n::Lang::of(&document.language).code_sms(&code, &document.title, org_name))
+            .await?;
         audit(ctx, conn, Entry::new("party.code_sent", "document", document.id).metadata(json!({ "party": party.id, "name": party.name })))
             .await?;
         let hint: String = phone.chars().rev().take(3).collect::<Vec<_>>().into_iter().rev().collect();

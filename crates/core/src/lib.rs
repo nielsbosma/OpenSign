@@ -18,6 +18,7 @@ pub mod auth;
 pub mod documents;
 pub mod eid;
 pub mod email;
+pub mod i18n;
 pub mod jobs;
 pub mod oauth;
 pub mod services;

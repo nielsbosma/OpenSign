@@ -9,11 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { type AuthMethod, call, errorMessage, fetchPdf, type SignerView } from '@/lib/api';
-import { AUTH_LABELS, saveBytes } from '@/lib/format';
+import { saveBytes } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { FormError } from '../auth/AuthLayout';
 import { EidIdentify } from './EidIdentify';
 import { type Signature, SignaturePad } from './SignaturePad';
+import { TextsContext, textsFor, useTexts } from './texts';
 
 /**
  * The page behind a signing link. The token lives in the URL fragment, so it never reaches a server log or a Referer
@@ -74,21 +75,19 @@ function safeColor(color?: string) {
 }
 
 function Shell({ view, children }: { view?: SignerView; children: React.ReactNode }) {
+  const t = useTexts();
   return (
-    <div className="min-h-svh bg-muted/40">
+    <div className="min-h-svh bg-muted/40" lang={view?.document.language}>
       <header className="border-b bg-background">
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4">
           <Logo className="size-6" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-semibold">{view?.document.title ?? 'OpenSign'}</div>
             {view && (
-              <div className="truncate text-xs text-muted-foreground">
-                From {view.document.sender ? `${view.document.sender}, ` : ''}
-                {view.document.organisation}
-              </div>
+              <div className="truncate text-xs text-muted-foreground">{t.from(view.document.sender, view.document.organisation)}</div>
             )}
           </div>
-          <ShieldCheck className="size-4 text-success" aria-label="Secure connection" />
+          <ShieldCheck className="size-4 text-success" aria-label={t.secureConnection} />
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
@@ -122,6 +121,7 @@ function Identify({
   resume?: string;
   onSession: (session: string) => void;
 }) {
+  const t = useTexts();
   const [sent, setSent] = useState<{ phoneHint: string } | null>(null);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string>();
@@ -146,11 +146,11 @@ function Identify({
     return <EidIdentify token={token} session={session} method={method} purpose={purpose} resume={resume} onSession={onSession} />;
   }
   if (method !== 'sms_pin') {
-    return <FormError message={`${AUTH_LABELS[method]} cannot be used here. Ask the sender for another method.`} />;
+    return <FormError message={t.methodUnavailable(t.methods[method] ?? method)} />;
   }
   return sent ? (
     <form onSubmit={verify} className="grid gap-3">
-      <p>We sent a 6-digit code to the number ending {sent.phoneHint}.</p>
+      <p>{t.codeSent(sent.phoneHint)}</p>
       <FormError message={error} />
       <Input
         value={code}
@@ -158,11 +158,11 @@ function Identify({
         inputMode="numeric"
         autoComplete="one-time-code"
         className="font-mono text-lg tracking-widest"
-        aria-label="Code"
+        aria-label={t.code}
         autoFocus
       />
       <Button type="submit" disabled={busy || code.trim().length < 6}>
-        {busy && <Spinner className="text-primary-foreground" />} Confirm
+        {busy && <Spinner className="text-primary-foreground" />} {t.confirm}
       </Button>
       <Button
         type="button"
@@ -170,21 +170,31 @@ function Identify({
         disabled={busy}
         onClick={() => run(async () => setSent(await call('signing.request_code', { token })))}
       >
-        Send a New Code
+        {t.newCode}
       </Button>
     </form>
   ) : (
     <div className="grid gap-3">
-      <p>To {purpose === 'view' ? 'open' : 'sign'} this document, confirm it is you with a code sent by SMS.</p>
+      <p>{t.smsIntro(purpose === 'view')}</p>
       <FormError message={error} />
       <Button disabled={busy} onClick={() => run(async () => setSent(await call('signing.request_code', { token })))}>
-        {busy && <Spinner className="text-primary-foreground" />} Text Me a Code
+        {busy && <Spinner className="text-primary-foreground" />} {t.textMe}
       </Button>
     </div>
   );
 }
 
 export function SignPage() {
+  const [language, setLanguage] = useState<string>();
+  return (
+    <TextsContext.Provider value={textsFor(language)}>
+      <SigningFlow onLanguage={setLanguage} />
+    </TextsContext.Provider>
+  );
+}
+
+function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void }) {
+  const t = useTexts();
   const token = useSigningToken();
   const resume = useEidResume();
   const [session, setSession] = useSignerSession(token);
@@ -202,9 +212,12 @@ export function SignPage() {
   useEffect(() => {
     if (!token) return;
     call('signing.open', { token, session })
-      .then(setView)
+      .then((v) => {
+        setView(v);
+        onLanguage(v.document.language);
+      })
       .catch((e) => setError(errorMessage(e)));
-  }, [token, session]);
+  }, [token, session, onLanguage]);
 
   const locked = !!view?.needsAuthentication;
   const loader = useMemo(
@@ -214,11 +227,11 @@ export function SignPage() {
   const pdf = usePdf(loader, `${!!view}:${locked}:${session}`);
   const brand = safeColor(view?.document.brandColor);
 
-  if (!token) return <Message icon={<XCircle className="size-10 text-destructive" />} title="This link is incomplete" />;
+  if (!token) return <Message icon={<XCircle className="size-10 text-destructive" />} title={t.linkIncomplete} />;
   if (error) {
     return (
       <Shell>
-        <Message icon={<XCircle className="size-10 text-destructive" />} title="This link does not work">
+        <Message icon={<XCircle className="size-10 text-destructive" />} title={t.linkBroken}>
           {error}
         </Message>
       </Shell>
@@ -244,13 +257,9 @@ export function SignPage() {
               <CheckCircle2 className="size-10 text-success" />
             )
           }
-          title={result === 'declined' ? 'You declined' : view.party.role === 'approver' ? 'Approved' : 'Signed'}
+          title={result === 'declined' ? t.youDeclined : view.party.role === 'approver' ? t.approved : t.signed}
         >
-          {result === 'completed'
-            ? 'Everyone has signed. The sealed document is on its way to you by email.'
-            : result === 'signed'
-              ? 'Thank you. You will receive the signed document when everyone has signed.'
-              : 'The sender has been told. You can close this page.'}
+          {result === 'completed' ? t.completedNote : result === 'signed' ? t.signedNote : t.declinedNote}
         </Message>
       </Shell>
     );
@@ -259,8 +268,8 @@ export function SignPage() {
     return (
       <Shell view={view}>
         <div className="mx-auto mt-6 grid max-w-md gap-4 rounded-lg border bg-background p-6">
-          <h1 className="text-lg font-semibold">Hello {view.party.name}</h1>
-          {resume === 'invalid' && <FormError message="The identification did not go through. Try again." />}
+          <h1 className="text-lg font-semibold">{t.hello(view.party.name)}</h1>
+          {resume === 'invalid' && <FormError message={t.eidFailed} />}
           <Identify
             token={token}
             session={session}
@@ -347,7 +356,7 @@ export function SignPage() {
                             <Checkbox
                               checked={values[f.id] === 'true'}
                               onCheckedChange={(c) => setValues({ ...values, [f.id]: c ? 'true' : 'false' })}
-                              aria-label={f.label || 'Checkbox'}
+                              aria-label={f.label || t.checkbox}
                             />
                           </label>
                         );
@@ -357,7 +366,7 @@ export function SignPage() {
                           <input
                             key={f.id}
                             aria-label={f.label || f.kind}
-                            placeholder={f.label || (f.kind === 'initials' ? 'Initials' : f.kind === 'company' ? 'Company' : 'Text')}
+                            placeholder={f.label || (f.kind === 'initials' ? t.initials : f.kind === 'company' ? t.company : t.text)}
                             value={values[f.id] ?? (f.kind === 'company' ? (view.party.company ?? '') : '')}
                             onChange={(e) => setValues({ ...values, [f.id]: e.target.value })}
                             className="pointer-events-auto absolute rounded-[3px] border border-primary bg-primary/10 px-1 text-[11px] text-zinc-900 outline-none focus:bg-white"
@@ -376,11 +385,11 @@ export function SignPage() {
                         >
                           {canAct &&
                             (f.kind === 'signature'
-                              ? 'Your signature'
+                              ? t.yourSignature
                               : f.kind === 'name'
                                 ? view.party.name
                                 : f.kind === 'date'
-                                  ? 'Date of signing'
+                                  ? t.dateOfSigning
                                   : f.kind)}
                         </div>
                       );
@@ -397,21 +406,17 @@ export function SignPage() {
             <div>
               <h2 className="font-semibold">{view.party.name}</h2>
               <p className="text-muted-foreground">
-                {view.party.role === 'viewer'
-                  ? 'You receive a copy of this document.'
-                  : view.party.role === 'approver'
-                    ? 'You are asked to approve this document.'
-                    : 'You are asked to sign this document.'}
+                {view.party.role === 'viewer' ? t.roleViewer : view.party.role === 'approver' ? t.roleApprover : t.roleSigner}
               </p>
             </div>
             {view.document.status === 'completed' && view.canDownload ? (
               <Button onClick={downloadSigned}>
-                <Download /> Download Signed Document
+                <Download /> {t.downloadSigned}
               </Button>
             ) : done ? (
-              <p>You have already {view.party.status === 'declined' ? 'declined' : 'responded'}.</p>
+              <p>{view.party.status === 'declined' ? t.alreadyDeclined : t.alreadyResponded}</p>
             ) : view.party.role === 'viewer' ? null : !view.yourTurn ? (
-              <p className="text-muted-foreground">Others sign before you. We will email you when it is your turn.</p>
+              <p className="text-muted-foreground">{t.notYourTurn}</p>
             ) : view.signAuthentication ? (
               <Identify
                 token={token}
@@ -423,14 +428,11 @@ export function SignPage() {
               />
             ) : (
               <>
-                {inputs.length > 0 && <p className="text-xs text-muted-foreground">Fill in the highlighted fields in the document.</p>}
+                {inputs.length > 0 && <p className="text-xs text-muted-foreground">{t.fillFields}</p>}
                 {isSigner && <SignaturePad defaultName={view.party.name} onChange={setSignature} />}
                 <label className="flex items-start gap-2.5">
                   <Checkbox checked={consent} onCheckedChange={(c) => setConsent(c === true)} className="mt-0.5" />
-                  <span>
-                    I have read the document and agree to {isSigner ? 'sign it' : 'approve it'} electronically. This is as binding as a
-                    signature on paper.
-                  </span>
+                  <span>{t.consent(isSigner)}</span>
                 </label>
                 <FormError message={signError} />
                 <Button
@@ -439,36 +441,34 @@ export function SignPage() {
                   style={brand ? { backgroundColor: brand } : undefined}
                   size="lg"
                 >
-                  {busy ? <Spinner className="text-primary-foreground" /> : <FileSignature />} {isSigner ? 'Sign' : 'Approve'}
+                  {busy ? <Spinner className="text-primary-foreground" /> : <FileSignature />} {isSigner ? t.sign : t.approve}
                 </Button>
                 <Button variant="ghost" onClick={() => setDeclining(true)} disabled={busy}>
-                  Decline
+                  {t.decline}
                 </Button>
               </>
             )}
             {!canAct && signError && <FormError message={signError} />}
           </div>
-          <p className="mt-3 px-1 text-xs text-muted-foreground">
-            Every step is recorded in a tamper-evident audit trail and the finished document is sealed, so anyone can verify it later.
-          </p>
+          <p className="mt-3 px-1 text-xs text-muted-foreground">{t.auditNote}</p>
         </aside>
       </div>
       <Dialog open={declining} onOpenChange={setDeclining}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Decline to Sign?</DialogTitle>
-            <DialogDescription>The document stops for everyone and the sender is told.</DialogDescription>
+            <DialogTitle>{t.declineTitle}</DialogTitle>
+            <DialogDescription>{t.declineDescription}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-1.5">
-            <Label htmlFor="reason">Reason (Optional)</Label>
+            <Label htmlFor="reason">{t.reason}</Label>
             <Textarea id="reason" value={reason} onChange={(e) => setReason(e.target.value)} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeclining(false)}>
-              Back
+              {t.back}
             </Button>
             <Button variant="destructive" onClick={decline} disabled={busy}>
-              Decline
+              {t.decline}
             </Button>
           </DialogFooter>
         </DialogContent>

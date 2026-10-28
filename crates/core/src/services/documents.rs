@@ -158,6 +158,7 @@ impl Service for Get {
 pub struct CreateInput {
     pub title: String,
     pub message: Option<String>,
+    /// What signers see and receive: `en` or `sv`. Defaults to the template's, then the organisation's.
     pub language: Option<String>,
     /// Copy files, parties and fields from this template.
     pub template_id: Option<Uuid>,
@@ -212,6 +213,7 @@ impl Service for Create {
             }
             None => None,
         };
+        let org: crate::settings::OrgSettings = settings(ctx, conn).await?;
         let id = Uuid::now_v7();
         let message = match (&input.message, &template) {
             (Some(m), _) => clean_text(m, "The message", 4000)?,
@@ -228,7 +230,7 @@ impl Service for Create {
         .bind(template.as_ref().map(|t| t.id))
         .bind(ctx.actor()?.user_id)
         .bind(message)
-        .bind(language(input.language.as_deref().or(template.as_ref().map(|t| t.language.as_str())))?)
+        .bind(language(input.language.as_deref().or(template.as_ref().map(|t| t.language.as_str())).or(Some(org.locale.as_str())))?)
         .bind(input.sequential.or(template.as_ref().map(|t| t.sequential)).unwrap_or(false))
         .bind(template.as_ref().and_then(|t| t.reminder_days))
         .bind(input.external_id.as_deref().map(|e| clean_text(e, "The external id", 200)).transpose()?.filter(|e| !e.is_empty()))
@@ -438,6 +440,7 @@ pub struct UpdateInput {
     pub id: Uuid,
     pub title: Option<String>,
     pub message: Option<String>,
+    /// What signers see and receive: `en` or `sv`.
     pub language: Option<String>,
     /// Parties sign one sign-order group at a time.
     pub sequential: Option<bool>,

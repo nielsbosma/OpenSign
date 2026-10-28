@@ -20,6 +20,7 @@ use crate::eid::bankid::{self, BankId, Collected};
 use crate::eid::freja::{self, Freja, Outcome, User};
 use crate::eid::{Identity, oidc, same_person, se_personal_number};
 use crate::error::{AppError, ErrorKind, Result, bad_request, conflict, not_found, too_many};
+use crate::i18n::Lang;
 use crate::service::{Access, Meta, Service};
 use crate::settings::{EidSettings, OrgSettings};
 
@@ -402,6 +403,7 @@ impl Service for Status {
                 session: None,
                 expires_at: Some(row.expires_at),
             };
+            let lang = Lang::of(&document.language);
             let eid: EidSettings = settings(ctx, conn).await?;
             let reference = row.reference.clone().unwrap_or_default();
             let (identity, evidence) = match method {
@@ -412,13 +414,18 @@ impl Service for Status {
                             (Some(t), Some(k)) => Some(bankid::qr_code(&t, &k, (ctx.now - row.created_at).num_seconds().max(0))),
                             _ => None,
                         };
-                        return Ok(pending(bankid::message(hint.as_deref(), false), qr));
+                        return Ok(pending(bankid::message(hint.as_deref(), false, lang), qr));
                     }
-                    Collected::Failed { hint } => return fail(conn, row.id, bankid::message(hint.as_deref(), true)).await,
+                    Collected::Failed { hint } => return fail(conn, row.id, bankid::message(hint.as_deref(), true, lang)).await,
                     Collected::Complete { identity, evidence } => (identity, evidence),
                 },
                 AuthMethod::Freja => match Freja::from_settings(&eid)?.result(&reference).await? {
-                    Outcome::Pending => return Ok(pending("Confirm in the Freja eID app.", None)),
+                    Outcome::Pending => {
+                        return Ok(pending(
+                            if lang == Lang::Sv { "Bekräfta i Freja eID-appen." } else { "Confirm in the Freja eID app." },
+                            None,
+                        ));
+                    }
                     Outcome::Failed(message) => return fail(conn, row.id, message).await,
                     Outcome::Complete { identity, evidence } => (identity, evidence),
                 },

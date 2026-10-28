@@ -3,11 +3,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useTexts } from './texts';
 
 export type Signature = { imagePngBase64: string | null; typedName: string | null };
 
 /** Draw with a finger, pen or mouse, or type the name. Drawn strokes are exported as a PNG with a transparent background. */
 export function SignaturePad({ defaultName, onChange }: { defaultName: string; onChange: (s: Signature | null) => void }) {
+  const t = useTexts();
   const canvas = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const [mode, setMode] = useState<'draw' | 'type'>('draw');
@@ -72,8 +74,8 @@ export function SignaturePad({ defaultName, onChange }: { defaultName: string; o
   return (
     <Tabs value={mode} onValueChange={(v) => setMode(v as 'draw' | 'type')}>
       <TabsList>
-        <TabsTrigger value="draw">Draw</TabsTrigger>
-        <TabsTrigger value="type">Type</TabsTrigger>
+        <TabsTrigger value="draw">{t.draw}</TabsTrigger>
+        <TabsTrigger value="type">{t.type}</TabsTrigger>
       </TabsList>
       <TabsContent value="draw" forceMount className="data-[state=inactive]:hidden">
         <div className="relative">
@@ -83,19 +85,19 @@ export function SignaturePad({ defaultName, onChange }: { defaultName: string; o
             onPointerMove={move}
             onPointerUp={up}
             onPointerCancel={up}
-            aria-label="Signature drawing area"
+            aria-label={t.drawingArea}
             className="h-36 w-full touch-none rounded-md border bg-white"
           />
           <div className="pointer-events-none absolute inset-x-6 bottom-8 border-b border-dashed border-zinc-300" />
           {drawn && (
             <Button type="button" variant="ghost" size="sm" onClick={clear} className="absolute top-1 right-1 text-zinc-600">
-              <Eraser /> Clear
+              <Eraser /> {t.clear}
             </Button>
           )}
         </div>
       </TabsContent>
       <TabsContent value="type">
-        <Input value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Your name" />
+        <Input value={typed} onChange={(e) => setTyped(e.target.value)} aria-label={t.yourName} />
         {typed.trim() && (
           <div className="mt-2 flex h-20 items-center rounded-md border bg-white px-4 font-serif text-3xl text-indigo-950 italic">
             {typed}

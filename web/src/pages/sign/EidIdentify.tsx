@@ -4,19 +4,20 @@ import { useEffect, useRef, useState } from 'react';
 import { Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { type AuthMethod, call, errorMessage } from '@/lib/api';
-import { AUTH_LABELS } from '@/lib/format';
 import { FormError } from '../auth/AuthLayout';
+import { useTexts } from './texts';
 
 type Started = { id: string; qr?: string | null; autoStartToken?: string | null };
 
 const POLL_MS = 2000;
 
 function Qr({ value }: { value: string }) {
+  const t = useTexts();
   const [src, setSrc] = useState<string>();
   useEffect(() => {
     void QRCode.toDataURL(value, { margin: 1, width: 200 }).then(setSrc);
   }, [value]);
-  return src ? <img src={src} alt="QR code to scan with your phone" className="mx-auto size-[200px] rounded-md border" /> : null;
+  return src ? <img src={src} alt={t.qrAlt} className="mx-auto size-[200px] rounded-md border" /> : null;
 }
 
 /**
@@ -45,7 +46,8 @@ export function EidIdentify({
   const [showQr, setShowQr] = useState(method === 'freja');
   const onSessionRef = useRef(onSession);
   onSessionRef.current = onSession;
-  const label = AUTH_LABELS[method];
+  const t = useTexts();
+  const label = t.methods[method] ?? method;
 
   const id = started?.id;
   useEffect(() => {
@@ -62,7 +64,7 @@ export function EidIdentify({
         }
         if (status.status === 'failed') {
           setStarted(null);
-          setError(status.message ?? 'The identification did not go through. Try again.');
+          setError(status.message ?? t.eidFailed);
           return;
         }
         setMessage(status.message ?? undefined);
@@ -80,7 +82,7 @@ export function EidIdentify({
       stopped = true;
       window.clearTimeout(timer);
     };
-  }, [id, token, resume]);
+  }, [id, token, resume, t]);
 
   const start = async (sameDevice: boolean) => {
     setBusy(true);
@@ -110,50 +112,47 @@ export function EidIdentify({
     setMessage(undefined);
   };
 
-  const action = purpose === 'view' ? 'open' : 'sign';
   if (started) {
     return (
       <div className="grid gap-4 text-center">
         {showQr && started.qr ? (
           <>
-            <p>Scan the QR code with the {label} app on your phone.</p>
+            <p>{t.scanQr(label)}</p>
             <Qr value={started.qr} />
           </>
         ) : (
           <Smartphone className="mx-auto size-10 text-muted-foreground" />
         )}
         <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground" aria-live="polite">
-          <Spinner /> {message ?? `Waiting for ${label}…`}
+          <Spinner /> {message ?? t.waitingFor(label)}
         </p>
         {method === 'se_bankid' && !showQr && started.qr && (
           <Button variant="outline" onClick={() => setShowQr(true)}>
-            Use BankID on Another Device
+            {t.bankidOtherDevice}
           </Button>
         )}
         <Button variant="ghost" onClick={cancel}>
-          Cancel
+          {t.cancel}
         </Button>
       </div>
     );
   }
   return (
     <div className="grid gap-3">
-      <p>
-        To {action} this document, identify yourself with {label}.
-      </p>
+      <p>{t.eidIntro(purpose === 'view', label)}</p>
       <FormError message={error} />
       {method === 'se_bankid' ? (
         <>
           <Button disabled={busy} onClick={() => start(true)}>
-            {busy && <Spinner className="text-primary-foreground" />} Open BankID on This Device
+            {busy && <Spinner className="text-primary-foreground" />} {t.bankidThisDevice}
           </Button>
           <Button variant="outline" disabled={busy} onClick={() => start(false)}>
-            BankID on Another Device
+            {t.bankidAnotherDevice}
           </Button>
         </>
       ) : (
         <Button disabled={busy} onClick={() => start(false)}>
-          {busy && <Spinner className="text-primary-foreground" />} Identify with {label}
+          {busy && <Spinner className="text-primary-foreground" />} {t.identifyWith(label)}
         </Button>
       )}
     </div>

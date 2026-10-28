@@ -33,7 +33,7 @@ async fn run(ctx: &Ctx, job: &Job) -> Result<()> {
                 .fetch_optional(&mut *tx)
                 .await?;
             if let Some(document) = document {
-                notify::notify_stopped(ctx, &mut tx, &document, None, "The sender canceled it").await?;
+                notify::notify_stopped(ctx, &mut tx, &document, None, crate::i18n::Stopped::Canceled).await?;
             }
         }
         "webhook" => {

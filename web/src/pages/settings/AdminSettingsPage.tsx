@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { type Group, useApi, useApiMutation } from '@/lib/api';
-import { formatDate, formatDateTime } from '@/lib/format';
+import { formatDate, formatDateTime, LANGUAGES } from '@/lib/format';
 import { SettingsCard } from './SettingsLayout';
 
 type Spec = {
@@ -33,7 +33,13 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
       { key: 'registrationNumber', label: 'Registration Number' },
       { key: 'country', label: 'Country', placeholder: 'SE' },
       { key: 'timeZone', label: 'Time Zone', placeholder: 'Europe/Stockholm' },
-      { key: 'locale', label: 'Language', placeholder: 'en' },
+      {
+        key: 'locale',
+        label: 'Language for Signers',
+        type: 'select',
+        options: LANGUAGES,
+        hint: 'The default for new documents. Each document can use its own.',
+      },
       { key: 'brandColor', label: 'Brand Color', type: 'color' },
     ],
   },

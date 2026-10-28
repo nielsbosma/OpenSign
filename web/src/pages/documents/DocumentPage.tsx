@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
@@ -30,7 +31,7 @@ import {
   useApi,
   useApiMutation,
 } from '@/lib/api';
-import { AUTH_LABELS, DELIVERY_LABELS, formatBytes, formatDateTime, PARTY_STATUS_LABELS, saveBytes } from '@/lib/format';
+import { AUTH_LABELS, DELIVERY_LABELS, formatBytes, formatDateTime, LANGUAGES, PARTY_STATUS_LABELS, saveBytes } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { ActivityPanel } from './ActivityPanel';
 import { StatusBadge } from './DocumentsPage';
@@ -292,6 +293,21 @@ function DetailsSection({ doc }: { doc: DocumentView }) {
         />
       </div>
       <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-1.5">
+          <Label htmlFor="language">Language for Signers</Label>
+          <Select value={doc.language} onValueChange={(language) => update.mutate({ id: doc.id, language })}>
+            <SelectTrigger id="language" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {LANGUAGES.map(([code, name]) => (
+                <SelectItem key={code} value={code}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="grid gap-1.5">
           <Label htmlFor="reminders">Remind Every (Days)</Label>
           <Input

@@ -51,6 +51,12 @@ export const AUTH_LABELS: Record<string, string> = {
   broker: 'eID broker',
 };
 
+/** Languages signers can get their emails, SMS and signing page in. */
+export const LANGUAGES: [string, string][] = [
+  ['en', 'English'],
+  ['sv', 'Svenska'],
+];
+
 export const DELIVERY_LABELS: Record<string, string> = {
   email: 'Email',
   sms: 'SMS',

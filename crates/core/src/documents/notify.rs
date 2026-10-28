@@ -11,6 +11,7 @@ use crate::audit::{Entry, audit};
 use crate::context::Ctx;
 use crate::email::{self, Attachment, Message};
 use crate::error::{AppError, Result};
+use crate::i18n::{Lang, Stopped};
 use crate::jobs::enqueue;
 use crate::services::settings;
 use crate::settings::{EmailSettings, OrgSettings, SecuritySettings, SmsSettings};
@@ -58,19 +59,20 @@ pub async fn notify_party(ctx: &Ctx, conn: &mut PgConnection, party_id: Uuid, re
     let org: OrgSettings = settings(ctx, conn).await?;
     let sender = owner(conn, &document).await?.map(|(name, _)| name).unwrap_or_else(|| org_name(&org).to_string());
     let url = signer_url(ctx, ctx.keys(), &party);
-    let verb = if party.role() == PartyRole::Approver { "approve" } else { "sign" };
+    let approve = party.role() == PartyRole::Approver;
+    let lang = Lang::of(&document.language);
     match delivery {
         Delivery::Email => {
             let to = party
                 .email
                 .clone()
                 .ok_or_else(|| AppError::internal(anyhow::anyhow!("party {} has email delivery without an email", party.id)))?;
-            let mut paragraphs = vec![format!("{sender} at {} sent you \u{201c}{}\u{201d} to {verb}.", org_name(&org), document.title)];
+            let mut paragraphs = vec![lang.invitation(&sender, org_name(&org), &document.title, approve)];
             if !document.message.trim().is_empty() {
                 paragraphs.push(document.message.trim().to_string());
             }
             if let Some(expires) = party.link_expires_at {
-                paragraphs.push(format!("The link works until {}.", expires.format("%Y-%m-%d")));
+                paragraphs.push(lang.link_until(expires));
             }
             let email_settings: EmailSettings = settings(ctx, conn).await?;
             email::send(
@@ -80,14 +82,10 @@ pub async fn notify_party(ctx: &Ctx, conn: &mut PgConnection, party_id: Uuid, re
                 &Message {
                     to,
                     to_name: Some(party.name.clone()),
-                    subject: format!(
-                        "{}{sender} sent you \u{201c}{}\u{201d} to {verb}",
-                        if reminder { "Reminder: " } else { "" },
-                        document.title
-                    ),
+                    subject: lang.invitation_subject(reminder, &sender, &document.title, approve),
                     paragraphs,
-                    button: Some((if verb == "sign" { "Review and Sign".into() } else { "Review and Approve".into() }, url)),
-                    footer: Some("This link is personal. Do not forward this email.".into()),
+                    button: Some((lang.open_button(approve).into(), url)),
+                    footer: Some(lang.personal_link().into()),
                     attachments: vec![],
                 },
             )
@@ -99,7 +97,7 @@ pub async fn notify_party(ctx: &Ctx, conn: &mut PgConnection, party_id: Uuid, re
                 .clone()
                 .ok_or_else(|| AppError::internal(anyhow::anyhow!("party {} has SMS delivery without a phone", party.id)))?;
             let sms: SmsSettings = settings(ctx, conn).await?;
-            let text = format!("{}: {sender} asks you to {verb} \u{201c}{}\u{201d}: {url}", org_name(&org), document.title);
+            let text = lang.invitation_sms(org_name(&org), &sender, &document.title, approve, &url);
             crate::sms::send(&ctx.app, &sms, &phone, &text).await?;
         }
         _ => {}
@@ -152,14 +150,15 @@ pub async fn notify_completed(ctx: &Ctx, conn: &mut PgConnection, document_id: U
         recipients.push((email, name, None));
     }
     let filename = format!("{}.pdf", sanitize_filename(&document.title));
+    let lang = Lang::of(&document.language);
     for (to, name, party) in recipients {
-        let mut paragraphs = vec![format!("\u{201c}{}\u{201d} is signed by everyone.", document.title)];
+        let mut paragraphs = vec![lang.completed(&document.title)];
         let button = match (&attachment, &party) {
             (Some(_), _) => {
-                paragraphs.push("The signed document is attached. It carries an electronic seal and the full signing evidence.".into());
+                paragraphs.push(lang.completed_attached().into());
                 None
             }
-            (None, Some(p)) => Some(("Download Signed Document".to_string(), signer_url(ctx, ctx.keys(), p))),
+            (None, Some(p)) => Some((lang.download_button().to_string(), signer_url(ctx, ctx.keys(), p))),
             (None, None) => Some(("Open Document".to_string(), format!("{}/documents/{}", ctx.app.public_url(), document.id))),
         };
         email::send(
@@ -169,7 +168,7 @@ pub async fn notify_completed(ctx: &Ctx, conn: &mut PgConnection, document_id: U
             &Message {
                 to,
                 to_name: Some(name),
-                subject: format!("Signed: {}", document.title),
+                subject: lang.completed_subject(&document.title),
                 paragraphs,
                 button,
                 footer: None,
@@ -209,11 +208,18 @@ pub async fn notify_declined(ctx: &Ctx, conn: &mut PgConnection, document_id: Uu
         };
         email::send(&ctx.app, &email_settings, &org, &message).await?;
     }
-    notify_stopped(ctx, conn, &document, Some(party_id), &format!("{} declined to sign", decliner.name)).await
+    notify_stopped(ctx, conn, &document, Some(party_id), Stopped::Declined(&decliner.name)).await
 }
 
 /// Tells parties who already got a link that the document will not be signed.
-pub async fn notify_stopped(ctx: &Ctx, conn: &mut PgConnection, document: &DocumentRow, except: Option<Uuid>, why: &str) -> Result<()> {
+pub async fn notify_stopped(
+    ctx: &Ctx,
+    conn: &mut PgConnection,
+    document: &DocumentRow,
+    except: Option<Uuid>,
+    why: Stopped<'_>,
+) -> Result<()> {
+    let lang = Lang::of(&document.language);
     let org: OrgSettings = settings(ctx, conn).await?;
     let email_settings: EmailSettings = settings(ctx, conn).await?;
     for p in parties(conn, document.id).await? {
@@ -224,11 +230,8 @@ pub async fn notify_stopped(ctx: &Ctx, conn: &mut PgConnection, document: &Docum
         let message = Message {
             to: email,
             to_name: Some(p.name.clone()),
-            subject: format!("No longer needed: {}", document.title),
-            paragraphs: vec![format!(
-                "{why}, so \u{201c}{}\u{201d} will not be completed. You do not need to do anything.",
-                document.title
-            )],
+            subject: lang.stopped_subject(&document.title),
+            paragraphs: vec![lang.stopped(&why, &document.title)],
             button: None,
             footer: None,
             attachments: vec![],

@@ -352,6 +352,7 @@ export type DocumentsCreateInput = {
   externalId?: string | null;
   /** Create a reusable template instead of a document. */
   isTemplate?: boolean;
+  /** What signers see and receive: `en` or `sv`. Defaults to the template's, then the organisation's. */
   language?: string | null;
   message?: string | null;
   metadata?: unknown;
@@ -562,6 +563,7 @@ export type DocumentsUpdateInput = {
   expiresAt?: string | null;
   externalId?: string | null;
   id: string;
+  /** What signers see and receive: `en` or `sv`. */
   language?: string | null;
   message?: string | null;
   metadata?: unknown;
