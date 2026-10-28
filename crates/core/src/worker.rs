@@ -42,6 +42,11 @@ async fn run(ctx: &Ctx, job: &Job) -> Result<()> {
             return notify::deliver_webhook(ctx, &mut conn, id(job, "delivery")?).await;
         }
         "sweep" => sweep(ctx, &mut tx).await?,
+        "anchor_audit" => {
+            drop(tx);
+            let mut conn = ctx.db().acquire().await?;
+            return anchor_audit(ctx, &mut conn).await;
+        }
         other => return Err(AppError::internal(anyhow::anyhow!("unknown job kind {other}"))),
     }
     tx.commit().await?;
@@ -73,6 +78,33 @@ async fn sweep(ctx: &Ctx, conn: &mut sqlx::PgConnection) -> Result<()> {
     }
     sqlx::query("delete from idempotency_keys where created_at < $1 - interval '1 day'").bind(ctx.now).execute(&mut *conn).await?;
     schedule_sweep(conn, Some(ctx.now + Duration::minutes(SWEEP_MINUTES))).await
+}
+
+/// Time-stamps the head of the audit chain with the time stamp authority, at most once an hour, so
+/// the trail up to that point provably existed then and cannot be quietly rebuilt later.
+async fn anchor_audit(ctx: &Ctx, conn: &mut sqlx::PgConnection) -> Result<()> {
+    let head: Option<(i64, Vec<u8>)> =
+        sqlx::query_as("select id, hash from audit_log order by id desc limit 1").fetch_optional(&mut *conn).await?;
+    let Some((head_id, hash)) = head else { return Ok(()) };
+    let (anchored, last): (Option<i64>, Option<chrono::DateTime<chrono::Utc>>) =
+        sqlx::query_as("select max(audit_id), max(created_at) from audit_anchors").fetch_one(&mut *conn).await?;
+    if anchored.is_some_and(|a| a >= head_id) || last.is_some_and(|at| at > ctx.now - Duration::hours(1)) {
+        return Ok(());
+    }
+    let signing: crate::settings::SigningSettings = crate::services::settings(ctx, conn).await?;
+    let url = signing.tsa_url.trim();
+    if url.is_empty() {
+        return Ok(());
+    }
+    let token = seal::timestamp(ctx, url, &hash).await?;
+    sqlx::query("insert into audit_anchors (audit_id, head_hash, tsa_token, tsa_url) values ($1, $2, $3, $4)")
+        .bind(head_id)
+        .bind(&hash)
+        .bind(token)
+        .bind(url)
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
 }
 
 pub async fn schedule_sweep(conn: &mut sqlx::PgConnection, at: Option<chrono::DateTime<chrono::Utc>>) -> Result<()> {

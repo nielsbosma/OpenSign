@@ -1,0 +1,120 @@
+# OpenSign
+
+An open source electronic signing service you run yourself. Upload a Word or PDF document, place fields, send it, and get back a sealed PDF that any PDF reader can verify, with an evidence report of who signed, when, and how they proved who they were.
+
+- **Signing flows**: signers, approvers and viewers, in order or all at once; email, SMS or link delivery; reminders, expiry, decline with a reason; templates.
+- **Identification**: email link, SMS code (46elks or Twilio), Swedish BankID, Freja eID, and other Nordic eIDs through an OpenID Connect broker (Idura/Criipto, Signicat). With a personal number on the party, only that person can sign.
+- **Sealed PDFs**: PAdES (ETSI.CAdES.detached) seal over the whole file, RFC 3161 time stamp, appended evidence pages, and a verify page and API that check any OpenSign document.
+- **Word and PDF uploads**: Word, ODT and RTF are converted by Gotenberg on a private network; every PDF is sanitized (no JavaScript, forms actions, embedded files or XFA) before anyone sees it.
+- **APIs**: a REST API with OpenAPI, plus drop-in compatible endpoints for **Scrive** (`/api/v2`) and **DocuSign** eSignature (`/restapi/v2.1`), signed webhooks, and idempotency keys.
+- **MCP**: everything you can do in the app is available to Claude and other MCP clients, with your permissions and in the audit trail.
+- **AI (optional)**: an assistant over your own tools, and an LLM review of a document before you send it. Off until an admin picks a provider; document text is only sent if an admin allows it.
+- **Multi-user with roles**: admin, manager, sender, auditor and viewer. One organisation per install.
+- **Security first**: see [SECURITY.md](SECURITY.md) for the threat model and the controls.
+
+## Running it
+
+OpenSign is one container image plus Postgres, an S3-compatible bucket and (for Word files) Gotenberg.
+
+| Variable | |
+| --- | --- |
+| `DATABASE_URL` | Postgres 15 or later |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION` | The bucket; documents are encrypted before they reach it |
+| `APP_SECRET` | 32+ random characters, e.g. `openssl rand -base64 48`. Every key derives from it: keep it safe and never change it |
+| `APP_URL` | The public https address |
+| `CONVERTER_URL` | Gotenberg, on a private network (optional; without it only PDFs are accepted) |
+
+Everything else (Resend, SMS, eID, AI, security rules, branding) is set in the browser.
+
+### On Sliplane
+
+```sh
+SLIPLANE_TOKEN=api_rw_org_... ./deploy/sliplane.sh
+```
+
+The script uses the [Sliplane API](https://ctrl.sliplane.io) to create a project, a managed Postgres, a bucket, Gotenberg on the private network, and the OpenSign service with a fresh `APP_SECRET`. It prints the URL. Run it again to update (`OPENSIGN_TAG=0.2.0` for a release). See the top of the script for options, such as bringing your own database or pinning Resend and the AI provider.
+
+### Anywhere else
+
+```sh
+docker run -d --name opensign -p 3000:3000 \
+  -e DATABASE_URL=postgres://opensign:secret@db:5432/opensign \
+  -e S3_ENDPOINT=https://s3.example.com -e S3_BUCKET=opensign \
+  -e S3_ACCESS_KEY=... -e S3_SECRET_KEY=... \
+  -e APP_SECRET="$(openssl rand -base64 48)" \
+  -e APP_URL=https://sign.example.com \
+  -e CONVERTER_URL=http://gotenberg:3000 \
+  ghcr.io/nielsbosma/opensign:latest
+```
+
+The image is distroless, runs as a non-root user, works with a read-only root file system, and is multi-arch (amd64, arm64). Tags: `:latest`, `:1.2.3` and `:1.2` for releases, `:edge` for `main`.
+
+### First run
+
+1. The container log prints a **setup code**, so nobody else can claim a fresh install.
+2. Create the first admin.
+3. Enter a **Resend** API key and sender address. OpenSign sends a test email and only continues once Resend accepted it; documents cannot go out by email until then.
+4. Optionally set up SMS, eID, your seal certificate and AI in **Admin settings**.
+
+Any admin setting can be pinned with an environment variable, `OPENSIGN_<GROUP>_<FIELD>`, for example `OPENSIGN_EMAIL_API_KEY` or `OPENSIGN_SECURITY_ENFORCE_TWO_FACTOR=true`. Pinned fields are locked in the UI.
+
+### eID providers
+
+- **Swedish BankID**: your relying-party certificate (PEM with key) and BankID's server CA, from your bank. Use the test environment with BankID's test certificate first.
+- **Freja eID**: your client certificate and Freja's result-signing certificate. Results whose signature does not check out are refused.
+- **Broker**: issuer URL, client id and secret. Register `https://<your-install>/api/eid/callback` as the redirect URI. `acr_values` picks a specific eID.
+
+## Using the API
+
+Create an API key under **Settings → API Keys**, then:
+
+```sh
+curl -H "Authorization: Bearer osk_..." https://sign.example.com/api/v1/documents
+```
+
+The OpenAPI document is at `/api/v1/openapi.json`. Existing Scrive or DocuSign integrations can point at OpenSign instead: use an OpenSign API key as the bearer token, and the Scrive or DocuSign base path above.
+
+## Connecting Claude
+
+In Claude, add a custom connector with `https://<your-install>/mcp` (also shown under **Settings → Account**), sign in and approve. It uses OAuth 2.1 with dynamic client registration and PKCE, over Streamable HTTP.
+
+## Architecture
+
+```
+           ┌──────────────── one container ───────────────────────────┐
+ browser ─▶│ React app ─ RPC ──┐                                      │
+ REST/API ▶│ REST, Scrive,     ├─▶ services (permissions, audit, ──▶ Postgres
+ Claude  ─▶│ DocuSign, MCP ────┤   settings, encryption)          ──▶ S3 (encrypted files)
+ signer  ─▶│ signing page ─────┘   worker: email, SMS, sealing,   ──▶ Resend, SMS, eID, TSA, LLM
+           │                       webhooks, reminders            ──▶ Gotenberg (private)
+           └──────────────────────────────────────────────────────────┘
+```
+
+Rust (axum, sqlx) in `crates/`: `crypto` (keys, encryption, tokens; no I/O), `db` (migrations), `pdf` (sanitizing, stamping, evidence, PAdES), `core` (services, eID, email, worker) and `server` (HTTP, REST, compatibility APIs, MCP). The web app is React, Vite and Tailwind in `web/`.
+
+## Development
+
+```sh
+pnpm install
+pnpm infra:up            # Postgres, S3, Mailpit and Gotenberg in Docker
+cp .env.example .env
+pnpm dev                 # server on :3000, web app on http://localhost:5173
+```
+
+| Command | |
+| --- | --- |
+| `pnpm lint` | Biome and Clippy |
+| `pnpm typecheck` | The web app |
+| `pnpm test` | Rust tests (set `TEST_DATABASE_URL`) and web tests |
+| `pnpm api:types` | Regenerate the web app's typed client after changing a service |
+| `docker compose --profile prod up -d --build` | The production image at http://localhost:8090 |
+
+Email in development goes to Mailpit at http://localhost:8026. See [CLAUDE.md](CLAUDE.md) for conventions and [CONTRIBUTING.md](CONTRIBUTING.md) for how to contribute.
+
+## Releasing
+
+Bump `version` in `Cargo.toml`, move the **Unreleased** notes in `CHANGELOG.md` under it, merge to `main`, then publish a GitHub Release named `vX.Y.Z`. CI runs every check, builds amd64 and arm64, and pushes `ghcr.io/nielsbosma/opensign:X.Y.Z`, `:X.Y` and `:latest`. Make the package public once after the first publish (GitHub → Packages → opensign → Package settings).
+
+## License
+
+[MIT](LICENSE)

@@ -75,7 +75,7 @@ pub async fn active_identity(ctx: &Ctx, conn: &mut PgConnection) -> Result<SealI
     SealIdentity::from_parts(&key, &chain).map_err(pdf_err)
 }
 
-async fn timestamp(ctx: &Ctx, url: &str, signature: &[u8]) -> Result<Vec<u8>> {
+pub(crate) async fn timestamp(ctx: &Ctx, url: &str, signature: &[u8]) -> Result<Vec<u8>> {
     let parsed = reqwest::Url::parse(url).map_err(|_| AppError::new(ErrorKind::BadRequest, "The time stamp URL is not valid"))?;
     if !matches!(parsed.scheme(), "http" | "https") {
         return Err(AppError::new(ErrorKind::BadRequest, "The time stamp URL must use http or https"));

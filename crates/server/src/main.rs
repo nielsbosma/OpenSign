@@ -49,10 +49,12 @@ fn health_check() -> anyhow::Result<()> {
     let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(3000);
     let mut stream = std::net::TcpStream::connect_timeout(&SocketAddr::from(([127, 0, 0, 1], port)), Duration::from_secs(3))?;
     stream.set_read_timeout(Some(Duration::from_secs(3)))?;
-    stream.write_all(b"GET /api/health HTTP/1.0
+    stream.write_all(
+        b"GET /api/health HTTP/1.0
 Host: localhost
 
-")?;
+",
+    )?;
     let mut head = [0u8; 12];
     stream.read_exact(&mut head)?;
     anyhow::ensure!(head.ends_with(b" 200"), "unhealthy: {}", String::from_utf8_lossy(&head));
