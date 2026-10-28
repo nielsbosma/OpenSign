@@ -416,7 +416,9 @@ function SigningFlow({ token, onLanguage }: { token: string; onLanguage: (langua
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
           {view.document.message && (
-            <div dir="auto" className="mb-4 rounded-lg border bg-background p-4 whitespace-pre-line">{view.document.message}</div>
+            <div dir="auto" className="mb-4 rounded-lg border bg-background p-4 whitespace-pre-line">
+              {view.document.message}
+            </div>
           )}
           <div dir="ltr">
             {pdf.pages ? (
