@@ -7,6 +7,7 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  Scale,
   Send,
   Trash2,
   UserPlus,
@@ -45,7 +46,16 @@ import {
   useApi,
   useApiMutation,
 } from '@/lib/api';
-import { AUTH_LABELS, DELIVERY_LABELS, formatBytes, formatDateTime, LANGUAGES, PARTY_STATUS_LABELS, saveBytes } from '@/lib/format';
+import {
+  AUTH_LABELS,
+  DELIVERY_LABELS,
+  formatBytes,
+  formatDate,
+  formatDateTime,
+  LANGUAGES,
+  PARTY_STATUS_LABELS,
+  saveBytes,
+} from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
 import { ActivityPanel } from './ActivityPanel';
@@ -432,6 +442,8 @@ export function DocumentPage() {
   const [cancelReason, setCancelReason] = useState('');
   const [canceling, setCanceling] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [holding, setHolding] = useState(false);
+  const [holdReason, setHoldReason] = useState('');
 
   const setParties = useApiMutation('documents.set_parties', { invalidates: ['documents.'] });
   const removeFile = useApiMutation('documents.remove_file', { invalidates: ['documents.'] });
@@ -442,6 +454,14 @@ export function DocumentPage() {
     onSuccess: () => navigate(doc?.isTemplate ? '/templates' : '/documents'),
   });
   const fromTemplate = useApiMutation('documents.create', { onSuccess: (d) => navigate(`/documents/${d.id}`) });
+  const legalHold = useApiMutation('documents.legal_hold', {
+    invalidates: ['documents.'],
+    onSuccess: (out) => {
+      setHolding(false);
+      setHoldReason('');
+      toast.success(out.legalHold ? 'The document is on legal hold' : 'The legal hold is released');
+    },
+  });
 
   const filesKey = doc ? `${doc.id}:${doc.status}:${doc.files.map((f) => f.id).join(',')}` : '';
   const pdfUrl = !doc?.files.length
@@ -537,6 +557,12 @@ export function DocumentPage() {
             {!doc.isTemplate && <StatusBadge status={doc.status} />}
             <span>{doc.sentAt ? `Sent ${formatDateTime(doc.sentAt)}` : `Created ${formatDateTime(doc.createdAt)}`}</span>
             {doc.expiresAt && pending && <span>· Expires {formatDateTime(doc.expiresAt)}</span>}
+            {doc.legalHold && (
+              <span className="inline-flex items-center gap-1 font-medium text-warning" title={doc.legalHoldReason ?? undefined}>
+                · <Scale className="size-3.5" /> Legal Hold
+              </span>
+            )}
+            {doc.deletesAt && <span>· Kept until {formatDate(doc.deletesAt)}</span>}
             {saving && <span>· Saving…</span>}
           </div>
         </div>
@@ -583,7 +609,12 @@ export function DocumentPage() {
                   Cancel Signing
                 </DropdownMenuItem>
               )}
-              {doc.canEdit && !pending && (
+              {!doc.isTemplate && can('documents.legal_hold') && (
+                <DropdownMenuItem onSelect={() => (doc.legalHold ? legalHold.mutate({ id: doc.id, hold: false }) : setHolding(true))}>
+                  <Scale /> {doc.legalHold ? 'Release Legal Hold' : 'Place on Legal Hold'}
+                </DropdownMenuItem>
+              )}
+              {doc.canEdit && !pending && !doc.legalHold && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={() => setDeleting(true)} className="text-destructive">
@@ -797,6 +828,33 @@ export function DocumentPage() {
               onClick={() => cancel.mutate({ id: doc.id, reason: cancelReason.trim() || null })}
             >
               Cancel Signing
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={holding} onOpenChange={setHolding}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Place on Legal Hold?</DialogTitle>
+            <DialogDescription>
+              Nobody can delete “{doc.title}” and no retention rule touches it until the hold is released. Both are recorded in the audit
+              trail.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={holdReason}
+            onChange={(e) => setHoldReason(e.target.value)}
+            placeholder="Reason, such as a case or matter reference"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHolding(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={legalHold.isPending || !holdReason.trim()}
+              onClick={() => legalHold.mutate({ id: doc.id, hold: true, reason: holdReason.trim() })}
+            >
+              Place Hold
             </Button>
           </DialogFooter>
         </DialogContent>

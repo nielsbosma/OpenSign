@@ -18,7 +18,7 @@ use crate::context::Ctx;
 use crate::documents::attachments::{self, AttachmentRequest};
 use crate::documents::{
     AuthMethod, DOCUMENT_COLUMNS, Delivery, DocumentRow, FieldKind, FieldRow, PartyRole, PartyRow, current_turn, fields, notify, parties,
-    party_for_token, status,
+    party_for_token, seal_identity, status,
 };
 use crate::error::{AppError, ErrorKind, Result, bad_request, conflict, too_many};
 use crate::jobs::enqueue;
@@ -250,6 +250,7 @@ impl Service for RequestCode {
             return Err(bad_request("This party does not use SMS codes"));
         }
         let phone = party.phone.clone().ok_or_else(|| bad_request("There is no phone number for you. Ask the sender to add one."))?;
+        sqlx::query("select 1 from parties where id = $1 for update").bind(party.id).execute(&mut *conn).await?;
         let recent: i64 = sqlx::query_scalar("select count(*) from sms_challenges where party_id = $1 and created_at > $2")
             .bind(party.id)
             .bind(ctx.now - Duration::hours(1))
@@ -489,7 +490,7 @@ impl Service for Sign {
         let method = session.as_ref().map_or(party.auth_to_sign(), |s| s.a);
         let evidence = json!({
             "auth": method,
-            "identity": session.as_ref().and_then(|s| s.i.clone()),
+            "identity": session.as_ref().and_then(|s| s.i.as_deref()).map(|i| seal_identity(ctx.keys(), party.id, i)),
             "ip": ctx.ip,
             "userAgent": ctx.user_agent,
             "signedAt": ctx.now,

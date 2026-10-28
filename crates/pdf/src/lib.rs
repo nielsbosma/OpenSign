@@ -4,19 +4,27 @@
 mod cert;
 mod evidence;
 mod geometry;
+mod ltv;
 mod merge;
 mod sanitize;
 mod seal;
 mod stamp;
 mod tsa;
 mod verify;
+mod x509;
 
+#[cfg(test)]
+mod ltv_tests;
 #[cfg(test)]
 mod tests;
 
 pub use cert::{SealIdentity, generate_seal_identity};
 pub use evidence::{EvidenceAttachment, EvidenceEvent, EvidenceParty, EvidenceReport, append_evidence};
 pub use geometry::{PageBox, extract_text, page_sizes};
+pub use ltv::{
+    Revocation, RevocationCheck, RevocationStatus, ValidationData, ValidationPlan, add_validation_data, finish_document_timestamp,
+    parse_issuer_certificates, plan as plan_validation, prepare_document_timestamp,
+};
 pub use merge::merge;
 pub use sanitize::{Limits, Sanitized, sanitize};
 pub use seal::{Prepared, SealOptions, Signed, finish, prepare, seal, sign};

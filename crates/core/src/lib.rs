@@ -26,4 +26,5 @@ pub mod sheet;
 pub mod sms;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
+pub mod webauthn;
 pub mod worker;

@@ -168,6 +168,9 @@ async fn bankid_identifies_the_right_person_only() {
     let done = status(started.id).await.unwrap();
     assert_eq!(done.status, "complete");
     let session = done.session.unwrap();
+    let stored: String =
+        sqlx::query_scalar("select identity::text from eid_sessions where id = $1").bind(started.id).fetch_one(&app.db).await.unwrap();
+    assert!(stored.contains("Anna Andersson") && !stored.contains("199001010017"), "the personal number is stored encrypted");
     let again = status(started.id).await.unwrap();
     assert!(again.session.is_none() && again.status == "failed", "a session is handed out once");
 

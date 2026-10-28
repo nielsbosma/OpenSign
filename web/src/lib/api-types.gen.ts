@@ -24,7 +24,7 @@ export type AccountMcpConnectionsOutput = Array<Connection>;
 
 export type AccountMeInput = Record<string, unknown>;
 
-export type Permission = "org.read" | "users.read" | "users.manage" | "settings.manage" | "audit.read" | "documents.read" | "documents.create" | "documents.read_all" | "documents.manage_all" | "templates.manage" | "api_keys.manage" | "webhooks.manage" | "ai.use" | "system.read";
+export type Permission = "org.read" | "users.read" | "users.manage" | "settings.manage" | "audit.read" | "documents.read" | "documents.create" | "documents.read_all" | "documents.manage_all" | "documents.legal_hold" | "templates.manage" | "api_keys.manage" | "webhooks.manage" | "ai.use" | "system.read";
 
 export type Role = "admin" | "manager" | "sender" | "auditor" | "viewer";
 
@@ -39,6 +39,50 @@ export type Me = {
   role: Role;
   twoFactorEnabled: boolean;
 };
+
+export type AccountPasskeyAddInput = {
+  /** base64url */
+  attestationObject: string;
+  /** base64url */
+  clientDataJson: string;
+  /** A name to tell your passkeys apart, e.g. "MacBook" or "Phone". */
+  name: string;
+  state: string;
+  transports?: Array<string>;
+};
+
+export type AccountPasskeyAddOutput = PasskeyView;
+
+export type PasskeyView = {
+  createdAt: string;
+  id: string;
+  lastUsedAt?: string | null;
+  name: string;
+};
+
+export type AccountPasskeyBeginInput = {
+  /** Your password, to confirm it is you before a new way to sign in is added. */
+  currentPassword?: string | null;
+};
+
+export type AccountPasskeyBeginOutput = Ceremony;
+
+export type Ceremony = {
+  /** `PublicKeyCredentialCreationOptions` or `...RequestOptions`, with binary values base64url-encoded. */
+  options: unknown;
+  /** Send back unchanged with the browser's response. */
+  state: string;
+};
+
+export type AccountPasskeyRemoveInput = {
+  id: string;
+};
+
+export type AccountPasskeyRemoveOutput = Ok_;
+
+export type AccountPasskeysInput = Record<string, unknown>;
+
+export type AccountPasskeysOutput = Array<PasskeyView>;
 
 export type AccountRevokeMcpConnectionInput = {
   id: string;
@@ -187,6 +231,8 @@ export type AuditVerifyInput = Record<string, unknown>;
 export type AuditVerifyOutput = ChainReport;
 
 export type ChainReport = {
+  /** Hourly time-stamped heads that no longer match the entry they were taken from. */
+  broken_anchors: Array<number>;
   /** The first entry whose stored hash does not match its contents or its predecessor. */
   broken_at?: number | null;
   entries: number;
@@ -211,6 +257,29 @@ export type AuthLoginOutput = {
 export type AuthLogoutInput = Record<string, unknown>;
 
 export type AuthLogoutOutput = Ok_;
+
+export type AuthPasskeyBeginInput = Record<string, unknown>;
+
+export type AuthPasskeyBeginOutput = Ceremony;
+
+export type AuthPasskeySignInInput = {
+  authenticatorData: string;
+  clientDataJson: string;
+  /** The credential's rawId, base64url. */
+  credentialId: string;
+  signature: string;
+  state: string;
+  userHandle?: string | null;
+};
+
+export type AuthPasskeySignInOutput = {
+  expires_at: string;
+  status: "signed_in";
+  token: string;
+} | {
+  challenge: string;
+  status: "two_factor_required";
+};
 
 export type AuthRequestPasswordResetInput = {
   email: string;
@@ -418,6 +487,8 @@ export type DocumentView = {
   canceledAt?: string | null;
   completedAt?: string | null;
   createdAt: string;
+  /** When the retention rules will delete this document, if any rule applies to it. */
+  deletesAt?: string | null;
   expiresAt?: string | null;
   externalId?: string | null;
   fields: Array<FieldRow>;
@@ -425,6 +496,10 @@ export type DocumentView = {
   id: string;
   isTemplate: boolean;
   language: string;
+  /** On legal hold: no retention rule or person can delete it until the hold is released. */
+  legalHold: boolean;
+  legalHoldAt?: string | null;
+  legalHoldReason?: string | null;
   message: string;
   metadata: unknown;
   originalSha256?: string | null;
@@ -514,6 +589,23 @@ export type ReviewOutput = {
 };
 
 export type DocumentsLatestReviewOutput = ReviewOutput | null;
+
+export type DocumentsLegalHoldInput = {
+  /** True places the hold, false releases it. */
+  hold: boolean;
+  id: string;
+  /** Why the document must be kept, such as a case or matter reference. Required to place a hold. */
+  reason?: string;
+};
+
+export type DocumentsLegalHoldOutput = LegalHoldView;
+
+export type LegalHoldView = {
+  id: string;
+  legalHold: boolean;
+  legalHoldAt?: string | null;
+  legalHoldReason?: string | null;
+};
 
 export type DocumentsListInput = {
   limit?: number | null;
@@ -772,6 +864,20 @@ export type ConsentView = {
   redirectHost: string;
 };
 
+export type RetentionPreviewInput = Record<string, unknown>;
+
+export type RetentionPreviewOutput = RetentionPreview;
+
+export type RetentionPreview = {
+  /** Documents the current rules would delete at the next run. */
+  completed: number;
+  drafts: number;
+  ended: number;
+  /** Documents on legal hold, which no rule deletes. */
+  held: number;
+  oldestHeldSince?: string | null;
+};
+
 export type SealGetInput = Record<string, unknown>;
 
 export type SealInfo = {
@@ -786,7 +892,7 @@ export type SealRegenerateInput = Record<string, unknown>;
 
 export type SealRegenerateOutput = SealInfo;
 
-export type Group = "org" | "email" | "security" | "signing" | "ai" | "sms" | "eid";
+export type Group = "org" | "email" | "security" | "retention" | "signing" | "ai" | "sms" | "eid";
 
 export type SettingsGetInput = {
   group: Group;
@@ -1113,6 +1219,10 @@ export interface Services {
   "account.change_password": { kind: "mutation"; input: AccountChangePasswordInput; output: AccountChangePasswordOutput };
   "account.mcp_connections": { kind: "query"; input: AccountMcpConnectionsInput; output: AccountMcpConnectionsOutput };
   "account.me": { kind: "query"; input: AccountMeInput; output: AccountMeOutput };
+  "account.passkey_add": { kind: "mutation"; input: AccountPasskeyAddInput; output: AccountPasskeyAddOutput };
+  "account.passkey_begin": { kind: "mutation"; input: AccountPasskeyBeginInput; output: AccountPasskeyBeginOutput };
+  "account.passkey_remove": { kind: "mutation"; input: AccountPasskeyRemoveInput; output: AccountPasskeyRemoveOutput };
+  "account.passkeys": { kind: "query"; input: AccountPasskeysInput; output: AccountPasskeysOutput };
   "account.revoke_mcp_connection": { kind: "mutation"; input: AccountRevokeMcpConnectionInput; output: AccountRevokeMcpConnectionOutput };
   "account.two_factor_begin": { kind: "mutation"; input: AccountTwoFactorBeginInput; output: AccountTwoFactorBeginOutput };
   "account.two_factor_confirm": { kind: "mutation"; input: AccountTwoFactorConfirmInput; output: AccountTwoFactorConfirmOutput };
@@ -1127,6 +1237,8 @@ export interface Services {
   "audit.verify": { kind: "query"; input: AuditVerifyInput; output: AuditVerifyOutput };
   "auth.login": { kind: "mutation"; input: AuthLoginInput; output: AuthLoginOutput };
   "auth.logout": { kind: "mutation"; input: AuthLogoutInput; output: AuthLogoutOutput };
+  "auth.passkey_begin": { kind: "mutation"; input: AuthPasskeyBeginInput; output: AuthPasskeyBeginOutput };
+  "auth.passkey_sign_in": { kind: "mutation"; input: AuthPasskeySignInInput; output: AuthPasskeySignInOutput };
   "auth.request_password_reset": { kind: "mutation"; input: AuthRequestPasswordResetInput; output: AuthRequestPasswordResetOutput };
   "auth.reset_password": { kind: "mutation"; input: AuthResetPasswordInput; output: AuthResetPasswordOutput };
   "auth.verify_two_factor": { kind: "mutation"; input: AuthVerifyTwoFactorInput; output: AuthVerifyTwoFactorOutput };
@@ -1143,6 +1255,7 @@ export interface Services {
   "documents.download": { kind: "query"; input: DocumentsDownloadInput; output: DocumentsDownloadOutput };
   "documents.get": { kind: "query"; input: DocumentsGetInput; output: DocumentsGetOutput };
   "documents.latest_review": { kind: "query"; input: DocumentsLatestReviewInput; output: DocumentsLatestReviewOutput };
+  "documents.legal_hold": { kind: "mutation"; input: DocumentsLegalHoldInput; output: DocumentsLegalHoldOutput };
   "documents.list": { kind: "query"; input: DocumentsListInput; output: DocumentsListOutput };
   "documents.remind": { kind: "mutation"; input: DocumentsRemindInput; output: DocumentsRemindOutput };
   "documents.remove_file": { kind: "mutation"; input: DocumentsRemoveFileInput; output: DocumentsRemoveFileOutput };
@@ -1160,6 +1273,7 @@ export interface Services {
   "oauth.approve": { kind: "mutation"; input: OauthApproveInput; output: OauthApproveOutput };
   "oauth.deny": { kind: "mutation"; input: OauthDenyInput; output: OauthDenyOutput };
   "oauth.describe": { kind: "query"; input: OauthDescribeInput; output: OauthDescribeOutput };
+  "retention.preview": { kind: "query"; input: RetentionPreviewInput; output: RetentionPreviewOutput };
   "seal.get": { kind: "query"; input: SealGetInput; output: SealGetOutput };
   "seal.regenerate": { kind: "mutation"; input: SealRegenerateInput; output: SealRegenerateOutput };
   "settings.get": { kind: "query"; input: SettingsGetInput; output: SettingsGetOutput };

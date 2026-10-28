@@ -170,8 +170,10 @@ pub async fn keys(http: &reqwest::Client, discovery: &Discovery) -> Result<Vec<K
 
 const SKEW: i64 = 60;
 
-/// The claims of a valid ID token for this client and nonce.
-pub fn verify_id_token(token: &str, keys: &[Key], issuer: &str, client_id: &str, nonce: &str, now: i64) -> Result<Value> {
+/// The claims of a valid ID token for this client and nonce. With `acr_values`, the token must say
+/// one of them was used: the browser can drop them from the authorization request and pick a
+/// weaker method at the broker.
+pub fn verify_id_token(token: &str, keys: &[Key], issuer: &str, client_id: &str, nonce: &str, acr_values: &str, now: i64) -> Result<Value> {
     let claims = jws::verify(token, keys).map_err(|e| unavailable("The eID broker's ID token could not be verified").with_cause(e))?;
     let reject = |why: &str| Err(unavailable(format!("The eID broker's ID token was refused: {why}")));
     if claims["iss"].as_str().map(|s| s.trim_end_matches('/')) != Some(issuer.trim_end_matches('/')) {
@@ -196,6 +198,14 @@ pub fn verify_id_token(token: &str, keys: &[Key], issuer: &str, client_id: &str,
     }
     if !claims["nonce"].as_str().is_some_and(|n| opensign_crypto::constant_time_eq(n.as_bytes(), nonce.as_bytes())) {
         return reject("wrong nonce");
+    }
+    let mut accepted = acr_values.split_whitespace().peekable();
+    if accepted.peek().is_some()
+        && !claims["acr"]
+            .as_str()
+            .is_some_and(|acr| accepted.any(|a| acr == a || acr.strip_prefix(a).is_some_and(|rest| rest.starts_with(':'))))
+    {
+        return reject("the identification method was not one of those required");
     }
     Ok(claims)
 }
@@ -233,7 +243,7 @@ mod tests {
         let now = 1_800_000_000;
         let good = json!({ "iss": "https://broker.example", "aud": "client", "exp": now + 300, "iat": now, "nonce": "n1", "name": "Ada Lovelace", "ssn": "199001010017" });
         let token = |claims: &Value| sign(&private, &json!({ "alg": "RS256", "kid": "k1" }), claims);
-        let check = |claims: &Value| verify_id_token(&token(claims), &keys, "https://broker.example/", "client", "n1", now);
+        let check = |claims: &Value| verify_id_token(&token(claims), &keys, "https://broker.example/", "client", "n1", "", now);
 
         let claims = check(&good).expect("valid");
         assert_eq!(identity(&claims), Some(Identity { name: "Ada Lovelace".into(), personal_number: Some("199001010017".into()) }));
@@ -254,6 +264,16 @@ mod tests {
         multi["aud"] = json!(["client", "other"]);
         multi["azp"] = json!("client");
         assert!(check(&multi).is_ok());
+        let required =
+            |claims: &Value| verify_id_token(&token(claims), &keys, "https://broker.example", "client", "n1", "urn:a urn:b", now);
+        assert!(required(&good).is_err(), "no acr when one is required");
+        let mut strong = good.clone();
+        strong["acr"] = json!("urn:b");
+        assert!(required(&strong).is_ok());
+        strong["acr"] = json!("urn:b:same-device");
+        assert!(required(&strong).is_ok(), "a more specific method under a required one");
+        strong["acr"] = json!("urn:weak");
+        assert!(required(&strong).is_err());
     }
 
     #[test]

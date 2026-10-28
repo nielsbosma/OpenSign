@@ -1079,7 +1079,7 @@ impl Service for Delete {
     type Output = Ok_;
     const META: Meta = Meta::mutation(
         "documents.delete",
-        "Delete a document or template that is not pending. Signed documents can only be deleted by someone who manages all documents.",
+        "Delete a document or template that is not pending, with its files. Signed documents can only be deleted by someone who manages all documents, and documents on legal hold by no one.",
         Access::Permission(Permission::DocumentsCreate),
     );
 
@@ -1091,14 +1091,7 @@ impl Service for Delete {
         if document.status == status::COMPLETED && !ctx.can(Permission::DocumentsManageAll) {
             return Err(forbidden());
         }
-        sqlx::query("delete from documents where id = $1").bind(document.id).execute(&mut *conn).await?;
-        audit(
-            ctx,
-            conn,
-            Entry::new("document.deleted", "document", document.id)
-                .before(json!({ "title": document.title, "status": document.status, "sealedSha256": document.sealed_sha256 })),
-        )
-        .await?;
+        crate::documents::purge(ctx, conn, &document, "manual").await?;
         Ok(Ok_::default())
     }
 }

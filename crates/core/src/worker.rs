@@ -46,6 +46,18 @@ async fn run(ctx: &Ctx, job: &Job) -> Result<()> {
             return crate::services::bulk::run_job(ctx, id(job, "bulk")?).await;
         }
         "sweep" => sweep(ctx, &mut tx).await?,
+        "retention" => {
+            if crate::services::retention::run(ctx, &mut tx).await? > 0 {
+                enqueue(&mut tx, "retention", json!({}), None, None).await?;
+            }
+        }
+        "delete_objects" => {
+            drop(tx);
+            for key in job.payload["keys"].as_array().into_iter().flatten().filter_map(|k| k.as_str()) {
+                ctx.app.storage.delete_raw(key).await?;
+            }
+            return Ok(());
+        }
         "anchor_audit" => {
             drop(tx);
             let mut conn = ctx.db().acquire().await?;
@@ -84,6 +96,7 @@ async fn sweep(ctx: &Ctx, conn: &mut sqlx::PgConnection) -> Result<()> {
         enqueue(conn, "notify_party", json!({ "party": party, "reminder": true }), None, Some(&format!("notify:{party}"))).await?;
     }
     sqlx::query("delete from idempotency_keys where created_at < $1 - interval '1 day'").bind(ctx.now).execute(&mut *conn).await?;
+    enqueue(conn, "retention", json!({}), None, Some("retention")).await?;
     enqueue(conn, "anchor_audit", json!({}), None, Some("anchor_audit")).await
 }
 
@@ -103,7 +116,7 @@ async fn anchor_audit(ctx: &Ctx, conn: &mut sqlx::PgConnection) -> Result<()> {
     if url.is_empty() {
         return Ok(());
     }
-    let token = seal::timestamp(ctx, url, &hash).await?;
+    let token = seal::timestamp(ctx, url, &<sha2::Sha256 as sha2::Digest>::digest(&hash).into()).await?;
     sqlx::query("insert into audit_anchors (audit_id, head_hash, tsa_token, tsa_url) values ($1, $2, $3, $4)")
         .bind(head_id)
         .bind(&hash)

@@ -1,10 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { KeyRound } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { Field, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useApiMutation } from '@/lib/api';
+import { call, errorMessage, useApiMutation } from '@/lib/api';
+import { getPasskey, passkeyCanceled, passkeysSupported } from '@/lib/passkeys';
 import { useSession } from '@/lib/session';
 import { AuthLayout, FormError } from './AuthLayout';
 
@@ -23,6 +25,7 @@ export function LoginPage() {
   const [code, setCode] = useState('');
   const [challenge, setChallenge] = useState<string | null>(null);
   const [error, setError] = useState<string>();
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
 
   const done = async () => {
     await queryClient.invalidateQueries();
@@ -40,6 +43,21 @@ export function LoginPage() {
     e.preventDefault();
     setError(undefined);
     login.mutate({ email: email.trim(), password }, { onError: (e) => setError(e.message) });
+  };
+
+  const signInWithPasskey = async () => {
+    setError(undefined);
+    setPasskeyBusy(true);
+    try {
+      const begin = await call('auth.passkey_begin', {});
+      const response = await getPasskey(begin.options as Record<string, unknown>);
+      await call('auth.passkey_sign_in', { state: begin.state, ...response });
+      await done();
+    } catch (e) {
+      if (!passkeyCanceled(e)) setError(errorMessage(e));
+    } finally {
+      setPasskeyBusy(false);
+    }
   };
 
   const submitCode = (e: FormEvent) => {
@@ -102,6 +120,11 @@ export function LoginPage() {
         <Button type="submit" disabled={login.isPending}>
           {login.isPending && <Spinner className="text-primary-foreground" />} Sign In
         </Button>
+        {passkeysSupported() && (
+          <Button type="button" variant="outline" disabled={passkeyBusy} onClick={() => void signInWithPasskey()}>
+            {passkeyBusy ? <Spinner /> : <KeyRound />} Sign In with a Passkey
+          </Button>
+        )}
         <Link to="/forgot-password" className="text-center text-muted-foreground hover:text-foreground">
           Forgot Your Password?
         </Link>

@@ -172,6 +172,199 @@ async fn setup_login_lockout_two_factor_and_api_keys() {
     assert_eq!(kind(locked), ErrorKind::TooManyRequests, "the right password is refused while locked");
 
     call::<auth::RequestPasswordReset>(&anon, auth::EmailInput { email: "nobody@example.com".into() }).await.unwrap();
-    let chain = opensign_core::audit::verify_chain(&mut conn).await.unwrap();
+    let chain = opensign_core::audit::verify_chain(&mut conn, &app.keys).await.unwrap();
     assert!(chain.valid, "{chain:?}");
+}
+
+#[tokio::test]
+async fn parallel_guesses_all_count_toward_the_lockout() {
+    let Some(app) = app().await else { return };
+    let anon = web(&app);
+    let input = setup::CompleteInput {
+        setup_code: app.keys.setup_code(),
+        org_name: "Acme AB".into(),
+        name: "Ada Admin".into(),
+        email: "ada@example.com".into(),
+        password: PASSWORD.into(),
+    };
+    call::<setup::Complete>(&anon, input).await.unwrap();
+    let guesses: Vec<_> = (0..6)
+        .map(|i| {
+            let anon = anon.clone();
+            tokio::spawn(async move { call::<auth::Login>(&anon, login("ada@example.com", &format!("wrong password number {i}"))).await })
+        })
+        .collect();
+    for guess in guesses {
+        assert!(guess.await.unwrap().is_err());
+    }
+    let failures: i32 =
+        sqlx::query_scalar("select failed_login_count from users where email = 'ada@example.com'").fetch_one(&app.db).await.unwrap();
+    assert!(failures >= 5, "every guess before the lock counted: {failures}");
+    assert_eq!(kind(call::<auth::Login>(&anon, login("ada@example.com", PASSWORD)).await), ErrorKind::TooManyRequests);
+}
+
+mod passkey {
+    use base64::Engine;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64URL;
+    use ciborium::Value;
+    use p256::ecdsa::signature::Signer;
+    use p256::ecdsa::{DerSignature, SigningKey};
+    use sha2::{Digest, Sha256};
+
+    pub struct Authenticator {
+        pub key: SigningKey,
+        pub id: Vec<u8>,
+        pub count: u32,
+        pub rp_id: String,
+        pub origin: String,
+    }
+
+    fn cbor(value: &Value) -> Vec<u8> {
+        let mut out = Vec::new();
+        ciborium::into_writer(value, &mut out).unwrap();
+        out
+    }
+
+    fn challenge(options: &serde_json::Value) -> String {
+        options["challenge"].as_str().unwrap().to_string()
+    }
+
+    impl Authenticator {
+        fn auth_data(&self, flags: u8, tail: &[u8]) -> Vec<u8> {
+            let mut out = Sha256::digest(self.rp_id.as_bytes()).to_vec();
+            out.push(flags);
+            out.extend_from_slice(&self.count.to_be_bytes());
+            out.extend_from_slice(tail);
+            out
+        }
+
+        fn client(&self, kind: &str, options: &serde_json::Value) -> Vec<u8> {
+            serde_json::to_vec(&serde_json::json!({ "type": kind, "challenge": challenge(options), "origin": self.origin })).unwrap()
+        }
+
+        /// (clientDataJSON, attestationObject), base64url.
+        pub fn create(&self, options: &serde_json::Value) -> (String, String) {
+            let point = self.key.verifying_key().to_encoded_point(false);
+            let cose = cbor(&Value::Map(vec![
+                (1.into(), 2.into()),
+                (3.into(), (-7).into()),
+                ((-1).into(), 1.into()),
+                ((-2).into(), Value::Bytes(point.x().unwrap().to_vec())),
+                ((-3).into(), Value::Bytes(point.y().unwrap().to_vec())),
+            ]));
+            let mut attested = vec![0u8; 16];
+            attested.extend_from_slice(&(self.id.len() as u16).to_be_bytes());
+            attested.extend_from_slice(&self.id);
+            attested.extend_from_slice(&cose);
+            let object = cbor(&Value::Map(vec![
+                ("fmt".into(), "none".into()),
+                ("attStmt".into(), Value::Map(vec![])),
+                ("authData".into(), Value::Bytes(self.auth_data(0x45, &attested))),
+            ]));
+            (B64URL.encode(self.client("webauthn.create", options)), B64URL.encode(object))
+        }
+
+        /// (clientDataJSON, authenticatorData, signature), base64url.
+        pub fn get(&mut self, options: &serde_json::Value) -> (String, String, String) {
+            self.count += 1;
+            let client = self.client("webauthn.get", options);
+            let data = self.auth_data(0x05, &[]);
+            let mut signed = data.clone();
+            signed.extend_from_slice(&Sha256::digest(&client));
+            let signature: DerSignature = self.key.sign(&signed);
+            (B64URL.encode(client), B64URL.encode(data), B64URL.encode(signature.as_bytes()))
+        }
+    }
+}
+
+#[tokio::test]
+async fn passkeys_register_and_sign_in_once_per_challenge() {
+    use base64::Engine;
+    use opensign_core::services::passkeys;
+
+    let Some(app) = app().await else { return };
+    let anon = web(&app);
+    call::<setup::Complete>(
+        &anon,
+        setup::CompleteInput {
+            setup_code: app.keys.setup_code(),
+            org_name: "Acme AB".into(),
+            name: "Ada Admin".into(),
+            email: "ada@example.com".into(),
+            password: PASSWORD.into(),
+        },
+    )
+    .await
+    .unwrap();
+    let admin = signed_in(&app, call::<auth::Login>(&anon, login("ada@example.com", PASSWORD)).await.unwrap()).await;
+    let url = url::Url::parse(&app.public_url()).unwrap();
+    let mut device = passkey::Authenticator {
+        key: p256::ecdsa::SigningKey::from_slice(&[9u8; 32]).unwrap(),
+        id: b"credential-1".to_vec(),
+        count: 0,
+        rp_id: url.host_str().unwrap().to_string(),
+        origin: url.origin().ascii_serialization(),
+    };
+
+    let refused = call::<passkeys::BeginRegistration>(&admin, passkeys::BeginInput { current_password: Some("wrong".into()) }).await;
+    assert_eq!(kind(refused), ErrorKind::BadRequest, "adding a passkey asks for the password");
+    let begin =
+        call::<passkeys::BeginRegistration>(&admin, passkeys::BeginInput { current_password: Some(PASSWORD.into()) }).await.unwrap();
+    let (client, attestation) = device.create(&begin.options);
+    let add = |state: String| passkeys::FinishRegistrationInput {
+        state,
+        name: "Laptop".into(),
+        client_data_json: client.clone(),
+        attestation_object: attestation.clone(),
+        transports: vec!["internal".into()],
+    };
+    call::<passkeys::FinishRegistration>(&admin, add(begin.state.clone())).await.unwrap();
+    assert!(call::<passkeys::FinishRegistration>(&admin, add(begin.state)).await.is_err(), "a challenge works once");
+    assert_eq!(call::<passkeys::List>(&admin, Empty {}).await.unwrap().len(), 1);
+
+    let begin = call::<passkeys::BeginSignIn>(&anon, Empty {}).await.unwrap();
+    let (client, data, signature) = device.get(&begin.options);
+    let sign_in = |state: String| passkeys::SignInInput {
+        state,
+        credential_id: base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&device.id),
+        client_data_json: client.clone(),
+        authenticator_data: data.clone(),
+        signature: signature.clone(),
+        user_handle: None,
+    };
+    let session = signed_in(&app, call::<passkeys::SignIn>(&anon, sign_in(begin.state.clone())).await.unwrap()).await;
+    assert_eq!(session.actor.as_ref().unwrap().email, "ada@example.com");
+    assert_eq!(kind(call::<passkeys::SignIn>(&anon, sign_in(begin.state)).await), ErrorKind::Unauthorized, "no replay");
+
+    let other = call::<passkeys::BeginSignIn>(&anon, Empty {}).await.unwrap();
+    let (client, data, signature) = device.get(&begin_options_with_other_challenge(&other.options));
+    let mismatched = passkeys::SignInInput {
+        state: other.state,
+        credential_id: base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&device.id),
+        client_data_json: client,
+        authenticator_data: data,
+        signature,
+        user_handle: None,
+    };
+    assert!(call::<passkeys::SignIn>(&anon, mismatched).await.is_err(), "a response for another challenge is refused");
+
+    let id = call::<passkeys::List>(&admin, Empty {}).await.unwrap()[0].id;
+    call::<passkeys::Remove>(&admin, passkeys::RemoveInput { id }).await.unwrap();
+    let begin = call::<passkeys::BeginSignIn>(&anon, Empty {}).await.unwrap();
+    let (client, data, signature) = device.get(&begin.options);
+    let removed = passkeys::SignInInput {
+        state: begin.state,
+        credential_id: base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&device.id),
+        client_data_json: client,
+        authenticator_data: data,
+        signature,
+        user_handle: None,
+    };
+    assert_eq!(kind(call::<passkeys::SignIn>(&anon, removed).await), ErrorKind::Unauthorized);
+}
+
+fn begin_options_with_other_challenge(options: &serde_json::Value) -> serde_json::Value {
+    let mut changed = options.clone();
+    changed["challenge"] = serde_json::json!("c29tZXRoaW5nLWVsc2U");
+    changed
 }

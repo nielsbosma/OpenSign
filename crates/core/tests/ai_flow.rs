@@ -110,6 +110,9 @@ async fn assistant_and_review() {
     let first = seen.lock().unwrap()[0].clone();
     let tools: Vec<&str> = first["tools"].as_array().unwrap().iter().map(|t| t["function"]["name"].as_str().unwrap()).collect();
     assert!(tools.contains(&"documents_create") && !tools.contains(&"api_keys_create") && !tools.contains(&"ai_chat"));
+    for kept_out in ["users_update", "users_invite", "webhooks_create", "documents_signing_link", "documents_share"] {
+        assert!(!tools.contains(&kept_out), "the assistant never gets {kept_out}");
+    }
     let list = call::<documents::List>(&ada, serde_json::from_value(json!({ "search": "Via AI" })).unwrap()).await.unwrap();
     assert_eq!(list.len(), 1);
     let mut conn = app.db.acquire().await.unwrap();

@@ -21,6 +21,7 @@ pub fn is_forbidden(ip: IpAddr) -> bool {
                 || (o[0] == 100 && (64..=127).contains(&o[1]))
                 || (o[0] == 192 && o[1] == 0 && o[2] == 0)
                 || (o[0] == 198 && (18..=19).contains(&o[1]))
+                || (o[0] == 192 && o[1] == 88 && o[2] == 99)
                 || o[0] >= 240
         }
         IpAddr::V6(v6) => {
@@ -34,7 +35,9 @@ pub fn is_forbidden(ip: IpAddr) -> bool {
                 || (s[0] & 0xfe00) == 0xfc00
                 || (s[0] & 0xffc0) == 0xfe80
                 || (s[0] == 0x64 && s[1] == 0xff9b)
-                || (s[0] == 0x2001 && s[1] == 0x0db8)
+                || (s[0] == 0x2001 && (s[1] == 0x0db8 || s[1] == 0))
+                || s[0] == 0x2002
+                || s[..6].iter().all(|x| *x == 0)
         }
     }
 }
@@ -120,9 +123,15 @@ pub fn client_with_certificate(identity_pem: &str, roots: Option<&str>) -> Resul
 
 /// Literal IPs in a URL bypass DNS, so they are checked here as well.
 pub fn check_public_url(url: &str) -> Result<reqwest::Url, String> {
+    check_outbound_url(url, false)
+}
+
+/// As `check_public_url`, also allowing plain http for services that sign what they return (time
+/// stamp authorities).
+pub fn check_outbound_url(url: &str, allow_http: bool) -> Result<reqwest::Url, String> {
     let parsed = reqwest::Url::parse(url).map_err(|_| "Enter a valid URL".to_string())?;
-    if parsed.scheme() != "https" {
-        return Err("Use an https URL".into());
+    if parsed.scheme() != "https" && !(allow_http && parsed.scheme() == "http") {
+        return Err(if allow_http { "Use an http or https URL" } else { "Use an https URL" }.into());
     }
     if !parsed.username().is_empty() || parsed.password().is_some() {
         return Err("Leave credentials out of the URL".into());
@@ -156,6 +165,9 @@ mod tests {
             "fd00::1",
             "fe80::1",
             "::ffff:10.0.0.1",
+            "::10.0.0.1",
+            "2002:a00:1::1",
+            "2001::1",
         ] {
             assert!(is_forbidden(ip.parse().expect("ip")), "{ip}");
         }
@@ -172,6 +184,9 @@ mod tests {
         assert!(check_public_url("https://[::1]/").is_err());
         assert!(check_public_url("https://user:pw@example.com/").is_err());
         assert!(check_public_url("https://localhost/").is_err());
+        assert!(check_outbound_url("http://timestamp.digicert.com", true).is_ok());
+        assert!(check_outbound_url("http://169.254.169.254/latest", true).is_err());
+        assert!(check_outbound_url("ftp://example.com/", true).is_err());
     }
 
     #[tokio::test]

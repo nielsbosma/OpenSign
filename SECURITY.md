@@ -25,12 +25,13 @@ It does not protect against someone who holds `APP_SECRET` together with the dat
 **Accounts and sessions**
 - Passwords are Unicode-normalized and hashed with Argon2id (64 MiB, 3 passes), with a minimum length. Failed sign-ins lock the account for a while; every attempt is audited.
 - TOTP two-factor authentication with single-use recovery codes, which an admin can require for everyone.
+- Passkeys (WebAuthn, verified in-house in Rust): user verification required, origin and RP ID checked, challenges single-use and short-lived, signature counters must increase, ES256, EdDSA and RSA of 2048 bits or more. A passkey satisfies the two-factor requirement.
 - Session cookies are `HttpOnly`, `SameSite=Lax`, `__Host-` prefixed and `Secure` on https, stored only as a MAC in the database, with absolute and idle expiry. Cookie-authenticated writes must come from our own origin (`Origin` or `Sec-Fetch-Site`).
 - The first admin can only be created with a one-time setup code from the server log.
 - API keys and OAuth tokens are stored as hashes. MCP uses OAuth 2.1 with PKCE (S256 only), exact redirect URIs, audience-bound access tokens, and rotating refresh tokens with reuse detection that revokes the whole grant.
 
 **Roles**
-- Admin, manager, sender, auditor and viewer, enforced in the service layer. The UI only hides what the server would refuse anyway. MCP and the AI assistant act with the user's own permissions; public services are never tools.
+- Admin, manager, sender, auditor and viewer, enforced in the service layer. The UI only hides what the server would refuse anyway. MCP and the AI assistant act with the user's own permissions; public services are never tools. The assistant also never gets tools that change who has access, add webhooks or hand out signing links, since text in documents could try to steer it.
 
 **Signing links and signers**
 - A link is the party id plus a MAC over it and a link version; it lives in the URL fragment, so it never reaches server logs or `Referer` headers, and the signing page removes it from the address bar. Resending or canceling bumps the version and kills old links.
@@ -42,14 +43,17 @@ It does not protect against someone who holds `APP_SECRET` together with the dat
 - Uploads are checked by content, not name. PDFs are rewritten without JavaScript, actions, embedded files, XFA, launch and URI actions; Word files are converted by Gotenberg on a private network, which has no keys or database access.
 - PDFs are served as downloads with `Content-Security-Policy: sandbox`.
 - The finished document is stamped, gets evidence pages (each party's identification, IP, user agent and times, and the document hashes) and a JSON evidence attachment, then a PAdES seal over the whole file and an RFC 3161 time stamp. CI checks the result with poppler's `pdfsig` and `qpdf`.
+- Retention: rules in Settings delete documents after set periods. A deletion removes the document's file rows in the same transaction, which destroys their wrapped keys so the encrypted bodies are unreadable at once, then a job removes the objects from the bucket. Files another document still uses are kept. A legal hold (its own permission, a required reason, audited) blocks both the rules and manual deletion. The audit trail keeps a record of every deletion.
+- Long-term validation (PAdES B-LTA): after sealing, OpenSign collects every certificate the seal and time stamps depend on, fetches OCSP responses (or CRLs) for each, and adds them to the document security store, then adds a document time stamp over the whole file. Both are incremental updates, so the seal's bytes are untouched. A response is only stored after OpenSign has checked it: signed by the issuer or its delegated responder, about the right certificate, and current. Fetches go through the public HTTP client with size limits. If revocation data cannot be fetched the document is still sealed and the gap is recorded in the audit log.
+- Verification checks time stamp authorities' signatures (RSA of 2048 bits or more, ECDSA P-256 and P-384, SHA-2), and compares the revision each signature covers with the final file: only a document security store and invisible document time stamps may be added. Any other later change, including a new annotation or a changed catalog entry, marks the signature as not intact.
 
 **Audit trail**
-- Every change is in an append-only log (database triggers refuse updates, deletes and truncation), hash-chained with a key derived from `APP_SECRET`, and its head is time-stamped by the time stamp authority every hour, so the trail up to then cannot be quietly rebuilt. `audit.verify` checks the chain.
+- Every change is in an append-only log (database triggers refuse updates, deletes and truncation), hash-chained with a key derived from `APP_SECRET`, and its head is time-stamped by the time stamp authority every hour, so the trail up to then cannot be quietly rebuilt. `audit.verify` checks the chain and the anchors.
 
 **The web and the network**
 - Strict CSP (`script-src 'self'`, no inline script, `frame-ancestors 'none'`), HSTS on https, `nosniff`, `no-referrer`, COOP and CORP, and a tight permissions policy.
 - Rate limits per address on sign-in, codes, signing, uploads and verification, on top of the database lockouts.
-- Outbound requests to anything configurable (webhooks, AI endpoints, eID brokers, time stamp authorities) resolve DNS first and refuse private, loopback, link-local and metadata addresses, and follow no redirects.
+- Outbound requests to anything configurable (webhooks, AI endpoints, eID brokers, time stamp authorities) resolve DNS first and refuse private, loopback, link-local and metadata addresses, and follow no redirects. The one exception is a self-hosted AI proxy (LiteLLM or another OpenAI-compatible endpoint), which an admin may point at the private network.
 - Webhooks are signed with a per-webhook secret in the `OpenSign-Signature` header.
 
 **Supply chain and runtime**

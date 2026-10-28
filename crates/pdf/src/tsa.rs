@@ -57,15 +57,16 @@ fn int_value(int: &Int) -> i64 {
     int.as_bytes().iter().fold(0i64, |acc, b| (acc << 8) | *b as i64)
 }
 
-/// An RFC 3161 request for a time stamp over `data` (for PAdES, the signature value).
-pub fn build_request(data: &[u8], nonce: &[u8; 16]) -> Vec<u8> {
+/// An RFC 3161 request for a time stamp over a SHA-256 digest: of the signature value for a
+/// signature time stamp, of the signed byte ranges for a document time stamp.
+pub fn build_request(digest: &[u8; 32], nonce: &[u8; 16]) -> Vec<u8> {
     let mut nonce = nonce.to_vec();
     nonce[0] &= 0x7f;
     let request = TimeStampReq {
         version: 1,
         message_imprint: MessageImprint {
             hash_algorithm: sha256_alg(),
-            hashed_message: OctetString::new(Sha256::digest(data).to_vec()).expect("32 bytes"),
+            hashed_message: OctetString::new(digest.to_vec()).expect("32 bytes"),
         },
         nonce: Int::new(&nonce).expect("valid integer"),
         cert_req: true,
@@ -73,9 +74,9 @@ pub fn build_request(data: &[u8], nonce: &[u8; 16]) -> Vec<u8> {
     request.to_der().expect("a time stamp request encodes")
 }
 
-/// Checks the response's status, that the token covers `data`, and that it echoes our nonce.
-/// Returns the token (a CMS ContentInfo) to embed as the signature-time-stamp attribute.
-pub fn parse_response(response: &[u8], data: &[u8], nonce: &[u8; 16]) -> Result<Vec<u8>, TimestampError> {
+/// Checks the response's status, that the token covers `digest`, and that it echoes our nonce.
+/// Returns the token (a CMS ContentInfo) to embed.
+pub fn parse_response(response: &[u8], digest: &[u8; 32], nonce: &[u8; 16]) -> Result<Vec<u8>, TimestampError> {
     let invalid = |e: &dyn std::fmt::Display| TimestampError::Invalid(e.to_string());
     let resp = TimeStampResp::from_der(response).map_err(|e| invalid(&e))?;
     let status_der = resp.status.to_der().map_err(|e| invalid(&e))?;
@@ -86,7 +87,7 @@ pub fn parse_response(response: &[u8], data: &[u8], nonce: &[u8; 16]) -> Result<
     }
     let token = resp.time_stamp_token.ok_or_else(|| invalid(&"no token in the response"))?;
     let token_der = token.to_der().map_err(|e| invalid(&e))?;
-    let fields = token_fields(&token_der, data)?;
+    let fields = token_fields(&token_der, digest)?;
     let mut expected = nonce.to_vec();
     expected[0] &= 0x7f;
     let expected = Int::new(&expected).map_err(|e| invalid(&e))?;
@@ -98,8 +99,8 @@ pub fn parse_response(response: &[u8], data: &[u8], nonce: &[u8; 16]) -> Result<
     Ok(token_der)
 }
 
-/// The TSTInfo fields of a time stamp token, after checking that it covers `data` with SHA-256.
-fn token_fields(token_der: &[u8], data: &[u8]) -> Result<Vec<Any>, TimestampError> {
+/// The TSTInfo fields of a time stamp token, after checking that it covers `digest` (SHA-256).
+pub(crate) fn token_fields(token_der: &[u8], digest: &[u8]) -> Result<Vec<Any>, TimestampError> {
     let invalid = |e: &dyn std::fmt::Display| TimestampError::Invalid(e.to_string());
     let info = ContentInfo::from_der(token_der).map_err(|e| invalid(&e))?;
     if info.content_type != ID_SIGNED_DATA {
@@ -114,17 +115,52 @@ fn token_fields(token_der: &[u8], data: &[u8]) -> Result<Vec<Any>, TimestampErro
     let fields: Vec<Any> = Vec::from_der(tst_der.as_bytes()).map_err(|e| invalid(&e))?;
     let imprint = fields.get(2).ok_or_else(|| invalid(&"TSTInfo is too short"))?;
     let imprint = MessageImprint::from_der(&imprint.to_der().map_err(|e| invalid(&e))?).map_err(|e| invalid(&e))?;
-    if imprint.hash_algorithm.oid != ID_SHA_256 || imprint.hashed_message.as_bytes() != Sha256::digest(data).as_slice() {
+    if imprint.hash_algorithm.oid != ID_SHA_256 || imprint.hashed_message.as_bytes() != digest {
         return Err(invalid(&"the token covers different data"));
     }
     Ok(fields)
 }
 
-/// The time a token vouches for, if it covers `data`. The TSA's own signature is not checked here;
-/// readers validate it against their trust lists.
+/// The time a token vouches for, if it covers `data`. Whether the TSA is trusted is for readers
+/// and their trust lists; `token_signature_valid` checks the cryptography.
 pub fn token_time(token_der: &[u8], data: &[u8]) -> Result<DateTime<Utc>, TimestampError> {
-    let fields = token_fields(token_der, data)?;
+    digest_time(token_der, &Sha256::digest(data))
+}
+
+pub(crate) fn digest_time(token_der: &[u8], digest: &[u8]) -> Result<DateTime<Utc>, TimestampError> {
+    let fields = token_fields(token_der, digest)?;
     let time = fields.get(4).ok_or_else(|| TimestampError::Invalid("TSTInfo has no time".into()))?;
     let time: GeneralizedTime = time.decode_as().map_err(|e| TimestampError::Invalid(e.to_string()))?;
     Ok(DateTime::<Utc>::from(time.to_system_time()))
+}
+
+/// Checks the TSA's signature on a token: the signed attributes carry the digest of the TSTInfo
+/// and verify with the key of the certificate the token names.
+pub(crate) fn token_signature_valid(token_der: &[u8]) -> Result<bool, String> {
+    let info = ContentInfo::from_der(token_der).map_err(|e| e.to_string())?;
+    let signed: SignedData = info.content.decode_as().map_err(|e| e.to_string())?;
+    let [signer] = signed.signer_infos.0.as_slice() else { return Err("the time stamp has more than one signer".into()) };
+    let content = signed.encap_content_info.econtent.as_ref().ok_or("the time stamp has no content")?;
+    let tst = OctetString::from_der(&content.to_der().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    let attrs = signer.signed_attrs.as_ref().ok_or("the time stamp has no signed attributes")?;
+    let hash = crate::x509::Hash::from_oid(&signer.digest_alg.oid).ok_or("the time stamp uses an unsupported digest")?;
+    let message_digest = attrs
+        .iter()
+        .find(|a| a.oid == const_oid::db::rfc5911::ID_MESSAGE_DIGEST)
+        .and_then(|a| a.values.get(0))
+        .and_then(|v| v.decode_as::<OctetString>().ok())
+        .ok_or("the time stamp has no message digest")?;
+    if message_digest.as_bytes() != hash.digest(tst.as_bytes()) {
+        return Ok(false);
+    }
+    let certs = crate::verify::certificates(&signed);
+    let cert = crate::verify::signer_certificate(&certs, &signer.sid).ok_or("the time stamp does not include its certificate")?;
+    let message = attrs.to_der().map_err(|e| e.to_string())?;
+    Ok(crate::x509::verify_signature(
+        &cert.tbs_certificate.subject_public_key_info,
+        &signer.signature_algorithm.oid,
+        Some(&signer.digest_alg.oid),
+        &message,
+        signer.signature.as_bytes(),
+    ))
 }
