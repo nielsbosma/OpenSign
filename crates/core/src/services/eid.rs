@@ -477,6 +477,10 @@ impl Service for Status {
         if let Some(number) = &identity.personal_number {
             proof.push_str(&format!(", personal number {number}"));
         }
+        let eid: EidSettings = settings(ctx, conn).await?;
+        if (method == AuthMethod::SeBankid && eid.bankid_test) || (method == AuthMethod::Freja && eid.freja_test) {
+            proof.push_str(" (TEST environment, not a real identification)");
+        }
         Ok(EidStatus {
             status: "complete".into(),
             message: None,
