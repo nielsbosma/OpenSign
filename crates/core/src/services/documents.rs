@@ -450,6 +450,7 @@ pub struct UpdateInput {
     pub expires_at: Option<DateTime<Utc>>,
     /// Remind parties who have not signed every this many days; 0 turns reminders off.
     pub reminder_days: Option<i32>,
+    /// Your own reference; "" removes it.
     pub external_id: Option<String>,
     pub metadata: Option<Value>,
 }
@@ -480,7 +481,7 @@ impl Service for Update {
         sqlx::query(
             "update documents set title = coalesce($2, title), message = coalesce($3, message), language = coalesce($4, language),
                 sequential = coalesce($5, sequential), expires_at = coalesce($6, expires_at), reminder_days = coalesce($7, reminder_days),
-                external_id = coalesce($8, external_id), metadata = coalesce($9, metadata), updated_at = now() where id = $1",
+                external_id = case when $8::text is null then external_id else nullif($8, '') end, metadata = coalesce($9, metadata), updated_at = now() where id = $1",
         )
         .bind(document.id)
         .bind(input.title.as_deref().map(title).transpose()?)

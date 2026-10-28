@@ -595,6 +595,7 @@ export type DocumentsUnshareOutput = Ok_;
 export type DocumentsUpdateInput = {
   /** When the signing links stop working and the document expires. */
   expiresAt?: string | null;
+  /** Your own reference; "" removes it. */
   externalId?: string | null;
   id: string;
   /** What signers see and receive: `en` or `sv`. */
