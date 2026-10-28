@@ -88,7 +88,7 @@ impl Meta {
 #[async_trait]
 pub trait Service: Send + Sync + 'static {
     type Input: DeserializeOwned + JsonSchema + Send + 'static;
-    type Output: Serialize + Send + 'static;
+    type Output: Serialize + JsonSchema + Send + 'static;
     const META: Meta;
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: Self::Input) -> Result<Self::Output>;
 }
@@ -134,6 +134,7 @@ pub async fn call<S: Service>(ctx: &Ctx, input: S::Input) -> Result<S::Output> {
 pub trait DynService: Send + Sync {
     fn meta(&self) -> &Meta;
     fn input_schema(&self) -> Schema;
+    fn output_schema(&self) -> Schema;
     async fn invoke(&self, ctx: &Ctx, input: serde_json::Value) -> Result<serde_json::Value>;
 }
 
@@ -147,6 +148,10 @@ impl<S: Service> DynService for Erased<S> {
 
     fn input_schema(&self) -> Schema {
         schemars::schema_for!(S::Input)
+    }
+
+    fn output_schema(&self) -> Schema {
+        schemars::schema_for!(S::Output)
     }
 
     async fn invoke(&self, ctx: &Ctx, input: serde_json::Value) -> Result<serde_json::Value> {

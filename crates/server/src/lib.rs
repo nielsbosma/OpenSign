@@ -1,6 +1,8 @@
 pub mod auth;
 pub mod error;
 pub mod files;
+pub mod openapi;
+pub mod rest;
 pub mod rpc;
 pub mod security;
 
@@ -89,6 +91,7 @@ pub fn router(state: AppState) -> Router {
         .route("/documents/{id}/files", post(files::upload).layer(DefaultBodyLimit::max(110 * 1024 * 1024)))
         .route("/sign/file", post(files::signer))
         .route("/verify", post(files::verify))
+        .nest("/v1", rest::router(&state))
         .fallback(api_not_found)
         .layer(middleware::from_fn_with_state(state.clone(), security::same_origin))
         .layer(middleware::from_fn_with_state(state.clone(), security::general_limit));

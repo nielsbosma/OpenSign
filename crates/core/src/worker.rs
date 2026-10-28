@@ -71,6 +71,7 @@ async fn sweep(ctx: &Ctx, conn: &mut sqlx::PgConnection) -> Result<()> {
     for party in due {
         enqueue(conn, "notify_party", json!({ "party": party, "reminder": true }), None, Some(&format!("notify:{party}"))).await?;
     }
+    sqlx::query("delete from idempotency_keys where created_at < $1 - interval '1 day'").bind(ctx.now).execute(&mut *conn).await?;
     schedule_sweep(conn, Some(ctx.now + Duration::minutes(SWEEP_MINUTES))).await
 }
 

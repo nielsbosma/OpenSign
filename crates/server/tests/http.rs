@@ -202,3 +202,104 @@ fn opensign_pdf_fixture() -> Vec<u8> {
     doc.save_to(&mut out).unwrap();
     out
 }
+
+#[tokio::test]
+async fn rest_api_with_keys_idempotency_and_openapi() {
+    let Some(app) = app().await else { return };
+    let client = Client { router: router(AppState::new(app.clone())), ip: "203.0.113.9" };
+    let setup = json!({ "setupCode": app.keys.setup_code(), "orgName": "Acme AB", "name": "Ada", "email": "ada@example.com", "password": PASSWORD });
+    client.call("setup.create_first_admin", setup, &[]).await;
+    let (response, _) = client.call("auth.login", json!({ "email": "ada@example.com", "password": PASSWORD }), &[]).await;
+    let cookie = cookie_of(&response);
+    let session: [(&str, &str); 2] = [("cookie", &cookie), ("origin", ORIGIN)];
+    let (_, key) = client.call("api_keys.create", json!({ "name": "CRM", "permissions": ["documents.create"] }), &session).await;
+    let bearer = format!("Bearer {}", key["key"].as_str().unwrap());
+    let (_, narrow) = client.call("api_keys.create", json!({ "name": "Org only", "permissions": ["org.read"] }), &session).await;
+    let narrow = format!("Bearer {}", narrow["key"].as_str().unwrap());
+
+    let rest = |method: &str, path: &str, auth: &str, body: Option<Value>, idempotency: Option<&str>| {
+        let mut b = Request::builder()
+            .method(method)
+            .uri(format!("/api/v1{path}"))
+            .header("authorization", auth)
+            .header("x-forwarded-for", "203.0.113.9");
+        if let Some(k) = idempotency {
+            b = b.header("idempotency-key", k);
+        }
+        match body {
+            Some(body) => b.header(header::CONTENT_TYPE, "application/json").body(Body::from(body.to_string())).unwrap(),
+            None => b.body(Body::empty()).unwrap(),
+        }
+    };
+
+    let (response, created) =
+        client.send(rest("POST", "/documents", &bearer, Some(json!({ "title": "NDA", "externalId": "crm-42" })), Some("create-nda"))).await;
+    assert_eq!(response.status(), StatusCode::CREATED, "{created}");
+    let id = created["id"].as_str().unwrap().to_string();
+    let (response, again) =
+        client.send(rest("POST", "/documents", &bearer, Some(json!({ "title": "NDA", "externalId": "crm-42" })), Some("create-nda"))).await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert_eq!(response.headers().get("idempotent-replayed").unwrap(), "true");
+    assert_eq!(again["id"], created["id"], "a retry does not create a second document");
+    let (response, _) = client.send(rest("POST", "/documents", &bearer, Some(json!({ "title": "Other" })), Some("create-nda"))).await;
+    assert_eq!(response.status(), StatusCode::CONFLICT, "a reused key with another body is refused");
+
+    let (response, list) = client.send(rest("GET", "/documents?search=crm-42&limit=5", &bearer, None, None)).await;
+    assert_eq!(response.status(), StatusCode::OK, "{list}");
+    assert_eq!(list.as_array().unwrap().len(), 1);
+    let (response, _) = client.send(rest("GET", "/documents?limit=lots", &bearer, None, None)).await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let (response, templates) = client.send(rest("GET", "/templates", &bearer, None, None)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(templates.as_array().unwrap().len(), 0);
+
+    let (response, doc) = client.send(rest("PATCH", &format!("/documents/{id}"), &bearer, Some(json!({ "title": "NDA v2" })), None)).await;
+    assert_eq!(response.status(), StatusCode::OK, "{doc}");
+    assert_eq!(doc["title"], "NDA v2");
+    let parties = json!({ "parties": [{ "role": "signer", "name": "Bo Berg", "email": "bo@example.com" }] });
+    let (response, body) = client.send(rest("PUT", &format!("/documents/{id}/parties"), &bearer, Some(parties), None)).await;
+    assert_eq!(response.status(), StatusCode::OK, "{body}");
+
+    let (response, _) = client.send(rest("GET", &format!("/documents/{id}"), &narrow, None, None)).await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND, "a key without document scopes sees nothing");
+    let (response, _) = client.send(rest("GET", "/documents/not-a-uuid", &bearer, None, None)).await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let (response, _) = client.send(rest("GET", "/documents", "Bearer nope", None, None)).await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let (response, _) = client.send(rest("DELETE", &format!("/documents/{id}"), &bearer, None, None)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let (response, spec) = client.send(Request::get("/api/v1/openapi.json").body(Body::empty()).unwrap()).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(spec["openapi"], "3.1.0");
+    let text = spec.to_string();
+    assert!(!text.contains("#/$defs/"), "every reference points into components");
+    for (path, ops) in spec["paths"].as_object().unwrap() {
+        for (method, op) in ops.as_object().unwrap() {
+            assert!(op["operationId"].is_string(), "{method} {path}");
+        }
+    }
+    let send = &spec["paths"]["/documents/{id}/send"]["post"];
+    assert_eq!(send["parameters"][0]["name"], "id");
+    let refs: Vec<String> =
+        text.match_indices("#/components/schemas/").map(|(i, _)| text[i + 21..].split('"').next().unwrap().to_string()).collect();
+    for r in refs {
+        assert!(spec["components"]["schemas"].get(&r).is_some(), "{r} is defined");
+    }
+}
+
+#[test]
+fn every_rest_path_parameter_is_an_input_field() {
+    use opensign_core::services::registry;
+    let services: std::collections::HashMap<_, _> = registry().into_iter().map(|s| (s.meta().name, s)).collect();
+    for route in opensign_server::rest::ROUTES {
+        let service = services.get(route.service).unwrap_or_else(|| panic!("{} is registered", route.service));
+        let schema = serde_json::to_value(service.input_schema()).unwrap();
+        for param in route.path.split('/').filter_map(|s| s.strip_prefix('{').and_then(|s| s.strip_suffix('}'))) {
+            assert!(schema["properties"].get(param).is_some(), "{} {} has no field {param}", route.method, route.path);
+        }
+        for (field, _) in route.fixed {
+            assert!(schema["properties"].get(*field).is_some(), "{} has no field {field}", route.service);
+        }
+    }
+}

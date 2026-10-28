@@ -148,14 +148,15 @@ create table webhook_deliveries (
 create index webhook_deliveries_webhook_idx on webhook_deliveries (webhook_id, created_at desc);
 
 create table idempotency_keys (
+  actor text not null,
   key text not null,
-  api_key_id uuid not null references api_keys (id) on delete cascade,
-  request_hash text not null,
-  response jsonb not null,
-  status integer not null,
+  request_sha256 bytea not null,
+  status integer,
+  response jsonb,
   created_at timestamptz not null default now(),
-  primary key (api_key_id, key)
+  primary key (actor, key)
 );
+create index idempotency_keys_created on idempotency_keys (created_at);
 
 -- A sealed document cannot change: only its row's bookkeeping may.
 create function protect_sealed_document() returns trigger language plpgsql as $$

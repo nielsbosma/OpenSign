@@ -34,6 +34,7 @@ permissions! {
     UsersManage = "users.manage": "Invite people, change roles and deactivate accounts",
     SettingsManage = "settings.manage": "Change Admin settings: organisation, email, signing certificate, providers, AI, security",
     AuditRead = "audit.read": "Browse and verify the audit log",
+    DocumentsRead = "documents.read": "See your own documents and those shared with you",
     DocumentsCreate = "documents.create": "Upload documents and send them for signing",
     DocumentsReadAll = "documents.read_all": "See every document, not only your own and those shared with you",
     DocumentsManageAll = "documents.manage_all": "Change, cancel and delete any document",
@@ -92,6 +93,7 @@ impl Role {
                 permissions: &[
                     OrgRead,
                     UsersRead,
+                    DocumentsRead,
                     DocumentsCreate,
                     DocumentsReadAll,
                     DocumentsManageAll,
@@ -104,16 +106,18 @@ impl Role {
             Role::Sender => RoleInfo {
                 label: "Sender",
                 description: "Sends documents and sees their own and those shared with them",
-                permissions: &[OrgRead, UsersRead, DocumentsCreate, ApiKeysManage, AiUse],
+                permissions: &[OrgRead, UsersRead, DocumentsRead, DocumentsCreate, ApiKeysManage, AiUse],
             },
             Role::Auditor => RoleInfo {
                 label: "Auditor",
                 description: "Reads every document and the audit log, changes nothing",
-                permissions: &[OrgRead, UsersRead, DocumentsReadAll, AuditRead, SystemRead],
+                permissions: &[OrgRead, UsersRead, DocumentsRead, DocumentsReadAll, AuditRead, SystemRead],
             },
-            Role::Viewer => {
-                RoleInfo { label: "Viewer", description: "Sees documents shared with them", permissions: &[OrgRead, UsersRead] }
-            }
+            Role::Viewer => RoleInfo {
+                label: "Viewer",
+                description: "Sees documents shared with them",
+                permissions: &[OrgRead, UsersRead, DocumentsRead],
+            },
         }
     }
 

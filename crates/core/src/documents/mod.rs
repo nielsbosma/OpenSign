@@ -292,9 +292,13 @@ pub enum Need {
 /// SQL condition for documents the actor may read, with `$1` = may read all, `$2` = user id.
 pub const VISIBLE: &str = "($1 or d.owner_id = $2 or (d.is_template and $3) or exists (select 1 from document_access a where a.document_id = d.id and a.user_id = $2))";
 
+/// What the actor may see: everything, their own and shared documents, and shared templates. An
+/// API key without a document scope sees none of its owner's documents.
 pub fn visibility(ctx: &Ctx) -> Result<(bool, Uuid, bool)> {
     let actor = ctx.actor()?;
-    Ok((actor.can(Permission::DocumentsReadAll), actor.user_id, actor.can(Permission::DocumentsCreate)))
+    let can_create = actor.can(Permission::DocumentsCreate);
+    let own = if can_create || actor.can(Permission::DocumentsRead) { actor.user_id } else { Uuid::nil() };
+    Ok((actor.can(Permission::DocumentsReadAll), own, can_create))
 }
 
 /// Loads a document the actor may read or edit. A document they may not see is "not found", so
