@@ -382,6 +382,7 @@ async fn sends_signs_seals_and_verifies() {
 
     let finished = call::<docs::Get>(&sender, docs::IdInput { id }).await.unwrap();
     assert_eq!(finished.document.status, "completed");
+    assert_eq!(finished.sealed_with_timestamp, Some(false), "no time stamp authority in tests");
     assert!(finished.parties.iter().filter(|p| p.id != cecilia).all(|p| p.status == "signed"));
 
     let download = call::<docs::Download>(&sender, docs::DownloadInput { id, version: Some(Version::Signed) }).await.unwrap();

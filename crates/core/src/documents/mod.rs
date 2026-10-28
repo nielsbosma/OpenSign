@@ -284,6 +284,8 @@ pub struct DocumentView {
     pub fields: Vec<FieldRow>,
     /// Files parties are asked to upload while signing, and what they uploaded.
     pub attachments: Vec<attachments::AttachmentRequest>,
+    /// Whether the seal carries a time stamp from the time stamp authority; unset until sealed.
+    pub sealed_with_timestamp: Option<bool>,
     pub can_edit: bool,
 }
 
@@ -385,7 +387,18 @@ pub async fn view(ctx: &Ctx, conn: &mut PgConnection, document: DocumentRow) -> 
     let fields = fields(conn, document.id).await?;
     let files = files(conn, document.id).await?;
     let attachments = attachments::for_document(conn, document.id).await?;
-    Ok(DocumentView { document, owner_name, files, parties, fields, attachments, can_edit })
+    let sealed_with_timestamp: Option<bool> = match document.sealed_file_id {
+        Some(_) => sqlx::query_scalar(
+            "select (metadata->>'timestamped')::boolean from audit_log
+             where entity_type = 'document' and entity_id = $1 and action = 'document.completed' order by id desc limit 1",
+        )
+        .bind(document.id.to_string())
+        .fetch_optional(&mut *conn)
+        .await?
+        .flatten(),
+        None => None,
+    };
+    Ok(DocumentView { document, owner_name, files, parties, fields, attachments, sealed_with_timestamp, can_edit })
 }
 
 fn link_mac(keys: &Keys, party_id: Uuid, version: i32) -> String {

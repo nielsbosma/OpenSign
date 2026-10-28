@@ -342,6 +342,8 @@ export type DocumentView = {
   parties: Array<PartyView>;
   reminderDays?: number | null;
   sealedSha256?: string | null;
+  /** Whether the seal carries a time stamp from the time stamp authority; unset until sealed. */
+  sealedWithTimestamp?: boolean | null;
   sentAt?: string | null;
   sequential: boolean;
   status: string;
