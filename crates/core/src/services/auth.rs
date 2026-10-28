@@ -53,7 +53,7 @@ pub enum LoginResult {
     },
 }
 
-async fn start_session(ctx: &Ctx, conn: &mut PgConnection, user: &UserRow) -> Result<LoginResult> {
+pub(crate) async fn start_session(ctx: &Ctx, conn: &mut PgConnection, user: &UserRow) -> Result<LoginResult> {
     let security: SecuritySettings = settings(ctx, conn).await?;
     let session = create_session(conn, user.id, &security, ctx.ip.as_deref(), ctx.user_agent.as_deref(), ctx.now).await?;
     sqlx::query("update users set failed_login_count = 0, locked_until = null, last_login_at = $2 where id = $1")

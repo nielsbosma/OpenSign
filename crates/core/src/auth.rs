@@ -24,6 +24,7 @@ pub struct UserRow {
     pub locked_until: Option<DateTime<Utc>>,
     pub last_login_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    pub has_passkey: bool,
 }
 
 pub async fn user_by_id(conn: &mut PgConnection, id: Uuid) -> Result<Option<UserRow>> {
@@ -62,7 +63,7 @@ pub fn actor_for(user: &UserRow, security: &SecuritySettings, credential: Creden
         name: user.name.clone(),
         role,
         permissions: role.permissions(),
-        must_enable_two_factor: security.enforce_two_factor && user.totp_enabled_at.is_none(),
+        must_enable_two_factor: security.enforce_two_factor && user.totp_enabled_at.is_none() && !user.has_passkey,
         credential,
     })
 }

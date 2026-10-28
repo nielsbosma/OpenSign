@@ -25,6 +25,7 @@ It does not protect against someone who holds `APP_SECRET` together with the dat
 **Accounts and sessions**
 - Passwords are Unicode-normalized and hashed with Argon2id (64 MiB, 3 passes), with a minimum length. Failed sign-ins lock the account for a while; every attempt is audited.
 - TOTP two-factor authentication with single-use recovery codes, which an admin can require for everyone.
+- Passkeys (WebAuthn, verified in-house in Rust): user verification required, origin and RP ID checked, challenges single-use and short-lived, signature counters must increase, ES256, EdDSA and RSA of 2048 bits or more. A passkey satisfies the two-factor requirement.
 - Session cookies are `HttpOnly`, `SameSite=Lax`, `__Host-` prefixed and `Secure` on https, stored only as a MAC in the database, with absolute and idle expiry. Cookie-authenticated writes must come from our own origin (`Origin` or `Sec-Fetch-Site`).
 - The first admin can only be created with a one-time setup code from the server log.
 - API keys and OAuth tokens are stored as hashes. MCP uses OAuth 2.1 with PKCE (S256 only), exact redirect URIs, audience-bound access tokens, and rotating refresh tokens with reuse detection that revokes the whole grant.

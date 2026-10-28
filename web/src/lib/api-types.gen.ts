@@ -40,6 +40,50 @@ export type Me = {
   twoFactorEnabled: boolean;
 };
 
+export type AccountPasskeyAddInput = {
+  /** base64url */
+  attestationObject: string;
+  /** base64url */
+  clientDataJson: string;
+  /** A name to tell your passkeys apart, e.g. "MacBook" or "Phone". */
+  name: string;
+  state: string;
+  transports?: Array<string>;
+};
+
+export type AccountPasskeyAddOutput = PasskeyView;
+
+export type PasskeyView = {
+  createdAt: string;
+  id: string;
+  lastUsedAt?: string | null;
+  name: string;
+};
+
+export type AccountPasskeyBeginInput = {
+  /** Your password, to confirm it is you before a new way to sign in is added. */
+  currentPassword?: string | null;
+};
+
+export type AccountPasskeyBeginOutput = Ceremony;
+
+export type Ceremony = {
+  /** `PublicKeyCredentialCreationOptions` or `...RequestOptions`, with binary values base64url-encoded. */
+  options: unknown;
+  /** Send back unchanged with the browser's response. */
+  state: string;
+};
+
+export type AccountPasskeyRemoveInput = {
+  id: string;
+};
+
+export type AccountPasskeyRemoveOutput = Ok_;
+
+export type AccountPasskeysInput = Record<string, unknown>;
+
+export type AccountPasskeysOutput = Array<PasskeyView>;
+
 export type AccountRevokeMcpConnectionInput = {
   id: string;
 };
@@ -213,6 +257,29 @@ export type AuthLoginOutput = {
 export type AuthLogoutInput = Record<string, unknown>;
 
 export type AuthLogoutOutput = Ok_;
+
+export type AuthPasskeyBeginInput = Record<string, unknown>;
+
+export type AuthPasskeyBeginOutput = Ceremony;
+
+export type AuthPasskeySignInInput = {
+  authenticatorData: string;
+  clientDataJson: string;
+  /** The credential's rawId, base64url. */
+  credentialId: string;
+  signature: string;
+  state: string;
+  userHandle?: string | null;
+};
+
+export type AuthPasskeySignInOutput = {
+  expires_at: string;
+  status: "signed_in";
+  token: string;
+} | {
+  challenge: string;
+  status: "two_factor_required";
+};
 
 export type AuthRequestPasswordResetInput = {
   email: string;
@@ -1115,6 +1182,10 @@ export interface Services {
   "account.change_password": { kind: "mutation"; input: AccountChangePasswordInput; output: AccountChangePasswordOutput };
   "account.mcp_connections": { kind: "query"; input: AccountMcpConnectionsInput; output: AccountMcpConnectionsOutput };
   "account.me": { kind: "query"; input: AccountMeInput; output: AccountMeOutput };
+  "account.passkey_add": { kind: "mutation"; input: AccountPasskeyAddInput; output: AccountPasskeyAddOutput };
+  "account.passkey_begin": { kind: "mutation"; input: AccountPasskeyBeginInput; output: AccountPasskeyBeginOutput };
+  "account.passkey_remove": { kind: "mutation"; input: AccountPasskeyRemoveInput; output: AccountPasskeyRemoveOutput };
+  "account.passkeys": { kind: "query"; input: AccountPasskeysInput; output: AccountPasskeysOutput };
   "account.revoke_mcp_connection": { kind: "mutation"; input: AccountRevokeMcpConnectionInput; output: AccountRevokeMcpConnectionOutput };
   "account.two_factor_begin": { kind: "mutation"; input: AccountTwoFactorBeginInput; output: AccountTwoFactorBeginOutput };
   "account.two_factor_confirm": { kind: "mutation"; input: AccountTwoFactorConfirmInput; output: AccountTwoFactorConfirmOutput };
@@ -1129,6 +1200,8 @@ export interface Services {
   "audit.verify": { kind: "query"; input: AuditVerifyInput; output: AuditVerifyOutput };
   "auth.login": { kind: "mutation"; input: AuthLoginInput; output: AuthLoginOutput };
   "auth.logout": { kind: "mutation"; input: AuthLogoutInput; output: AuthLogoutOutput };
+  "auth.passkey_begin": { kind: "mutation"; input: AuthPasskeyBeginInput; output: AuthPasskeyBeginOutput };
+  "auth.passkey_sign_in": { kind: "mutation"; input: AuthPasskeySignInInput; output: AuthPasskeySignInOutput };
   "auth.request_password_reset": { kind: "mutation"; input: AuthRequestPasswordResetInput; output: AuthRequestPasswordResetOutput };
   "auth.reset_password": { kind: "mutation"; input: AuthResetPasswordInput; output: AuthResetPasswordOutput };
   "auth.verify_two_factor": { kind: "mutation"; input: AuthVerifyTwoFactorInput; output: AuthVerifyTwoFactorOutput };

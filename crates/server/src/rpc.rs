@@ -17,6 +17,8 @@ fn limit_for(name: &str) -> Option<Limit> {
     match name {
         "auth.login"
         | "auth.verify_two_factor"
+        | "auth.passkey_begin"
+        | "auth.passkey_sign_in"
         | "auth.request_password_reset"
         | "auth.reset_password"
         | "users.accept_invite"
@@ -76,7 +78,7 @@ pub async fn call(State(state): State<AppState>, Path(name): Path<String>, reque
 
     let mut response_headers = Vec::new();
     match name.as_str() {
-        "auth.login" | "auth.verify_two_factor" if output["status"] == "signed_in" => {
+        "auth.login" | "auth.verify_two_factor" | "auth.passkey_sign_in" if output["status"] == "signed_in" => {
             let token = output["token"].as_str().unwrap_or_default().to_string();
             let expires = output["expiresAt"]
                 .as_str()
