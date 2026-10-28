@@ -8,7 +8,7 @@ use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{MethodFilter, get, on, post};
 use opensign_core::context::{Credential, Ctx, Surface};
 use opensign_core::error::{AppError, ErrorKind, bad_request};
-use opensign_crypto::sha256_hex;
+use opensign_crypto::{KeyPurpose, sha256_hex};
 use serde_json::{Map, Value, json};
 
 use crate::error::{ApiError, json_error};
@@ -161,6 +161,11 @@ fn actor_key(ctx: &Ctx) -> Option<String> {
     })
 }
 
+/// Stored responses can hold signing links, documents and webhook secrets, so they are encrypted.
+fn response_context(actor: &str, key: &str) -> String {
+    format!("idempotency:{actor}:{key}")
+}
+
 async fn claim(ctx: &Ctx, actor: &str, key: &str, fingerprint: &[u8]) -> Result<Replay, AppError> {
     if key.is_empty() || key.len() > 200 {
         return Err(bad_request("Idempotency-Key is 1 to 200 characters"));
@@ -186,12 +191,18 @@ async fn claim(ctx: &Ctx, actor: &str, key: &str, fingerprint: &[u8]) -> Result<
         return Err(AppError::new(ErrorKind::Conflict, "This Idempotency-Key was already used for a different request"));
     }
     match (status, response) {
-        (Some(status), Some(body)) => {
+        (Some(status), Some(Value::String(sealed))) => {
+            let plain = ctx
+                .keys()
+                .decrypt_str(KeyPurpose::Settings, &response_context(actor, key), &sealed)
+                .map_err(|_| AppError::new(ErrorKind::Conflict, "This Idempotency-Key cannot be replayed"))?;
+            let body: Value = serde_json::from_str(&plain).map_err(AppError::internal)?;
             let status = StatusCode::from_u16(status as u16).unwrap_or(StatusCode::OK);
             let mut response = (status, Json(body)).into_response();
             response.headers_mut().insert("idempotent-replayed", header::HeaderValue::from_static("true"));
             Ok(Replay::Stored(response))
         }
+        (Some(_), Some(_)) => Err(AppError::new(ErrorKind::Conflict, "This Idempotency-Key cannot be replayed")),
         _ => Err(AppError::new(ErrorKind::Conflict, "A request with this Idempotency-Key is still running")),
     }
 }
@@ -204,7 +215,7 @@ async fn settle(ctx: &Ctx, actor: &str, key: &str, outcome: Option<(StatusCode, 
                 .bind(actor)
                 .bind(key)
                 .bind(i32::from(status.as_u16()))
-                .bind(body)
+                .bind(Value::String(ctx.keys().encrypt_str(KeyPurpose::Settings, &response_context(actor, key), &body.to_string())))
                 .execute(&mut *conn)
                 .await
         }
