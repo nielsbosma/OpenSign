@@ -905,6 +905,7 @@ impl Service for Send {
             return Err(bad_request("Add at least one party who signs or approves"));
         }
         let email_settings: EmailSettings = settings(ctx, conn).await?;
+        let sms_ready = crate::sms::is_configured(&settings::<SmsSettings>(ctx, conn).await?) || ctx.app.env.development;
         for p in &all {
             match Delivery::parse(&p.delivery) {
                 Some(Delivery::Email) if p.email.is_none() => return Err(bad_request(format!("{} needs an email address", p.name))),
@@ -912,6 +913,9 @@ impl Service for Send {
                     return Err(bad_request("Email is not set up. An admin adds a Resend API key in Admin settings."));
                 }
                 Some(Delivery::Sms) if p.phone.is_none() => return Err(bad_request(format!("{} needs a phone number", p.name))),
+                Some(Delivery::Sms) if !sms_ready => {
+                    return Err(bad_request("SMS is not set up. An admin chooses an SMS provider in Admin settings."));
+                }
                 _ => {}
             }
             check_auth_available(ctx, conn, p.auth_to_view(), p).await?;
