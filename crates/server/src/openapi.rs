@@ -103,7 +103,7 @@ pub fn document(state: &AppState, server: &str) -> Value {
         if let Some(params) = (!parameters.is_empty()).then_some(parameters) {
             operation["parameters"] = Value::Array(params);
         }
-        let ok = if route.method == Method::POST && in_path.is_empty() { "201" } else { "200" };
+        let ok = if route.creates { "201" } else { "200" };
         let mut responses = Map::new();
         responses.insert(ok.into(), json!({ "description": "OK", "content": { "application/json": { "schema": output } } }));
         responses.insert("4XX".into(), error_response("The request was refused; see `kind`"));

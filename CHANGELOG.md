@@ -6,6 +6,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
+- REST routes for bulk send (`/bulk-sends`, with `/bulk-sends/preview` for column mapping), legal hold (`PUT /documents/{id}/legal-hold`), the retention preview and system version and status, all in the OpenAPI document.
 - API Explorer: browse every REST endpoint with its schemas, send live requests as yourself or with an API key, and copy the call as curl, JavaScript or Python.
 
 - Settings → System: the running version against the latest GitHub release, migrations and the job queue; an update notice for admins; one-click update through a Sliplane deploy hook. Migrations run on every start.

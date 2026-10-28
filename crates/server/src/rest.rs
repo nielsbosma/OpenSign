@@ -18,23 +18,42 @@ use crate::{AppState, RequestId, auth, files};
 const BODY_LIMIT: usize = 40 * 1024 * 1024;
 
 /// One REST operation: a path over a service. Path parameters become input fields of the same name;
-/// `fixed` fields are set by the route itself.
+/// `fixed` fields are set by the route itself. `creates` answers 201 instead of 200.
 pub struct Route {
     pub method: Method,
     pub path: &'static str,
     pub service: &'static str,
     pub fixed: &'static [(&'static str, bool)],
+    pub creates: bool,
 }
 
 const fn route(method: Method, path: &'static str, service: &'static str) -> Route {
-    Route { method, path, service, fixed: &[] }
+    let creates = matches!(method, Method::POST) && !has_parameter(path);
+    Route { method, path, service, fixed: &[], creates }
+}
+
+/// A POST that computes rather than creates, such as a preview.
+const fn action(path: &'static str, service: &'static str) -> Route {
+    Route { method: Method::POST, path, service, fixed: &[], creates: false }
+}
+
+const fn has_parameter(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'{' {
+            return true;
+        }
+        i += 1;
+    }
+    false
 }
 
 pub const ROUTES: &[Route] = &[
     route(Method::GET, "/me", "account.me"),
     route(Method::GET, "/documents", "documents.list"),
     route(Method::POST, "/documents", "documents.create"),
-    Route { method: Method::GET, path: "/templates", service: "documents.list", fixed: &[("templates", true)] },
+    Route { method: Method::GET, path: "/templates", service: "documents.list", fixed: &[("templates", true)], creates: false },
     route(Method::GET, "/documents/{id}", "documents.get"),
     route(Method::PATCH, "/documents/{id}", "documents.update"),
     route(Method::DELETE, "/documents/{id}", "documents.delete"),
@@ -47,6 +66,15 @@ pub const ROUTES: &[Route] = &[
     route(Method::POST, "/documents/{id}/shares", "documents.share"),
     route(Method::DELETE, "/documents/{id}/shares/{userId}", "documents.unshare"),
     route(Method::POST, "/documents/{documentId}/parties/{partyId}/signing-link", "documents.signing_link"),
+    route(Method::PUT, "/documents/{id}/legal-hold", "documents.legal_hold"),
+    route(Method::GET, "/bulk-sends", "bulk.list"),
+    route(Method::POST, "/bulk-sends", "bulk.start"),
+    action("/bulk-sends/preview", "bulk.preview"),
+    route(Method::GET, "/bulk-sends/{id}", "bulk.get"),
+    route(Method::POST, "/bulk-sends/{id}/cancel", "bulk.cancel"),
+    route(Method::GET, "/retention/preview", "retention.preview"),
+    route(Method::GET, "/system/version", "system.version"),
+    route(Method::GET, "/system/status", "system.status"),
     route(Method::GET, "/webhooks", "webhooks.list"),
     route(Method::POST, "/webhooks", "webhooks.create"),
     route(Method::DELETE, "/webhooks/{id}", "webhooks.delete"),
@@ -272,8 +300,7 @@ async fn handle(
     };
 
     let result = service.invoke(&ctx, input).await;
-    let created = route.method == Method::POST && !route.path.contains('}');
-    let status = if created { StatusCode::CREATED } else { StatusCode::OK };
+    let status = if route.creates { StatusCode::CREATED } else { StatusCode::OK };
     if let Some((actor, key)) = &idempotency {
         match &result {
             Ok(body) => settle(&ctx, actor, key, Some((status, body))).await,
