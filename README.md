@@ -28,11 +28,17 @@ Everything else (Resend, SMS, eID, AI, security rules, branding) is set in the b
 
 ### On Sliplane
 
+[![Deploy to Sliplane](https://sliplane.opendeploy.cloud/button.svg)](https://sliplane.opendeploy.cloud/?repo=https://github.com/nielsbosma/OpenSign)
+
+The button reads [sliplane.yaml](sliplane.yaml): it asks for your Resend key (and optionally an AI provider), shows what it will create and what it costs, and sets up a managed Postgres, a bucket, Gotenberg on the private network and OpenSign with a fresh `APP_SECRET`. The deployed app links to its own updates.
+
+From a terminal, the same thing over the [Sliplane API](https://ctrl.sliplane.io):
+
 ```sh
 SLIPLANE_TOKEN=api_rw_org_... ./deploy/sliplane.sh
 ```
 
-The script uses the [Sliplane API](https://ctrl.sliplane.io) to create a project, a managed Postgres, a bucket, Gotenberg on the private network, and the OpenSign service with a fresh `APP_SECRET`. It prints the URL. Run it again to update (`OPENSIGN_TAG=0.2.0` for a release). See the top of the script for options, such as bringing your own database or pinning Resend and the AI provider.
+Run it again to update (`OPENSIGN_TAG=0.2.0` for a release). See the top of the script for options, such as bringing your own database.
 
 ### Anywhere else
 

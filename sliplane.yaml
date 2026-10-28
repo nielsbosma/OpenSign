@@ -1,0 +1,71 @@
+# yaml-language-server: $schema=https://sliplane.opendeploy.cloud/schema/v1.json
+version: 1
+
+app:
+  name: OpenSign
+  description: Self-hosted electronic signatures with sealed PDFs, BankID and eID, APIs and MCP.
+  icon: ./web/public/favicon.svg
+  docs: https://github.com/nielsbosma/OpenSign#readme
+
+server:
+  minimum: starter
+  recommended: base
+  shared: true
+
+addons:
+  email:
+    use: resend
+    reason: OpenSign sends signing invitations, codes and the sealed documents by email.
+  llm:
+    use: llm
+    optional: true
+    reason: An assistant and a review of documents before they are sent. Document text is only sent if an admin allows it.
+    providers: [anthropic, openai, opper, berget, openai-compatible]
+    default: anthropic
+
+databases:
+  db:
+    engine: postgres
+    version: 17
+    database: opensign
+
+buckets:
+  files:
+    versioning: true
+
+services:
+  converter:
+    image: gotenberg/gotenberg:8
+    public: false
+    port: 3000
+    healthcheck: /health
+    cmd: gotenberg --api-timeout=60s --chromium-disable-routes=true --webhook-disable=true --prometheus-disable-collect=true
+
+  opensign:
+    image: ghcr.io/nielsbosma/opensign:${{ release.tag }}
+    public: true
+    port: 3000
+    healthcheck: /api/health
+    dependsOn: [converter]
+    env:
+      DATABASE_URL: ${{ databases.db.url }}
+      S3_ENDPOINT: ${{ buckets.files.endpoint }}
+      S3_BUCKET: ${{ buckets.files.bucket }}
+      S3_REGION: ${{ buckets.files.region }}
+      S3_ACCESS_KEY: ${{ buckets.files.accessKeyId }}
+      S3_SECRET_KEY: ${{ buckets.files.secretAccessKey }}
+      APP_SECRET: ${{ secret(48) }}
+      APP_URL: ${{ services.opensign.url }}
+      CONVERTER_URL: ${{ services.converter.internalUrl }}
+      OPENSIGN_EMAIL_API_KEY: ${{ addons.email.apiKey }}
+      OPENSIGN_EMAIL_FROM_ADDRESS: ${{ addons.email.from }}
+      OPENSIGN_AI_PROVIDER: ${{ addons.llm.provider }}
+      OPENSIGN_AI_MODEL: ${{ addons.llm.model }}
+      OPENSIGN_AI_API_KEY: ${{ addons.llm.apiKey }}
+      OPENSIGN_AI_BASE_URL: ${{ if(addons.llm.provider == "openai-compatible", addons.llm.baseUrl, "") }}
+
+done:
+  open: ${{ services.opensign.url }}
+  message: |
+    Open OpenSign and enter the setup code from the opensign service's logs in Sliplane to create the first admin.
+    Resend is already set up; the wizard sends a test email to confirm it.
