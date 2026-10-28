@@ -27,6 +27,7 @@ pub enum Group {
     Email,
     Security,
     Retention,
+    Updates,
     Signing,
     Ai,
     Sms,
@@ -69,6 +70,7 @@ impl Service for GetSettings {
             Group::Email => view::<EmailSettings>(ctx, conn).await,
             Group::Security => view::<SecuritySettings>(ctx, conn).await,
             Group::Retention => view::<RetentionSettings>(ctx, conn).await,
+            Group::Updates => view::<crate::settings::UpdateSettings>(ctx, conn).await,
             Group::Signing => view::<SigningSettings>(ctx, conn).await,
             Group::Ai => view::<AiSettings>(ctx, conn).await,
             Group::Sms => view::<SmsSettings>(ctx, conn).await,
@@ -204,6 +206,12 @@ fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
             }
             Ok(())
         }
+        "updates" => {
+            if let Some(hook) = value.get("deployHookUrl").and_then(Value::as_str).filter(|u| !u.is_empty()) {
+                crate::net::check_public_url(hook).map_err(bad_request)?;
+            }
+            Ok(())
+        }
         "retention" => {
             let rules: RetentionSettings = serde_json::from_value(value.clone()).map_err(AppError::internal)?;
             if [rules.completed_days, rules.ended_days, rules.draft_days].iter().any(|d| *d > 36_500) {
@@ -250,6 +258,7 @@ impl Service for UpdateSettings {
             }
             Group::Security => update::<SecuritySettings>(ctx, conn, &input.values).await,
             Group::Retention => update::<RetentionSettings>(ctx, conn, &input.values).await,
+            Group::Updates => update::<crate::settings::UpdateSettings>(ctx, conn, &input.values).await,
             Group::Signing => update::<SigningSettings>(ctx, conn, &input.values).await,
             Group::Ai => update::<AiSettings>(ctx, conn, &input.values).await,
             Group::Sms => update::<SmsSettings>(ctx, conn, &input.values).await,

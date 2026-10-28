@@ -54,6 +54,7 @@ It does not protect against someone who holds `APP_SECRET` together with the dat
 - Strict CSP (`script-src 'self'`, no inline script, `frame-ancestors 'none'`), HSTS on https, `nosniff`, `no-referrer`, COOP and CORP, and a tight permissions policy.
 - Rate limits per address on sign-in, codes, signing, uploads and verification, on top of the database lockouts.
 - Outbound requests to anything configurable (webhooks, AI endpoints, eID brokers, time stamp authorities) resolve DNS first and refuse private, loopback, link-local and metadata addresses, and follow no redirects. The one exception is a self-hosted AI proxy (LiteLLM or another OpenAI-compatible endpoint), which an admin may point at the private network.
+- The update check sends GitHub nothing but the version in the User-Agent, at most every six hours, and can be turned off. The deploy hook is stored encrypted as a secret, must be a public HTTPS address, only an admin can call it, and every call is audited.
 - Webhooks are signed with a per-webhook secret in the `OpenSign-Signature` header.
 
 **Supply chain and runtime**

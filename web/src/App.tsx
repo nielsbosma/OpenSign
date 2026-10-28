@@ -19,6 +19,7 @@ import { AdminSettingsPage } from '@/pages/settings/AdminSettingsPage';
 import { ApiKeysPage } from '@/pages/settings/ApiKeysPage';
 import { AuditPage } from '@/pages/settings/AuditPage';
 import { SettingsLayout } from '@/pages/settings/SettingsLayout';
+import { SystemPage } from '@/pages/settings/SystemPage';
 import { UsersPage } from '@/pages/settings/UsersPage';
 import { WebhooksPage } from '@/pages/settings/WebhooksPage';
 import { SignPage } from '@/pages/sign/SignPage';
@@ -85,6 +86,7 @@ export function App() {
           <Route path="api-keys" element={<ApiKeysPage />} />
           <Route path="webhooks" element={<WebhooksPage />} />
           <Route path="audit" element={<AuditPage />} />
+          <Route path="system" element={<SystemPage />} />
           <Route path="admin/:group" element={<AdminSettingsPage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />

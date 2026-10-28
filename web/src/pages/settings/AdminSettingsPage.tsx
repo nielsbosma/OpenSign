@@ -64,6 +64,25 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
       { key: 'maxUploadMb', label: 'Largest Upload (MB)', type: 'number' },
     ],
   },
+  updates: {
+    title: 'Updates',
+    description: 'Check for new releases and update from the System page.',
+    fields: [
+      {
+        key: 'checkForUpdates',
+        label: 'Check for Updates',
+        type: 'bool',
+        hint: 'Asks GitHub for the latest release at most every six hours.',
+      },
+      {
+        key: 'deployHookUrl',
+        label: 'Deploy Hook',
+        type: 'secret',
+        placeholder: 'https://api.sliplane.io/deploy/…',
+        hint: 'Calling it redeploys the service with its configured image tag, so use latest or a version series such as 1.2 rather than an exact version.',
+      },
+    ],
+  },
   retention: {
     title: 'Retention',
     description:

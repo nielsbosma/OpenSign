@@ -7,6 +7,7 @@ pub mod eid;
 pub mod oauth;
 pub mod passkeys;
 pub mod retention;
+pub mod system;
 pub mod setup;
 pub mod signing;
 pub mod users;
@@ -83,6 +84,9 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<documents::Delete>(),
         erase::<retention::SetLegalHold>(),
         erase::<retention::Preview>(),
+        erase::<system::GetVersion>(),
+        erase::<system::Status>(),
+        erase::<system::Update>(),
         erase::<documents::Share>(),
         erase::<documents::Unshare>(),
         erase::<documents::Download>(),

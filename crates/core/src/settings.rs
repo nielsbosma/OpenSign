@@ -83,6 +83,27 @@ impl SettingsGroup for SecuritySettings {
     const NAME: &'static str = "security";
 }
 
+/// Release checks and in-app updates.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UpdateSettings {
+    /// Ask GitHub for the latest release (at most every six hours, only the version is sent).
+    pub check_for_updates: bool,
+    /// A secret URL that redeploys the service when called, such as Sliplane's deploy hook.
+    pub deploy_hook_url: Option<String>,
+}
+
+impl Default for UpdateSettings {
+    fn default() -> Self {
+        Self { check_for_updates: true, deploy_hook_url: None }
+    }
+}
+
+impl SettingsGroup for UpdateSettings {
+    const NAME: &'static str = "updates";
+    const SECRETS: &'static [&'static str] = &["deployHookUrl"];
+}
+
 /// How long documents are kept. 0 keeps them; documents on legal hold and templates are always kept.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default, rename_all = "camelCase")]

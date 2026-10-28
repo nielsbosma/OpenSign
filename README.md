@@ -66,6 +66,18 @@ The image is distroless, runs as a non-root user, works with a read-only root fi
 
 Any admin setting can be pinned with an environment variable, `OPENSIGN_<GROUP>_<FIELD>`, for example `OPENSIGN_EMAIL_API_KEY` or `OPENSIGN_SECURITY_ENFORCE_TWO_FACTOR=true`. Pinned fields are locked in the UI.
 
+### Updating
+
+**Settings → System** shows the running version, the latest release on GitHub, the database migrations and the job queue. Admins with an update waiting also see **Update to X** in the sidebar.
+
+Every start applies pending database migrations before serving, under a lock so only one container migrates. A build refuses to start against a database migrated by a newer one. So updating is only ever "run the newer image":
+
+- **From the app**: put your Sliplane deploy hook (Sliplane → service → Settings → Deploy hook) in **Settings → Updates**, then press **Update Now** on the System page. The hook redeploys the service's image tag, so run `:latest` or a release series such as `:1.2`, not an exact version.
+- **Sliplane from your machine**: `OPENSIGN_TAG=1.2.0 ./deploy/sliplane.sh`.
+- **Docker Compose**: `docker compose pull && docker compose up -d`.
+
+Back up the database before a major version. Turn off the GitHub check in **Settings → Updates** for installs without internet access.
+
 ### eID providers
 
 - **Swedish BankID**: turn it on with **Use the BankID test environment** and it works right away with BankID's public test certificate and a [test BankID](https://developers.bankid.com/test-portal). For production, upload the `.p12` your bank gives you and type its password; BankID's server root is built in.

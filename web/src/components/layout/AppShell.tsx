@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { FileStack, FileText, LogOut, Menu, Moon, Settings, ShieldCheck, Sparkles, Sun } from 'lucide-react';
+import { ArrowUpCircle, FileStack, FileText, LogOut, Menu, Moon, Settings, ShieldCheck, Sparkles, Sun } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { AssistantPanel } from '@/components/AssistantPanel';
@@ -70,6 +70,7 @@ function UserMenu() {
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { can } = useSession();
+  const version = useApi('system.version', { refresh: false }, { enabled: can('settings.manage'), staleTime: 60 * 60_000 });
   return (
     <div className="flex h-full flex-col bg-sidebar">
       <div className="flex h-14 shrink-0 items-center gap-2.5 px-3">
@@ -93,6 +94,11 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <NavLink to="/settings" className={linkClass} onClick={onNavigate}>
           <Settings className="size-4 opacity-80" /> Settings
         </NavLink>
+        {version.data?.updateAvailable && (
+          <NavLink to="/settings/system" className={linkClass} onClick={onNavigate}>
+            <ArrowUpCircle className="size-4 text-primary" /> Update to {version.data.latest?.version}
+          </NavLink>
+        )}
         <UserMenu />
       </div>
     </div>

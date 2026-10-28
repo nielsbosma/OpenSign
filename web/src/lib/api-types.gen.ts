@@ -892,7 +892,7 @@ export type SealRegenerateInput = Record<string, unknown>;
 
 export type SealRegenerateOutput = SealInfo;
 
-export type Group = "org" | "email" | "security" | "retention" | "signing" | "ai" | "sms" | "eid";
+export type Group = "org" | "email" | "security" | "retention" | "updates" | "signing" | "ai" | "sms" | "eid";
 
 export type SettingsGetInput = {
   group: Group;
@@ -1111,6 +1111,64 @@ export type SignerSessionOutput = {
   session: string;
 };
 
+export type SystemStatusInput = Record<string, unknown>;
+
+export type JobSummary = {
+  failing: number;
+  kind: string;
+  lastError?: string | null;
+  waiting: number;
+};
+
+export type MigrationView = {
+  description: string;
+  installedOn: string;
+  success: boolean;
+  version: number;
+};
+
+export type SystemStatusOutput = SystemStatus;
+
+export type SystemStatus = {
+  database: string;
+  jobs: Array<JobSummary>;
+  /** Applied migrations, newest first. Pending ones run when the app starts. */
+  migrations: Array<MigrationView>;
+  pendingMigrations: number;
+  version: string;
+};
+
+export type SystemUpdateInput = Record<string, unknown>;
+
+export type SystemUpdateOutput = Ok_;
+
+export type SystemVersionInput = {
+  /** Ask GitHub now instead of using the result from the last six hours. */
+  refresh?: boolean;
+};
+
+export type Release = {
+  /** The release notes as written on GitHub (Markdown), shortened. */
+  notes: string;
+  publishedAt?: string | null;
+  url: string;
+  version: string;
+};
+
+export type SystemVersionOutput = VersionView;
+
+export type VersionView = {
+  /** An admin can update from the app: a deploy hook is set. */
+  canUpdate: boolean;
+  /** Why the latest release is unknown: checks turned off, or GitHub unreachable. */
+  checkProblem?: string | null;
+  current: string;
+  /** A build from source rather than a release image. */
+  development: boolean;
+  latest?: Release | null;
+  updateAvailable: boolean;
+};
+
 export type UsersAcceptInviteInput = {
   name: string;
   password: string;
@@ -1290,6 +1348,9 @@ export interface Services {
   "signing.request_code": { kind: "mutation"; input: SigningRequestCodeInput; output: SigningRequestCodeOutput };
   "signing.sign": { kind: "mutation"; input: SigningSignInput; output: SigningSignOutput };
   "signing.verify_code": { kind: "mutation"; input: SigningVerifyCodeInput; output: SigningVerifyCodeOutput };
+  "system.status": { kind: "query"; input: SystemStatusInput; output: SystemStatusOutput };
+  "system.update": { kind: "mutation"; input: SystemUpdateInput; output: SystemUpdateOutput };
+  "system.version": { kind: "query"; input: SystemVersionInput; output: SystemVersionOutput };
   "users.accept_invite": { kind: "mutation"; input: UsersAcceptInviteInput; output: UsersAcceptInviteOutput };
   "users.invite": { kind: "mutation"; input: UsersInviteInput; output: UsersInviteOutput };
   "users.list": { kind: "query"; input: UsersListInput; output: UsersListOutput };
