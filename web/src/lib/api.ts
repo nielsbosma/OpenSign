@@ -20,7 +20,12 @@ export class ApiError extends Error {
 
 async function parse(response: Response) {
   const text = await response.text();
-  const body = text ? JSON.parse(text) : null;
+  let body = null;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    if (response.ok) throw new ApiError('The server sent a response that could not be read', response.status, 'internal');
+  }
   if (!response.ok) {
     throw new ApiError(body?.error ?? response.statusText ?? 'Something went wrong', response.status, body?.kind ?? 'internal');
   }
