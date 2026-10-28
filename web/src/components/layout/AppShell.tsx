@@ -56,8 +56,8 @@ function UserMenu() {
         <DropdownMenuItem onSelect={toggle}>
           {theme === 'dark' ? <Sun /> : <Moon />} {theme === 'dark' ? 'Light Theme' : 'Dark Theme'}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => navigate('/settings/account')}>
-          <Settings /> Your Account
+        <DropdownMenuItem onSelect={() => navigate('/settings')}>
+          <Settings /> Settings
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={signOut}>
@@ -94,9 +94,6 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </a>
       </nav>
       <div className="grid gap-0.5 border-t border-sidebar-border px-2 py-2">
-        <NavLink to="/settings" className={linkClass} onClick={onNavigate}>
-          <Settings className="size-4 opacity-80" /> Settings
-        </NavLink>
         {version.data?.updateAvailable && (
           <NavLink to="/settings/system" className={linkClass} onClick={onNavigate}>
             <ArrowUpCircle className="size-4 text-primary" /> Update to {version.data.latest?.version}
