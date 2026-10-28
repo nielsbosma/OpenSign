@@ -65,6 +65,7 @@ fn status_out(status: &str) -> &'static str {
 fn delivery_out(delivery: &str) -> &'static str {
     match delivery {
         "sms" => "mobile",
+        "in_person" => "pad",
         "link" | "none" => "api",
         _ => "email",
     }
@@ -74,7 +75,8 @@ fn delivery_in(value: Option<&str>) -> Result<&'static str, AppError> {
     Ok(match value.unwrap_or("email") {
         "email" | "email_mobile" | "portal" => "email",
         "mobile" => "sms",
-        "api" | "pad" => "link",
+        "pad" => "in_person",
+        "api" => "link",
         other => return Err(bad_request(format!("delivery_method {other} is not supported"))),
     })
 }

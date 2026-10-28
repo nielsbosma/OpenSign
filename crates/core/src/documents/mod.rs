@@ -48,8 +48,9 @@ string_enum!(
 );
 
 string_enum!(
-    /// How the party gets their link. `link` hands it to the sender (or the calling system) instead.
-    Delivery { Email = "email", Sms = "sms", Link = "link", None = "none", }
+    /// How the party gets their link. `link` hands it to the sender (or the calling system) instead;
+    /// `in_person` means the party signs on the sender's own device, started from the document page.
+    Delivery { Email = "email", Sms = "sms", Link = "link", InPerson = "in_person", None = "none", }
 );
 
 string_enum!(

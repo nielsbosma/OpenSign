@@ -1,4 +1,4 @@
-import { CheckCircle2, Download, FileSignature, ShieldCheck, XCircle } from 'lucide-react';
+import { CheckCircle2, Download, FileSignature, HandHelping, ShieldCheck, XCircle } from 'lucide-react';
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { Logo, Spinner } from '@/components/common';
 import { PdfLoading, PdfPages, usePdf } from '@/components/PdfPages';
@@ -210,6 +210,7 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
   const [declining, setDeclining] = useState(false);
   const [reason, setReason] = useState('');
   const [attachments, setAttachments] = useState<AttachmentRequest[]>([]);
+  const [handedOver, setHandedOver] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -262,7 +263,33 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
           }
           title={result === 'declined' ? t.youDeclined : view.party.role === 'approver' ? t.approved : t.signed}
         >
-          {result === 'completed' ? t.completedNote : result === 'signed' ? t.signedNote : t.declinedNote}
+          {result === 'completed'
+            ? view.party.email
+              ? t.completedNote
+              : t.completedNoEmail
+            : result === 'signed'
+              ? t.signedNote
+              : t.declinedNote}
+          {view.party.inPerson && (
+            <div className="mt-4 grid justify-items-center gap-3">
+              <p className="font-medium text-foreground">{t.handBack(view.document.sender ?? view.document.organisation)}</p>
+              <Button variant="outline" onClick={() => window.location.assign(`/documents/${view.document.id}`)}>
+                {t.backToDocument}
+              </Button>
+            </div>
+          )}
+        </Message>
+      </Shell>
+    );
+  }
+  if (view.party.inPerson && !handedOver && view.yourTurn) {
+    return (
+      <Shell view={view}>
+        <Message icon={<HandHelping className="size-10 text-muted-foreground" />} title={t.handOver(view.party.name)}>
+          {t.handOverNote(view.document.sender ?? view.document.organisation)}
+          <div className="mt-4">
+            <Button onClick={() => setHandedOver(true)}>{t.iAm(view.party.name)}</Button>
+          </div>
         </Message>
       </Shell>
     );
