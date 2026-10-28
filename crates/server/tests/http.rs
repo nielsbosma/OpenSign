@@ -247,6 +247,32 @@ async fn rest_api_with_keys_idempotency_and_openapi() {
         }
     };
 
+    let (_, manager) =
+        client.call("api_keys.create", json!({ "name": "Ops", "permissions": ["api_keys.manage", "org.read"] }), &session).await;
+    let manager_bearer = format!("Bearer {}", manager["key"].as_str().unwrap());
+    let manager_path = format!("/api-keys/{}", manager["id"].as_str().unwrap());
+    let (response, edited) = client
+        .send(rest("PATCH", &manager_path, &manager_bearer, Some(json!({ "name": "Ops edited", "allowedIps": ["203.0.113.0/24"] })), None))
+        .await;
+    assert_eq!(response.status(), StatusCode::OK, "{edited}");
+    assert_eq!(edited["allowedIps"], json!(["203.0.113.0/24"]));
+    assert!(edited.get("key").is_none() && !edited.to_string().contains(manager["key"].as_str().unwrap()));
+    let (response, _) = client
+        .send(rest(
+            "PATCH",
+            &manager_path,
+            &manager_bearer,
+            Some(json!({ "permissions": ["api_keys.manage", "documents.read_all"] })),
+            None,
+        ))
+        .await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN, "a key cannot widen a key");
+    let (response, _) = client.send(rest("PATCH", &manager_path, &manager_bearer, Some(json!({ "allowedIps": [] })), None)).await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN, "a key cannot lift an IP allowlist");
+    let (response, listed) = client.send(rest("GET", "/api-keys", &manager_bearer, None, None)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(listed.as_array().unwrap().iter().any(|k| k["name"] == "Ops edited"));
+
     let (response, created) =
         client.send(rest("POST", "/documents", &bearer, Some(json!({ "title": "NDA", "externalId": "crm-42" })), Some("create-nda"))).await;
     assert_eq!(response.status(), StatusCode::CREATED, "{created}");

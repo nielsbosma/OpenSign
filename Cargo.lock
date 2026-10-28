@@ -2254,6 +2254,7 @@ dependencies = [
  "encoding_rs",
  "hex",
  "hmac 0.12.1",
+ "ipnet",
  "jpeg-decoder",
  "lopdf",
  "object_store",

@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
 use opensign_crypto::{hash_password, random_token, sha256_hex};
@@ -8,7 +10,7 @@ use uuid::Uuid;
 
 use super::{Empty, Ok_, settings};
 use crate::audit::{Entry, audit};
-use crate::auth::{API_KEY_PREFIX, normalize_email, revoke_sessions, user_by_email, user_by_id};
+use crate::auth::{API_KEY_PREFIX, ips_no_wider, normalize_allowed_ips, normalize_email, revoke_sessions, user_by_email, user_by_id};
 use crate::context::{Credential, Ctx};
 use crate::email::{self, Message};
 use crate::error::{AppError, ErrorKind, Result, bad_request, conflict, forbidden, not_found};
@@ -345,6 +347,7 @@ pub struct CreateApiKeyInput {
     /// What the key may do. It never gets more than your own role allows, now or later.
     pub permissions: Vec<Permission>,
     pub expires_in_days: Option<u32>,
+    /// Addresses or CIDR ranges the key may be used from. Empty allows any address.
     #[serde(default)]
     pub allowed_ips: Vec<String>,
 }
@@ -372,28 +375,21 @@ impl Service for CreateApiKey {
         if actor.credential != Credential::Session {
             return Err(AppError::new(ErrorKind::Forbidden, "Create API keys in the app, signed in"));
         }
-        let name = input.name.trim();
-        if name.is_empty() || name.len() > 100 {
-            return Err(bad_request("Name the key, e.g. after the system that uses it"));
-        }
-        if input.permissions.is_empty() || input.permissions.iter().any(|p| !actor.can(*p)) {
-            return Err(forbidden());
-        }
-        for ip in &input.allowed_ips {
-            ip.parse::<std::net::IpAddr>().map_err(|_| bad_request(format!("{ip} is not an IP address")))?;
-        }
+        let name = key_name(&input.name)?;
+        let permissions = key_permissions(actor, &input.permissions)?;
+        let allowed_ips = normalize_allowed_ips(&input.allowed_ips)?;
         let prefix: String = hex::encode(opensign_crypto::random_bytes::<6>());
         let key = format!("{API_KEY_PREFIX}{prefix}_{}", random_token());
         let id = Uuid::now_v7();
         let expires_at = input.expires_in_days.map(|d| ctx.now + Duration::days(d.clamp(1, 3650) as i64));
         sqlx::query("insert into api_keys (id, name, prefix, key_hash, user_id, permissions, allowed_ips, expires_at) values ($1, $2, $3, $4, $5, $6, $7, $8)")
             .bind(id)
-            .bind(name)
+            .bind(&name)
             .bind(&prefix)
             .bind(sha256_hex(&key))
             .bind(actor.user_id)
-            .bind(input.permissions.iter().map(|p| p.as_str()).collect::<Vec<_>>())
-            .bind(&input.allowed_ips)
+            .bind(&permissions)
+            .bind(&allowed_ips)
             .bind(expires_at)
             .execute(&mut *conn)
             .await?;
@@ -401,11 +397,30 @@ impl Service for CreateApiKey {
             ctx,
             conn,
             Entry::new("api_keys.create", "api_key", id)
-                .after(serde_json::json!({ "name": name, "permissions": input.permissions, "expiresAt": expires_at })),
+                .after(serde_json::json!({ "name": name, "permissions": permissions, "allowedIps": allowed_ips, "expiresAt": expires_at })),
         )
         .await?;
         Ok(CreatedApiKey { id, key })
     }
+}
+
+fn key_name(name: &str) -> Result<String> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > 100 {
+        return Err(bad_request("Name the key, e.g. after the system that uses it"));
+    }
+    Ok(name.to_string())
+}
+
+fn key_permissions(actor: &crate::context::Actor, permissions: &[Permission]) -> Result<Vec<String>> {
+    if permissions.is_empty() {
+        return Err(bad_request("Give the key at least one permission"));
+    }
+    if permissions.iter().any(|p| !actor.can(*p)) {
+        return Err(forbidden());
+    }
+    let set: BTreeSet<Permission> = permissions.iter().copied().collect();
+    Ok(set.into_iter().map(|p| p.as_str().to_string()).collect())
 }
 
 #[derive(Serialize, JsonSchema, sqlx::FromRow)]
@@ -415,10 +430,13 @@ pub struct ApiKeyView {
     pub name: String,
     pub prefix: String,
     pub permissions: Vec<String>,
+    pub allowed_ips: Vec<String>,
     pub expires_at: Option<DateTime<Utc>>,
     pub last_used_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
 }
+
+const API_KEY_COLUMNS: &str = "id, name, prefix, permissions, allowed_ips, expires_at, last_used_at, created_at";
 
 pub struct ListApiKeys;
 
@@ -430,12 +448,90 @@ impl Service for ListApiKeys {
         Meta::query("api_keys.list", "List your API keys (never the keys themselves).", Access::Permission(Permission::ApiKeysManage));
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<Vec<ApiKeyView>> {
-        Ok(sqlx::query_as(
-            "select id, name, prefix, permissions, expires_at, last_used_at, created_at from api_keys where user_id = $1 and revoked_at is null order by created_at desc",
-        )
+        Ok(sqlx::query_as(&format!(
+            "select {API_KEY_COLUMNS} from api_keys where user_id = $1 and revoked_at is null order by created_at desc"
+        ))
         .bind(ctx.actor()?.user_id)
         .fetch_all(&mut *conn)
         .await?)
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateApiKeyInput {
+    pub id: Uuid,
+    /// A new name. Omit to keep the current one.
+    pub name: Option<String>,
+    /// Replaces the key's scopes. You can only grant what your own role allows. Omit to keep them.
+    pub permissions: Option<Vec<Permission>>,
+    /// Replaces the addresses or CIDR ranges the key may be used from; empty allows any address. Omit to keep them.
+    pub allowed_ips: Option<Vec<String>>,
+}
+
+pub struct UpdateApiKey;
+
+#[async_trait]
+impl Service for UpdateApiKey {
+    type Input = UpdateApiKeyInput;
+    type Output = ApiKeyView;
+    const META: Meta = Meta::mutation(
+        "api_keys.update",
+        "Rename one of your API keys or change its permissions or IP allowlist. The key itself stays the same and is never shown again. Through an API key or MCP you can only narrow a key's access; widening it needs the app, signed in.",
+        Access::Permission(Permission::ApiKeysManage),
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: UpdateApiKeyInput) -> Result<ApiKeyView> {
+        let actor = ctx.actor()?;
+        let before: ApiKeyView = sqlx::query_as(&format!(
+            "select {API_KEY_COLUMNS} from api_keys where id = $1 and user_id = $2 and revoked_at is null for update"
+        ))
+        .bind(input.id)
+        .bind(actor.user_id)
+        .fetch_optional(&mut *conn)
+        .await?
+        .ok_or_else(|| not_found("API key"))?;
+
+        let name = match &input.name {
+            Some(n) => key_name(n)?,
+            None => before.name.clone(),
+        };
+        let permissions = match &input.permissions {
+            Some(p) => key_permissions(actor, p)?,
+            None => before.permissions.clone(),
+        };
+        let allowed_ips = match &input.allowed_ips {
+            Some(ips) => normalize_allowed_ips(ips)?,
+            None => before.allowed_ips.clone(),
+        };
+        let widens = permissions.iter().any(|p| !before.permissions.contains(p)) || !ips_no_wider(&before.allowed_ips, &allowed_ips);
+        if widens && actor.credential != Credential::Session {
+            return Err(AppError::new(ErrorKind::Forbidden, "Widen an API key's access in the app, signed in"));
+        }
+        let same = |a: &[String], b: &[String]| a.iter().collect::<BTreeSet<_>>() == b.iter().collect::<BTreeSet<_>>();
+        if name == before.name && same(&permissions, &before.permissions) && same(&allowed_ips, &before.allowed_ips) {
+            return Ok(before);
+        }
+
+        let after: ApiKeyView = sqlx::query_as(&format!(
+            "update api_keys set name = $3, permissions = $4, allowed_ips = $5 where id = $1 and user_id = $2 returning {API_KEY_COLUMNS}"
+        ))
+        .bind(input.id)
+        .bind(actor.user_id)
+        .bind(&name)
+        .bind(&permissions)
+        .bind(&allowed_ips)
+        .fetch_one(&mut *conn)
+        .await?;
+        audit(
+            ctx,
+            conn,
+            Entry::new("api_keys.update", "api_key", input.id)
+                .before(serde_json::json!({ "name": before.name, "permissions": before.permissions, "allowedIps": before.allowed_ips }))
+                .after(serde_json::json!({ "name": after.name, "permissions": after.permissions, "allowedIps": after.allowed_ips })),
+        )
+        .await?;
+        Ok(after)
     }
 }
 

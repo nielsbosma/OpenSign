@@ -28,6 +28,7 @@ const NOT_FOR_ASSISTANT: &[&str] = &[
     "webhooks.create",
     "webhooks.delete",
     "webhooks.test",
+    "api_keys.update",
     "api_keys.revoke",
     "documents.signing_link",
     "documents.share",

@@ -126,6 +126,84 @@ async fn setup_login_lockout_two_factor_and_api_keys() {
     )
     .await;
     assert_eq!(kind(escalate), ErrorKind::Forbidden, "an API key cannot mint keys");
+
+    let managed = call::<users::CreateApiKey>(
+        &admin,
+        users::CreateApiKeyInput {
+            name: "Ops".into(),
+            permissions: vec![Permission::ApiKeysManage, Permission::DocumentsRead, Permission::DocumentsCreate],
+            expires_in_days: None,
+            allowed_ips: vec!["198.51.100.0/24".into()],
+        },
+    )
+    .await
+    .unwrap();
+    let now = opensign_core::context::now();
+    assert!(load_api_key(&mut conn, &managed.key, Some("203.0.113.5"), &SecuritySettings::default(), now).await.unwrap().is_none());
+    let managed_actor =
+        load_api_key(&mut conn, &managed.key, Some("198.51.100.20"), &SecuritySettings::default(), now).await.unwrap().unwrap();
+    let via_managed = web(&app).with_actor(managed_actor);
+    let update = |id, name: Option<&str>, permissions: Option<Vec<Permission>>, ips: Option<Vec<&str>>| users::UpdateApiKeyInput {
+        id,
+        name: name.map(Into::into),
+        permissions,
+        allowed_ips: ips.map(|v| v.into_iter().map(Into::into).collect()),
+    };
+    let narrowed = call::<users::UpdateApiKey>(
+        &via_managed,
+        update(
+            managed.id,
+            Some("Ops (read)"),
+            Some(vec![Permission::ApiKeysManage, Permission::DocumentsRead]),
+            Some(vec!["198.51.100.20"]),
+        ),
+    )
+    .await
+    .unwrap();
+    assert_eq!(narrowed.name, "Ops (read)");
+    assert_eq!(narrowed.allowed_ips, ["198.51.100.20"]);
+    assert!(!narrowed.permissions.contains(&"documents.create".to_string()));
+    let widen = call::<users::UpdateApiKey>(
+        &via_managed,
+        update(managed.id, None, Some(vec![Permission::ApiKeysManage, Permission::DocumentsCreate]), None),
+    )
+    .await;
+    assert_eq!(kind(widen), ErrorKind::Forbidden, "a key cannot widen scopes");
+    let open_up = call::<users::UpdateApiKey>(&via_managed, update(managed.id, None, None, Some(vec![]))).await;
+    assert_eq!(kind(open_up), ErrorKind::Forbidden, "a key cannot drop its IP allowlist");
+    let beyond = call::<users::UpdateApiKey>(&via_managed, update(created.id, None, Some(vec![Permission::UsersManage]), None)).await;
+    assert_eq!(kind(beyond), ErrorKind::Forbidden, "no one grants more than they have");
+    let bad_ip = call::<users::UpdateApiKey>(&admin, update(managed.id, None, None, Some(vec!["example.com"]))).await;
+    assert_eq!(kind(bad_ip), ErrorKind::BadRequest);
+
+    let widened = call::<users::UpdateApiKey>(
+        &admin,
+        update(managed.id, None, Some(vec![Permission::ApiKeysManage, Permission::DocumentsCreate]), Some(vec![])),
+    )
+    .await
+    .unwrap();
+    assert!(widened.allowed_ips.is_empty() && widened.permissions.contains(&"documents.create".to_string()), "signed in, you can widen");
+    let still: String =
+        sqlx::query_scalar("select key_hash from api_keys where id = $1").bind(managed.id).fetch_one(&mut *conn).await.unwrap();
+    assert_eq!(still, sha256_hex(&managed.key), "editing never changes the secret");
+    assert!(load_api_key(&mut conn, &managed.key, Some("203.0.113.5"), &SecuritySettings::default(), now).await.unwrap().is_some());
+
+    let (before, after): (serde_json::Value, serde_json::Value) =
+        sqlx::query_as("select before, after from audit_log where action = 'api_keys.update' and entity_id = $1 order by id desc limit 1")
+            .bind(managed.id.to_string())
+            .fetch_one(&mut *conn)
+            .await
+            .unwrap();
+    assert_eq!(before["allowedIps"], serde_json::json!(["198.51.100.20"]));
+    assert_eq!(after["allowedIps"], serde_json::json!([]));
+    assert!(!after.to_string().contains(&managed.key[4..16]), "the audit trail never holds the key");
+
+    let listed = call::<users::ListApiKeys>(&admin, Empty {}).await.unwrap();
+    assert!(listed.iter().any(|k| k.id == managed.id && k.allowed_ips.is_empty()));
+    call::<users::RevokeApiKey>(&admin, users::IdInput { id: managed.id }).await.unwrap();
+    let revoked = call::<users::UpdateApiKey>(&admin, update(managed.id, Some("Back"), None, None)).await;
+    assert_eq!(kind(revoked), ErrorKind::NotFound, "a revoked key cannot be edited");
+
     call::<users::RevokeApiKey>(&admin, users::IdInput { id: created.id }).await.unwrap();
     assert!(
         load_api_key(&mut conn, &created.key, None, &SecuritySettings::default(), opensign_core::context::now()).await.unwrap().is_none()
