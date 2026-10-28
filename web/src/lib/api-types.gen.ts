@@ -24,7 +24,7 @@ export type AccountMcpConnectionsOutput = Array<Connection>;
 
 export type AccountMeInput = Record<string, unknown>;
 
-export type Permission = "org.read" | "users.read" | "users.manage" | "settings.manage" | "audit.read" | "documents.read" | "documents.create" | "documents.read_all" | "documents.manage_all" | "templates.manage" | "api_keys.manage" | "webhooks.manage" | "ai.use" | "system.read";
+export type Permission = "org.read" | "users.read" | "users.manage" | "settings.manage" | "audit.read" | "documents.read" | "documents.create" | "documents.read_all" | "documents.manage_all" | "documents.legal_hold" | "templates.manage" | "api_keys.manage" | "webhooks.manage" | "ai.use" | "system.read";
 
 export type Role = "admin" | "manager" | "sender" | "auditor" | "viewer";
 
@@ -487,6 +487,8 @@ export type DocumentView = {
   canceledAt?: string | null;
   completedAt?: string | null;
   createdAt: string;
+  /** When the retention rules will delete this document, if any rule applies to it. */
+  deletesAt?: string | null;
   expiresAt?: string | null;
   externalId?: string | null;
   fields: Array<FieldRow>;
@@ -494,6 +496,10 @@ export type DocumentView = {
   id: string;
   isTemplate: boolean;
   language: string;
+  /** On legal hold: no retention rule or person can delete it until the hold is released. */
+  legalHold: boolean;
+  legalHoldAt?: string | null;
+  legalHoldReason?: string | null;
   message: string;
   metadata: unknown;
   originalSha256?: string | null;
@@ -583,6 +589,23 @@ export type ReviewOutput = {
 };
 
 export type DocumentsLatestReviewOutput = ReviewOutput | null;
+
+export type DocumentsLegalHoldInput = {
+  /** True places the hold, false releases it. */
+  hold: boolean;
+  id: string;
+  /** Why the document must be kept, such as a case or matter reference. Required to place a hold. */
+  reason?: string;
+};
+
+export type DocumentsLegalHoldOutput = LegalHoldView;
+
+export type LegalHoldView = {
+  id: string;
+  legalHold: boolean;
+  legalHoldAt?: string | null;
+  legalHoldReason?: string | null;
+};
 
 export type DocumentsListInput = {
   limit?: number | null;
@@ -841,6 +864,20 @@ export type ConsentView = {
   redirectHost: string;
 };
 
+export type RetentionPreviewInput = Record<string, unknown>;
+
+export type RetentionPreviewOutput = RetentionPreview;
+
+export type RetentionPreview = {
+  /** Documents the current rules would delete at the next run. */
+  completed: number;
+  drafts: number;
+  ended: number;
+  /** Documents on legal hold, which no rule deletes. */
+  held: number;
+  oldestHeldSince?: string | null;
+};
+
 export type SealGetInput = Record<string, unknown>;
 
 export type SealInfo = {
@@ -855,7 +892,7 @@ export type SealRegenerateInput = Record<string, unknown>;
 
 export type SealRegenerateOutput = SealInfo;
 
-export type Group = "org" | "email" | "security" | "signing" | "ai" | "sms" | "eid";
+export type Group = "org" | "email" | "security" | "retention" | "signing" | "ai" | "sms" | "eid";
 
 export type SettingsGetInput = {
   group: Group;
@@ -1218,6 +1255,7 @@ export interface Services {
   "documents.download": { kind: "query"; input: DocumentsDownloadInput; output: DocumentsDownloadOutput };
   "documents.get": { kind: "query"; input: DocumentsGetInput; output: DocumentsGetOutput };
   "documents.latest_review": { kind: "query"; input: DocumentsLatestReviewInput; output: DocumentsLatestReviewOutput };
+  "documents.legal_hold": { kind: "mutation"; input: DocumentsLegalHoldInput; output: DocumentsLegalHoldOutput };
   "documents.list": { kind: "query"; input: DocumentsListInput; output: DocumentsListOutput };
   "documents.remind": { kind: "mutation"; input: DocumentsRemindInput; output: DocumentsRemindOutput };
   "documents.remove_file": { kind: "mutation"; input: DocumentsRemoveFileInput; output: DocumentsRemoveFileOutput };
@@ -1235,6 +1273,7 @@ export interface Services {
   "oauth.approve": { kind: "mutation"; input: OauthApproveInput; output: OauthApproveOutput };
   "oauth.deny": { kind: "mutation"; input: OauthDenyInput; output: OauthDenyOutput };
   "oauth.describe": { kind: "query"; input: OauthDescribeInput; output: OauthDescribeOutput };
+  "retention.preview": { kind: "query"; input: RetentionPreviewInput; output: RetentionPreviewOutput };
   "seal.get": { kind: "query"; input: SealGetInput; output: SealGetOutput };
   "seal.regenerate": { kind: "mutation"; input: SealRegenerateInput; output: SealRegenerateOutput };
   "settings.get": { kind: "query"; input: SettingsGetInput; output: SettingsGetOutput };

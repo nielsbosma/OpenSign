@@ -10,7 +10,8 @@ An open source electronic signing service you run yourself. Upload a Word or PDF
 - **APIs**: a REST API with OpenAPI, plus drop-in compatible endpoints for **Scrive** (`/api/v2`) and **DocuSign** eSignature (`/restapi/v2.1`), signed webhooks, and idempotency keys.
 - **MCP**: everything you can do in the app is available to Claude and other MCP clients, with your permissions and in the audit trail.
 - **AI (optional)**: an assistant over your own tools, and an LLM review of a document before you send it. Off until an admin picks a provider; document text is only sent if an admin allows it.
-- **Multi-user with roles**: admin, manager, sender, auditor and viewer. One organisation per install.
+- **Retention and legal hold**: rules in Settings delete signed, ended and draft documents with their files after set periods; a legal hold keeps a document until it is released.
+- **Multi-user with roles**: admin, manager, sender, auditor and viewer; passkeys or an authenticator app for two-factor. One organisation per install.
 - **Security first**: see [SECURITY.md](SECURITY.md) for the threat model and the controls.
 
 ## Running it

@@ -108,7 +108,8 @@ pub mod status {
 }
 
 pub const DOCUMENT_COLUMNS: &str = "id, title, status, is_template, template_id, owner_id, message, language, sequential, expires_at, reminder_days, \
-     source_file_id, sealed_file_id, original_sha256, sealed_sha256, page_count, external_id, metadata, sent_at, completed_at, canceled_at, created_at, updated_at";
+     source_file_id, sealed_file_id, original_sha256, sealed_sha256, page_count, external_id, metadata, sent_at, completed_at, canceled_at, created_at, updated_at, \
+     legal_hold, legal_hold_reason, legal_hold_at";
 
 #[derive(Debug, Clone, Serialize, JsonSchema, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -140,6 +141,10 @@ pub struct DocumentRow {
     pub canceled_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// On legal hold: no retention rule or person can delete it until the hold is released.
+    pub legal_hold: bool,
+    pub legal_hold_reason: Option<String>,
+    pub legal_hold_at: Option<DateTime<Utc>>,
 }
 
 pub const PARTY_COLUMNS: &str = "id, document_id, role, name, email, phone, personal_number, company, sign_order, delivery, auth_to_view, auth_to_sign, \
@@ -314,6 +319,8 @@ pub struct DocumentView {
     /// Files parties are asked to upload while signing, and what they uploaded.
     pub attachments: Vec<attachments::AttachmentRequest>,
     pub can_edit: bool,
+    /// When the retention rules will delete this document, if any rule applies to it.
+    pub deletes_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -414,7 +421,55 @@ pub async fn view(ctx: &Ctx, conn: &mut PgConnection, document: DocumentRow) -> 
     let fields = fields(conn, document.id).await?;
     let files = files(conn, document.id).await?;
     let attachments = attachments::for_document(conn, document.id).await?;
-    Ok(DocumentView { document, owner_name, files, parties, fields, attachments, can_edit })
+    let rules: crate::settings::RetentionSettings = crate::services::settings(ctx, conn).await?;
+    let deletes_at = crate::services::retention::deletes_at(&rules, &document);
+    Ok(DocumentView { document, owner_name, files, parties, fields, attachments, can_edit, deletes_at })
+}
+
+/// Deletes a document with everything that belongs to it. File rows go in the same transaction,
+/// which destroys their wrapped keys, so the encrypted bodies are unreadable at once; the bucket
+/// objects are removed by a job after commit. Files another document still uses are kept.
+pub async fn purge(ctx: &Ctx, conn: &mut PgConnection, document: &DocumentRow, reason: &str) -> Result<()> {
+    if document.legal_hold {
+        return Err(crate::error::conflict("This document is on legal hold and cannot be deleted"));
+    }
+    let file_ids: Vec<Uuid> = sqlx::query_scalar(
+        "select f from (
+           select source_file_id as f from documents where id = $1
+           union select sealed_file_id from documents where id = $1
+           union select file_id from document_files where document_id = $1
+           union select file_id from attachment_requests where document_id = $1
+           union select (signature->>'imageFileId')::uuid from parties
+             where document_id = $1 and signature->>'imageFileId' ~ '^[0-9a-f-]{36}$'
+         ) ids where f is not null",
+    )
+    .bind(document.id)
+    .fetch_all(&mut *conn)
+    .await?;
+    sqlx::query("delete from documents where id = $1").bind(document.id).execute(&mut *conn).await?;
+    let keys: Vec<String> = sqlx::query_scalar(
+        "delete from files f where f.id = any($1)
+           and not exists (select 1 from documents d where d.source_file_id = f.id or d.sealed_file_id = f.id)
+           and not exists (select 1 from document_files x where x.file_id = f.id)
+           and not exists (select 1 from attachment_requests a where a.file_id = f.id)
+           and not exists (select 1 from parties p where p.signature->>'imageFileId' = f.id::text)
+         returning storage_key",
+    )
+    .bind(&file_ids)
+    .fetch_all(&mut *conn)
+    .await?;
+    if !keys.is_empty() {
+        crate::jobs::enqueue(conn, "delete_objects", serde_json::json!({ "keys": keys }), None, None).await?;
+    }
+    crate::audit::audit(
+        ctx,
+        conn,
+        crate::audit::Entry::new("document.deleted", "document", document.id)
+            .before(serde_json::json!({ "title": document.title, "status": document.status, "sealedSha256": document.sealed_sha256 }))
+            .metadata(serde_json::json!({ "reason": reason, "filesDeleted": keys.len() })),
+    )
+    .await?;
+    Ok(())
 }
 
 fn link_mac(keys: &Keys, party_id: Uuid, version: i32) -> String {

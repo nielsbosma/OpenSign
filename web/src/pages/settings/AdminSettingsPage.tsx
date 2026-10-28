@@ -55,14 +55,28 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
   },
   security: {
     title: 'Security',
-    description: 'Sessions, uploads and how long documents are kept.',
+    description: 'Sessions, sign-in and uploads.',
     fields: [
       { key: 'enforceTwoFactor', label: 'Require two-factor authentication for everyone', type: 'bool' },
       { key: 'sessionHours', label: 'Session Length (Hours)', type: 'number' },
       { key: 'idleMinutes', label: 'Sign Out After Idle (Minutes)', type: 'number' },
       { key: 'signerLinkDays', label: 'Signing Links Expire After (Days)', type: 'number' },
       { key: 'maxUploadMb', label: 'Largest Upload (MB)', type: 'number' },
-      { key: 'retentionDays', label: 'Delete Completed Documents After (Days)', type: 'number', hint: '0 keeps them.' },
+    ],
+  },
+  retention: {
+    title: 'Retention',
+    description:
+      'Delete documents and their files automatically after a set time. 0 keeps them. Templates and documents on legal hold are always kept, and the audit trail keeps a record of every deletion.',
+    fields: [
+      { key: 'completedDays', label: 'Delete Signed Documents After (Days)', type: 'number', hint: 'Counted from completion.' },
+      {
+        key: 'endedDays',
+        label: 'Delete Declined, Canceled and Expired Documents After (Days)',
+        type: 'number',
+        hint: 'Counted from when signing stopped.',
+      },
+      { key: 'draftDays', label: 'Delete Untouched Drafts After (Days)', type: 'number', hint: 'Counted from the last change.' },
     ],
   },
   signing: {
@@ -240,6 +254,29 @@ function SealExtras() {
           description="New documents are sealed with a new key. Documents sealed before stay valid and verifiable."
           onConfirm={() => regenerate.mutate({})}
         />
+      </div>
+    </SettingsCard>
+  );
+}
+
+function RetentionExtras() {
+  const preview = useApi('retention.preview', {}, { staleTime: 0 });
+  if (!preview.data) return null;
+  const { completed, ended, drafts, held, oldestHeldSince } = preview.data;
+  const due = completed + ended + drafts;
+  return (
+    <SettingsCard title="Next Run" description="Retention runs every ten minutes. Each deletion is recorded in the audit trail.">
+      <div className="grid gap-1">
+        <div>
+          {due === 0
+            ? 'Nothing is due for deletion with the saved rules.'
+            : `${due.toLocaleString()} ${due === 1 ? 'document is' : 'documents are'} due: ${completed} signed, ${ended} declined, canceled or expired, ${drafts} drafts.`}
+        </div>
+        <div className="text-muted-foreground">
+          {held === 0
+            ? 'No documents are on legal hold.'
+            : `${held} ${held === 1 ? 'document is' : 'documents are'} on legal hold${oldestHeldSince ? `, the oldest since ${formatDate(oldestHeldSince)}` : ''}.`}
+        </div>
       </div>
     </SettingsCard>
   );
@@ -433,6 +470,7 @@ export function AdminSettingsPage() {
         )}
       </SettingsCard>
       {group === 'signing' && <SealExtras />}
+      {group === 'retention' && <RetentionExtras />}
     </div>
   );
 }
