@@ -40,6 +40,10 @@ pub async fn context(state: &AppState, headers: &HeaderMap, ip: Option<String>, 
     ctx.ip = ip;
     ctx.user_agent = headers.get(header::USER_AGENT).and_then(|v| v.to_str().ok()).map(|s| s.chars().take(300).collect());
     ctx.request_id = Some(request_id);
+    if surface == Surface::Signer {
+        // A signer is the holder of the signing link, never whoever happens to be signed in to the app in the same browser.
+        return Ok(ctx);
+    }
     let bearer = headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer ")).map(str::trim);
     if bearer.is_none() && session_cookie(headers, state).is_none() {
         return Ok(ctx);

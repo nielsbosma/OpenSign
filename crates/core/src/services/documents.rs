@@ -504,7 +504,8 @@ pub struct PartyInput {
     pub email: Option<String>,
     /// With country code, e.g. +46701234567. Needed for SMS delivery and SMS codes.
     pub phone: Option<String>,
-    /// A national id number to match against the eID result, e.g. a Swedish personnummer. Stored encrypted.
+    /// A national id number to match against the eID result, e.g. a Swedish personnummer. Stored encrypted. Leave it out (or
+    /// send the masked value) to keep the stored one; send "" to remove it.
     pub personal_number: Option<String>,
     pub company: Option<String>,
     /// In sequential documents, lower numbers sign first. Equal numbers sign in parallel.
@@ -545,6 +546,7 @@ struct CleanParty {
     email: Option<String>,
     phone: Option<String>,
     personal_number: Option<String>,
+    keep_personal_number: bool,
     company: Option<String>,
     sign_order: i32,
     delivery: Delivery,
@@ -568,13 +570,18 @@ fn clean_party(input: PartyInput, existing: &[PartyRow]) -> Result<CleanParty> {
     if input.auth_to_sign == AuthMethod::None {
         return Err(bad_request("authToSign is standard, sms_pin, se_bankid, freja or broker"));
     }
+    let keep_personal_number = input.personal_number.as_deref().is_none_or(|n| n.contains('\u{2022}'));
     Ok(CleanParty {
         id,
         role: input.role,
         name,
         email: input.email.as_deref().map(str::trim).filter(|e| !e.is_empty()).map(normalize_email).transpose()?,
         phone: input.phone.as_deref().map(str::trim).filter(|p| !p.is_empty()).map(crate::sms::normalize_phone).transpose()?,
-        personal_number: input.personal_number.as_deref().map(str::trim).filter(|p| !p.is_empty()).map(personal_number).transpose()?,
+        personal_number: match keep_personal_number {
+            true => None,
+            false => input.personal_number.as_deref().map(str::trim).filter(|p| !p.is_empty()).map(personal_number).transpose()?,
+        },
+        keep_personal_number,
         company: input.company.as_deref().map(|c| clean_text(c, "The company", 200)).transpose()?.filter(|c| !c.is_empty()),
         sign_order: input.sign_order.unwrap_or(1).clamp(1, 100),
         delivery: input.delivery,
@@ -624,7 +631,7 @@ impl Service for SetParties {
                 "insert into parties (id, document_id, role, name, email, phone, personal_number, company, sign_order, delivery, auth_to_view, auth_to_sign)
                  values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                  on conflict (id) do update set role = excluded.role, name = excluded.name, email = excluded.email, phone = excluded.phone,
-                   personal_number = excluded.personal_number, company = excluded.company, sign_order = excluded.sign_order,
+                   personal_number = case when $13 then parties.personal_number else excluded.personal_number end, company = excluded.company, sign_order = excluded.sign_order,
                    delivery = excluded.delivery, auth_to_view = excluded.auth_to_view, auth_to_sign = excluded.auth_to_sign, updated_at = now()",
             )
             .bind(p.id)
@@ -639,6 +646,7 @@ impl Service for SetParties {
             .bind(p.delivery.as_str())
             .bind(p.auth_to_view.as_str())
             .bind(p.auth_to_sign.as_str())
+            .bind(p.keep_personal_number)
             .execute(&mut *conn)
             .await?;
         }

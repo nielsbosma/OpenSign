@@ -71,6 +71,11 @@ async fn setup_login_lockout_two_factor_and_api_keys() {
     assert!(call::<auth::ConfirmTwoFactor>(&admin, auth::CodeInput { code: "000000".into() }).await.is_err());
     let recovery = call::<auth::ConfirmTwoFactor>(&admin, auth::CodeInput { code: totp.code_at(now) }).await.unwrap().recovery_codes;
     assert!(recovery.len() >= 8);
+    assert_eq!(
+        kind(call::<auth::BeginTwoFactor>(&admin, Empty {}).await),
+        ErrorKind::Conflict,
+        "a stolen session must not swap the authenticator"
+    );
 
     let LoginResult::TwoFactorRequired { challenge } = call::<auth::Login>(&anon, login("ada@example.com", PASSWORD)).await.unwrap() else {
         panic!("two-factor is required once enabled")

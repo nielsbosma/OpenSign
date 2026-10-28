@@ -14,3 +14,4 @@ playwright-report/
 screenshots/
 fuzz/artifacts/
 fuzz/corpus/
+*.tsbuildinfo

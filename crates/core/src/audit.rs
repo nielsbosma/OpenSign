@@ -135,7 +135,12 @@ pub async fn audit(ctx: &Ctx, conn: &mut PgConnection, entry: Entry<'_>) -> Resu
     }
     let metadata = Value::Object(metadata);
     let actor_id = ctx.actor.as_ref().map(|a| a.user_id);
-    let actor_label = ctx.actor.as_ref().map(|a| a.email.clone()).unwrap_or_else(|| ctx.surface.as_str().to_string());
+    let party = (ctx.surface == crate::context::Surface::Signer).then(|| metadata.get("name").and_then(Value::as_str)).flatten();
+    let actor_label = match (&ctx.actor, party) {
+        (Some(actor), _) => actor.email.clone(),
+        (None, Some(name)) => format!("{name} (signer)"),
+        (None, None) => ctx.surface.as_str().to_string(),
+    };
     let occurred_at = crate::context::now();
 
     // A savepoint inside the caller's transaction, or a transaction of its own on a bare connection,

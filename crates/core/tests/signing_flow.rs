@@ -154,6 +154,29 @@ async fn sends_signs_seals_and_verifies() {
     .unwrap();
     let (anna, bo, cecilia) = (set[0].id, set[1].id, set[2].id);
 
+    let with_number = |id: Uuid, number: Option<&str>| PartyInput {
+        id: Some(id),
+        personal_number: number.map(str::to_string),
+        ..party("Anna", PartyRole::Signer, Delivery::Email, AuthMethod::Standard)
+    };
+    let resave = |anna: PartyInput| docs::SetPartiesInput {
+        document_id: id,
+        parties: vec![
+            anna,
+            PartyInput { id: Some(bo), ..party("Bo", PartyRole::Signer, Delivery::Link, AuthMethod::SmsPin) },
+            PartyInput { id: Some(cecilia), ..party("Cecilia", PartyRole::Viewer, Delivery::Email, AuthMethod::Standard) },
+        ],
+    };
+    let stored = call::<docs::SetParties>(&sender, resave(with_number(anna, Some("19121212-1212")))).await.unwrap();
+    let masked = stored[0].personal_number.clone().unwrap();
+    assert!(masked.ends_with("1212") && !masked.contains("1912"));
+    let kept = call::<docs::SetParties>(&sender, resave(with_number(anna, None))).await.unwrap();
+    assert_eq!(kept[0].personal_number.as_deref(), Some(masked.as_str()), "leaving it out keeps the stored number");
+    let kept = call::<docs::SetParties>(&sender, resave(with_number(anna, Some(&masked)))).await.unwrap();
+    assert_eq!(kept[0].personal_number.as_deref(), Some(masked.as_str()), "sending the masked value back keeps it");
+    let cleared = call::<docs::SetParties>(&sender, resave(with_number(anna, Some("")))).await.unwrap();
+    assert!(cleared[0].personal_number.is_none());
+
     let mut company = field(Some(bo), FieldKind::Text, 1, 0.3);
     company.label = Some("Bank account".into());
     call::<docs::SetFields>(

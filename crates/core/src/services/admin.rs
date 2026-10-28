@@ -107,7 +107,18 @@ async fn update<G: SettingsGroup>(ctx: &Ctx, conn: &mut PgConnection, patch: &Va
             map.insert(secret.to_string(), Value::Null);
         }
     }
-    let next: G = serde_json::from_value(merge(base, patch, G::SECRETS)).map_err(|e| bad_request(format!("Invalid settings: {e}")))?;
+    let mut patch = patch.clone();
+    if G::NAME == "email"
+        && let Value::Object(changes) = &mut patch
+    {
+        // Only a successful test email marks email as working; a new key or sender needs a new test.
+        changes.remove("verifiedAt");
+        let changed = |field: &str| changes.get(field).is_some_and(|v| !v.is_null() && !v.is_boolean() && Some(v) != base.get(field));
+        if changed("apiKey") || changed("fromAddress") {
+            changes.insert("verifiedAt".into(), Value::Null);
+        }
+    }
+    let next: G = serde_json::from_value(merge(base, &patch, G::SECRETS)).map_err(|e| bad_request(format!("Invalid settings: {e}")))?;
     validate::<G>(&next)?;
     ctx.app.settings.save(conn, ctx.keys(), &next, Some(ctx.actor()?.user_id)).await?;
     let saved: G = settings(ctx, conn).await?;

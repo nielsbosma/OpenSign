@@ -99,6 +99,21 @@ async fn sessions_csrf_rate_limits_and_api_keys() {
     let (response, _) = client.call("account.me", json!({}), &[("authorization", "Bearer osk_not_a_real_key")]).await;
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "a bad key is refused, not ignored");
 
+    let auth: &[(&str, &str)] = &[("cookie", &cookie), ("origin", ORIGIN)];
+    let forged = json!({ "group": "email", "values": { "fromAddress": "sign@example.com", "verifiedAt": "2020-01-01T00:00:00Z" } });
+    let (response, _) = client.call("settings.update", forged, auth).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let (_, status) = client.call("setup.status", json!({}), auth).await;
+    assert_eq!(status["emailConfigured"], false, "only a test email that went out marks email as working");
+    let (response, _) = client.call("settings.send_test_email", json!({}), auth).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let (_, status) = client.call("setup.status", json!({}), auth).await;
+    assert_eq!(status["emailConfigured"], true);
+    let changed = json!({ "group": "email", "values": { "fromAddress": "other@example.com" } });
+    client.call("settings.update", changed, auth).await;
+    let (_, status) = client.call("setup.status", json!({}), auth).await;
+    assert_eq!(status["emailConfigured"], false, "a new sender needs a new test");
+
     let (response, _) = client.call("auth.logout", json!({}), &[("cookie", &cookie), ("origin", ORIGIN)]).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert!(response.headers().get(header::SET_COOKIE).unwrap().to_str().unwrap().contains("Max-Age=0"));

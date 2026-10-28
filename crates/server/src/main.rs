@@ -45,6 +45,11 @@ async fn shutdown() {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    if std::env::args().nth(1).as_deref() == Some("schema") {
+        use std::io::Write;
+        writeln!(std::io::stdout(), "{}", serde_json::to_string_pretty(&opensign_server::service_schemas())?)?;
+        return Ok(());
+    }
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,sqlx=warn")))
         .init();

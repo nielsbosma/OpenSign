@@ -70,8 +70,9 @@ async fn api_not_found() -> Response {
 
 /// The built web app: next to the binary in the image, or `web/dist` in a checkout.
 fn web_dist() -> Option<PathBuf> {
-    let candidates = [PathBuf::from("web"), PathBuf::from("web/dist"), PathBuf::from("/app/web")];
-    candidates.into_iter().find(|p| p.join("index.html").is_file())
+    // Only a built app: serving `web/` itself would publish the sources.
+    let configured = std::env::var("WEB_DIST").ok().map(PathBuf::from);
+    configured.into_iter().chain([PathBuf::from("web/dist"), PathBuf::from("/app/web")]).find(|p| p.join("index.html").is_file())
 }
 
 async fn no_cache_html(request: Request, next: Next) -> Response {
@@ -81,6 +82,23 @@ async fn no_cache_html(request: Request, next: Next) -> Response {
         response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
     }
     response
+}
+
+/// Every service's name, kind and JSON schemas, for generating the web app's typed client.
+pub fn service_schemas() -> serde_json::Value {
+    let mut services = serde_json::Map::new();
+    for service in opensign_core::services::registry() {
+        let meta = service.meta();
+        services.insert(
+            meta.name.to_string(),
+            json!({
+                "kind": if meta.kind == opensign_core::service::Kind::Query { "query" } else { "mutation" },
+                "input": service.input_schema(),
+                "output": service.output_schema(),
+            }),
+        );
+    }
+    serde_json::Value::Object(services)
 }
 
 pub fn router(state: AppState) -> Router {
