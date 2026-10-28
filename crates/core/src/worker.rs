@@ -57,7 +57,9 @@ async fn run(ctx: &Ctx, job: &Job) -> Result<()> {
 /// schedules the next sweep once this one is done, since a pending job holds its unique key.
 async fn sweep(ctx: &Ctx, conn: &mut sqlx::PgConnection) -> Result<()> {
     let expired: Vec<Uuid> = sqlx::query_scalar(
-        "update documents set status = 'expired', updated_at = now() where status = 'pending' and expires_at is not null and expires_at < $1 returning id",
+        "update documents d set status = 'expired', updated_at = now() where status = 'pending' and expires_at is not null and expires_at < $1
+           and exists (select 1 from parties p where p.document_id = d.id and p.role <> 'viewer' and p.signed_at is null)
+         returning id",
     )
     .bind(ctx.now)
     .fetch_all(&mut *conn)

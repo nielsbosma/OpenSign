@@ -37,3 +37,30 @@ async fn an_exhausted_job_does_not_block_its_key() {
         sqlx::query_as("select payload, attempts from jobs where unique_key = 'k'").fetch_one(&mut *conn).await.unwrap();
     assert_eq!((payload, attempts), (json!({ "n": 3 }), 0));
 }
+
+#[tokio::test]
+async fn the_sweep_does_not_expire_a_document_waiting_for_its_seal() {
+    let Some(app) = app().await else { return };
+    let mut conn = app.db.acquire().await.unwrap();
+    for (title, signed) in [("Signed", true), ("Unsigned", false)] {
+        let id = uuid::Uuid::now_v7();
+        sqlx::query("insert into documents (id, title, status, expires_at) values ($1, $2, 'pending', now() - interval '1 minute')")
+            .bind(id)
+            .bind(title)
+            .execute(&mut *conn)
+            .await
+            .unwrap();
+        sqlx::query("insert into parties (id, document_id, name, signed_at) values ($1, $2, 'Anna', case when $3 then now() end)")
+            .bind(uuid::Uuid::now_v7())
+            .bind(id)
+            .bind(signed)
+            .execute(&mut *conn)
+            .await
+            .unwrap();
+    }
+    worker::schedule_sweep(&mut conn, None).await.unwrap();
+    worker::drain(&app).await.unwrap();
+    let statuses: Vec<(String, String)> =
+        sqlx::query_as("select title, status from documents order by title").fetch_all(&mut *conn).await.unwrap();
+    assert_eq!(statuses, vec![("Signed".into(), "pending".into()), ("Unsigned".into(), "expired".into())]);
+}
