@@ -16,6 +16,7 @@ import { AttachmentUploads } from './AttachmentUploads';
 import { EidIdentify } from './EidIdentify';
 import { type Signature, SignaturePad } from './SignaturePad';
 import { TextsContext, textsFor, useTexts } from './texts';
+import { WebcamPhoto } from './WebcamPhoto';
 
 /**
  * The page behind a signing link. The token lives in the URL fragment, so it never reaches a server log or a Referer
@@ -461,8 +462,24 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
             ) : (
               <>
                 {inputs.length > 0 && <p className="text-xs text-muted-foreground">{t.fillFields}</p>}
-                {attachments.length > 0 && (
-                  <AttachmentUploads token={token} session={session} requests={attachments} onChange={setAttachments} />
+                {attachments
+                  .filter((a) => a.kind === 'photo')
+                  .map((a) => (
+                    <WebcamPhoto
+                      key={a.id}
+                      token={token}
+                      session={session}
+                      request={a}
+                      onChange={(updated) => setAttachments(attachments.map((r) => (r.id === updated.id ? updated : r)))}
+                    />
+                  ))}
+                {attachments.some((a) => a.kind !== 'photo') && (
+                  <AttachmentUploads
+                    token={token}
+                    session={session}
+                    requests={attachments.filter((a) => a.kind !== 'photo')}
+                    onChange={(files) => setAttachments([...attachments.filter((a) => a.kind === 'photo'), ...files])}
+                  />
                 )}
                 {isSigner && <SignaturePad defaultName={view.party.name} onChange={setSignature} />}
                 <label className="flex items-start gap-2.5">

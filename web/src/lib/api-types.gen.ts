@@ -424,6 +424,8 @@ export type AttachmentRequest = {
   fileId?: string | null;
   fileName?: string | null;
   id: string;
+  /** `file` for an upload the sender asked for, `photo` for a live photo taken with the camera while signing. */
+  kind: string;
   name: string;
   partyId: string;
   required: boolean;
@@ -476,6 +478,8 @@ export type PartyView = {
   signedAt?: string | null;
   status: string;
   viewedAt?: string | null;
+  /** The party must take a live webcam photo before signing. */
+  webcamPhoto: boolean;
 };
 
 export type DocumentsCancelOutput = DocumentView;
@@ -734,6 +738,8 @@ export type PartyInput = {
   role?: PartyRole;
   /** In sequential documents, lower numbers sign first. Equal numbers sign in parallel. */
   signOrder?: number | null;
+  /** Ask the party to take a live photo of themselves with their webcam or phone camera before they can sign. The photo is stored encrypted, shown to the sender and sealed into the evidence. Leave out to keep the current setting. */
+  webcamPhoto?: boolean | null;
 };
 
 /** Signers sign, approvers approve without a signature image, viewers receive the signed copy. */

@@ -647,6 +647,7 @@ async fn send_row(ctx: &Ctx, conn: &mut PgConnection, bulk: &BulkJob, values: &B
                 auth_to_view: p.auth_to_view(),
                 auth_to_sign: p.auth_to_sign(),
                 attachments: None,
+                webcam_photo: None,
             }
         })
         .collect();

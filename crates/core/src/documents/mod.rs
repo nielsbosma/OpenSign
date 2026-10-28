@@ -216,6 +216,8 @@ pub struct PartyView {
     pub signed_at: Option<DateTime<Utc>>,
     pub declined_at: Option<DateTime<Utc>>,
     pub decline_reason: Option<String>,
+    /// The party must take a live webcam photo before signing.
+    pub webcam_photo: bool,
 }
 
 pub fn personal_number_context(party_id: Uuid) -> String {
@@ -284,8 +286,18 @@ impl PartyView {
             signed_at: row.signed_at,
             declined_at: row.declined_at,
             decline_reason: row.decline_reason.clone(),
+            webcam_photo: false,
         }
     }
+}
+
+pub async fn party_views(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid) -> Result<Vec<PartyView>> {
+    let photo = attachments::photo_parties(conn, document_id).await?;
+    Ok(parties(conn, document_id)
+        .await?
+        .iter()
+        .map(|p| PartyView { webcam_photo: photo.contains(&p.id), ..PartyView::from_row(ctx.keys(), p) })
+        .collect())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, sqlx::FromRow)]
@@ -419,7 +431,7 @@ pub async fn view(ctx: &Ctx, conn: &mut PgConnection, document: DocumentRow) -> 
         None => None,
     };
     let can_edit = can_edit(ctx, conn, &document).await?;
-    let parties = parties(conn, document.id).await?.iter().map(|p| PartyView::from_row(ctx.keys(), p)).collect();
+    let parties = party_views(ctx, conn, document.id).await?;
     let fields = fields(conn, document.id).await?;
     let files = files(conn, document.id).await?;
     let attachments = attachments::for_document(conn, document.id).await?;

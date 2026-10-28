@@ -133,6 +133,17 @@ pub fn document(state: &AppState, server: &str) -> Value {
         } }),
     );
     paths.insert(
+        "/documents/{id}/attachments/{request}".into(),
+        json!({ "get": {
+            "operationId": "documents_attachment", "tags": ["documents"],
+            "summary": "Download a file a party uploaded or the webcam photo they took. The request id is in the document's `attachments`.",
+            "parameters": [id[0], { "name": "request", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+            "responses": { "200": { "description": "The file, PDF or PNG", "content": {
+                "application/pdf": { "schema": { "type": "string", "format": "binary" } },
+                "image/png": { "schema": { "type": "string", "format": "binary" } } } }, "4XX": error_response("Refused") }
+        } }),
+    );
+    paths.insert(
         "/verify".into(),
         json!({ "post": {
             "operationId": "verify_pdf", "tags": ["verify"], "security": [],

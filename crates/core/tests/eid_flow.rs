@@ -126,6 +126,7 @@ async fn sent_document(app: &Arc<App>, sender: &Ctx, personal_number: &str) -> S
         auth_to_view: AuthMethod::SeBankid,
         auth_to_sign: AuthMethod::SeBankid,
         attachments: None,
+        webcam_photo: None,
     };
     call::<docs::SetParties>(sender, docs::SetPartiesInput { document_id: id, parties: vec![anna] }).await.unwrap();
     call::<docs::Send>(sender, docs::SendInput { id, expires_at: None }).await.unwrap();
