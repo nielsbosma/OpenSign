@@ -18,6 +18,26 @@ pub struct Discovery {
     pub authorization_endpoint: String,
     pub token_endpoint: String,
     pub jwks_uri: String,
+    #[serde(default)]
+    pub token_endpoint_auth_methods_supported: Vec<String>,
+}
+
+/// A configured OpenID Connect provider: the generic broker, or TIC Identity.
+pub struct Provider {
+    pub http: reqwest::Client,
+    pub issuer: String,
+    pub client_id: String,
+    pub client_secret: String,
+    pub scope: &'static str,
+    pub acr_values: String,
+    /// Off only for stand-ins in tests, which listen on loopback over http.
+    pub require_public: bool,
+}
+
+impl Provider {
+    pub async fn discover(&self) -> Result<Discovery> {
+        discover_checked(&self.http, &self.issuer, self.require_public).await
+    }
 }
 
 fn unavailable(message: impl Into<String>) -> AppError {
@@ -29,6 +49,10 @@ fn https(url: &str) -> bool {
 }
 
 pub async fn discover(http: &reqwest::Client, issuer: &str) -> Result<Discovery> {
+    discover_checked(http, issuer, true).await
+}
+
+async fn discover_checked(http: &reqwest::Client, issuer: &str, require_public: bool) -> Result<Discovery> {
     let issuer = issuer.trim_end_matches('/');
     let url = format!("{issuer}/.well-known/openid-configuration");
     let found: Discovery = http
@@ -43,7 +67,7 @@ pub async fn discover(http: &reqwest::Client, issuer: &str) -> Result<Discovery>
     if found.issuer.trim_end_matches('/') != issuer {
         return Err(unavailable("The eID broker names a different issuer than the one configured"));
     }
-    if ![&found.authorization_endpoint, &found.token_endpoint, &found.jwks_uri].iter().all(|u| https(u)) {
+    if require_public && ![&found.authorization_endpoint, &found.token_endpoint, &found.jwks_uri].iter().all(|u| https(u)) {
         return Err(unavailable("The eID broker's endpoints must be public https addresses"));
     }
     Ok(found)
@@ -59,6 +83,7 @@ pub struct AuthorizeRequest<'a> {
     pub state: &'a str,
     pub nonce: &'a str,
     pub verifier: &'a str,
+    pub scope: &'a str,
     pub acr_values: &'a str,
     pub login_hint: Option<&'a str>,
 }
@@ -72,7 +97,7 @@ pub fn authorize_url(discovery: &Discovery, request: &AuthorizeRequest) -> Resul
             .append_pair("response_type", "code")
             .append_pair("client_id", request.client_id)
             .append_pair("redirect_uri", request.redirect_uri)
-            .append_pair("scope", "openid")
+            .append_pair("scope", request.scope)
             .append_pair("state", request.state)
             .append_pair("nonce", request.nonce)
             .append_pair("code_challenge", &pkce_challenge(request.verifier))
@@ -98,23 +123,31 @@ pub struct Exchange<'a> {
 }
 
 pub async fn exchange(http: &reqwest::Client, discovery: &Discovery, request: &Exchange<'_>) -> Result<String> {
-    let response = http
-        .post(&discovery.token_endpoint)
-        .basic_auth(form_encode(request.client_id), Some(form_encode(request.client_secret)))
-        .form(&[
-            ("grant_type", "authorization_code"),
-            ("code", request.code),
-            ("redirect_uri", request.redirect_uri),
-            ("code_verifier", request.verifier),
-        ])
-        .send()
-        .await
-        .map_err(|e| unavailable("The eID broker is not reachable right now").with_cause(e))?;
+    let mut form = vec![
+        ("grant_type", "authorization_code"),
+        ("code", request.code),
+        ("redirect_uri", request.redirect_uri),
+        ("code_verifier", request.verifier),
+    ];
+    let mut post = http.post(&discovery.token_endpoint);
+    if client_secret_post(discovery) {
+        form.extend([("client_id", request.client_id), ("client_secret", request.client_secret)]);
+    } else {
+        post = post.basic_auth(form_encode(request.client_id), Some(form_encode(request.client_secret)));
+    }
+    let response = post.form(&form).send().await.map_err(|e| unavailable("The eID broker is not reachable right now").with_cause(e))?;
     if !response.status().is_success() {
         return Err(unavailable(format!("The eID broker refused the sign-in ({})", response.status())));
     }
     let body: Value = response.json().await.map_err(|e| unavailable("The eID broker answered in an unexpected way").with_cause(e))?;
     body["id_token"].as_str().map(str::to_string).ok_or_else(|| unavailable("The eID broker sent no ID token"))
+}
+
+/// Basic auth is the default (OpenID Connect Discovery 1.0, section 3); the secret goes in the body
+/// only for a provider that does not take Basic.
+fn client_secret_post(discovery: &Discovery) -> bool {
+    let methods = &discovery.token_endpoint_auth_methods_supported;
+    methods.iter().any(|m| m == "client_secret_post") && !methods.iter().any(|m| m == "client_secret_basic")
 }
 
 /// RFC 6749 2.3.1: client credentials are form-encoded before they go into Basic auth.
@@ -179,17 +212,21 @@ pub fn verify_id_token(token: &str, keys: &[Key], issuer: &str, client_id: &str,
 
 /// The person in the claims. Brokers name the national identity number differently.
 pub fn identity(claims: &Value) -> Option<Identity> {
-    let name = claims["name"].as_str().map(str::to_string).or_else(|| {
-        let given = claims["given_name"].as_str().unwrap_or_default();
-        let family = claims["family_name"].as_str().unwrap_or_default();
-        let full = format!("{given} {family}");
-        (!full.trim().is_empty()).then(|| full.trim().to_string())
-    })?;
+    let name = name(claims)?;
     let number = ["ssn", "nin", "socialno", "personal_number", "personalNumber", "national_id", "cprNumberIdentifier", "hetu"]
         .iter()
         .find_map(|k| claims[*k].as_str())
         .map(str::to_string);
     Some(Identity { name, personal_number: number })
+}
+
+pub fn name(claims: &Value) -> Option<String> {
+    claims["name"].as_str().filter(|n| !n.trim().is_empty()).map(|n| n.trim().to_string()).or_else(|| {
+        let given = claims["given_name"].as_str().unwrap_or_default();
+        let family = claims["family_name"].as_str().unwrap_or_default();
+        let full = format!("{given} {family}");
+        (!full.trim().is_empty()).then(|| full.trim().to_string())
+    })
 }
 
 #[cfg(test)]
@@ -246,6 +283,7 @@ mod tests {
             authorization_endpoint: "https://broker.example/authorize".into(),
             token_endpoint: "https://broker.example/token".into(),
             jwks_uri: "https://broker.example/jwks".into(),
+            token_endpoint_auth_methods_supported: Vec::new(),
         };
         let url = authorize_url(
             &discovery,
@@ -255,6 +293,7 @@ mod tests {
                 state: "s",
                 nonce: "n",
                 verifier: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+                scope: "openid",
                 acr_values: "urn:grn:authn:no:bankid",
                 login_hint: None,
             },

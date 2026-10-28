@@ -18,7 +18,7 @@ use crate::context::Ctx;
 use crate::documents::{AuthMethod, PartyRow, required_personal_number, status};
 use crate::eid::bankid::{self, BankId, Collected};
 use crate::eid::freja::{self, Freja, Outcome, User};
-use crate::eid::{Identity, oidc, same_person, se_personal_number};
+use crate::eid::{Identity, bankid_via_tic, oidc, same_person, se_personal_number, tic};
 use crate::error::{AppError, ErrorKind, Result, bad_request, conflict, not_found, too_many};
 use crate::i18n::Lang;
 use crate::service::{Access, Meta, Service};
@@ -133,10 +133,40 @@ fn provider(method: AuthMethod) -> Result<&'static str> {
 
 fn method_of(provider: &str) -> AuthMethod {
     match provider {
-        "se_bankid" => AuthMethod::SeBankid,
+        "se_bankid" | "tic" => AuthMethod::SeBankid,
         "freja" => AuthMethod::Freja,
         _ => AuthMethod::Broker,
     }
+}
+
+fn oidc_provider(ctx: &Ctx, eid: &EidSettings, provider: &str) -> Result<oidc::Provider> {
+    if provider == "tic" {
+        return tic::provider(eid, &ctx.app.http.public);
+    }
+    if !eid.broker_enabled {
+        return Err(bad_request("eID is not set up. An admin enables it in Admin settings."));
+    }
+    Ok(oidc::Provider {
+        http: ctx.app.http.public.clone(),
+        issuer: eid.broker_issuer.clone(),
+        client_id: eid.broker_client_id.clone(),
+        client_secret: eid.broker_client_secret.clone().unwrap_or_default(),
+        scope: "openid",
+        acr_values: eid.broker_acr_values.clone(),
+        require_public: true,
+    })
+}
+
+fn swedish(expected: Option<&str>, this_year: i32) -> Result<Option<String>> {
+    expected
+        .map(|n| {
+            se_personal_number(n, this_year).ok_or_else(|| {
+                bad_request(
+                    "The personal number on this party is not a Swedish one, so BankID cannot be used. Ask the sender to correct it.",
+                )
+            })
+        })
+        .transpose()
 }
 
 pub struct Start;
@@ -173,16 +203,14 @@ impl Service for Start {
             return Err(too_many("Too many identification attempts. Try again in an hour."));
         }
         let eid: EidSettings = settings(ctx, conn).await?;
+        let provider = if provider == "se_bankid" && bankid_via_tic(&eid) { "tic" } else { provider };
         let expected = required_personal_number(ctx.keys(), &party)?;
         let id = Uuid::now_v7();
         let mut secrets = Secrets { qr_start_token: None, qr_start_secret: None, nonce: None, verifier: None };
         let mut state_mac_value = None;
-        let (reference, started) = match method {
-            AuthMethod::SeBankid => {
-                let number = match expected.as_deref() {
-                    Some(n) => Some(se_personal_number(n, ctx.now.year()).ok_or_else(|| bad_request("The personal number on this party is not a Swedish one, so BankID cannot be used. Ask the sender to correct it."))?),
-                    None => None,
-                };
+        let (reference, started) = match provider {
+            "se_bankid" => {
+                let number = swedish(expected.as_deref(), ctx.now.year())?;
                 let org: OrgSettings = settings(ctx, conn).await?;
                 let organisation = if org.name.is_empty() { "OpenSign".to_string() } else { org.name };
                 let text =
@@ -202,7 +230,7 @@ impl Service for Start {
                 };
                 (Some(order.order_ref), started)
             }
-            AuthMethod::Freja => {
+            "freja" => {
                 let ssn = expected.as_deref().and_then(|n| se_personal_number(n, ctx.now.year()));
                 let user = match (&ssn, &party.email) {
                     (Some(ssn), _) => User::Ssn(ssn),
@@ -222,10 +250,11 @@ impl Service for Start {
                 (Some(auth_ref), started)
             }
             _ => {
-                if !eid.broker_enabled {
-                    return Err(bad_request("eID is not set up. An admin enables it in Admin settings."));
+                if provider == "tic" {
+                    swedish(expected.as_deref(), ctx.now.year())?;
                 }
-                let discovery = oidc::discover(&ctx.app.http.public, &eid.broker_issuer).await?;
+                let oidc = oidc_provider(ctx, &eid, provider)?;
+                let discovery = oidc.discover().await?;
                 let state = random_token();
                 let nonce = random_token();
                 let verifier = random_token();
@@ -233,12 +262,13 @@ impl Service for Start {
                 let url = oidc::authorize_url(
                     &discovery,
                     &oidc::AuthorizeRequest {
-                        client_id: &eid.broker_client_id,
+                        client_id: &oidc.client_id,
                         redirect_uri: &redirect,
                         state: &state,
                         nonce: &nonce,
                         verifier: &verifier,
-                        acr_values: &eid.broker_acr_values,
+                        scope: oidc.scope,
+                        acr_values: &oidc.acr_values,
                         login_hint: None,
                     },
                 )?;
@@ -426,8 +456,8 @@ impl Service for Status {
             let lang = Lang::of(&document.language);
             let eid: EidSettings = settings(ctx, conn).await?;
             let reference = row.reference.clone().unwrap_or_default();
-            let (identity, evidence) = match method {
-                AuthMethod::SeBankid => match BankId::from_settings(&eid)?.collect(&reference).await? {
+            let (identity, evidence) = match row.provider.as_str() {
+                "se_bankid" => match BankId::from_settings(&eid)?.collect(&reference).await? {
                     Collected::Pending { hint } => {
                         let s = secrets(ctx, &row)?;
                         let qr = match (s.qr_start_token, s.qr_start_secret) {
@@ -439,7 +469,7 @@ impl Service for Status {
                     Collected::Failed { hint } => return fail(conn, row.id, bankid::message(hint.as_deref(), true, lang)).await,
                     Collected::Complete { identity, evidence } => (identity, evidence),
                 },
-                AuthMethod::Freja => match Freja::from_settings(&eid)?.result(&reference).await? {
+                "freja" => match Freja::from_settings(&eid)?.result(&reference).await? {
                     Outcome::Pending => {
                         return Ok(pending(
                             if lang == Lang::Sv { "Bekräfta i Freja eID-appen." } else { "Confirm in the Freja eID app." },
@@ -478,7 +508,7 @@ impl Service for Status {
             proof.push_str(&format!(", personal number {number}"));
         }
         let eid: EidSettings = settings(ctx, conn).await?;
-        if (method == AuthMethod::SeBankid && eid.bankid_test) || (method == AuthMethod::Freja && eid.freja_test) {
+        if (row.provider == "se_bankid" && eid.bankid_test) || (method == AuthMethod::Freja && eid.freja_test) {
             proof.push_str(" (TEST environment, not a real identification)");
         }
         Ok(EidStatus {
@@ -525,16 +555,19 @@ impl Service for Cancel {
     }
 }
 
-/// The broker sends the browser back here. Returns the eID session to resume on the signing page.
+type CallbackRow = (Uuid, Uuid, String, Option<String>, DateTime<Utc>);
+
+/// The broker or TIC Identity sends the browser back here. Returns the eID session to resume on the
+/// signing page.
 pub async fn broker_callback(ctx: &Ctx, conn: &mut PgConnection, state: &str, code: Option<&str>, error: Option<&str>) -> Result<Uuid> {
-    let row: Option<(Uuid, Uuid, Option<String>, DateTime<Utc>)> = sqlx::query_as(
-        "update eid_sessions set state_mac = null where state_mac = $1 and provider = 'broker' and status = 'pending'
-         returning id, party_id, secrets, expires_at",
+    let row: Option<CallbackRow> = sqlx::query_as(
+        "update eid_sessions set state_mac = null where state_mac = $1 and provider in ('broker', 'tic') and status = 'pending'
+         returning id, party_id, provider, secrets, expires_at",
     )
     .bind(state_mac(ctx, state))
     .fetch_optional(&mut *conn)
     .await?;
-    let Some((id, party_id, sealed, expires_at)) = row else {
+    let Some((id, party_id, provider, sealed, expires_at)) = row else {
         return Err(bad_request("This identification is not valid or was already used. Go back to the signing link and start again."));
     };
     let finish = async {
@@ -558,33 +591,30 @@ pub async fn broker_callback(ctx: &Ctx, conn: &mut PgConnection, state: &str, co
             return Err(AppError::internal(anyhow::anyhow!("broker session without nonce")));
         };
         let eid: EidSettings = settings(ctx, conn).await?;
-        let http = &ctx.app.http.public;
-        let discovery = oidc::discover(http, &eid.broker_issuer).await?;
+        let oidc = oidc_provider(ctx, &eid, &provider)?;
+        let discovery = oidc.discover().await?;
         let id_token = oidc::exchange(
-            http,
+            &oidc.http,
             &discovery,
             &oidc::Exchange {
-                client_id: &eid.broker_client_id,
-                client_secret: eid.broker_client_secret.as_deref().unwrap_or_default(),
+                client_id: &oidc.client_id,
+                client_secret: &oidc.client_secret,
                 code,
                 verifier: &verifier,
                 redirect_uri: &redirect_uri(ctx),
             },
         )
         .await?;
-        let keys = oidc::keys(http, &discovery).await?;
-        let claims = oidc::verify_id_token(
-            &id_token,
-            &keys,
-            &discovery.issuer,
-            &eid.broker_client_id,
-            &nonce,
-            &eid.broker_acr_values,
-            ctx.now.timestamp(),
-        )?;
-        let identity = oidc::identity(&claims).ok_or_else(|| bad_request("The eID broker did not say who you are"))?;
-        let evidence = json!({ "provider": "broker", "issuer": discovery.issuer, "idToken": id_token });
-        if let Err(message) = complete(ctx, conn, &party, id, "broker", &identity, &evidence).await? {
+        let keys = oidc::keys(&oidc.http, &discovery).await?;
+        let claims =
+            oidc::verify_id_token(&id_token, &keys, &discovery.issuer, &oidc.client_id, &nonce, &oidc.acr_values, ctx.now.timestamp())?;
+        let identity = if provider == "tic" {
+            tic::identity(&claims, ctx.now.year()).ok_or_else(|| bad_request("TIC Identity did not return a Swedish personal number"))?
+        } else {
+            oidc::identity(&claims).ok_or_else(|| bad_request("The eID broker did not say who you are"))?
+        };
+        let evidence = json!({ "provider": provider, "issuer": discovery.issuer, "idToken": id_token });
+        if let Err(message) = complete(ctx, conn, &party, id, &provider, &identity, &evidence).await? {
             return Err(bad_request(message));
         }
         Ok(())
