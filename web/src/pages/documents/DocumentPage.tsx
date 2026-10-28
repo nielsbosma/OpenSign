@@ -1,4 +1,17 @@
-import { ArrowLeft, Download, HandHelping, Link2, MoreHorizontal, Paperclip, Pencil, Plus, Send, Trash2, UserPlus } from 'lucide-react';
+import {
+  ArrowLeft,
+  Download,
+  HandHelping,
+  Link2,
+  MoreHorizontal,
+  Paperclip,
+  Pencil,
+  Plus,
+  Send,
+  Trash2,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
@@ -33,8 +46,10 @@ import {
   useApiMutation,
 } from '@/lib/api';
 import { AUTH_LABELS, DELIVERY_LABELS, formatBytes, formatDateTime, LANGUAGES, PARTY_STATUS_LABELS, saveBytes } from '@/lib/format';
+import { useSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
 import { ActivityPanel } from './ActivityPanel';
+import { BulkSendDialog } from './BulkSendDialog';
 import { StatusBadge } from './DocumentsPage';
 import { FieldLayer } from './FieldLayer';
 import { clamp, type EditableField, FIELD_KINDS, partyColor, toEditable, toInput } from './fields';
@@ -410,6 +425,8 @@ export function DocumentPage() {
   const [placingFor, setPlacingFor] = useState<string | null>(null);
   const [partyDialog, setPartyDialog] = useState<{ open: boolean; party: PartyView | null }>({ open: false, party: null });
   const [sending, setSending] = useState(false);
+  const [bulkSending, setBulkSending] = useState(false);
+  const { can } = useSession();
   const [links, setLinks] = useState<SignerLink[]>([]);
   const [uploading, setUploading] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -523,6 +540,11 @@ export function DocumentPage() {
           {doc.isTemplate && (
             <Button onClick={() => fromTemplate.mutate({ title: doc.title, templateId: doc.id })} disabled={fromTemplate.isPending}>
               <Plus /> Use Template
+            </Button>
+          )}
+          {doc.isTemplate && can('documents.create') && (
+            <Button variant="outline" onClick={() => setBulkSending(true)}>
+              <Users /> Bulk Send
             </Button>
           )}
           {draft && !doc.isTemplate && (
@@ -748,6 +770,7 @@ export function DocumentPage() {
         onSave={(p) => saveParties(partyDialog.party ? allParties().map((x) => (x.id === p.id ? p : x)) : [...allParties(), p])}
       />
       <SendDialog doc={doc} open={sending} onOpenChange={setSending} onSent={setLinks} />
+      {doc.isTemplate && <BulkSendDialog templateId={doc.id} templateTitle={doc.title} open={bulkSending} onOpenChange={setBulkSending} />}
       <LinksDialog links={links} onClose={() => setLinks([])} />
       <Dialog open={canceling} onOpenChange={setCanceling}>
         <DialogContent>

@@ -10,6 +10,7 @@ use opensign_core::context::{Actor, App, Credential, Ctx, Surface};
 use opensign_core::documents::attachments::AttachmentRequestInput;
 use opensign_core::documents::{AuthMethod, Delivery, FieldKind, PartyRole, parties, signer_token};
 use opensign_core::error::ErrorKind;
+use opensign_core::services::bulk;
 use opensign_core::services::documents::{self as docs, FieldInput, PartyInput, Version};
 use opensign_core::services::signing::{self, FieldValue, SignatureInput, sms_code_hash};
 use opensign_core::settings::SigningSettings;
@@ -516,4 +517,78 @@ async fn in_person_signing_issues_a_fresh_link_for_the_party_in_turn() {
     let outsider = user(&app, "Val Viewer", Role::Viewer).await;
     let refused = call::<docs::SignInPerson>(&outsider, docs::InPersonInput { document_id: id, party_id: fia }).await;
     assert!(refused.is_err());
+}
+
+#[tokio::test]
+async fn bulk_send_creates_one_document_per_row() {
+    let Some(app) = app().await else { return };
+    let sender = user(&app, "Bea Bulk", Role::Manager).await;
+    let create = serde_json::from_value::<docs::CreateInput>(serde_json::json!({ "title": "Lease", "isTemplate": true })).unwrap();
+    let template = call::<docs::Create>(&sender, create).await.unwrap().document.id;
+    call::<docs::Upload>(
+        &sender,
+        docs::UploadInput { document_id: template, name: "lease.pdf".into(), content_base64: B64.encode(sample_pdf(1)) },
+    )
+    .await
+    .unwrap();
+    let tenant = call::<docs::SetParties>(
+        &sender,
+        docs::SetPartiesInput {
+            document_id: template,
+            parties: vec![party("Tenant", PartyRole::Signer, Delivery::Email, AuthMethod::Standard)],
+        },
+    )
+    .await
+    .unwrap()[0]
+        .id;
+    let mut address = field(None, FieldKind::Text, 0, 0.2);
+    address.label = Some("Address".into());
+    call::<docs::SetFields>(
+        &sender,
+        docs::SetFieldsInput { document_id: template, fields: vec![field(Some(tenant), FieldKind::Signature, 0, 0.7), address] },
+    )
+    .await
+    .unwrap();
+
+    let csv = "Namn;E-post;Address;Kundnummer\nGöran Åberg;goran@example.test;Storgatan 1;K-1\nHelga Ek;not-an-email;Lillgatan 2;K-2\n";
+    let file = |csv: &str| bulk::FileInput { template_id: template, file_name: "tenants.csv".into(), content_base64: B64.encode(csv) };
+    let preview = call::<bulk::Preview>(&sender, bulk::PreviewInput { file: file(csv), use_ai: false }).await.unwrap();
+    let targets: Vec<&str> = preview.mapping.iter().map(|m| m.target.as_str()).collect();
+    assert_eq!(targets, ["party.0.name", "party.0.email", "field.Address", "externalId"]);
+    assert_eq!(preview.row_count, 2);
+    assert_eq!(preview.problems.len(), 1, "Helga's email is caught before anything is sent");
+    assert_eq!(preview.problems[0].row, 3);
+
+    let refused =
+        call::<bulk::Start>(&sender, bulk::StartInput { file: file(csv), mapping: preview.mapping.clone(), title_pattern: None }).await;
+    assert_eq!(kind(refused), ErrorKind::BadRequest);
+
+    let fixed = csv.replace("not-an-email", "helga@example.test");
+    let started = call::<bulk::Start>(
+        &sender,
+        bulk::StartInput { file: file(&fixed), mapping: preview.mapping, title_pattern: Some("Lease {Address}".into()) },
+    )
+    .await
+    .unwrap();
+    assert_eq!((started.total, started.status.as_str()), (2, "queued"));
+    worker::drain(&app).await.unwrap();
+
+    let done = call::<bulk::Get>(&sender, bulk::BulkIdInput { id: started.id }).await.unwrap();
+    assert_eq!(
+        (done.status.as_str(), done.sent, done.failed),
+        ("done", 2, 0),
+        "{:?}",
+        done.rows.iter().map(|r| &r.error).collect::<Vec<_>>()
+    );
+    let first = call::<docs::Get>(&sender, docs::IdInput { id: done.rows[0].document_id.unwrap() }).await.unwrap();
+    assert_eq!(first.document.title, "Lease Storgatan 1");
+    assert_eq!(first.document.status, "pending");
+    assert_eq!(first.document.external_id.as_deref(), Some("K-1"));
+    assert_eq!(first.parties[0].email.as_deref(), Some("goran@example.test"));
+    assert_eq!(first.fields.iter().find(|f| f.label == "Address").and_then(|f| f.value.as_deref()), Some("Storgatan 1"));
+    let leftover: i64 = sqlx::query_scalar("select count(*) from bulk_rows where data is not null").fetch_one(&app.db).await.unwrap();
+    assert_eq!(leftover, 0, "row data is dropped once a row is handled");
+
+    let other = user(&app, "Olle Other", Role::Sender).await;
+    assert!(call::<bulk::Get>(&other, bulk::BulkIdInput { id: started.id }).await.is_err());
 }

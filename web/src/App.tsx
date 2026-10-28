@@ -9,6 +9,7 @@ import { LoginPage } from '@/pages/auth/LoginPage';
 import { ForgotPasswordPage, ResetPasswordPage } from '@/pages/auth/PasswordPages';
 import { TwoFactorRequiredPage } from '@/pages/auth/TwoFactorRequiredPage';
 import { ConsentPage } from '@/pages/ConsentPage';
+import { BulkSendPage } from '@/pages/documents/BulkSendPage';
 import { DocumentPage } from '@/pages/documents/DocumentPage';
 import { DocumentsPage } from '@/pages/documents/DocumentsPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
@@ -76,6 +77,7 @@ export function App() {
         <Route path="/documents" element={<DocumentsPage templates={false} />} />
         <Route path="/templates" element={<DocumentsPage templates />} />
         <Route path="/documents/:id" element={<DocumentPage />} />
+        <Route path="/bulk/:id" element={<BulkSendPage />} />
         <Route path="/settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="/settings/account" replace />} />
           <Route path="account" element={<AccountPage />} />
