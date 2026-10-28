@@ -160,7 +160,9 @@ export function AppShell() {
             </Tooltip>
           </div>
         )}
-        <div className={cn('mx-auto w-full max-w-6xl pt-3.5 pb-10 pr-14 sm:pr-16', docked ? 'pl-4 sm:pl-6 lg:pl-8' : 'pl-14 sm:pl-16')}>
+        <div
+          className={cn('mx-auto w-full max-w-6xl pt-6 pb-10 lg:pt-10 pr-14 sm:pr-16', docked ? 'pl-4 sm:pl-6 lg:pl-8' : 'pl-14 sm:pl-16')}
+        >
           <Outlet />
         </div>
       </main>
