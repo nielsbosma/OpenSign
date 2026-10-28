@@ -17,6 +17,23 @@ use crate::service::{Access, Meta, Service, can_access};
 use crate::settings::AiSettings;
 
 const MAX_ROUNDS: usize = 8;
+
+/// Tools the assistant never gets, even when the user may call them. Tool results carry text other
+/// people wrote (document titles, party names, decline reasons), so an instruction hidden there must
+/// not be able to change who has access, where events go, or hand out signing links.
+const NOT_FOR_ASSISTANT: &[&str] = &[
+    "users.invite",
+    "users.update",
+    "users.revoke_invite",
+    "webhooks.create",
+    "webhooks.delete",
+    "webhooks.test",
+    "api_keys.revoke",
+    "documents.signing_link",
+    "documents.share",
+    "settings.send_test_email",
+    "ai.test",
+];
 const MAX_DOCUMENT_CHARS: usize = 180_000;
 
 async fn settings(ctx: &Ctx, conn: &mut PgConnection) -> Result<AiSettings> {
@@ -122,7 +139,10 @@ impl Service for Chat {
         let mut tool_ctx = ctx.clone();
         tool_ctx.surface = Surface::Ai;
         let registry = super::registry();
-        let available: Vec<_> = registry.iter().filter(|s| s.meta().tool && can_access(s.meta().access, ctx)).collect();
+        let available: Vec<_> = registry
+            .iter()
+            .filter(|s| s.meta().tool && !NOT_FOR_ASSISTANT.contains(&s.meta().name) && can_access(s.meta().access, ctx))
+            .collect();
         let tools: Vec<Tool> = available
             .iter()
             .map(|s| {
