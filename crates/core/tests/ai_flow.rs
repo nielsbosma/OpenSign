@@ -4,7 +4,8 @@ use std::sync::{Arc, Mutex};
 
 use axum::Json;
 use axum::extract::State;
-use axum::routing::post;
+use axum::http::HeaderMap;
+use axum::routing::{get, post};
 use base64::Engine;
 use opensign_core::auth::load_session;
 use opensign_core::call;
@@ -40,6 +41,16 @@ async fn fake_llm(State(seen): State<Seen>, Json(body): Json<Value>) -> Json<Val
         ] } }],
         "usage": usage
     }))
+}
+
+async fn fake_models(State(seen): State<Seen>, headers: HeaderMap) -> Json<Value> {
+    let auth = headers.get("authorization").and_then(|h| h.to_str().ok()).unwrap_or_default();
+    seen.lock().unwrap().push(json!({ "models": auth }));
+    Json(json!({ "data": [
+        { "id": "older-model", "created": 1 },
+        { "id": "text-embedding-small", "created": 3 },
+        { "id": "test-model", "created": 2 },
+    ] }))
 }
 
 async fn admin(app: &Arc<App>) -> Ctx {
@@ -87,7 +98,11 @@ async fn assistant_and_review() {
     let seen: Seen = Arc::default();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
-    let server = axum::Router::new().route("/v1/chat/completions", post(fake_llm)).with_state(seen.clone());
+    let server = axum::Router::new()
+        .route("/v1/chat/completions", post(fake_llm))
+        .route("/v1/models", get(fake_models))
+        .route("/other/v1/models", get(fake_models))
+        .with_state(seen.clone());
     tokio::spawn(async move { axum::serve(listener, server).await.unwrap() });
 
     let ada = admin(&app).await;
@@ -101,6 +116,15 @@ async fn assistant_and_review() {
     let values = json!({ "provider": "openai-compatible", "model": "test-model", "apiKey": "sk-test", "baseUrl": format!("http://127.0.0.1:{port}/v1") });
     call::<admin::UpdateSettings>(&ada, admin::UpdateInput { group: admin::Group::Ai, values }).await.unwrap();
     assert!(call::<ai::GetStatus>(&ada, Empty {}).await.unwrap().configured);
+
+    let none = || ai::ModelsInput { provider: None, base_url: None, api_key: None };
+    let models = call::<ai::ListModels>(&ada, none()).await.unwrap();
+    let ids: Vec<&str> = models.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(ids, ["test-model", "older-model"], "chat models only, newest first");
+    let elsewhere = ai::ModelsInput { base_url: Some(format!("http://127.0.0.1:{port}/other/v1")), ..none() };
+    call::<ai::ListModels>(&ada, elsewhere).await.unwrap();
+    let auths: Vec<Value> = seen.lock().unwrap().drain(..).map(|v| v["models"].clone()).collect();
+    assert_eq!(auths, [json!("Bearer sk-test"), json!("")], "the saved key never goes to an unsaved address");
 
     let out = call::<ai::Chat>(&ada, chat("Create a draft called Via AI")).await.unwrap();
     assert_eq!(out.reply, "Created the draft.");

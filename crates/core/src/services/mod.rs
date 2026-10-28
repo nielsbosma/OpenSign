@@ -130,6 +130,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<ai::Review>(),
         erase::<ai::LatestReview>(),
         erase::<ai::TestProvider>(),
+        erase::<ai::ListModels>(),
         erase::<ai::GetUsage>(),
     ]
 }

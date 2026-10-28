@@ -165,7 +165,7 @@ async fn update<G: SettingsGroup>(ctx: &Ctx, conn: &mut PgConnection, patch: &Va
     Ok(GroupView { values: after, pinned })
 }
 
-fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
+pub(crate) fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
     let value = serde_json::to_value(group).map_err(AppError::internal)?;
     let url = |field: &str| -> Result<()> {
         if let Some(u) = value.get(field).and_then(Value::as_str).filter(|u| !u.is_empty()) {
