@@ -1,5 +1,5 @@
-import { CheckCircle2, Download, FileSignature, HandHelping, ShieldCheck, XCircle } from 'lucide-react';
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, Download, FileSignature, HandHelping, Languages, ShieldCheck, XCircle } from 'lucide-react';
+import { type FormEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Logo, Spinner } from '@/components/common';
 import { PdfLoading, PdfPages, usePdf } from '@/components/PdfPages';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiError, type AttachmentRequest, type AuthMethod, call, errorMessage, fetchPdf, type SignerView } from '@/lib/api';
 import { saveBytes } from '@/lib/format';
@@ -15,7 +16,7 @@ import { FormError } from '../auth/AuthLayout';
 import { AttachmentUploads } from './AttachmentUploads';
 import { EidIdentify } from './EidIdentify';
 import { type Signature, SignaturePad } from './SignaturePad';
-import { TextsContext, textsFor, useTexts } from './texts';
+import { isRtl, LanguageContext, languageFor, SIGNER_LANGUAGES, TextsContext, textsFor, useTexts } from './texts';
 
 /**
  * The page behind a signing link. The token lives in the URL fragment, so it never reaches a server log or a Referer
@@ -75,10 +76,55 @@ function safeColor(color?: string) {
   return color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : undefined;
 }
 
+const LANGUAGE_KEY = 'opensign-sign-language';
+
+/** A language the signer picked on this page, for this tab and this link only. */
+function useChosenLanguage(token: string) {
+  const [chosen, setChosen] = useState<string | null>(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(LANGUAGE_KEY) ?? 'null') as { token: string; code: string } | null;
+      return saved?.token === token ? saved.code : null;
+    } catch {
+      return null;
+    }
+  });
+  const choose = useCallback(
+    (code: string) => {
+      setChosen(code);
+      try {
+        sessionStorage.setItem(LANGUAGE_KEY, JSON.stringify({ token, code }));
+      } catch {}
+    },
+    [token],
+  );
+  return [chosen, choose] as const;
+}
+
+function LanguagePicker() {
+  const t = useTexts();
+  const { code, choose } = useContext(LanguageContext);
+  return (
+    <Select value={code} onValueChange={choose}>
+      <SelectTrigger size="sm" aria-label={t.language}>
+        <Languages />
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {SIGNER_LANGUAGES.map(([c, name]) => (
+          <SelectItem key={c} value={c} lang={c} dir={isRtl(c) ? 'rtl' : 'ltr'}>
+            {name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function Shell({ view, children }: { view?: SignerView; children: React.ReactNode }) {
   const t = useTexts();
+  const { code } = useContext(LanguageContext);
   return (
-    <div className="min-h-svh bg-muted/40" lang={view?.document.language}>
+    <div className="min-h-svh bg-muted/40" lang={code} dir={isRtl(code) ? 'rtl' : 'ltr'}>
       <header className="border-b bg-background">
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4">
           <Logo className="size-6" />
@@ -88,7 +134,8 @@ function Shell({ view, children }: { view?: SignerView; children: React.ReactNod
               <div className="truncate text-xs text-muted-foreground">{t.from(view.document.sender, view.document.organisation)}</div>
             )}
           </div>
-          <ShieldCheck className="size-4 text-success" aria-label={t.secureConnection} />
+          <LanguagePicker />
+          <ShieldCheck className="size-4 shrink-0 text-success" aria-label={t.secureConnection} />
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
@@ -186,17 +233,22 @@ function Identify({
 }
 
 export function SignPage() {
+  const token = useSigningToken();
   const [language, setLanguage] = useState<string>();
+  const [chosen, choose] = useChosenLanguage(token);
+  const code = languageFor(chosen ?? language);
+  const choice = useMemo(() => ({ code, choose }), [code, choose]);
   return (
-    <TextsContext.Provider value={textsFor(language)}>
-      <SigningFlow onLanguage={setLanguage} />
-    </TextsContext.Provider>
+    <LanguageContext.Provider value={choice}>
+      <TextsContext.Provider value={textsFor(code)}>
+        <SigningFlow token={token} onLanguage={setLanguage} />
+      </TextsContext.Provider>
+    </LanguageContext.Provider>
   );
 }
 
-function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void }) {
+function SigningFlow({ token, onLanguage }: { token: string; onLanguage: (language: string) => void }) {
   const t = useTexts();
-  const token = useSigningToken();
   const resume = useEidResume();
   const [session, setSession] = useSignerSession(token);
   const [view, setView] = useState<SignerView>();
@@ -364,74 +416,77 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
           {view.document.message && (
-            <div className="mb-4 rounded-lg border bg-background p-4 whitespace-pre-line">{view.document.message}</div>
+            <div dir="auto" className="mb-4 rounded-lg border bg-background p-4 whitespace-pre-line">{view.document.message}</div>
           )}
-          {pdf.pages ? (
-            <PdfPages
-              pages={pdf.pages}
-              overlay={(page) => (
-                <div className="pointer-events-none absolute inset-0">
-                  {view.fields
-                    .filter((f) => f.page === page)
-                    .map((f) => {
-                      const mine = f.partyId === view.party.id;
-                      const style = {
-                        left: `${f.x * 100}%`,
-                        top: `${f.y * 100}%`,
-                        width: `${f.width * 100}%`,
-                        height: `${f.height * 100}%`,
-                      };
-                      if (!mine) return null;
-                      if (canAct && f.kind === 'checkbox') {
-                        return (
-                          <label key={f.id} className="pointer-events-auto absolute flex items-center justify-center" style={style}>
-                            <Checkbox
-                              checked={values[f.id] === 'true'}
-                              onCheckedChange={(c) => setValues({ ...values, [f.id]: c ? 'true' : 'false' })}
-                              aria-label={f.label || t.checkbox}
+          <div dir="ltr">
+            {pdf.pages ? (
+              <PdfPages
+                pages={pdf.pages}
+                overlay={(page) => (
+                  <div className="pointer-events-none absolute inset-0">
+                    {view.fields
+                      .filter((f) => f.page === page)
+                      .map((f) => {
+                        const mine = f.partyId === view.party.id;
+                        const style = {
+                          left: `${f.x * 100}%`,
+                          top: `${f.y * 100}%`,
+                          width: `${f.width * 100}%`,
+                          height: `${f.height * 100}%`,
+                        };
+                        if (!mine) return null;
+                        if (canAct && f.kind === 'checkbox') {
+                          return (
+                            <label key={f.id} className="pointer-events-auto absolute flex items-center justify-center" style={style}>
+                              <Checkbox
+                                checked={values[f.id] === 'true'}
+                                onCheckedChange={(c) => setValues({ ...values, [f.id]: c ? 'true' : 'false' })}
+                                aria-label={f.label || t.checkbox}
+                              />
+                            </label>
+                          );
+                        }
+                        if (canAct && ['text', 'initials', 'company'].includes(f.kind)) {
+                          return (
+                            <input
+                              key={f.id}
+                              dir="auto"
+                              aria-label={f.label || f.kind}
+                              placeholder={f.label || (f.kind === 'initials' ? t.initials : f.kind === 'company' ? t.company : t.text)}
+                              value={values[f.id] ?? (f.kind === 'company' ? (view.party.company ?? '') : '')}
+                              onChange={(e) => setValues({ ...values, [f.id]: e.target.value })}
+                              className="pointer-events-auto absolute rounded-[3px] border border-primary bg-primary/10 px-1 text-[11px] text-zinc-900 outline-none focus:bg-white"
+                              style={style}
                             />
-                          </label>
-                        );
-                      }
-                      if (canAct && ['text', 'initials', 'company'].includes(f.kind)) {
+                          );
+                        }
                         return (
-                          <input
+                          <div
                             key={f.id}
-                            aria-label={f.label || f.kind}
-                            placeholder={f.label || (f.kind === 'initials' ? t.initials : f.kind === 'company' ? t.company : t.text)}
-                            value={values[f.id] ?? (f.kind === 'company' ? (view.party.company ?? '') : '')}
-                            onChange={(e) => setValues({ ...values, [f.id]: e.target.value })}
-                            className="pointer-events-auto absolute rounded-[3px] border border-primary bg-primary/10 px-1 text-[11px] text-zinc-900 outline-none focus:bg-white"
+                            className={cn(
+                              'absolute flex items-center rounded-[3px] border px-1 text-[10px] text-zinc-700',
+                              canAct ? 'border-primary bg-primary/10' : 'border-transparent',
+                            )}
                             style={style}
-                          />
+                          >
+                            {canAct &&
+                              (f.kind === 'signature'
+                                ? t.yourSignature
+                                : f.kind === 'name'
+                                  ? view.party.name
+                                  : f.kind === 'date'
+                                    ? t.dateOfSigning
+                                    : f.kind)}
+                          </div>
                         );
-                      }
-                      return (
-                        <div
-                          key={f.id}
-                          className={cn(
-                            'absolute flex items-center rounded-[3px] border px-1 text-[10px] text-zinc-700',
-                            canAct ? 'border-primary bg-primary/10' : 'border-transparent',
-                          )}
-                          style={style}
-                        >
-                          {canAct &&
-                            (f.kind === 'signature'
-                              ? t.yourSignature
-                              : f.kind === 'name'
-                                ? view.party.name
-                                : f.kind === 'date'
-                                  ? t.dateOfSigning
-                                  : f.kind)}
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-            />
-          ) : (
-            <PdfLoading error={pdf.error} />
-          )}
+                      })}
+                  </div>
+                )}
+              />
+            ) : (
+              <PdfLoading error={pdf.error} />
+            )}
+          </div>
         </div>
         <aside className="lg:sticky lg:top-6 lg:self-start">
           <div className="grid gap-4 rounded-lg border bg-background p-5">

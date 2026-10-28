@@ -2,6 +2,7 @@ use serde_json::json;
 
 use crate::context::App;
 use crate::error::{AppError, ErrorKind, Result};
+use crate::i18n::Lang;
 use crate::settings::{EmailSettings, OrgSettings};
 
 pub fn escape(text: &str) -> String {
@@ -33,6 +34,7 @@ pub struct Message {
     pub button: Option<(String, String)>,
     pub footer: Option<String>,
     pub attachments: Vec<Attachment>,
+    pub lang: Lang,
 }
 
 pub struct Attachment {
@@ -65,7 +67,9 @@ pub fn render(message: &Message, org: &OrgSettings) -> Rendered {
         };
     let org_name = if org.name.is_empty() { "OpenSign" } else { org.name.as_str() };
     let mut html = format!(
-        r#"<!doctype html><html><body style="margin:0;background:#f5f5f4;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1c1917"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px"><table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid #e7e5e4;border-radius:12px"><tr><td style="padding:32px"><p style="margin:0 0 24px;font-weight:600">{}</p>"#,
+        r#"<!doctype html><html lang="{}" dir="{}"><body style="margin:0;background:#f5f5f4;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1c1917"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px"><table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid #e7e5e4;border-radius:12px"><tr><td style="padding:32px"><p style="margin:0 0 24px;font-weight:600">{}</p>"#,
+        message.lang.code(),
+        if message.lang.rtl() { "rtl" } else { "ltr" },
         escape(org_name)
     );
     let mut text = String::new();
@@ -180,6 +184,7 @@ mod tests {
                 button: Some(("Sign".into(), "javascript:alert(1)".into())),
                 footer: None,
                 attachments: vec![],
+                lang: crate::i18n::Lang::En,
             },
             &org,
         );

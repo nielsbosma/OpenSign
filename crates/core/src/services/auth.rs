@@ -436,6 +436,7 @@ impl Service for RequestPasswordReset {
                 button: Some(("Choose a New Password".into(), link)),
                 footer: Some("If you did not ask for this, ignore this email; your password stays the same.".into()),
                 attachments: vec![],
+                lang: crate::i18n::Lang::En,
             },
         )
         .await;

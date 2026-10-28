@@ -307,6 +307,7 @@ impl Service for SendTestEmail {
                 button: None,
                 footer: None,
                 attachments: vec![],
+                lang: crate::i18n::Lang::En,
             },
         )
         .await?;

@@ -371,7 +371,7 @@ export type RowProblem = {
 export type Target = {
   /** The template party it belongs to, or "Document". */
   group: string;
-  /** `party.<n>.<name|email|phone|company|personalNumber>`, `field.<label>`, `title` or `externalId`. */
+  /** `party.<n>.<name|email|phone|company|personalNumber|language>`, `field.<label>`, `title` or `externalId`. */
   key: string;
   label: string;
 };
@@ -467,6 +467,8 @@ export type PartyView = {
   delivery: string;
   email?: string | null;
   id: string;
+  /** What this party reads, if not the document's language. */
+  language?: string | null;
   name: string;
   notifiedAt?: string | null;
   personalNumber?: string | null;
@@ -537,7 +539,7 @@ export type DocumentsCreateInput = {
   externalId?: string | null;
   /** Create a reusable template instead of a document. */
   isTemplate?: boolean;
-  /** What signers see and receive: `en` or `sv`. Defaults to the template's, then the organisation's. */
+  /** What signers see and receive unless a party has its own: en, zh, hi, es, fr, ar, bn, pt, ru, ur or sv. Defaults to the template's, then the organisation's. */
   language?: string | null;
   message?: string | null;
   metadata?: unknown;
@@ -726,6 +728,8 @@ export type PartyInput = {
   email?: string | null;
   /** Keep an existing party (and its fields) by passing its id. */
   id?: string | null;
+  /** The language of this party's emails, SMS and signing page, if not the document's: en, zh, hi, es, fr, ar, bn, pt, ru, ur or sv. Leave out to use the document's. */
+  language?: string | null;
   name: string;
   /** A national id number to match against the eID result, e.g. a Swedish personnummer. Stored encrypted. Leave it out (or send the masked value) to keep the stored one; send "" to remove it. */
   personalNumber?: string | null;

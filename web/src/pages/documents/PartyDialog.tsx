@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { AttachmentRequest, AttachmentRequestInput, AuthMethod, Delivery, PartyInput, PartyRole, PartyView } from '@/lib/api';
-import { AUTH_LABELS, DELIVERY_LABELS } from '@/lib/format';
+import { AUTH_LABELS, DELIVERY_LABELS, LANGUAGES, languageName } from '@/lib/format';
 
 const ROLES: Record<PartyRole, string> = { signer: 'Signs', approver: 'Approves', viewer: 'Receives a copy' };
 const VIEW_AUTH: AuthMethod[] = ['none', 'sms_pin', 'se_bankid', 'freja', 'broker'];
@@ -27,6 +27,7 @@ export function partyToInput(p: PartyView, requests?: AttachmentRequest[]): Part
     authToView: p.authToView as AuthMethod,
     authToSign: p.authToSign as AuthMethod,
     signOrder: p.signOrder,
+    language: p.language ?? null,
     attachments: requests
       ?.filter((r) => r.partyId === p.id)
       .map((r) => ({ name: r.name, description: r.description, required: r.required })),
@@ -110,6 +111,7 @@ export function PartyDialog({
   onOpenChange,
   onSave,
   available,
+  documentLanguage,
 }: {
   party: PartyInput | null;
   maskedNumber?: string | null;
@@ -119,6 +121,7 @@ export function PartyDialog({
   onSave: (party: PartyInput) => void;
   /** Methods set up on this server; a party keeps a method it already has. */
   available: AuthMethod[];
+  documentLanguage: string;
 }) {
   const [p, setP] = useState<PartyInput>({ name: '' });
   useEffect(() => {
@@ -180,6 +183,13 @@ export function PartyDialog({
             </Field>
             <Field label="Identify to Sign">
               <Choice value={p.authToSign ?? 'standard'} onChange={(authToSign) => set({ authToSign })} options={authOptions(SIGN_AUTH)} />
+            </Field>
+            <Field label="Language" hint="Their emails, SMS and signing page.">
+              <Choice
+                value={p.language ?? 'document'}
+                onChange={(language) => set({ language: language === 'document' ? null : language })}
+                options={[['document', `Same as Document (${languageName(documentLanguage)})`], ...LANGUAGES]}
+              />
             </Field>
             {needsNumber && (
               <Field
