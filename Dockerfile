@@ -12,6 +12,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY web/package.json web/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --filter @opensign/web
 COPY web web
+COPY docs docs
 RUN pnpm --filter @opensign/web build
 
 FROM rust:1.99-slim AS server

@@ -6,6 +6,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
+- Documentation at `/docs` on every install, public and searchable, rendered from the Markdown in `docs/`. The app links to it from the sidebar, settings pages, the document list and the party dialog.
 - REST routes for bulk send (`/bulk-sends`, with `/bulk-sends/preview` for column mapping), legal hold (`PUT /documents/{id}/legal-hold`), the retention preview and system version and status, all in the OpenAPI document.
 - API Explorer: browse every REST endpoint with its schemas, send live requests as yourself or with an API key, and copy the call as curl, JavaScript or Python.
 

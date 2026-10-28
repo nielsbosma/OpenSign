@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { lazy, type ReactNode, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router';
 import { Spinner } from '@/components/common';
 import { AppShell } from '@/components/layout/AppShell';
@@ -25,6 +25,8 @@ import { UsersPage } from '@/pages/settings/UsersPage';
 import { WebhooksPage } from '@/pages/settings/WebhooksPage';
 import { SignPage } from '@/pages/sign/SignPage';
 import { VerifyPage } from '@/pages/VerifyPage';
+
+const DocsPage = lazy(() => import('@/pages/docs/DocsPage').then((m) => ({ default: m.DocsPage })));
 
 function FullPageSpinner() {
   return (
@@ -60,6 +62,14 @@ export function App() {
       <Route path="/invite" element={<InvitePage />} />
       <Route path="/sign" element={<SignPage />} />
       <Route path="/verify" element={<VerifyPage />} />
+      <Route
+        path="/docs/*"
+        element={
+          <Suspense fallback={<FullPageSpinner />}>
+            <DocsPage />
+          </Suspense>
+        }
+      />
       <Route
         path="/oauth/consent"
         element={

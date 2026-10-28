@@ -1,5 +1,18 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowUpCircle, Braces, FileStack, FileText, LogOut, Menu, Moon, Settings, ShieldCheck, Sparkles, Sun } from 'lucide-react';
+import {
+  ArrowUpCircle,
+  BookOpen,
+  Braces,
+  FileStack,
+  FileText,
+  LogOut,
+  Menu,
+  Moon,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Sun,
+} from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { AssistantPanel } from '@/components/AssistantPanel';
@@ -91,6 +104,9 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </NavLink>
         <a href="/verify" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
           <ShieldCheck className="size-4 opacity-80" /> Verify a Document
+        </a>
+        <a href="/docs" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
+          <BookOpen className="size-4 opacity-80" /> Documentation
         </a>
       </nav>
       <div className="grid gap-0.5 border-t border-sidebar-border px-2 py-2">
