@@ -7,9 +7,10 @@ pub mod eid;
 pub mod oauth;
 pub mod passkeys;
 pub mod retention;
-pub mod system;
+pub mod review;
 pub mod setup;
 pub mod signing;
+pub mod system;
 pub mod users;
 pub mod webhooks;
 
@@ -115,6 +116,9 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<signing::Sign>(),
         erase::<signing::Decline>(),
         erase::<signing::RemoveAttachment>(),
+        erase::<review::CreateLink>(),
+        erase::<review::RevokeLink>(),
+        erase::<review::SetReviewLinks>(),
         erase::<webhooks::List>(),
         erase::<webhooks::Create>(),
         erase::<webhooks::Delete>(),
