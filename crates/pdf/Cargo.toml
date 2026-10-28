@@ -2,6 +2,7 @@
 name = "opensign-pdf"
 description = "PDF sanitizing, field stamping, evidence pages and PAdES sealing."
 version.workspace = true
+publish.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
