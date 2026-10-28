@@ -633,7 +633,7 @@ export function DocumentPage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">
           {draft && doc.files.length > 0 && (
-            <div className="sticky top-0 z-10 mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border bg-background/95 p-2 backdrop-blur">
+            <div className="sticky top-3 z-10 mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border bg-background/95 p-2 backdrop-blur">
               <select
                 aria-label="Fields for"
                 value={placingFor ?? ''}
@@ -728,7 +728,7 @@ export function DocumentPage() {
           )}
         </div>
 
-        <aside className="min-w-0">
+        <aside className="min-w-0 lg:sticky lg:top-3 lg:max-h-[calc(100svh-1.5rem)] lg:self-start lg:overflow-y-auto lg:pb-4 [scrollbar-width:thin]">
           <Tabs defaultValue="setup">
             <TabsList className="w-full">
               <TabsTrigger value="setup">{draft ? 'Setup' : 'Parties'}</TabsTrigger>
