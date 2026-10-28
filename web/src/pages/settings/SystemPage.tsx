@@ -1,11 +1,11 @@
 import { ArrowUpCircle, CheckCircle2, ExternalLink, RefreshCw } from 'lucide-react';
-import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmButton, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { useApi, useApiMutation } from '@/lib/api';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { useSession } from '@/lib/session';
+import { SettingsGroup } from './AdminSettingsPage';
 import { SettingsCard } from './SettingsLayout';
 
 function Command({ children }: { children: string }) {
@@ -24,7 +24,23 @@ function VersionCard() {
   const tag = v.latest?.version ?? 'latest';
 
   return (
-    <SettingsCard title="Version" description="OpenSign checks GitHub for new releases at most every six hours. Only the version is sent.">
+    <SettingsCard
+      title="Version"
+      description={
+        <>
+          OpenSign checks{' '}
+          <a
+            href="https://github.com/nielsbosma/OpenSign/releases"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary hover:underline"
+          >
+            GitHub
+          </a>{' '}
+          for new releases at most every six hours. Only the version is sent.
+        </>
+      }
+    >
       <div className="grid gap-4">
         <div className="flex flex-wrap items-center gap-3">
           {v.updateAvailable ? <ArrowUpCircle className="size-5 text-primary" /> : <CheckCircle2 className="size-5 text-success" />}
@@ -65,11 +81,7 @@ function VersionCard() {
         {v.updateAvailable && !v.canUpdate && (
           <div className="grid gap-2 text-sm">
             <p className="text-muted-foreground">
-              To update from here, add a deploy hook under{' '}
-              <Link to="/settings/admin/updates" className="text-primary">
-                Updates
-              </Link>
-              . Or redeploy yourself; migrations run on start:
+              To update from here, add a deploy hook under Updates below. Or redeploy yourself; migrations run on start:
             </p>
             <Command>{`OPENSIGN_TAG=${tag} ./deploy/sliplane.sh`}</Command>
             <Command>{'docker compose pull && docker compose up -d'}</Command>
@@ -81,11 +93,13 @@ function VersionCard() {
 }
 
 export function SystemPage() {
+  const { can } = useSession();
   const status = useApi('system.status', {});
   const s = status.data;
   return (
     <div className="grid gap-6">
       <VersionCard />
+      {can('settings.manage') && <SettingsGroup group="updates" />}
       {s ? (
         <>
           <SettingsCard

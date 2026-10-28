@@ -68,7 +68,7 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
   },
   updates: {
     title: 'Updates',
-    description: 'Check for new releases and update from the System page.',
+    description: 'How OpenSign finds and installs new releases.',
     fields: [
       {
         key: 'checkForUpdates',
@@ -339,8 +339,14 @@ function AiExtras() {
 
 export function AdminSettingsPage() {
   const { group = '' } = useParams();
-  const spec = GROUPS[group as Group];
-  const current = useApi('settings.get', { group: group as Group }, { enabled: !!spec });
+  if (group === 'updates') return <Navigate to="/settings/system" replace />;
+  if (!GROUPS[group as Group]) return <Navigate to="/settings" replace />;
+  return <SettingsGroup group={group as Group} />;
+}
+
+export function SettingsGroup({ group }: { group: Group }) {
+  const spec = GROUPS[group];
+  const current = useApi('settings.get', { group });
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const save = useApiMutation('settings.update', {
     invalidates: ['settings.', 'ai.', 'setup.'],
@@ -352,7 +358,6 @@ export function AdminSettingsPage() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new group starts with no unsaved changes
   useEffect(() => setDraft({}), [group]);
 
-  if (!spec) return <Navigate to="/settings" replace />;
   if (current.isPending) return <Spinner />;
   const saved = (current.data?.values ?? {}) as Record<string, unknown>;
   const pinned = current.data?.pinned ?? [];
@@ -361,7 +366,7 @@ export function AdminSettingsPage() {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    save.mutate({ group: group as Group, values: draft });
+    save.mutate({ group, values: draft });
   };
 
   return (
