@@ -19,13 +19,15 @@ flate2 = "1"
 hex = { workspace = true }
 lopdf = { version = "0.46", default-features = false }
 p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
+p256-ct = { package = "p256", version = "0.14", features = ["ecdsa", "pkcs8"] }
 png = "0.17"
 qrcode = { version = "0.14", default-features = false }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true, features = ["oid"] }
-signature = "2"
+signature = { version = "2", features = ["std"] }
+signature-ct = { package = "signature", version = "3" }
 spki = { version = "0.7", features = ["std"] }
 thiserror = { workspace = true }
 x509-cert = { version = "0.2", features = ["builder", "std"] }

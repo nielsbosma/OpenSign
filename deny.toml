@@ -3,6 +3,13 @@
 [advisories]
 version = 2
 yanked = "deny"
+ignore = [
+  # The Marvin attack needs RSA private-key decryption. OpenSign only verifies RS256 signatures (Freja, eID brokers).
+  { id = "RUSTSEC-2023-0071", reason = "rsa is only used to verify signatures with public keys" },
+  # crypto-bigint 0.5 comes with p256 0.13, which only handles public keys and the x509/CMS types here.
+  # The seal's private key only ever goes through p256 0.14 (crypto-bigint 0.7.6 or later); see crates/pdf/src/cert.rs.
+  { id = "RUSTSEC-2026-0387", reason = "no secret arithmetic on crypto-bigint 0.5" },
+]
 
 [licenses]
 version = 2
@@ -12,6 +19,7 @@ confidence-threshold = 0.9
 [bans]
 multiple-versions = "allow"
 wildcards = "deny"
+allow-wildcard-paths = true
 deny = [
   { crate = "openssl", reason = "rustls only; one TLS stack" },
   { crate = "openssl-sys", reason = "rustls only; one TLS stack" },

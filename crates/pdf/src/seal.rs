@@ -10,7 +10,6 @@ use der::{Encode, Sequence};
 use lopdf::{Document, Object, StringFormat, dictionary};
 use p256::ecdsa::DerSignature;
 use sha2::{Digest, Sha256};
-use signature::Signer;
 use spki::AlgorithmIdentifierOwned;
 use x509_cert::attr::Attribute;
 
@@ -151,7 +150,7 @@ pub fn sign(identity: &SealIdentity, digest: &[u8; 32]) -> Result<Signed> {
     ];
     let signed_attrs = SetOfVec::try_from(attrs).map_err(sig_err)?;
     let to_sign = signed_attrs.to_der().map_err(sig_err)?;
-    let signature: DerSignature = identity.key.try_sign(&to_sign).map_err(sig_err)?;
+    let signature: DerSignature = identity.key.sign(&to_sign)?;
     Ok(Signed { signed_attrs, signature: signature.as_bytes().to_vec() })
 }
 

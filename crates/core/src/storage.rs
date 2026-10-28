@@ -3,7 +3,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use object_store::aws::AmazonS3Builder;
 use object_store::path::Path;
-use object_store::{ObjectStore, PutPayload};
+use object_store::{ObjectStore, ObjectStoreExt, PutPayload};
 use opensign_crypto::{DataKey, Keys, open_blob, seal_blob, sha256_hex};
 use serde::Serialize;
 use sqlx::PgConnection;
