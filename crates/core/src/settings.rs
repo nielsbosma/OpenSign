@@ -112,6 +112,8 @@ pub struct AiSettings {
     pub base_url: String,
     /// Off: the assistant works, but document text never leaves the server.
     pub allow_document_text: bool,
+    /// Tokens per calendar month across everyone; 0 means no limit.
+    pub monthly_token_budget: u64,
 }
 
 impl SettingsGroup for AiSettings {

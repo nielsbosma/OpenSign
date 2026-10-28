@@ -1,4 +1,5 @@
 pub mod admin;
+pub mod ai;
 pub mod auth;
 pub mod documents;
 pub mod oauth;
@@ -96,6 +97,13 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<oauth::Deny>(),
         erase::<oauth::ListConnections>(),
         erase::<oauth::RevokeConnection>(),
+        erase::<ai::GetStatus>(),
+        erase::<ai::Chat>(),
+        erase::<ai::CheckSetup>(),
+        erase::<ai::Review>(),
+        erase::<ai::LatestReview>(),
+        erase::<ai::TestProvider>(),
+        erase::<ai::GetUsage>(),
     ]
 }
 

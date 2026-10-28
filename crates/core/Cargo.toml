@@ -39,3 +39,4 @@ testing = ["opensign-db/testing"]
 [dev-dependencies]
 opensign-core = { path = ".", features = ["testing"] }
 lopdf = { version = "0.46", default-features = false }
+axum = { workspace = true }

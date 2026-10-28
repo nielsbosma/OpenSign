@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod audit;
 pub mod context;
 pub mod env;

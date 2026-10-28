@@ -16,7 +16,7 @@ mod tests;
 
 pub use cert::{SealIdentity, generate_seal_identity};
 pub use evidence::{EvidenceEvent, EvidenceParty, EvidenceReport, append_evidence};
-pub use geometry::{PageBox, page_sizes};
+pub use geometry::{PageBox, extract_text, page_sizes};
 pub use merge::merge;
 pub use sanitize::{Limits, Sanitized, sanitize};
 pub use seal::{Prepared, SealOptions, Signed, finish, prepare, seal, sign};

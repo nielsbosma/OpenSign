@@ -158,6 +158,29 @@ create table idempotency_keys (
 );
 create index idempotency_keys_created on idempotency_keys (created_at);
 
+-- AI reviews of a document's text, kept so the editor can show the latest one.
+create table ai_reviews (
+  id uuid primary key,
+  document_id uuid not null references documents (id) on delete cascade,
+  created_by uuid references users (id) on delete set null,
+  model text not null,
+  result jsonb not null,
+  created_at timestamptz not null default now()
+);
+create index ai_reviews_document_idx on ai_reviews (document_id, created_at desc);
+
+-- Tokens spent per call, for the monthly budget and the Admin's overview.
+create table ai_usage (
+  id bigserial primary key,
+  user_id uuid references users (id) on delete set null,
+  kind text not null,
+  model text not null,
+  input_tokens integer not null,
+  output_tokens integer not null,
+  created_at timestamptz not null default now()
+);
+create index ai_usage_created_idx on ai_usage (created_at);
+
 -- A sealed document cannot change: only its row's bookkeeping may.
 create function protect_sealed_document() returns trigger language plpgsql as $$
 begin

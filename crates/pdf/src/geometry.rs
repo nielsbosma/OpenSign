@@ -90,6 +90,14 @@ pub fn page_sizes(pdf: &[u8]) -> Result<Vec<(f64, f64)>> {
     doc.get_pages().values().map(|&page| page_box(&doc, page).map(|b| b.displayed())).collect()
 }
 
+/// The text of each page, in order, for review by a language model. Best effort: PDFs drawn as
+/// images or with unusual font encodings give little or nothing.
+pub fn extract_text(pdf: &[u8]) -> Result<Vec<String>> {
+    let doc = Document::load_mem(pdf)?;
+    let pages: Vec<u32> = doc.get_pages().keys().copied().collect();
+    Ok(pages.iter().map(|&n| doc.extract_text(&[n]).unwrap_or_default()).collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
