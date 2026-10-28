@@ -9,9 +9,9 @@ use serde::de::DeserializeOwned;
 use sha2::Sha256;
 use zeroize::Zeroizing;
 
+use crate::CryptoError;
 use crate::aead::DataKey;
 use crate::token::{constant_time_eq, random_bytes};
-use crate::CryptoError;
 
 pub const MIN_SECRET_LEN: usize = 32;
 
@@ -157,8 +157,7 @@ impl Keys {
     /// A tamper-proof, expiring token. `kind` is part of the MAC input, so a token issued for one
     /// purpose is refused for another.
     pub fn sign_token<T: Serialize>(&self, kind: &str, payload: &T, ttl_seconds: i64, now: i64) -> String {
-        let body = serde_json::to_vec(&SignedEnvelope { k: kind, exp: now + ttl_seconds, d: payload })
-            .expect("token payloads serialize");
+        let body = serde_json::to_vec(&SignedEnvelope { k: kind, exp: now + ttl_seconds, d: payload }).expect("token payloads serialize");
         let body = B64.encode(body);
         let mac = B64.encode(self.mac(KeyPurpose::TokenMac, body.as_bytes()));
         format!("{body}.{mac}")

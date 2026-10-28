@@ -111,11 +111,9 @@ impl Role {
                 description: "Reads every document and the audit log, changes nothing",
                 permissions: &[OrgRead, UsersRead, DocumentsReadAll, AuditRead, SystemRead],
             },
-            Role::Viewer => RoleInfo {
-                label: "Viewer",
-                description: "Sees documents shared with them",
-                permissions: &[OrgRead, UsersRead],
-            },
+            Role::Viewer => {
+                RoleInfo { label: "Viewer", description: "Sees documents shared with them", permissions: &[OrgRead, UsersRead] }
+            }
         }
     }
 

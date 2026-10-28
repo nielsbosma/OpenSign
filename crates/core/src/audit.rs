@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
-use sqlx::PgConnection;
+use sqlx::{Connection, PgConnection};
 
 use crate::context::Ctx;
 use crate::error::Result;
@@ -138,8 +138,11 @@ pub async fn audit(ctx: &Ctx, conn: &mut PgConnection, entry: Entry<'_>) -> Resu
     let actor_label = ctx.actor.as_ref().map(|a| a.email.clone()).unwrap_or_else(|| ctx.surface.as_str().to_string());
     let occurred_at = crate::context::now();
 
-    sqlx::query("select pg_advisory_xact_lock($1)").bind(CHAIN_LOCK).execute(&mut *conn).await?;
-    let prev: Option<Vec<u8>> = sqlx::query_scalar("select hash from audit_log order by id desc limit 1").fetch_optional(&mut *conn).await?;
+    // A savepoint inside the caller's transaction, or a transaction of its own on a bare connection,
+    // so the lock is held until the entry is written.
+    let mut tx = conn.begin().await?;
+    sqlx::query("select pg_advisory_xact_lock($1)").bind(CHAIN_LOCK).execute(&mut *tx).await?;
+    let prev: Option<Vec<u8>> = sqlx::query_scalar("select hash from audit_log order by id desc limit 1").fetch_optional(&mut *tx).await?;
     let prev = prev.unwrap_or_else(|| GENESIS.to_vec());
     let hash = chain_hash(
         &prev,
@@ -172,8 +175,9 @@ pub async fn audit(ctx: &Ctx, conn: &mut PgConnection, entry: Entry<'_>) -> Resu
     .bind(&metadata)
     .bind(&prev)
     .bind(hash.as_slice())
-    .fetch_one(&mut *conn)
+    .fetch_one(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(id)
 }
 
@@ -209,7 +213,8 @@ pub async fn verify_chain(conn: &mut PgConnection) -> Result<ChainReport> {
     let mut entries = 0;
     let mut last_id = 0i64;
     loop {
-        let rows: Vec<Row> = sqlx::query_as("select * from audit_log where id > $1 order by id limit 1000").bind(last_id).fetch_all(&mut *conn).await?;
+        let rows: Vec<Row> =
+            sqlx::query_as("select * from audit_log where id > $1 order by id limit 1000").bind(last_id).fetch_all(&mut *conn).await?;
         if rows.is_empty() {
             break;
         }
@@ -247,7 +252,8 @@ mod tests {
 
     #[test]
     fn redacts_secrets_at_any_depth() {
-        let value = json!({ "name": "A", "password": "x", "nested": { "api_key": "k", "empty": null, "token": "" }, "list": [{ "secret": "s" }] });
+        let value =
+            json!({ "name": "A", "password": "x", "nested": { "api_key": "k", "empty": null, "token": "" }, "list": [{ "secret": "s" }] });
         let extra = BTreeSet::from(["empty"]);
         assert_eq!(
             redact(&value, &extra),

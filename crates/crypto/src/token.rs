@@ -31,8 +31,7 @@ pub fn recovery_codes() -> Vec<String> {
     (0..10)
         .map(|_| {
             let bytes = random_bytes::<12>();
-            let chars: Vec<char> =
-                bytes.iter().map(|b| RECOVERY_ALPHABET[(*b as usize) % RECOVERY_ALPHABET.len()] as char).collect();
+            let chars: Vec<char> = bytes.iter().map(|b| RECOVERY_ALPHABET[(*b as usize) % RECOVERY_ALPHABET.len()] as char).collect();
             chars.chunks(4).map(|c| c.iter().collect::<String>()).collect::<Vec<_>>().join("-")
         })
         .collect()

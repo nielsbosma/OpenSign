@@ -22,7 +22,11 @@ pub struct Env {
 
 impl std::fmt::Debug for Env {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Env").field("s3_bucket", &self.s3_bucket).field("app_url", &self.app_url).field("role", &self.role).finish_non_exhaustive()
+        f.debug_struct("Env")
+            .field("s3_bucket", &self.s3_bucket)
+            .field("app_url", &self.app_url)
+            .field("role", &self.role)
+            .finish_non_exhaustive()
     }
 }
 
@@ -47,7 +51,9 @@ fn hint(name: &str) -> &'static str {
         "S3_ACCESS_KEY" => "An access key with read and write access to the bucket",
         "S3_SECRET_KEY" => "The secret that belongs to S3_ACCESS_KEY",
         "S3_ENDPOINT" => "Leave empty for AWS S3; set it for R2, MinIO and others, e.g. https://<account>.r2.cloudflarestorage.com",
-        "APP_SECRET" => "A long random string that derives every encryption key. Generate it with `openssl rand -base64 48` and never change it.",
+        "APP_SECRET" => {
+            "A long random string that derives every encryption key. Generate it with `openssl rand -base64 48` and never change it."
+        }
         "APP_URL" => "The public https address, e.g. https://sign.example.com",
         "CONVERTER_URL" => "The private address of the Gotenberg service that converts Word documents, e.g. http://converter:3000",
         _ => "",
@@ -71,7 +77,11 @@ impl Env {
         let app_secret = required("APP_SECRET");
 
         if !database_url.is_empty() && !(database_url.starts_with("postgres://") || database_url.starts_with("postgresql://")) {
-            problems.push(EnvProblem { name: "DATABASE_URL", message: "DATABASE_URL must start with postgres://".into(), hint: hint("DATABASE_URL") });
+            problems.push(EnvProblem {
+                name: "DATABASE_URL",
+                message: "DATABASE_URL must start with postgres://".into(),
+                hint: hint("DATABASE_URL"),
+            });
         }
         if !app_secret.is_empty() && app_secret.chars().count() < opensign_crypto::MIN_SECRET_LEN {
             problems.push(EnvProblem {
@@ -105,12 +115,12 @@ impl Env {
             }
         };
         let development = get("APP_ENV").as_deref() == Some("development");
-        if !development {
-            if let Some(url) = &app_url {
-                if url.starts_with("http://") && !url.starts_with("http://localhost") {
-                    problems.push(EnvProblem { name: "APP_URL", message: "APP_URL must use https in production".into(), hint: hint("APP_URL") });
-                }
-            }
+        if !development
+            && let Some(url) = &app_url
+            && url.starts_with("http://")
+            && !url.starts_with("http://localhost")
+        {
+            problems.push(EnvProblem { name: "APP_URL", message: "APP_URL must use https in production".into(), hint: hint("APP_URL") });
         }
 
         if !problems.is_empty() {

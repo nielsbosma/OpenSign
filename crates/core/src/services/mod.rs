@@ -1,0 +1,87 @@
+pub mod admin;
+pub mod auth;
+pub mod setup;
+pub mod users;
+
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use sqlx::PgConnection;
+
+use crate::context::Ctx;
+use crate::error::Result;
+use crate::service::{DynService, erase};
+use crate::settings::SettingsGroup;
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+pub struct Empty {}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct Ok_ {
+    pub ok: bool,
+}
+
+impl Default for Ok_ {
+    fn default() -> Self {
+        Self { ok: true }
+    }
+}
+
+pub async fn settings<G: SettingsGroup>(ctx: &Ctx, conn: &mut PgConnection) -> Result<G> {
+    ctx.app.settings.get::<G>(conn, ctx.keys()).await
+}
+
+/// Every service. MCP, the AI assistant and the RPC endpoint expose these by name.
+pub fn registry() -> Vec<Box<dyn DynService>> {
+    vec![
+        erase::<auth::Login>(),
+        erase::<auth::VerifyTwoFactor>(),
+        erase::<auth::Logout>(),
+        erase::<auth::WhoAmI>(),
+        erase::<auth::BeginTwoFactor>(),
+        erase::<auth::ConfirmTwoFactor>(),
+        erase::<auth::ChangePassword>(),
+        erase::<auth::RequestPasswordReset>(),
+        erase::<auth::ResetPassword>(),
+        erase::<setup::Status>(),
+        erase::<setup::Complete>(),
+        erase::<users::List>(),
+        erase::<users::Invite>(),
+        erase::<users::AcceptInvite>(),
+        erase::<users::Update>(),
+        erase::<users::ResetTwoFactor>(),
+        erase::<users::ListInvites>(),
+        erase::<users::RevokeInvite>(),
+        erase::<users::CreateApiKey>(),
+        erase::<users::ListApiKeys>(),
+        erase::<users::RevokeApiKey>(),
+        erase::<admin::GetSettings>(),
+        erase::<admin::UpdateSettings>(),
+        erase::<admin::SendTestEmail>(),
+        erase::<admin::ListAudit>(),
+        erase::<admin::VerifyAudit>(),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::*;
+    use crate::service::Access;
+
+    #[test]
+    fn names_are_unique_dotted_and_described() {
+        let mut seen = HashSet::new();
+        for s in registry() {
+            let meta = s.meta();
+            assert!(seen.insert(meta.name), "duplicate {}", meta.name);
+            assert!(meta.name.contains('.') && meta.name.chars().all(|c| c.is_ascii_lowercase() || c == '.' || c == '_'), "{}", meta.name);
+            assert!(meta.description.ends_with('.'), "{} needs a full-sentence description", meta.name);
+            if meta.access == Access::Public {
+                assert!(!meta.tool, "public service {} must not be a tool", meta.name);
+            }
+            let schema = serde_json::to_value(s.input_schema()).expect("schema");
+            assert_eq!(schema["type"], "object", "{} input must be an object", meta.name);
+        }
+    }
+}

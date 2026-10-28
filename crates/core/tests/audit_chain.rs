@@ -16,7 +16,8 @@ async fn chain_verifies_and_detects_edits() {
     assert!(report.valid, "{report:?}");
     assert_eq!(report.entries, 5);
 
-    let stored: serde_json::Value = sqlx::query_scalar("select after from audit_log where entity_id = '2'").fetch_one(&mut *conn).await.unwrap();
+    let stored: serde_json::Value =
+        sqlx::query_scalar("select after from audit_log where entity_id = '2'").fetch_one(&mut *conn).await.unwrap();
     assert_eq!(stored["password"], "••••");
 
     sqlx::query("alter table audit_log disable trigger audit_log_append_only").execute(&mut *conn).await.unwrap();

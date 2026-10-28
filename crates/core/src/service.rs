@@ -40,11 +40,27 @@ pub struct Meta {
 
 impl Meta {
     pub const fn query(name: &'static str, description: &'static str, access: Access) -> Meta {
-        Meta { name, description, kind: Kind::Query, access, tool: !matches!(access, Access::Public), transaction: false, allow_without_two_factor: false }
+        Meta {
+            name,
+            description,
+            kind: Kind::Query,
+            access,
+            tool: !matches!(access, Access::Public),
+            transaction: false,
+            allow_without_two_factor: false,
+        }
     }
 
     pub const fn mutation(name: &'static str, description: &'static str, access: Access) -> Meta {
-        Meta { name, description, kind: Kind::Mutation, access, tool: !matches!(access, Access::Public), transaction: true, allow_without_two_factor: false }
+        Meta {
+            name,
+            description,
+            kind: Kind::Mutation,
+            access,
+            tool: !matches!(access, Access::Public),
+            transaction: true,
+            allow_without_two_factor: false,
+        }
     }
 
     pub const fn not_a_tool(mut self) -> Meta {

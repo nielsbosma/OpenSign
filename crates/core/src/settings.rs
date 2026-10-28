@@ -221,10 +221,10 @@ impl SettingsCache {
     }
 
     pub async fn get<G: SettingsGroup>(&self, conn: &mut PgConnection, keys: &Keys) -> Result<G> {
-        if let Some((at, value)) = self.entries.read().ok().and_then(|e| e.get(G::NAME).cloned()) {
-            if at.elapsed() < TTL {
-                return serde_json::from_value(value).map_err(AppError::internal);
-            }
+        if let Some((at, value)) = self.entries.read().ok().and_then(|e| e.get(G::NAME).cloned())
+            && at.elapsed() < TTL
+        {
+            return serde_json::from_value(value).map_err(AppError::internal);
         }
         let row: Option<(Value, Value)> =
             sqlx::query_as(r#"select "values", secrets from settings where "group" = $1"#).bind(G::NAME).fetch_optional(&mut *conn).await?;
@@ -251,12 +251,19 @@ impl SettingsCache {
     }
 
     /// Saves a whole group. A secret sent as `None` keeps its stored value; send an empty string to clear it.
-    pub async fn save<G: SettingsGroup>(&self, conn: &mut PgConnection, keys: &Keys, group: &G, updated_by: Option<uuid::Uuid>) -> Result<()> {
+    pub async fn save<G: SettingsGroup>(
+        &self,
+        conn: &mut PgConnection,
+        keys: &Keys,
+        group: &G,
+        updated_by: Option<uuid::Uuid>,
+    ) -> Result<()> {
         let pinned = self.pinned::<G>();
         let Value::Object(mut values) = serde_json::to_value(group).map_err(AppError::internal)? else {
             return Err(bad_request("Settings must be an object"));
         };
-        let current: Option<Value> = sqlx::query_scalar(r#"select secrets from settings where "group" = $1"#).bind(G::NAME).fetch_optional(&mut *conn).await?;
+        let current: Option<Value> =
+            sqlx::query_scalar(r#"select secrets from settings where "group" = $1"#).bind(G::NAME).fetch_optional(&mut *conn).await?;
         let mut secrets = match current {
             Some(Value::Object(map)) => map,
             _ => Map::new(),
@@ -316,8 +323,11 @@ mod tests {
     #[test]
     fn pins_override_and_are_listed() {
         let cache = SettingsCache::from_env(
-            [("OPENSIGN_SECURITY_ENFORCE_TWO_FACTOR".to_string(), "true".to_string()), ("OPENSIGN_SECURITY_SESSION_HOURS".into(), "4".into())]
-                .into_iter(),
+            [
+                ("OPENSIGN_SECURITY_ENFORCE_TWO_FACTOR".to_string(), "true".to_string()),
+                ("OPENSIGN_SECURITY_SESSION_HOURS".into(), "4".into()),
+            ]
+            .into_iter(),
         );
         let mut values = Map::new();
         cache.apply_pins::<SecuritySettings>(&mut values);

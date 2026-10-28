@@ -25,7 +25,8 @@ impl Storage {
             .with_secret_access_key(&env.s3_secret_key)
             .with_region(&env.s3_region);
         if let Some(endpoint) = &env.s3_endpoint {
-            builder = builder.with_endpoint(endpoint).with_virtual_hosted_style_request(false).with_allow_http(endpoint.starts_with("http://"));
+            builder =
+                builder.with_endpoint(endpoint).with_virtual_hosted_style_request(false).with_allow_http(endpoint.starts_with("http://"));
         }
         Ok(Self { store: Arc::new(builder.build().map_err(AppError::internal)?) })
     }

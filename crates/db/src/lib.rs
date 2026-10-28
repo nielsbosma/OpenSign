@@ -55,10 +55,11 @@ impl MigrationState {
 
 /// What is applied and what this build would apply. Refuses a database migrated by a newer build.
 pub async fn migration_state(db: &Db) -> Result<MigrationState, DbError> {
-    let table_exists: bool =
-        sqlx::query_scalar("select exists (select 1 from information_schema.tables where table_schema = current_schema() and table_name = '_sqlx_migrations')")
-            .fetch_one(db)
-            .await?;
+    let table_exists: bool = sqlx::query_scalar(
+        "select exists (select 1 from information_schema.tables where table_schema = current_schema() and table_name = '_sqlx_migrations')",
+    )
+    .fetch_one(db)
+    .await?;
     let applied: Vec<i64> = if table_exists {
         sqlx::query_scalar("select version from _sqlx_migrations where success order by version").fetch_all(db).await?
     } else {

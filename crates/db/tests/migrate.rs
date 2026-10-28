@@ -29,9 +29,11 @@ async fn audit_log_is_append_only() {
 async fn refuses_a_newer_database() {
     let Some(db) = test_db().await else { return };
     migrate(&db).await.unwrap();
-    sqlx::query("insert into _sqlx_migrations (version, description, success, checksum, execution_time) values (99999, 'future', true, '\x00', 0)")
-        .execute(&db)
-        .await
-        .unwrap();
+    sqlx::query(
+        "insert into _sqlx_migrations (version, description, success, checksum, execution_time) values (99999, 'future', true, '\x00', 0)",
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     assert!(matches!(migration_state(&db).await, Err(opensign_db::DbError::TooNew(99999))));
 }

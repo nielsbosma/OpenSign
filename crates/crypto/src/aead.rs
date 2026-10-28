@@ -46,9 +46,7 @@ pub fn open_blob(key: &DataKey, aad: &[u8], sealed: &[u8]) -> Result<Vec<u8>, Cr
         return Err(CryptoError::Format);
     }
     let cipher = Aes256Gcm::new_from_slice(key.as_bytes()).expect("32-byte key");
-    cipher
-        .decrypt(Nonce::from_slice(&sealed[4..HEADER_LEN]), Payload { msg: &sealed[HEADER_LEN..], aad })
-        .map_err(|_| CryptoError::Decrypt)
+    cipher.decrypt(Nonce::from_slice(&sealed[4..HEADER_LEN]), Payload { msg: &sealed[HEADER_LEN..], aad }).map_err(|_| CryptoError::Decrypt)
 }
 
 #[cfg(test)]

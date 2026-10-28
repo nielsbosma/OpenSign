@@ -77,10 +77,10 @@ pub fn too_many(message: impl Into<String>) -> AppError {
 
 impl From<sqlx::Error> for AppError {
     fn from(error: sqlx::Error) -> Self {
-        if let sqlx::Error::Database(db) = &error {
-            if db.is_unique_violation() {
-                return conflict("That already exists");
-            }
+        if let sqlx::Error::Database(db) = &error
+            && db.is_unique_violation()
+        {
+            return conflict("That already exists");
         }
         AppError::internal(error)
     }
