@@ -14,6 +14,11 @@ use crate::settings::EidSettings;
 
 const PRODUCTION: &str = "https://appapi2.bankid.com/rp/v6.0";
 const TEST: &str = "https://appapi2.test.bankid.com/rp/v6.0";
+/// BankID's server roots, checked against the live servers when they were added.
+const ROOT: &str = include_str!("certs/bankid-root.pem");
+const TEST_ROOT: &str = include_str!("certs/bankid-test-root.pem");
+/// BankID's public certificate for the test environment (FP Testcert 5), so test mode works with no setup.
+const TEST_RP: &str = include_str!("certs/bankid-test-rp.pem");
 
 /// Integration tests point BankID at a local stand-in.
 #[cfg(feature = "testing")]
@@ -53,11 +58,20 @@ impl BankId {
         if let Some(base) = TEST_BASE.lock().ok().and_then(|b| b.clone()) {
             return Ok(Self { client: reqwest::Client::new(), base });
         }
-        let identity = settings.bankid_certificate.as_deref().filter(|c| !c.trim().is_empty());
-        let (Some(identity), false) = (identity, settings.bankid_ca_certificate.trim().is_empty()) else {
-            return Err(unavailable("Swedish BankID is missing its certificates. An admin adds them in Admin settings."));
+        let own = settings.bankid_certificate.as_deref().filter(|c| !c.trim().is_empty());
+        let identity = match (own, settings.bankid_test) {
+            (Some(pem), _) => pem,
+            (None, true) => TEST_RP,
+            (None, false) => {
+                return Err(unavailable("Swedish BankID needs your relying-party certificate. An admin adds it in Admin settings."));
+            }
         };
-        let client = crate::net::client_with_certificate(identity, Some(&settings.bankid_ca_certificate))
+        let ca = match settings.bankid_ca_certificate.trim() {
+            "" if settings.bankid_test => TEST_ROOT,
+            "" => ROOT,
+            own => own,
+        };
+        let client = crate::net::client_with_certificate(identity, Some(ca))
             .map_err(|e| unavailable(&format!("Swedish BankID is not set up correctly: {e}")))?;
         Ok(Self { client, base: if settings.bankid_test { TEST } else { PRODUCTION }.into() })
     }

@@ -238,3 +238,24 @@ async fn freja_results_count_only_when_freja_signed_them() {
     assert!(freja.result("ref-1").await.is_err(), "a forged signature is refused");
     assert!(freja.result("ref-1").await.is_err(), "a signed result for another request is refused");
 }
+
+#[test]
+fn certificate_files_from_banks_work_as_they_are() {
+    for name in ["rp-modern.p12", "rp-legacy.p12"] {
+        let der = std::fs::read(format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap();
+        let pem = opensign_core::eid::pkcs12_to_pem(&der, "qwerty123").unwrap();
+        assert!(pem.starts_with("-----BEGIN PRIVATE KEY-----") && pem.contains("-----BEGIN CERTIFICATE-----"), "{name}");
+        opensign_core::net::client_with_certificate(&pem, None).unwrap();
+        assert!(opensign_core::eid::pkcs12_to_pem(&der, "wrong").is_err(), "{name} needs its password");
+    }
+}
+
+#[tokio::test]
+#[ignore = "calls BankID's public test service"]
+async fn bankid_test_environment_works_without_setup() {
+    let eid = EidSettings { bankid_enabled: true, bankid_test: true, ..EidSettings::default() };
+    let bankid = opensign_core::eid::bankid::BankId::from_settings(&eid).unwrap();
+    let order = bankid.start("194.168.2.25", None, None).await.unwrap();
+    assert!(!order.order_ref.is_empty());
+    bankid.cancel(&order.order_ref).await.unwrap();
+}

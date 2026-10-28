@@ -16,6 +16,37 @@ pub struct Identity {
     pub personal_number: Option<String>,
 }
 
+fn pem(label: &str, der: &[u8]) -> String {
+    use base64::Engine;
+    let body = base64::engine::general_purpose::STANDARD.encode(der);
+    let lines: Vec<&str> = body.as_bytes().chunks(64).map(|c| std::str::from_utf8(c).unwrap_or_default()).collect();
+    format!(
+        "-----BEGIN {label}-----
+{}
+-----END {label}-----
+",
+        lines.join(
+            "
+"
+        )
+    )
+}
+
+/// The private key and certificate chain of a PKCS#12 file (.p12, .pfx), as PEM.
+pub fn pkcs12_to_pem(der: &[u8], password: &str) -> Result<String, String> {
+    let store = p12_keystore::KeyStore::from_pkcs12(der, password)
+        .map_err(|_| "The certificate file could not be opened. Check the password.".to_string())?;
+    let (_, chain) = store.private_key_chain().ok_or("The certificate file holds no private key")?;
+    if chain.chain().is_empty() {
+        return Err("The certificate file holds no certificate".into());
+    }
+    let mut out = pem("PRIVATE KEY", chain.key());
+    for cert in chain.chain() {
+        out.push_str(&pem("CERTIFICATE", cert.as_der()));
+    }
+    Ok(out)
+}
+
 /// Whether `method` is switched on and has what it needs to work, with the reason when not.
 pub fn ready(settings: &crate::settings::EidSettings, method: crate::documents::AuthMethod) -> crate::error::Result<()> {
     use crate::documents::AuthMethod;

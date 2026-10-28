@@ -66,7 +66,8 @@ jobs:
           grep -q "ETSI.CAdES.detached" <<<"$out"
       - name: The web app's API types match the server
         run: |
-          cargo run --quiet --locked --bin opensign -- schema > /dev/null
+          node web/scripts/api-types.mjs
+          git diff --exit-code web/src/lib/api-types.gen.ts
 
   supply-chain:
     name: Advisories and licenses

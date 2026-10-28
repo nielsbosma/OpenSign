@@ -13,13 +13,15 @@ import { SettingsCard } from './SettingsLayout';
 type Spec = {
   key: string;
   label: string;
-  /** `file` is a secret PEM file, `pem` a public one such as a CA certificate. */
+  /** `file` is a secret PEM or PKCS#12 file, `pem` a public one such as a CA certificate. */
   type?: 'text' | 'secret' | 'bool' | 'number' | 'select' | 'file' | 'pem' | 'color';
   hint?: string;
   options?: [string, string][];
   placeholder?: string;
   /** Shown only when this other boolean or text field is set. */
   when?: string;
+  /** For a `file`: where the password of an uploaded .p12/.pfx goes. The server keeps only the PEM it unlocks. */
+  passwordKey?: string;
 };
 
 const GROUPS: Record<Group, { title: string; description: string; fields: Spec[] }> = {
@@ -120,14 +122,15 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
         key: 'bankidCertificate',
         label: 'Relying-Party Certificate',
         type: 'file',
-        hint: 'PEM with the certificate and its private key. From a .p12: openssl pkcs12 -in rp.p12 -out rp.pem -nodes',
+        hint: "The .p12 from your bank, or a PEM with the key. In the test environment, leave it empty to use BankID's public test certificate.",
+        passwordKey: 'bankidCertificatePassword',
         when: 'bankidEnabled',
       },
       {
         key: 'bankidCaCertificate',
-        label: 'BankID Server CA',
+        label: 'BankID Server CA (optional)',
         type: 'pem',
-        hint: "The issuing CA in BankID's relying-party guidelines, PEM. Only this CA is trusted for BankID.",
+        hint: "BankID's own root is built in. Only replace it if BankID tells you to.",
         when: 'bankidEnabled',
       },
       { key: 'frejaEnabled', label: 'Freja eID', type: 'bool' },
@@ -136,7 +139,8 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
         key: 'frejaCertificate',
         label: 'Client Certificate',
         type: 'file',
-        hint: 'PEM with the certificate and its private key. From a .pfx: openssl pkcs12 -in rp.pfx -out rp.pem -nodes',
+        hint: 'The .pfx from Freja, or a PEM with the key.',
+        passwordKey: 'frejaCertificatePassword',
         when: 'frejaEnabled',
       },
       {
@@ -167,6 +171,19 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
     ],
   },
 };
+
+async function readCertificate(file: File) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const text = new TextDecoder().decode(bytes);
+  if (text.includes('-----BEGIN ')) return text;
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
+function isPkcs12(value: unknown) {
+  return typeof value === 'string' && value !== '' && !value.includes('-----BEGIN ');
+}
 
 async function readPem(file: File) {
   const text = await file.text();
@@ -316,12 +333,11 @@ export function AdminSettingsPage() {
                         <Input
                           id={id}
                           type="file"
-                          accept=".pem,.crt,.cer,.key"
+                          accept=".pem,.crt,.cer,.key,.p12,.pfx"
                           disabled={locked}
                           onChange={async (e) => {
                             const file = e.target.files?.[0];
-                            const pem = file && (await readPem(file));
-                            if (pem) set(f.key, pem);
+                            if (file) set(f.key, await readCertificate(file));
                           }}
                         />
                       ) : (
@@ -341,6 +357,17 @@ export function AdminSettingsPage() {
                         </Button>
                       )}
                     </div>
+                    {f.passwordKey && isPkcs12(draft[f.key]) && (
+                      <Input
+                        className="mt-2"
+                        type="password"
+                        autoComplete="off"
+                        aria-label="Certificate file password"
+                        placeholder="The file's password"
+                        value={typeof draft[f.passwordKey] === 'string' ? (draft[f.passwordKey] as string) : ''}
+                        onChange={(e) => set(f.passwordKey!, e.target.value)}
+                      />
+                    )}
                   </Field>
                 );
               }

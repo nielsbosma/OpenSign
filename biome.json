@@ -2,7 +2,18 @@
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
-    "includes": ["**", "!**/migrations/meta", "!**/routeTree.gen.ts", "!**/*.gen.ts", "!**/*.html", "!**/*.svg", "!**/components/ui"]
+    "includes": [
+      "**",
+      "!**/migrations/meta",
+      "!**/routeTree.gen.ts",
+      "!**/*.gen.ts",
+      "!**/*.html",
+      "!**/*.svg",
+      "!**/components/ui",
+      "!**/*.md",
+      "!**/*.yaml",
+      "!**/*.yml"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -18,7 +29,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "style": { "noNonNullAssertion": "off", "noParameterAssign": "off" },
       "suspicious": { "noExplicitAny": "warn", "noArrayIndexKey": "off" },
       "a11y": {

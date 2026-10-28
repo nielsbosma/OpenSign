@@ -66,8 +66,8 @@ Any admin setting can be pinned with an environment variable, `OPENSIGN_<GROUP>_
 
 ### eID providers
 
-- **Swedish BankID**: your relying-party certificate (PEM with key) and BankID's server CA, from your bank. Use the test environment with BankID's test certificate first.
-- **Freja eID**: your client certificate and Freja's result-signing certificate. Results whose signature does not check out are refused.
+- **Swedish BankID**: turn it on with **Use the BankID test environment** and it works right away with BankID's public test certificate and a [test BankID](https://developers.bankid.com/test-portal). For production, upload the `.p12` your bank gives you and type its password; BankID's server root is built in.
+- **Freja eID**: upload the `.pfx` from Freja with its password, and Freja's result-signing certificate. Results whose signature does not check out are refused.
 - **Broker**: issuer URL, client id and secret. Register `https://<your-install>/api/eid/callback` as the redirect URI. `acr_values` picks a specific eID.
 
 ## Using the API

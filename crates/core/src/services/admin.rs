@@ -1,4 +1,6 @@
 use async_trait::async_trait;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as B64;
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -116,6 +118,24 @@ async fn update<G: SettingsGroup>(ctx: &Ctx, conn: &mut PgConnection, patch: &Va
         let changed = |field: &str| changes.get(field).is_some_and(|v| !v.is_null() && !v.is_boolean() && Some(v) != base.get(field));
         if changed("apiKey") || changed("fromAddress") {
             changes.insert("verifiedAt".into(), Value::Null);
+        }
+    }
+    if G::NAME == "eid"
+        && let Value::Object(changes) = &mut patch
+    {
+        // A .p12/.pfx arrives as base64 with its password; only the PEM it unlocks is stored.
+        for (field, password_field) in
+            [("bankidCertificate", "bankidCertificatePassword"), ("frejaCertificate", "frejaCertificatePassword")]
+        {
+            let password = changes.remove(password_field);
+            let Some(Value::String(upload)) = changes.get(field) else { continue };
+            if upload.is_empty() || upload.trim_start().starts_with("-----BEGIN") {
+                continue;
+            }
+            let der = B64.decode(upload.trim()).map_err(|_| bad_request("The certificate file is neither PEM nor PKCS#12"))?;
+            let password = password.as_ref().and_then(Value::as_str).unwrap_or_default();
+            let pem = crate::eid::pkcs12_to_pem(&der, password).map_err(bad_request)?;
+            changes.insert(field.into(), Value::String(pem));
         }
     }
     let next: G = serde_json::from_value(merge(base, &patch, G::SECRETS)).map_err(|e| bad_request(format!("Invalid settings: {e}")))?;

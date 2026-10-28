@@ -142,9 +142,10 @@ pub struct EidSettings {
     pub bankid_enabled: bool,
     /// BankID's test environment, for test BankIDs only.
     pub bankid_test: bool,
-    /// The relying-party certificate and its private key, PEM.
+    /// The relying-party certificate and its private key, PEM. Empty in the test environment uses
+    /// BankID's public test certificate.
     pub bankid_certificate: Option<String>,
-    /// BankID's issuing CA for the API server, PEM. Only this CA is trusted for BankID.
+    /// Overrides the built-in BankID server root, PEM. Only this root is trusted for BankID.
     pub bankid_ca_certificate: String,
     pub freja_enabled: bool,
     pub freja_test: bool,
