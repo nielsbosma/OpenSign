@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Download, KeyRound, Play, RotateCcw, Search } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Download, KeyRound, Moon, Play, RotateCcw, Search, Sun } from 'lucide-react';
 import { type KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { CopyButton, EmptyState, PageHeader, Spinner } from '@/components/common';
+import { CopyButton, EmptyState, Logo, PageHeader, Spinner } from '@/components/common';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,7 @@ import {
   variants,
 } from '@/lib/openapi';
 import { useSession } from '@/lib/session';
+import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 
 const BASE = '/api/v1';
@@ -491,68 +492,90 @@ export function ApiExplorerPage() {
   const shown = all.filter((e) => [e.method, e.path, e.summary, e.operationId].some((t) => t?.toLowerCase().includes(needle)));
   const groups = [...new Set(shown.map((e) => e.tag))].map((tag) => [tag, shown.filter((e) => e.tag === tag)] as const);
   const selected = all.find((e) => e.operationId === params.get('op')) ?? all[0];
+  const { theme, toggle } = useTheme();
 
   return (
-    <>
-      <PageHeader
-        title="API Explorer"
-        description="Every REST endpoint, with live calls and code to copy. Calls run as you, or with an API key you paste."
-        actions={
-          <div className="flex gap-2">
-            <Button variant="outline" asChild>
-              <a href={`${BASE}/openapi.json`} download="opensign-openapi.json">
-                <Download /> OpenAPI Document
-              </a>
+    <div className="min-h-svh">
+      <header className="sticky top-0 z-20 border-b bg-background/90 backdrop-blur">
+        <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-2.5 px-4 sm:px-6 lg:px-8">
+          <Link to="/documents" className="flex items-center gap-2.5">
+            <Logo />
+            <span className="font-semibold text-sm">OpenSign</span>
+          </Link>
+          <span className="text-muted-foreground text-sm">/ API</span>
+          <div className="ml-auto flex items-center gap-1">
+            <Button variant="ghost" size="icon" onClick={toggle} aria-label={theme === 'dark' ? 'Light Theme' : 'Dark Theme'}>
+              {theme === 'dark' ? <Sun /> : <Moon />}
             </Button>
-            <Button variant="outline" asChild>
-              <Link to="/settings/api-keys">
-                <KeyRound /> API Keys
+            <Button variant="ghost" asChild>
+              <Link to="/documents">
+                <ArrowLeft /> Back to OpenSign
               </Link>
             </Button>
           </div>
-        }
-      />
-      {spec.isPending ? (
-        <Spinner />
-      ) : !spec.data ? (
-        <EmptyState title="The API description could not be loaded">Reload the page to try again.</EmptyState>
-      ) : (
-        <div className="grid gap-8 lg:grid-cols-[300px_minmax(0,1fr)]">
-          <nav className="grid min-w-0 content-start gap-4 self-start lg:sticky lg:top-0" aria-label="Endpoints">
-            <div className="relative">
-              <Search className="absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search endpoints" className="pl-8" />
-            </div>
-            {groups.length === 0 && <p className="text-muted-foreground text-sm">No endpoint matches.</p>}
-            {groups.map(([tag, list]) => (
-              <div key={tag} className="grid min-w-0 gap-0.5">
-                <h2 className="px-2 pb-1 font-semibold text-muted-foreground text-xs uppercase tracking-wide">{tag}</h2>
-                {list.map((e) => (
-                  <button
-                    key={`${e.method} ${e.path}`}
-                    type="button"
-                    onClick={() => setParams({ op: e.operationId }, { replace: true })}
-                    title={e.summary}
-                    className={cn(
-                      'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted',
-                      e === selected && 'bg-muted',
-                    )}
-                  >
-                    <MethodBadge method={e.method} />
-                    <span className="truncate font-mono text-xs">{e.path}</span>
-                  </button>
-                ))}
-              </div>
-            ))}
-            <p className="break-words px-2 text-muted-foreground text-xs leading-relaxed">
-              Writes accept an <code className="font-mono">Idempotency-Key</code> header, so a retry never acts twice. Scrive and DocuSign
-              clients can use <code className="font-mono">/scrive/api/v2</code> and{' '}
-              <code className="font-mono">/docusign/restapi/v2.1</code>.
-            </p>
-          </nav>
-          {selected && <EndpointView key={selected.operationId} spec={spec.data} endpoint={selected} />}
         </div>
-      )}
-    </>
+      </header>
+      <main className="mx-auto w-full max-w-7xl px-4 pt-6 pb-10 sm:px-6 lg:px-8">
+        <PageHeader
+          title="API Explorer"
+          description="Every REST endpoint, with live calls and code to copy. Calls run as you, or with an API key you paste."
+          actions={
+            <div className="flex gap-2">
+              <Button variant="outline" asChild>
+                <a href={`${BASE}/openapi.json`} download="opensign-openapi.json">
+                  <Download /> OpenAPI Document
+                </a>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link to="/settings/api-keys">
+                  <KeyRound /> API Keys
+                </Link>
+              </Button>
+            </div>
+          }
+        />
+        {spec.isPending ? (
+          <Spinner />
+        ) : !spec.data ? (
+          <EmptyState title="The API description could not be loaded">Reload the page to try again.</EmptyState>
+        ) : (
+          <div className="grid gap-8 lg:grid-cols-[300px_minmax(0,1fr)]">
+            <nav className="grid min-w-0 content-start gap-4 self-start lg:sticky lg:top-20" aria-label="Endpoints">
+              <div className="relative">
+                <Search className="absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
+                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search endpoints" className="pl-8" />
+              </div>
+              {groups.length === 0 && <p className="text-muted-foreground text-sm">No endpoint matches.</p>}
+              {groups.map(([tag, list]) => (
+                <div key={tag} className="grid min-w-0 gap-0.5">
+                  <h2 className="px-2 pb-1 font-semibold text-muted-foreground text-xs uppercase tracking-wide">{tag}</h2>
+                  {list.map((e) => (
+                    <button
+                      key={`${e.method} ${e.path}`}
+                      type="button"
+                      onClick={() => setParams({ op: e.operationId }, { replace: true })}
+                      title={e.summary}
+                      className={cn(
+                        'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted',
+                        e === selected && 'bg-muted',
+                      )}
+                    >
+                      <MethodBadge method={e.method} />
+                      <span className="truncate font-mono text-xs">{e.path}</span>
+                    </button>
+                  ))}
+                </div>
+              ))}
+              <p className="break-words px-2 text-muted-foreground text-xs leading-relaxed">
+                Writes accept an <code className="font-mono">Idempotency-Key</code> header, so a retry never acts twice. Scrive and DocuSign
+                clients can use <code className="font-mono">/scrive/api/v2</code> and{' '}
+                <code className="font-mono">/docusign/restapi/v2.1</code>.
+              </p>
+            </nav>
+            {selected && <EndpointView key={selected.operationId} spec={spec.data} endpoint={selected} />}
+          </div>
+        )}
+      </main>
+    </div>
   );
 }
