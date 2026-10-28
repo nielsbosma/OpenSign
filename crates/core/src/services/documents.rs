@@ -450,6 +450,7 @@ pub struct UpdateInput {
     pub expires_at: Option<DateTime<Utc>>,
     /// Remind parties who have not signed every this many days; 0 turns reminders off.
     pub reminder_days: Option<i32>,
+    /// Your own reference; "" removes it.
     pub external_id: Option<String>,
     pub metadata: Option<Value>,
 }
@@ -480,7 +481,7 @@ impl Service for Update {
         sqlx::query(
             "update documents set title = coalesce($2, title), message = coalesce($3, message), language = coalesce($4, language),
                 sequential = coalesce($5, sequential), expires_at = coalesce($6, expires_at), reminder_days = coalesce($7, reminder_days),
-                external_id = coalesce($8, external_id), metadata = coalesce($9, metadata), updated_at = now() where id = $1",
+                external_id = case when $8::text is null then external_id else nullif($8, '') end, metadata = coalesce($9, metadata), updated_at = now() where id = $1",
         )
         .bind(document.id)
         .bind(input.title.as_deref().map(title).transpose()?)
@@ -890,8 +891,11 @@ impl Service for Send {
         if document.is_template {
             return Err(bad_request("Templates cannot be sent. Create a document from it first."));
         }
-        require_draft(&document)?;
-        sqlx::query("select 1 from documents where id = $1 for update").bind(document.id).execute(&mut *conn).await?;
+        let state: String =
+            sqlx::query_scalar("select status from documents where id = $1 for update").bind(document.id).fetch_one(&mut *conn).await?;
+        if state != status::DRAFT {
+            return Err(conflict("Only drafts can be sent"));
+        }
         let records = files(conn, document.id).await?;
         if records.is_empty() {
             return Err(bad_request("Add a file before sending"));
@@ -901,6 +905,7 @@ impl Service for Send {
             return Err(bad_request("Add at least one party who signs or approves"));
         }
         let email_settings: EmailSettings = settings(ctx, conn).await?;
+        let sms_ready = crate::sms::is_configured(&settings::<SmsSettings>(ctx, conn).await?) || ctx.app.env.development;
         for p in &all {
             match Delivery::parse(&p.delivery) {
                 Some(Delivery::Email) if p.email.is_none() => return Err(bad_request(format!("{} needs an email address", p.name))),
@@ -908,6 +913,9 @@ impl Service for Send {
                     return Err(bad_request("Email is not set up. An admin adds a Resend API key in Admin settings."));
                 }
                 Some(Delivery::Sms) if p.phone.is_none() => return Err(bad_request(format!("{} needs a phone number", p.name))),
+                Some(Delivery::Sms) if !sms_ready => {
+                    return Err(bad_request("SMS is not set up. An admin chooses an SMS provider in Admin settings."));
+                }
                 _ => {}
             }
             check_auth_available(ctx, conn, p.auth_to_view(), p).await?;

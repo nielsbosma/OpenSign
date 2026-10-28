@@ -53,10 +53,13 @@ async fn run(ctx: &Ctx, job: &Job) -> Result<()> {
     Ok(())
 }
 
-/// Expires documents past their deadline, queues reminders, and schedules itself again.
+/// Expires documents past their deadline, queues reminders and the audit anchor. `run_next`
+/// schedules the next sweep once this one is done, since a pending job holds its unique key.
 async fn sweep(ctx: &Ctx, conn: &mut sqlx::PgConnection) -> Result<()> {
     let expired: Vec<Uuid> = sqlx::query_scalar(
-        "update documents set status = 'expired', updated_at = now() where status = 'pending' and expires_at is not null and expires_at < $1 returning id",
+        "update documents d set status = 'expired', updated_at = now() where status = 'pending' and expires_at is not null and expires_at < $1
+           and exists (select 1 from parties p where p.document_id = d.id and p.role <> 'viewer' and p.signed_at is null)
+         returning id",
     )
     .bind(ctx.now)
     .fetch_all(&mut *conn)
@@ -77,7 +80,7 @@ async fn sweep(ctx: &Ctx, conn: &mut sqlx::PgConnection) -> Result<()> {
         enqueue(conn, "notify_party", json!({ "party": party, "reminder": true }), None, Some(&format!("notify:{party}"))).await?;
     }
     sqlx::query("delete from idempotency_keys where created_at < $1 - interval '1 day'").bind(ctx.now).execute(&mut *conn).await?;
-    schedule_sweep(conn, Some(ctx.now + Duration::minutes(SWEEP_MINUTES))).await
+    enqueue(conn, "anchor_audit", json!({}), None, Some("anchor_audit")).await
 }
 
 /// Time-stamps the head of the audit chain with the time stamp authority, at most once an hour, so
@@ -127,11 +130,13 @@ pub async fn run_next(app: &Arc<App>) -> Result<bool> {
             tracing::warn!(job = %job.id, kind = %job.kind, attempt = job.attempts, error = %e, cause = ?e.cause, "job failed");
             if job.kind == "sweep" {
                 jobs::complete(&mut conn, job.id).await?;
-                schedule_sweep(&mut conn, Some(crate::context::now() + Duration::minutes(SWEEP_MINUTES))).await?;
             } else {
                 jobs::fail(&mut conn, &job, &e.to_string()).await?;
             }
         }
+    }
+    if job.kind == "sweep" {
+        schedule_sweep(&mut conn, Some(crate::context::now() + Duration::minutes(SWEEP_MINUTES))).await?;
     }
     Ok(true)
 }

@@ -16,7 +16,8 @@ pub struct Job {
 }
 
 /// Queues a job in the caller's transaction, so it only exists if the change that caused it commits.
-/// A `unique_key` keeps at most one pending job per key.
+/// A `unique_key` keeps at most one pending job per key; a job under that key that ran out of
+/// attempts is started over instead of blocking the key forever.
 pub async fn enqueue(
     conn: &mut PgConnection,
     kind: &str,
@@ -26,7 +27,9 @@ pub async fn enqueue(
 ) -> Result<()> {
     sqlx::query(
         "insert into jobs (id, kind, payload, run_at, unique_key) values ($1, $2, $3, coalesce($4, now()), $5)
-         on conflict (unique_key) where done_at is null and unique_key is not null do nothing",
+         on conflict (unique_key) where done_at is null and unique_key is not null do update
+           set kind = excluded.kind, payload = excluded.payload, run_at = excluded.run_at, attempts = 0, locked_until = null, last_error = null
+           where jobs.attempts >= jobs.max_attempts",
     )
     .bind(Uuid::now_v7())
     .bind(kind)

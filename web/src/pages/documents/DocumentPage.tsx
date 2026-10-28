@@ -351,7 +351,7 @@ function DetailsSection({ doc }: { doc: DocumentView }) {
             id="reminders"
             type="number"
             min={0}
-            max={30}
+            max={60}
             value={reminder}
             onChange={(e) => setReminder(e.target.value)}
             onBlur={() => update.mutate({ id: doc.id, reminderDays: Number(reminder) || 0 })}
@@ -414,12 +414,16 @@ export function DocumentPage() {
   const [uploading, setUploading] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [canceling, setCanceling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const setParties = useApiMutation('documents.set_parties', { invalidates: ['documents.'] });
   const removeFile = useApiMutation('documents.remove_file', { invalidates: ['documents.'] });
   const remind = useApiMutation('documents.remind', { onSuccess: () => toast.success('Reminders sent') });
   const cancel = useApiMutation('documents.cancel', { invalidates: ['documents.'], onSuccess: () => setCanceling(false) });
-  const remove = useApiMutation('documents.delete', { invalidates: ['documents.list'], onSuccess: () => navigate('/documents') });
+  const remove = useApiMutation('documents.delete', {
+    invalidates: ['documents.list'],
+    onSuccess: () => navigate(doc?.isTemplate ? '/templates' : '/documents'),
+  });
   const fromTemplate = useApiMutation('documents.create', { onSuccess: (d) => navigate(`/documents/${d.id}`) });
 
   const filesKey = doc ? `${doc.id}:${doc.status}:${doc.files.map((f) => f.id).join(',')}` : '';
@@ -547,7 +551,7 @@ export function DocumentPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {doc.files.length > 0 && (
+              {doc.status !== 'draft' && (
                 <DropdownMenuItem onSelect={() => download('original')}>
                   <Download /> Original PDF
                 </DropdownMenuItem>
@@ -560,7 +564,7 @@ export function DocumentPage() {
               {doc.canEdit && !pending && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={() => remove.mutate({ id: doc.id })} className="text-destructive">
+                  <DropdownMenuItem onSelect={() => setDeleting(true)} className="text-destructive">
                     <Trash2 /> Delete
                   </DropdownMenuItem>
                 </>
@@ -758,7 +762,7 @@ export function DocumentPage() {
           <Textarea
             value={cancelReason}
             onChange={(e) => setCancelReason(e.target.value)}
-            placeholder="Reason (optional, shared with the parties)"
+            placeholder="Reason (optional, kept in the activity log)"
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => setCanceling(false)}>
@@ -770,6 +774,22 @@ export function DocumentPage() {
               onClick={() => cancel.mutate({ id: doc.id, reason: cancelReason.trim() || null })}
             >
               Cancel Signing
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={deleting} onOpenChange={setDeleting}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {doc.isTemplate ? 'Template' : 'Document'}?</DialogTitle>
+            <DialogDescription>“{doc.title}” is deleted for everyone. This cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleting(false)}>
+              Keep It
+            </Button>
+            <Button variant="destructive" disabled={remove.isPending} onClick={() => remove.mutate({ id: doc.id })}>
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>
