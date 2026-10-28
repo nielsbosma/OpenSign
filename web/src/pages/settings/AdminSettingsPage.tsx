@@ -120,7 +120,8 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
   },
   eid: {
     title: 'BankID and eID',
-    description: 'Let parties identify with Swedish BankID, Freja eID, or other Nordic eIDs through a broker.',
+    description:
+      'Let parties identify with Swedish BankID (directly or through TIC Identity), Freja eID, or other Nordic eIDs through a broker.',
     fields: [
       { key: 'bankidEnabled', label: 'Swedish BankID', type: 'bool' },
       { key: 'bankidTest', label: 'Use the BankID test environment', type: 'bool', when: 'bankidEnabled' },
@@ -173,6 +174,21 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
         placeholder: 'urn:grn:authn:no:bankid',
         hint: 'Leave empty to let the signer choose at the broker. Register /api/eid/callback as the redirect URI.',
         when: 'brokerEnabled',
+      },
+      {
+        key: 'ticEnabled',
+        label: 'BankID Through TIC Identity',
+        type: 'bool',
+        hint: 'For Swedish BankID without an agreement with a bank. Used when Swedish BankID above is off.',
+      },
+      { key: 'ticTenant', label: 'Tenant', placeholder: 'your-tenant', hint: 'As in https://id.tic.io/your-tenant.', when: 'ticEnabled' },
+      { key: 'ticClientId', label: 'Client ID', when: 'ticEnabled' },
+      {
+        key: 'ticClientSecret',
+        label: 'Client Secret',
+        type: 'secret',
+        hint: 'Turn on OIDC for the tenant in the TIC portal and register /api/eid/callback as the redirect URI.',
+        when: 'ticEnabled',
       },
     ],
   },

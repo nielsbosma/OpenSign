@@ -286,7 +286,7 @@ pub struct EidCallback {
     error: Option<String>,
 }
 
-/// `GET /api/eid/callback`: the eID broker returns the browser here. The signing page picks the
+/// `GET /api/eid/callback`: the eID broker or TIC Identity returns the browser here. The signing page picks the
 /// result up with the session id; the page itself still holds the signing link.
 pub async fn eid_callback(State(state): State<AppState>, Query(q): Query<EidCallback>, parts: Parts) -> Response {
     let caller = match caller(&state, &parts, Surface::Signer, Some(security::SIGNER)).await {

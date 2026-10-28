@@ -3,7 +3,7 @@
 An open source electronic signing service you run yourself. Upload a Word or PDF document, place fields, send it, and get back a sealed PDF that any PDF reader can verify, with an evidence report of who signed, when, and how they proved who they were.
 
 - **Signing flows**: signers, approvers and viewers, in order or all at once; email, SMS or link delivery, or in person on your own device; reminders, expiry, decline with a reason; templates. Signers can be asked for attachments (an ID copy, a certificate), which are cleaned and sealed into the signed PDF. Signers see everything in English or Swedish.
-- **Identification**: email link, SMS code (46elks or Twilio), Swedish BankID, Freja eID, and other Nordic eIDs through an OpenID Connect broker (Idura/Criipto, Signicat). With a personal number on the party, only that person can sign.
+- **Identification**: email link, SMS code (46elks or Twilio), Swedish BankID (with your own agreement or through TIC Identity), Freja eID, and other Nordic eIDs through an OpenID Connect broker (Idura/Criipto, Signicat). With a personal number on the party, only that person can sign.
 - **Sealed PDFs**: PAdES (ETSI.CAdES.detached) seal over the whole file, RFC 3161 time stamp, appended evidence pages, and a verify page and API that check any OpenSign document.
 - **Word and PDF uploads**: Word, ODT and RTF are converted by Gotenberg on a private network; every PDF is sanitized (no JavaScript, forms actions, embedded files or XFA) before anyone sees it.
 - **APIs**: a REST API with OpenAPI, plus drop-in compatible endpoints for **Scrive** (`/api/v2`) and **DocuSign** eSignature (`/restapi/v2.1`), signed webhooks, and idempotency keys.
@@ -69,6 +69,7 @@ Any admin setting can be pinned with an environment variable, `OPENSIGN_<GROUP>_
 - **Swedish BankID**: turn it on with **Use the BankID test environment** and it works right away with BankID's public test certificate and a [test BankID](https://developers.bankid.com/test-portal). For production, upload the `.p12` your bank gives you and type its password; BankID's server root is built in.
 - **Freja eID**: upload the `.pfx` from Freja with its password, and Freja's result-signing certificate. Results whose signature does not check out are refused.
 - **Broker**: issuer URL, client id and secret. Register `https://<your-install>/api/eid/callback` as the redirect URI. `acr_values` picks a specific eID.
+- **BankID through [TIC Identity](https://id.tic.io)**: for BankID without an agreement with a bank. Turn on OIDC for your tenant in TIC's portal, register `https://<your-install>/api/eid/callback` as the redirect URI, and enter the tenant name, client id and secret. Parties still choose Swedish BankID; it goes through TIC whenever BankID with your own certificate is off.
 
 ## Using the API
 

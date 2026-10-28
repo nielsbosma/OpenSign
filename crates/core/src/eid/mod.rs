@@ -1,10 +1,11 @@
-//! Electronic identification of signers: Swedish BankID and Freja eID directly, and the other
-//! Nordic eIDs through an OpenID Connect broker.
+//! Electronic identification of signers: Swedish BankID directly or through TIC Identity, Freja eID
+//! directly, and the other Nordic eIDs through an OpenID Connect broker.
 
 pub mod bankid;
 pub mod freja;
 pub mod jws;
 pub mod oidc;
+pub mod tic;
 
 use serde::{Deserialize, Serialize};
 
@@ -51,6 +52,7 @@ pub fn pkcs12_to_pem(der: &[u8], password: &str) -> Result<String, String> {
 pub fn ready(settings: &crate::settings::EidSettings, method: crate::documents::AuthMethod) -> crate::error::Result<()> {
     use crate::documents::AuthMethod;
     match method {
+        AuthMethod::SeBankid if bankid_via_tic(settings) => tic::check(settings).map(|_| ()),
         AuthMethod::SeBankid => bankid::BankId::from_settings(settings).map(|_| ()),
         AuthMethod::Freja => freja::Freja::from_settings(settings).map(|_| ()),
         AuthMethod::Broker => {
@@ -66,6 +68,12 @@ pub fn ready(settings: &crate::settings::EidSettings, method: crate::documents::
         }
         _ => Ok(()),
     }
+}
+
+/// BankID goes through TIC Identity when it is switched on and BankID with an agreement of our own
+/// is not.
+pub fn bankid_via_tic(settings: &crate::settings::EidSettings) -> bool {
+    !settings.bankid_enabled && settings.tic_enabled
 }
 
 /// A Swedish personal identity (or coordination) number as 12 digits, if the check digit is right.

@@ -12,6 +12,7 @@ use opensign_core::documents::{AuthMethod, Delivery, PartyRole, parties, signer_
 use opensign_core::eid::bankid::TEST_BASE;
 use opensign_core::eid::freja::{Freja, Outcome};
 use opensign_core::eid::jws::Key;
+use opensign_core::eid::tic::TEST_ISSUER;
 use opensign_core::services::documents::{self as docs, PartyInput};
 use opensign_core::services::eid::{self, Purpose, StartInput, StatusInput};
 use opensign_core::services::signing::{self, TokenInput};
@@ -132,9 +133,13 @@ async fn sent_document(app: &Arc<App>, sender: &Ctx, personal_number: &str) -> S
     signer_token(&app.keys, &parties(&mut conn, id).await.unwrap()[0])
 }
 
+/// Both eID tests change the shared eID settings.
+static EID_SETTINGS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[tokio::test]
 async fn bankid_identifies_the_right_person_only() {
     let Some(app) = app().await else { return };
+    let _settings = EID_SETTINGS.lock().await;
     let standin = Arc::new(Mutex::new(BankIdStandIn { person: "199001010017".into(), ..Default::default() }));
     *TEST_BASE.lock().unwrap() = Some(stand_in(standin.clone()).await);
     {
@@ -194,6 +199,119 @@ async fn bankid_identifies_the_right_person_only() {
         sqlx::query_scalar("select count(*) from audit_log where action = 'party.eid_mismatch'").fetch_one(&app.db).await.unwrap();
     assert!(mismatches >= 1);
     *TEST_BASE.lock().unwrap() = None;
+}
+
+#[derive(Default)]
+struct TicStandIn {
+    challenge: String,
+    nonce: String,
+    nin: String,
+    secret: Option<String>,
+    exchanges: usize,
+}
+
+async fn tic_stand_in(private: rsa::RsaPrivateKey, state: Arc<Mutex<TicStandIn>>) -> String {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}/acme", listener.local_addr().unwrap());
+    let discovery = json!({
+        "issuer": base,
+        "authorization_endpoint": format!("{base}/oidc/authorize"),
+        "token_endpoint": format!("{base}/oidc/token"),
+        "jwks_uri": format!("{base}/oidc/jwks"),
+        "token_endpoint_auth_methods_supported": ["client_secret_post"],
+    });
+    let public = private.to_public_key();
+    let jwks = json!({ "keys": [{ "kty": "RSA", "kid": "k1", "n": B64URL.encode(public.n().to_bytes_be()), "e": B64URL.encode(public.e().to_bytes_be()) }] });
+    let issuer = base.clone();
+    let token = move |State(s): State<Arc<Mutex<TicStandIn>>>, axum::Form(form): axum::Form<std::collections::HashMap<String, String>>| {
+        let (private, issuer) = (private.clone(), issuer.clone());
+        async move {
+            let mut s = s.lock().unwrap();
+            s.exchanges += 1;
+            s.secret = form.get("client_secret").cloned();
+            let verifier = form.get("code_verifier").cloned().unwrap_or_default();
+            if B64URL.encode(<Sha256 as sha2::Digest>::digest(verifier.as_bytes())) != s.challenge || form["code"] != "code-1" {
+                return (axum::http::StatusCode::BAD_REQUEST, Json(json!({ "error": "invalid_grant" })));
+            }
+            let now = chrono::Utc::now().timestamp();
+            let claims = json!({
+                "iss": issuer, "aud": "opensign", "exp": now + 300, "iat": now, "nonce": s.nonce, "sub": "hashed",
+                "name": "Anna Andersson", "nin": s.nin, "nin_type": "personal_number", "nin_issuing_country": "SE",
+            });
+            let signed =
+                format!("{}.{}", B64URL.encode(json!({ "alg": "RS256", "kid": "k1" }).to_string()), B64URL.encode(claims.to_string()));
+            let id_token = format!("{signed}.{}", B64URL.encode(SigningKey::<Sha256>::new(private).sign(signed.as_bytes()).to_bytes()));
+            (axum::http::StatusCode::OK, Json(json!({ "token_type": "Bearer", "id_token": id_token, "access_token": "a" })))
+        }
+    };
+    let router = axum::Router::new()
+        .route("/acme/.well-known/openid-configuration", axum::routing::get(move || async move { Json(discovery) }))
+        .route("/acme/oidc/jwks", axum::routing::get(move || async move { Json(jwks) }))
+        .route("/acme/oidc/token", post(token))
+        .with_state(state);
+    tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+    base
+}
+
+#[tokio::test]
+async fn bankid_through_tic_identifies_the_right_person_only() {
+    let Some(app) = app().await else { return };
+    let _settings = EID_SETTINGS.lock().await;
+    let standin = Arc::new(Mutex::new(TicStandIn { nin: "199001010017".into(), ..Default::default() }));
+    let private = rsa::RsaPrivateKey::new(&mut rand::thread_rng(), 1024).unwrap();
+    *TEST_ISSUER.lock().unwrap() = Some(tic_stand_in(private, standin.clone()).await);
+    {
+        let mut conn = app.db.acquire().await.unwrap();
+        let eid = EidSettings {
+            tic_enabled: true,
+            tic_tenant: "acme".into(),
+            tic_client_id: "opensign".into(),
+            tic_client_secret: Some("s3cret".into()),
+            ..EidSettings::default()
+        };
+        app.settings.save(&mut conn, &app.keys, &eid, None).await.unwrap();
+    }
+    let sender = sender(&app).await;
+    let signer = signer_ctx(&app);
+
+    let identify = |token: String| {
+        let (signer, standin, app) = (signer.clone(), standin.clone(), app.clone());
+        async move {
+            let started =
+                call::<eid::Start>(&signer, StartInput { token: token.clone(), session: None, purpose: Purpose::View }).await.unwrap();
+            assert_eq!(started.method, AuthMethod::SeBankid);
+            let url = reqwest::Url::parse(started.redirect_url.as_deref().unwrap()).unwrap();
+            assert!(url.path().ends_with("/acme/oidc/authorize"));
+            let query: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
+            assert_eq!(query["scope"], "openid profile nin");
+            assert_eq!(query["code_challenge_method"], "S256");
+            {
+                let mut s = standin.lock().unwrap();
+                s.challenge = query["code_challenge"].clone();
+                s.nonce = query["nonce"].clone();
+            }
+            let mut conn = app.db.acquire().await.unwrap();
+            let id = eid::broker_callback(&signer, &mut conn, &query["state"], Some("code-1"), None).await.unwrap();
+            assert_eq!(id, started.id);
+            let replay = eid::broker_callback(&signer, &mut conn, &query["state"], Some("code-1"), None).await;
+            assert!(replay.is_err(), "a state is used once");
+            call::<eid::Status>(&signer, StatusInput { token, id }).await.unwrap()
+        }
+    };
+
+    let token = sent_document(&app, &sender, "900101-0017").await;
+    let done = identify(token.clone()).await;
+    assert_eq!(done.status, "complete");
+    assert_eq!(standin.lock().unwrap().secret.as_deref(), Some("s3cret"), "TIC takes the secret in the form");
+    let view = call::<signing::Open>(&signer, TokenInput { token, session: done.session }).await.unwrap();
+    assert_eq!(view.needs_authentication, None);
+
+    standin.lock().unwrap().nin = "199001010025".into();
+    let refused = identify(sent_document(&app, &sender, "900101-0017").await).await;
+    assert_eq!(refused.status, "failed");
+    assert!(refused.session.is_none());
+    assert!(refused.message.unwrap().contains("someone other than"));
+    *TEST_ISSUER.lock().unwrap() = None;
 }
 
 #[tokio::test]

@@ -199,6 +199,9 @@ fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
                     crate::net::client_with_certificate(pem, None).map_err(|e| bad_request(format!("{name}: {e}")))?;
                 }
             }
+            if present(&eid.tic_tenant) && crate::eid::tic::tenant(&eid.tic_tenant).is_none() {
+                return Err(bad_request("Enter the TIC tenant's name, as in https://id.tic.io/<tenant>"));
+            }
             if present(&eid.freja_signing_certificate) {
                 crate::eid::jws::Key::from_certificate_pem(&eid.freja_signing_certificate)
                     .map_err(|e| bad_request(format!("Freja's signing certificate is not usable: {e}")))?;
