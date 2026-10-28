@@ -36,7 +36,7 @@ impl Api {
         }
         let peer = parts.extensions.get::<axum::extract::ConnectInfo<std::net::SocketAddr>>().map(|c| c.0);
         let ip = security::client_ip(&parts.headers, peer);
-        match auth::context(state, &headers, ip.map(|i| i.to_string()), Surface::Api, request_id.clone()).await {
+        match auth::context(state, &headers, ip.map(|i| i.to_string()), Surface::Compat, request_id.clone()).await {
             Ok(ctx) if ctx.actor.is_some() => Ok(Api { state: state.clone(), ctx, request_id }),
             Ok(_) => Err((unauthorized(), request_id)),
             Err(e) => Err((e, request_id)),

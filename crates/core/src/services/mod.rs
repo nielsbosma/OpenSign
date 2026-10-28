@@ -1,6 +1,7 @@
 pub mod admin;
 pub mod auth;
 pub mod documents;
+pub mod oauth;
 pub mod setup;
 pub mod signing;
 pub mod users;
@@ -90,6 +91,11 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<webhooks::Create>(),
         erase::<webhooks::Delete>(),
         erase::<webhooks::Test>(),
+        erase::<oauth::Describe>(),
+        erase::<oauth::Approve>(),
+        erase::<oauth::Deny>(),
+        erase::<oauth::ListConnections>(),
+        erase::<oauth::RevokeConnection>(),
     ]
 }
 

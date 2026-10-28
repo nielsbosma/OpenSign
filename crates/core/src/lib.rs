@@ -17,6 +17,7 @@ pub mod auth;
 pub mod documents;
 pub mod email;
 pub mod jobs;
+pub mod oauth;
 pub mod services;
 pub mod sms;
 #[cfg(any(test, feature = "testing"))]

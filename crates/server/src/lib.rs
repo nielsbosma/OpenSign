@@ -2,6 +2,7 @@ pub mod auth;
 pub mod compat;
 pub mod error;
 pub mod files;
+pub mod mcp;
 pub mod openapi;
 pub mod rest;
 pub mod rpc;
@@ -99,7 +100,7 @@ pub fn router(state: AppState) -> Router {
         .layer(middleware::from_fn_with_state(state.clone(), security::general_limit));
 
     let docusign = compat::docusign::router().layer(middleware::from_fn_with_state(state.clone(), security::general_limit));
-    let mut app = Router::new().nest("/api", api).nest("/restapi/v2.1", docusign);
+    let mut app = Router::new().nest("/api", api).nest("/restapi/v2.1", docusign).merge(mcp::router());
     if let Some(dist) = web_dist() {
         let spa = ServeDir::new(&dist).fallback(ServeFile::new(dist.join("index.html")));
         app = app.fallback_service(spa).layer(middleware::from_fn(no_cache_html));

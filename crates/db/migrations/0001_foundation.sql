@@ -221,6 +221,8 @@ create table oauth_grants (
   resource text,
   access_token_hash text not null unique,
   refresh_token_hash text not null unique,
+  -- Refresh tokens already rotated away; seeing one again revokes the grant.
+  previous_refresh_hashes text[] not null default '{}',
   access_expires_at timestamptz not null,
   refresh_expires_at timestamptz not null,
   last_used_at timestamptz,
@@ -228,3 +230,4 @@ create table oauth_grants (
   created_at timestamptz not null default now()
 );
 create index oauth_grants_user_idx on oauth_grants (user_id);
+create index oauth_grants_previous_idx on oauth_grants using gin (previous_refresh_hashes);

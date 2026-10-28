@@ -37,13 +37,15 @@ pub struct AppError {
     pub message: String,
     #[source]
     pub cause: Option<anyhow::Error>,
+    /// A protocol error code for callers that speak one, e.g. OAuth's `invalid_grant`.
+    pub code: Option<&'static str>,
 }
 
 pub type Result<T, E = AppError> = std::result::Result<T, E>;
 
 impl AppError {
     pub fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
-        Self { kind, message: message.into(), cause: None }
+        Self { kind, message: message.into(), cause: None, code: None }
     }
 
     pub fn with_cause(mut self, cause: impl Into<anyhow::Error>) -> Self {
@@ -51,8 +53,13 @@ impl AppError {
         self
     }
 
+    pub fn with_code(mut self, code: &'static str) -> Self {
+        self.code = Some(code);
+        self
+    }
+
     pub fn internal(cause: impl Into<anyhow::Error>) -> Self {
-        Self { kind: ErrorKind::Internal, message: "Something went wrong on our side".into(), cause: Some(cause.into()) }
+        Self { kind: ErrorKind::Internal, message: "Something went wrong on our side".into(), cause: Some(cause.into()), code: None }
     }
 }
 
