@@ -129,55 +129,92 @@ pub async fn notify_turn(conn: &mut PgConnection, document: &DocumentRow) -> Res
     Ok(())
 }
 
-/// Emails the sealed document to every party with an email address and to the owner.
-pub async fn notify_completed(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid) -> Result<()> {
+/// Who a per-recipient email job is for: a party, or the document's owner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Recipient {
+    Party(Uuid),
+    Owner,
+}
+
+impl Recipient {
+    pub fn parse(value: &str) -> Option<Recipient> {
+        if value == "owner" { Some(Recipient::Owner) } else { Uuid::try_parse(value).ok().map(Recipient::Party) }
+    }
+
+    fn as_string(self) -> String {
+        match self {
+            Recipient::Party(id) => id.to_string(),
+            Recipient::Owner => "owner".into(),
+        }
+    }
+}
+
+/// Everyone who gets the sealed document: parties with an email address, and the owner unless
+/// they are also a party.
+async fn completed_recipients(
+    conn: &mut PgConnection,
+    document: &DocumentRow,
+) -> Result<Vec<(Recipient, String, String, Option<PartyRow>)>> {
+    let mut recipients = Vec::new();
+    for p in parties(conn, document.id).await? {
+        if let Some(email) = p.email.clone() {
+            recipients.push((Recipient::Party(p.id), email, p.name.clone(), Some(p)));
+        }
+    }
+    if let Some((name, email)) = owner(conn, document).await?
+        && !recipients.iter().any(|(_, e, _, _)| e.eq_ignore_ascii_case(&email))
+    {
+        recipients.push((Recipient::Owner, email, name, None));
+    }
+    Ok(recipients)
+}
+
+/// Emails the sealed document to every party with an email address and to the owner. Without a
+/// recipient it queues one job per recipient, so a failed send is retried without repeating the
+/// emails that already went out.
+pub async fn notify_completed(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid, to: Option<Recipient>) -> Result<()> {
     let Some(document) = document(conn, document_id).await? else { return Ok(()) };
     let Some(sealed_id) = document.sealed_file_id.filter(|_| document.status == status::COMPLETED) else { return Ok(()) };
+    let recipients = completed_recipients(conn, &document).await?;
+    let Some(to) = to else {
+        for (recipient, ..) in recipients {
+            let key = format!("completed:{}:{}", document.id, recipient.as_string());
+            enqueue(conn, "notify_completed", json!({ "document": document.id, "to": recipient.as_string() }), None, Some(&key)).await?;
+        }
+        return Ok(());
+    };
+    let Some((_, email, name, party)) = recipients.into_iter().find(|(r, ..)| *r == to) else { return Ok(()) };
     let record = file_record(conn, sealed_id).await?;
     let attachment =
         if record.size_bytes <= ATTACHMENT_LIMIT { Some(read_file(&ctx.app.storage, ctx.keys(), &record).await?) } else { None };
     let org: OrgSettings = settings(ctx, conn).await?;
     let email_settings: EmailSettings = settings(ctx, conn).await?;
-    let mut recipients: Vec<(String, String, Option<PartyRow>)> = Vec::new();
-    for p in parties(conn, document.id).await? {
-        if let Some(email) = p.email.clone() {
-            recipients.push((email, p.name.clone(), Some(p)));
-        }
-    }
-    if let Some((name, email)) = owner(conn, &document).await?
-        && !recipients.iter().any(|(e, _, _)| e.eq_ignore_ascii_case(&email))
-    {
-        recipients.push((email, name, None));
-    }
-    let filename = format!("{}.pdf", sanitize_filename(&document.title));
     let lang = Lang::of(&document.language);
-    for (to, name, party) in recipients {
-        let mut paragraphs = vec![lang.completed(&document.title)];
-        let button = match (&attachment, &party) {
-            (Some(_), _) => {
-                paragraphs.push(lang.completed_attached().into());
-                None
-            }
-            (None, Some(p)) => Some((lang.download_button().to_string(), signer_url(ctx, ctx.keys(), p))),
-            (None, None) => Some(("Open Document".to_string(), format!("{}/documents/{}", ctx.app.public_url(), document.id))),
-        };
-        email::send(
-            &ctx.app,
-            &email_settings,
-            &org,
-            &Message {
-                to,
-                to_name: Some(name),
-                subject: lang.completed_subject(&document.title),
-                paragraphs,
-                button,
-                footer: None,
-                attachments: attachment.iter().map(|content| Attachment { filename: filename.clone(), content: content.clone() }).collect(),
-            },
-        )
-        .await?;
-    }
-    Ok(())
+    let mut paragraphs = vec![lang.completed(&document.title)];
+    let button = match (&attachment, &party) {
+        (Some(_), _) => {
+            paragraphs.push(lang.completed_attached().into());
+            None
+        }
+        (None, Some(p)) => Some((lang.download_button().to_string(), signer_url(ctx, ctx.keys(), p))),
+        (None, None) => Some(("Open Document".to_string(), format!("{}/documents/{}", ctx.app.public_url(), document.id))),
+    };
+    let filename = format!("{}.pdf", sanitize_filename(&document.title));
+    email::send(
+        &ctx.app,
+        &email_settings,
+        &org,
+        &Message {
+            to: email,
+            to_name: Some(name),
+            subject: lang.completed_subject(&document.title),
+            paragraphs,
+            button,
+            footer: None,
+            attachments: attachment.into_iter().map(|content| Attachment { filename: filename.clone(), content }).collect(),
+        },
+    )
+    .await
 }
 
 pub fn sanitize_filename(title: &str) -> String {
@@ -186,7 +223,7 @@ pub fn sanitize_filename(title: &str) -> String {
     if name.is_empty() { "document".into() } else { name.chars().take(100).collect() }
 }
 
-/// Tells the owner a party declined, and every other notified party that signing stopped.
+/// Tells the owner a party declined, then queues the note to every other notified party.
 pub async fn notify_declined(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid, party_id: Uuid) -> Result<()> {
     let Some(document) = document(conn, document_id).await? else { return Ok(()) };
     let Some(decliner) = party(conn, party_id).await? else { return Ok(()) };
@@ -208,37 +245,49 @@ pub async fn notify_declined(ctx: &Ctx, conn: &mut PgConnection, document_id: Uu
         };
         email::send(&ctx.app, &email_settings, &org, &message).await?;
     }
-    notify_stopped(ctx, conn, &document, Some(party_id), Stopped::Declined(&decliner.name)).await
+    queue_stopped(conn, &document, Some(party_id)).await
 }
 
-/// Tells parties who already got a link that the document will not be signed.
-pub async fn notify_stopped(
-    ctx: &Ctx,
-    conn: &mut PgConnection,
-    document: &DocumentRow,
-    except: Option<Uuid>,
-    why: Stopped<'_>,
-) -> Result<()> {
+fn told_stopped(document: &DocumentRow, party: &PartyRow) -> bool {
+    party.notified_at.is_some() && party.email.is_some() && !(party.signed_at.is_some() && document.status == status::COMPLETED)
+}
+
+/// Queues one `notify_stopped` job per party who already got a link, except the one who declined.
+pub async fn queue_stopped(conn: &mut PgConnection, document: &DocumentRow, except: Option<Uuid>) -> Result<()> {
+    for p in parties(conn, document.id).await? {
+        if Some(p.id) != except && told_stopped(document, &p) {
+            let key = format!("stopped:{}:{}", document.id, p.id);
+            enqueue(conn, "notify_stopped", json!({ "document": document.id, "party": p.id }), None, Some(&key)).await?;
+        }
+    }
+    Ok(())
+}
+
+/// Tells a party who already got a link that the document will not be signed.
+pub async fn notify_stopped(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid, party_id: Uuid) -> Result<()> {
+    let Some(document) = document(conn, document_id).await? else { return Ok(()) };
+    let Some(p) = party(conn, party_id).await?.filter(|p| p.document_id == document.id && told_stopped(&document, p)) else {
+        return Ok(());
+    };
+    let decliner = parties(conn, document.id).await?.into_iter().find(|p| p.declined_at.is_some()).map(|p| p.name);
+    let why = match (document.status.as_str(), &decliner) {
+        (status::DECLINED, Some(name)) => Stopped::Declined(name),
+        (status::CANCELED, _) => Stopped::Canceled,
+        _ => return Ok(()),
+    };
     let lang = Lang::of(&document.language);
     let org: OrgSettings = settings(ctx, conn).await?;
     let email_settings: EmailSettings = settings(ctx, conn).await?;
-    for p in parties(conn, document.id).await? {
-        if Some(p.id) == except || p.notified_at.is_none() || p.signed_at.is_some() && document.status == status::COMPLETED {
-            continue;
-        }
-        let Some(email) = p.email.clone() else { continue };
-        let message = Message {
-            to: email,
-            to_name: Some(p.name.clone()),
-            subject: lang.stopped_subject(&document.title),
-            paragraphs: vec![lang.stopped(&why, &document.title)],
-            button: None,
-            footer: None,
-            attachments: vec![],
-        };
-        email::send(&ctx.app, &email_settings, &org, &message).await?;
-    }
-    Ok(())
+    let message = Message {
+        to: p.email.clone().unwrap_or_default(),
+        to_name: Some(p.name.clone()),
+        subject: lang.stopped_subject(&document.title),
+        paragraphs: vec![lang.stopped(&why, &document.title)],
+        button: None,
+        footer: None,
+        attachments: vec![],
+    };
+    email::send(&ctx.app, &email_settings, &org, &message).await
 }
 
 /// Queues a webhook delivery for every active webhook subscribed to `event`, in the caller's

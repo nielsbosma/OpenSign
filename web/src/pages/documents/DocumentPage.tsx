@@ -775,7 +775,7 @@ export function DocumentPage() {
               {doc.status === 'completed' && doc.sealedSha256 && (
                 <Section title="Seal">
                   <p className="text-muted-foreground">
-                    Sealed by OpenSign with a trusted timestamp. Anyone can check the file at{' '}
+                    Sealed by OpenSign{doc.sealedWithTimestamp ? ' with a trusted timestamp' : ''}. Anyone can check the file at{' '}
                     <a href="/verify" className="underline">
                       /verify
                     </a>
