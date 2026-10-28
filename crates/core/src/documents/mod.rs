@@ -1,5 +1,6 @@
 //! Documents, their parties and fields: shared types, who may see what, and signer links.
 
+pub mod attachments;
 pub mod notify;
 pub mod seal;
 pub mod upload;
@@ -280,6 +281,8 @@ pub struct DocumentView {
     pub files: Vec<FileRecord>,
     pub parties: Vec<PartyView>,
     pub fields: Vec<FieldRow>,
+    /// Files parties are asked to upload while signing, and what they uploaded.
+    pub attachments: Vec<attachments::AttachmentRequest>,
     pub can_edit: bool,
 }
 
@@ -380,7 +383,8 @@ pub async fn view(ctx: &Ctx, conn: &mut PgConnection, document: DocumentRow) -> 
     let parties = parties(conn, document.id).await?.iter().map(|p| PartyView::from_row(ctx.keys(), p)).collect();
     let fields = fields(conn, document.id).await?;
     let files = files(conn, document.id).await?;
-    Ok(DocumentView { document, owner_name, files, parties, fields, can_edit })
+    let attachments = attachments::for_document(conn, document.id).await?;
+    Ok(DocumentView { document, owner_name, files, parties, fields, attachments, can_edit })
 }
 
 fn link_mac(keys: &Keys, party_id: Uuid, version: i32) -> String {

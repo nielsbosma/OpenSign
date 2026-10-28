@@ -2,7 +2,9 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
 use chrono::{DateTime, Utc};
 use opensign_crypto::{KeyPurpose, random_bytes, sha256_hex};
-use opensign_pdf::{EvidenceEvent, EvidenceParty, EvidenceReport, PdfError, SealIdentity, SealOptions, Stamp, StampContent};
+use opensign_pdf::{
+    EvidenceAttachment, EvidenceEvent, EvidenceParty, EvidenceReport, PdfError, SealIdentity, SealOptions, Stamp, StampContent,
+};
 use serde_json::{Value, json};
 use sqlx::PgConnection;
 use uuid::Uuid;
@@ -176,11 +178,41 @@ async fn evidence_events(conn: &mut PgConnection, document_id: Uuid) -> Result<V
                 ),
                 "party.signed" => format!("Signed by {name}{ip}"),
                 "party.approved" => format!("Approved by {name}{ip}"),
+                "party.attachment_uploaded" => {
+                    format!(
+                        "{name} uploaded {} ({})",
+                        metadata["attachment"].as_str().unwrap_or("a file"),
+                        metadata["file"].as_str().unwrap_or("")
+                    )
+                }
                 _ => return None,
             };
             Some(EvidenceEvent { at: fmt_time(Some(at)), text })
         })
         .collect())
+}
+
+async fn evidence_attachments(
+    ctx: &Ctx,
+    conn: &mut PgConnection,
+    document: &DocumentRow,
+    parties: &[PartyRow],
+) -> Result<Vec<EvidenceAttachment>> {
+    let mut out = Vec::new();
+    for request in super::attachments::for_document(conn, document.id).await? {
+        let Some(file_id) = request.file_id else { continue };
+        let record = file_record(conn, file_id).await?;
+        let content = read_file(&ctx.app.storage, ctx.keys(), &record).await?;
+        out.push(EvidenceAttachment {
+            party: parties.iter().find(|p| p.id == request.party_id).map(|p| p.name.clone()).unwrap_or_default(),
+            name: request.name,
+            file_name: record.name,
+            sha256: record.sha256,
+            content_type: record.content_type,
+            content,
+        });
+    }
+    Ok(out)
 }
 
 /// Stamps every value and signature, appends the evidence pages, and seals the result with the
@@ -232,6 +264,7 @@ pub async fn seal_document(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid
             })
             .collect(),
         events: evidence_events(conn, document.id).await?,
+        attachments: evidence_attachments(ctx, conn, &document, &parties).await?,
         audit_head,
     };
     let identity = active_identity(ctx, conn).await?;

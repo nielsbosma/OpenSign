@@ -14,6 +14,7 @@ use super::{Ok_, settings};
 use crate::audit::{Entry, audit};
 use crate::auth::normalize_email;
 use crate::context::Ctx;
+use crate::documents::attachments::{self, AttachmentRequestInput};
 use crate::documents::{
     AuthMethod, Delivery, DocumentRow, DocumentView, FieldKind, Need, PartyRole, PartyRow, PartyView, VISIBLE, current_turn,
     decrypt_personal_number, files, load_document, notify, parties, personal_number_context, signer_url, status, upload, view, visibility,
@@ -282,6 +283,7 @@ async fn copy_template(ctx: &Ctx, conn: &mut PgConnection, from: Uuid, to: Uuid)
         .execute(&mut *conn)
         .await?;
     }
+    attachments::copy(conn, to, &ids, from).await?;
     for f in crate::documents::fields(conn, from).await? {
         sqlx::query(
             "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options)
@@ -519,6 +521,8 @@ pub struct PartyInput {
     pub auth_to_view: AuthMethod,
     #[serde(default = "default_sign_auth")]
     pub auth_to_sign: AuthMethod,
+    /// Files the party must or may upload while signing, such as a copy of an ID. Leave out to keep the current ones.
+    pub attachments: Option<Vec<AttachmentRequestInput>>,
 }
 
 fn default_role() -> PartyRole {
@@ -555,6 +559,7 @@ struct CleanParty {
     delivery: Delivery,
     auth_to_view: AuthMethod,
     auth_to_sign: AuthMethod,
+    attachments: Option<Vec<AttachmentRequestInput>>,
 }
 
 fn clean_party(input: PartyInput, existing: &[PartyRow]) -> Result<CleanParty> {
@@ -590,6 +595,7 @@ fn clean_party(input: PartyInput, existing: &[PartyRow]) -> Result<CleanParty> {
         delivery: input.delivery,
         auth_to_view: input.auth_to_view,
         auth_to_sign: input.auth_to_sign,
+        attachments: input.attachments,
     })
 }
 
@@ -652,6 +658,9 @@ impl Service for SetParties {
             .bind(p.keep_personal_number)
             .execute(&mut *conn)
             .await?;
+            if let Some(requests) = &p.attachments {
+                attachments::set(conn, document.id, p.id, requests).await?;
+            }
         }
         sqlx::query("update fields set party_id = null where document_id = $1 and party_id is not null and not (party_id = any($2))")
             .bind(document.id)
@@ -664,7 +673,12 @@ impl Service for SetParties {
             Entry::new("document.parties_set", "document", document.id).after(
                 cleaned
                     .iter()
-                    .map(|p| json!({ "id": p.id, "name": p.name, "email": p.email, "role": p.role, "authToSign": p.auth_to_sign }))
+                    .map(|p| {
+                        json!({
+                            "id": p.id, "name": p.name, "email": p.email, "role": p.role, "authToSign": p.auth_to_sign,
+                            "attachments": p.attachments.as_ref().map(|a| a.iter().map(|r| r.name.clone()).collect::<Vec<_>>()),
+                        })
+                    })
                     .collect::<Vec<_>>(),
             ),
         )
@@ -1190,6 +1204,26 @@ pub async fn document_file(ctx: &Ctx, conn: &mut PgConnection, id: Uuid, version
         ctx,
         conn,
         Entry::new("document.downloaded", "document", document.id).metadata(json!({ "version": format!("{version:?}").to_lowercase() })),
+    )
+    .await?;
+    Ok(record)
+}
+
+/// A file a party uploaded, for someone who may read the document. Every download is audited.
+pub async fn attachment_file(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid, request_id: Uuid) -> Result<FileRecord> {
+    let document = load_document(ctx, conn, document_id, Need::Read).await?;
+    let request = attachments::for_document(conn, document.id)
+        .await?
+        .into_iter()
+        .find(|r| r.id == request_id)
+        .ok_or_else(|| not_found("Attachment"))?;
+    let file_id = request.file_id.ok_or_else(|| conflict("Nothing has been uploaded yet"))?;
+    let record = file_record(conn, file_id).await?;
+    audit(
+        ctx,
+        conn,
+        Entry::new("document.attachment_downloaded", "document", document.id)
+            .metadata(json!({ "attachment": request.name, "file": record.name, "party": request.party_id })),
     )
     .await?;
     Ok(record)

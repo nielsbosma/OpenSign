@@ -146,6 +146,88 @@ pub async fn upload(State(state): State<AppState>, Path(id): Path<Uuid>, request
     }
 }
 
+/// A party's upload, as a download in a sandbox: images and PDFs never render in our origin.
+fn attachment(name: &str, content_type: &str, body: Vec<u8>) -> Response {
+    let mut response = Body::from(body).into_response();
+    let h = response.headers_mut();
+    let content_type = match content_type {
+        "application/pdf" => "application/pdf",
+        "image/png" => "image/png",
+        _ => "application/octet-stream",
+    };
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
+    h.insert(header::CONTENT_DISPOSITION, content_disposition(name));
+    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
+    h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("sandbox; default-src 'none'"));
+    response
+}
+
+/// `GET /api/documents/<id>/attachments/<request id>`
+pub async fn document_attachment(State(state): State<AppState>, Path((id, request)): Path<(Uuid, Uuid)>, parts: Parts) -> Response {
+    let caller = match caller(&state, &parts, Surface::Web, None).await {
+        Ok(c) => c,
+        Err(r) => return *r,
+    };
+    let result = async {
+        caller.ctx.actor()?;
+        let mut conn = caller.ctx.db().acquire().await?;
+        let record = docs::attachment_file(&caller.ctx, &mut conn, id, request).await?;
+        let body = read_file(&caller.ctx.app.storage, caller.ctx.keys(), &record).await?;
+        Ok::<_, opensign_core::AppError>((record.name, record.content_type, body))
+    }
+    .await;
+    match result {
+        Ok((name, content_type, body)) => attachment(&name, &content_type, body),
+        Err(e) => ApiError(e, Some(caller.request_id)).into_response(),
+    }
+}
+
+/// `POST /api/sign/attachment`, multipart with `token`, `session` (optional), `request` and `file`.
+pub async fn signer_attachment(State(state): State<AppState>, request: Request) -> Response {
+    let (parts, body) = request.into_parts();
+    let caller = match caller(&state, &parts, Surface::Signer, Some(security::UPLOAD)).await {
+        Ok(c) => c,
+        Err(r) => return *r,
+    };
+    let fail = |e| ApiError(e, Some(caller.request_id.clone())).into_response();
+    let mut multipart = match Multipart::from_request(Request::from_parts(parts, body), &state).await {
+        Ok(m) => m,
+        Err(_) => return fail(bad_request("Send the file as multipart/form-data")),
+    };
+    let (mut token, mut session, mut request_id, mut file) = (None, None, None, None);
+    while let Ok(Some(field)) = multipart.next_field().await {
+        match field.name() {
+            Some("token") => token = field.text().await.ok(),
+            Some("session") => session = field.text().await.ok().filter(|s| !s.is_empty()),
+            Some("request") => request_id = field.text().await.ok().and_then(|r| Uuid::parse_str(r.trim()).ok()),
+            Some("file") => {
+                let name = field.file_name().unwrap_or("attachment").to_string();
+                match field.bytes().await {
+                    Ok(bytes) => file = Some((name, bytes.to_vec())),
+                    Err(_) => return fail(bad_request("The upload was interrupted or is too large")),
+                }
+            }
+            _ => {}
+        }
+    }
+    let (Some(token), Some(request_id), Some((name, bytes))) = (token, request_id, file) else {
+        return fail(bad_request("Send token, request and file"));
+    };
+    let result = async {
+        let mut tx = caller.ctx.db().begin().await?;
+        let out =
+            opensign_core::services::signing::upload_attachment(&caller.ctx, &mut tx, &token, session.as_deref(), request_id, &name, bytes)
+                .await?;
+        tx.commit().await?;
+        Ok::<_, opensign_core::AppError>(out)
+    }
+    .await;
+    match result {
+        Ok(out) => Json(out).into_response(),
+        Err(e) => fail(e),
+    }
+}
+
 #[derive(Deserialize)]
 pub struct SignerFileInput {
     token: String,

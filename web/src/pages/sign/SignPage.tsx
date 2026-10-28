@@ -8,10 +8,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { type AuthMethod, call, errorMessage, fetchPdf, type SignerView } from '@/lib/api';
+import { type AttachmentRequest, type AuthMethod, call, errorMessage, fetchPdf, type SignerView } from '@/lib/api';
 import { saveBytes } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { FormError } from '../auth/AuthLayout';
+import { AttachmentUploads } from './AttachmentUploads';
 import { EidIdentify } from './EidIdentify';
 import { type Signature, SignaturePad } from './SignaturePad';
 import { TextsContext, textsFor, useTexts } from './texts';
@@ -208,12 +209,14 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
   const [result, setResult] = useState<'signed' | 'completed' | 'declined' | null>(null);
   const [declining, setDeclining] = useState(false);
   const [reason, setReason] = useState('');
+  const [attachments, setAttachments] = useState<AttachmentRequest[]>([]);
 
   useEffect(() => {
     if (!token) return;
     call('signing.open', { token, session })
       .then((v) => {
         setView(v);
+        setAttachments(v.attachments);
         onLanguage(v.document.language);
       })
       .catch((e) => setError(errorMessage(e)));
@@ -429,6 +432,9 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
             ) : (
               <>
                 {inputs.length > 0 && <p className="text-xs text-muted-foreground">{t.fillFields}</p>}
+                {attachments.length > 0 && (
+                  <AttachmentUploads token={token} session={session} requests={attachments} onChange={setAttachments} />
+                )}
                 {isSigner && <SignaturePad defaultName={view.party.name} onChange={setSignature} />}
                 <label className="flex items-start gap-2.5">
                   <Checkbox checked={consent} onCheckedChange={(c) => setConsent(c === true)} className="mt-0.5" />
@@ -437,7 +443,7 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
                 <FormError message={signError} />
                 <Button
                   onClick={sign}
-                  disabled={busy || !consent || (isSigner && !signature)}
+                  disabled={busy || !consent || (isSigner && !signature) || attachments.some((a) => a.required && !a.fileId)}
                   style={brand ? { backgroundColor: brand } : undefined}
                   size="lg"
                 >

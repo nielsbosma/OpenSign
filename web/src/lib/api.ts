@@ -57,6 +57,22 @@ export async function uploadFile(documentId: string, file: File): Promise<Output
   return parse(response);
 }
 
+/** A file the party was asked for, uploaded through their signing link. */
+export async function uploadAttachment(
+  token: string,
+  session: string | null,
+  request: string,
+  file: File,
+): Promise<import('./api-types.gen').AttachmentRequest> {
+  const form = new FormData();
+  form.append('token', token);
+  if (session) form.append('session', session);
+  form.append('request', request);
+  form.append('file', file, file.name);
+  const response = await fetch('/api/sign/attachment', { method: 'POST', credentials: 'same-origin', body: form });
+  return parse(response);
+}
+
 export async function verifyFile(file: File): Promise<Output<'documents.verify'>> {
   const response = await fetch('/api/verify', { method: 'POST', credentials: 'same-origin', body: file });
   return parse(response);

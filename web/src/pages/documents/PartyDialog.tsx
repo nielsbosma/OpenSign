@@ -1,10 +1,12 @@
+import { Plus, Trash2 } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { Field } from '@/components/common';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { AuthMethod, Delivery, PartyInput, PartyRole, PartyView } from '@/lib/api';
+import type { AttachmentRequest, AttachmentRequestInput, AuthMethod, Delivery, PartyInput, PartyRole, PartyView } from '@/lib/api';
 import { AUTH_LABELS, DELIVERY_LABELS } from '@/lib/format';
 
 const ROLES: Record<PartyRole, string> = { signer: 'Signs', approver: 'Approves', viewer: 'Receives a copy' };
@@ -12,7 +14,8 @@ const VIEW_AUTH: AuthMethod[] = ['none', 'sms_pin', 'se_bankid', 'freja', 'broke
 const SIGN_AUTH: AuthMethod[] = ['standard', 'sms_pin', 'se_bankid', 'freja', 'broker'];
 const EID: AuthMethod[] = ['se_bankid', 'freja', 'broker'];
 
-export function partyToInput(p: PartyView): PartyInput {
+/** Pass the document's attachment requests to edit them; leave them out to keep what is stored. */
+export function partyToInput(p: PartyView, requests?: AttachmentRequest[]): PartyInput {
   return {
     id: p.id,
     name: p.name,
@@ -24,7 +27,62 @@ export function partyToInput(p: PartyView): PartyInput {
     authToView: p.authToView as AuthMethod,
     authToSign: p.authToSign as AuthMethod,
     signOrder: p.signOrder,
+    attachments: requests
+      ?.filter((r) => r.partyId === p.id)
+      .map((r) => ({ name: r.name, description: r.description, required: r.required })),
   };
+}
+
+function AttachmentRequests({ value, onChange }: { value: AttachmentRequestInput[]; onChange: (v: AttachmentRequestInput[]) => void }) {
+  const update = (i: number, patch: Partial<AttachmentRequestInput>) => onChange(value.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  return (
+    <div className="grid gap-2 sm:col-span-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">Ask for Attachments</span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={value.length >= 10}
+          onClick={() => onChange([...value, { name: '', description: '', required: true }])}
+        >
+          <Plus /> Add
+        </Button>
+      </div>
+      {value.length === 0 && (
+        <p className="text-xs text-muted-foreground">For example a copy of an ID or a certificate. PDF, JPEG or PNG.</p>
+      )}
+      {value.map((r, i) => (
+        <div key={i} className="grid gap-2 rounded-md border p-2 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-center">
+          <Input
+            aria-label="Attachment name"
+            placeholder="Copy of ID"
+            value={r.name}
+            required
+            onChange={(e) => update(i, { name: e.target.value })}
+          />
+          <Input
+            aria-label="Attachment description"
+            placeholder="Description (optional)"
+            value={r.description ?? ''}
+            onChange={(e) => update(i, { description: e.target.value })}
+          />
+          <label className="flex items-center gap-1.5 text-xs">
+            <Checkbox checked={r.required ?? true} onCheckedChange={(c) => update(i, { required: c === true })} /> Required
+          </label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Remove attachment"
+            onClick={() => onChange(value.filter((_, j) => j !== i))}
+          >
+            <Trash2 />
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function Choice<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: [T, string][] }) {
@@ -64,7 +122,10 @@ export function PartyDialog({
 }) {
   const [p, setP] = useState<PartyInput>({ name: '' });
   useEffect(() => {
-    if (open) setP(party ?? { name: '', role: 'signer', delivery: 'email', authToView: 'none', authToSign: 'standard', signOrder: 1 });
+    if (open)
+      setP(
+        party ?? { name: '', role: 'signer', delivery: 'email', authToView: 'none', authToSign: 'standard', signOrder: 1, attachments: [] },
+      );
   }, [open, party]);
   const set = (patch: Partial<PartyInput>) => setP({ ...p, ...patch });
   const needsNumber = EID.includes(p.authToSign ?? 'standard') || EID.includes(p.authToView ?? 'none');
@@ -147,6 +208,9 @@ export function PartyDialog({
                   onChange={(e) => set({ signOrder: Number(e.target.value) || 1 })}
                 />
               </Field>
+            )}
+            {(p.role ?? 'signer') !== 'viewer' && (
+              <AttachmentRequests value={p.attachments ?? []} onChange={(attachments) => set({ attachments })} />
             )}
           </div>
           <DialogFooter>

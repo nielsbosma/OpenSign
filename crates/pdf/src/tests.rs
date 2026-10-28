@@ -160,6 +160,14 @@ fn report() -> EvidenceReport {
         events: (0..80)
             .map(|i| EvidenceEvent { at: format!("2026-10-28 11:{:02} UTC", i % 60), text: format!("Event number {i}") })
             .collect(),
+        attachments: vec![EvidenceAttachment {
+            party: "Anna Ångström".into(),
+            name: "Copy of ID".into(),
+            file_name: "passport.png".into(),
+            sha256: "12".repeat(32),
+            content_type: "image/png".into(),
+            content: b"png bytes".to_vec(),
+        }],
         audit_head: Some("ef".repeat(32)),
     }
 }
@@ -171,7 +179,9 @@ fn evidence_adds_pages_and_attachment() {
     let doc = Document::load_mem(&out).unwrap();
     assert!(doc.get_pages().len() >= 3, "80 events should spill onto a second evidence page");
     let names = doc.catalog().unwrap().get(b"Names").unwrap().as_dict().unwrap();
-    assert!(names.has(b"EmbeddedFiles"));
+    let tree = names.get(b"EmbeddedFiles").unwrap().as_dict().unwrap().get(b"Names").unwrap().as_array().unwrap();
+    let keys: Vec<&[u8]> = tree.iter().step_by(2).map(|k| k.as_str().unwrap()).collect();
+    assert_eq!(keys, [&b"attachment-01-passport.png"[..], b"evidence.json"]);
 }
 
 #[test]

@@ -93,6 +93,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<eid::Cancel>(),
         erase::<signing::Sign>(),
         erase::<signing::Decline>(),
+        erase::<signing::RemoveAttachment>(),
         erase::<webhooks::List>(),
         erase::<webhooks::Create>(),
         erase::<webhooks::Delete>(),

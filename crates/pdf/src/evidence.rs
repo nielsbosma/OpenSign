@@ -25,6 +25,20 @@ pub struct EvidenceEvent {
     pub text: String,
 }
 
+/// A file a party uploaded while signing. It is listed in the evidence and embedded in the PDF.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EvidenceAttachment {
+    pub party: String,
+    pub name: String,
+    pub file_name: String,
+    pub sha256: String,
+    #[serde(skip)]
+    pub content_type: String,
+    #[serde(skip)]
+    pub content: Vec<u8>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EvidenceReport {
@@ -37,6 +51,7 @@ pub struct EvidenceReport {
     pub verify_url: String,
     pub parties: Vec<EvidenceParty>,
     pub events: Vec<EvidenceEvent>,
+    pub attachments: Vec<EvidenceAttachment>,
     pub audit_head: Option<String>,
 }
 
@@ -164,6 +179,16 @@ pub fn append_evidence(pdf: &[u8], report: &EvidenceReport) -> Result<Vec<u8>> {
             );
         }
     }
+    if !report.attachments.is_empty() {
+        w.rule();
+        w.text(FONT_BOLD, 11.0, 0.0, "Attachments", 0.1);
+        for a in &report.attachments {
+            w.gap(2.0);
+            w.text(FONT, 9.0, 0.0, &format!("{} from {}: {}", a.name, a.party, a.file_name), 0.1);
+            w.text(FONT, 8.0, 12.0, &format!("SHA-256 {}", a.sha256), 0.35);
+        }
+        w.text(FONT, 8.5, 0.0, "The files are embedded in this PDF. Open the attachments pane of your PDF reader to see them.", 0.35);
+    }
     w.rule();
     w.text(FONT_BOLD, 11.0, 0.0, "Events", 0.1);
     for event in &report.events {
@@ -203,34 +228,56 @@ pub fn append_evidence(pdf: &[u8], report: &EvidenceReport) -> Result<Vec<u8>> {
         root.set("Kids", kids);
         root.set("Count", count);
     }
-    attach_json(&mut doc, report)?;
+    attach_files(&mut doc, report)?;
     let mut out = Vec::new();
     doc.compress();
     doc.save_to(&mut out).map_err(|e| PdfError::Malformed(e.to_string()))?;
     Ok(out)
 }
 
-fn attach_json(doc: &mut Document, report: &EvidenceReport) -> Result<ObjectId> {
-    let json = serde_json::to_vec_pretty(report).map_err(|e| PdfError::Malformed(e.to_string()))?;
+fn embed(
+    doc: &mut Document,
+    name: &str,
+    content_type: &str,
+    description: &str,
+    relationship: &str,
+    content: Vec<u8>,
+) -> (Vec<u8>, ObjectId) {
+    let size = content.len() as i64;
     let mut stream = Stream::new(
-        dictionary! { "Type" => "EmbeddedFile", "Subtype" => Object::Name(b"application/json".to_vec()), "Params" => dictionary! { "Size" => json.len() as i64 } },
-        json,
+        dictionary! { "Type" => "EmbeddedFile", "Subtype" => Object::Name(content_type.as_bytes().to_vec()), "Params" => dictionary! { "Size" => size } },
+        content,
     );
     let _ = stream.compress();
     let file = doc.add_object(stream);
-    let name = Object::String(b"evidence.json".to_vec(), StringFormat::Literal);
+    let name = crate::stamp::winansi(name);
     let spec = doc.add_object(dictionary! {
         "Type" => "Filespec",
-        "F" => name.clone(),
-        "UF" => name.clone(),
-        "AFRelationship" => "Data",
-        "Desc" => Object::String(b"OpenSign signing evidence".to_vec(), StringFormat::Literal),
+        "F" => Object::String(name.clone(), StringFormat::Literal),
+        "UF" => Object::String(name.clone(), StringFormat::Literal),
+        "AFRelationship" => Object::Name(relationship.as_bytes().to_vec()),
+        "Desc" => Object::String(crate::stamp::winansi(description), StringFormat::Literal),
         "EF" => dictionary! { "F" => Object::Reference(file), "UF" => Object::Reference(file) },
     });
+    (name, spec)
+}
+
+/// Embeds evidence.json and every attachment, in a name tree sorted as the PDF specification requires.
+fn attach_files(doc: &mut Document, report: &EvidenceReport) -> Result<()> {
+    let json = serde_json::to_vec_pretty(report).map_err(|e| PdfError::Malformed(e.to_string()))?;
+    let mut specs = vec![embed(doc, "evidence.json", "application/json", "OpenSign signing evidence", "Data", json)];
+    for (i, a) in report.attachments.iter().enumerate() {
+        let name = format!("attachment-{:02}-{}", i + 1, a.file_name);
+        let description = format!("{} from {}", a.name, a.party);
+        specs.push(embed(doc, &name, &a.content_type, &description, "Supplement", a.content.clone()));
+    }
+    specs.sort_by(|a, b| a.0.cmp(&b.0));
+    let names: Vec<Object> =
+        specs.iter().flat_map(|(name, spec)| [Object::String(name.clone(), StringFormat::Literal), Object::Reference(*spec)]).collect();
     let catalog = doc.catalog_mut()?;
-    catalog.set("Names", dictionary! { "EmbeddedFiles" => dictionary! { "Names" => vec![name, Object::Reference(spec)] } });
-    catalog.set("AF", vec![Object::Reference(spec)]);
-    Ok(spec)
+    catalog.set("Names", dictionary! { "EmbeddedFiles" => dictionary! { "Names" => names } });
+    catalog.set("AF", specs.iter().map(|(_, spec)| Object::Reference(*spec)).collect::<Vec<_>>());
+    Ok(())
 }
 
 #[cfg(test)]

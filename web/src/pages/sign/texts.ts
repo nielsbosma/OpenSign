@@ -59,6 +59,12 @@ const en = {
   bankidThisDevice: 'Open BankID on This Device',
   bankidAnotherDevice: 'BankID on Another Device',
   identifyWith: (label: string) => `Identify with ${label}`,
+  attachments: 'Attachments',
+  optional: 'optional',
+  uploadFile: 'Upload',
+  replaceFile: 'Replace',
+  removeFile: 'Remove',
+  attachmentsNote: 'PDF, JPEG or PNG, up to 10 MB. The files are sealed into the signed document.',
   methods: { sms_pin: 'SMS code', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-ID' } as Record<string, string>,
 };
 
@@ -123,6 +129,12 @@ const sv: Texts = {
   bankidThisDevice: 'Öppna BankID på den här enheten',
   bankidAnotherDevice: 'BankID på en annan enhet',
   identifyWith: (label) => `Legitimera dig med ${label}`,
+  attachments: 'Bilagor',
+  optional: 'valfri',
+  uploadFile: 'Ladda upp',
+  replaceFile: 'Byt fil',
+  removeFile: 'Ta bort',
+  attachmentsNote: 'PDF, JPEG eller PNG, högst 10 MB. Filerna förseglas i det signerade dokumentet.',
   methods: { sms_pin: 'SMS-kod', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-legitimation' },
 };
 

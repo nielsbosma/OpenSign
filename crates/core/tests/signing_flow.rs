@@ -7,6 +7,7 @@ use base64::engine::general_purpose::STANDARD as B64;
 use lopdf::{Document, Object, Stream, dictionary};
 use opensign_core::audit::verify_chain;
 use opensign_core::context::{Actor, App, Credential, Ctx, Surface};
+use opensign_core::documents::attachments::AttachmentRequestInput;
 use opensign_core::documents::{AuthMethod, Delivery, FieldKind, PartyRole, parties, signer_token};
 use opensign_core::error::ErrorKind;
 use opensign_core::services::documents::{self as docs, FieldInput, PartyInput, Version};
@@ -88,6 +89,7 @@ fn party(name: &str, role: PartyRole, delivery: Delivery, auth_to_sign: AuthMeth
         delivery,
         auth_to_view: AuthMethod::None,
         auth_to_sign,
+        attachments: None,
     }
 }
 
@@ -144,7 +146,17 @@ async fn sends_signs_seals_and_verifies() {
         docs::SetPartiesInput {
             document_id: id,
             parties: vec![
-                party("Anna", PartyRole::Signer, Delivery::Email, AuthMethod::Standard),
+                PartyInput {
+                    attachments: Some(vec![
+                        AttachmentRequestInput {
+                            name: "Copy of ID".into(),
+                            description: "Passport or driving licence".into(),
+                            required: None,
+                        },
+                        AttachmentRequestInput { name: "Other".into(), description: String::new(), required: Some(false) },
+                    ]),
+                    ..party("Anna", PartyRole::Signer, Delivery::Email, AuthMethod::Standard)
+                },
                 party("Bo", PartyRole::Signer, Delivery::Link, AuthMethod::SmsPin),
                 party("Cecilia", PartyRole::Viewer, Delivery::Email, AuthMethod::Standard),
             ],
@@ -231,6 +243,26 @@ async fn sends_signs_seals_and_verifies() {
     )
     .await;
     assert_eq!(kind(unsigned), ErrorKind::BadRequest, "a signature is required");
+    assert_eq!(anna_view.attachments.len(), 2, "requests survive saving the parties again without them");
+    let id_request = anna_view.attachments[0].id;
+    let typed = || Some(SignatureInput { typed_name: Some("Anna Andersson".into()), image_png_base64: None });
+    let missing = call::<signing::Sign>(
+        &signer,
+        signing::SignInput { token: anna_token.clone(), session: None, values: vec![], signature: typed(), consent: true },
+    )
+    .await;
+    assert_eq!(kind(missing), ErrorKind::BadRequest, "the required attachment is missing");
+    {
+        let mut tx = app.db.begin().await.unwrap();
+        let bad = signing::upload_attachment(&signer, &mut tx, &anna_token, None, id_request, "id.exe", b"MZ\x90".to_vec()).await;
+        assert_eq!(kind(bad), ErrorKind::BadRequest);
+        let other = signing::upload_attachment(&signer, &mut tx, &bo_token, None, id_request, "id.pdf", sample_pdf(1)).await;
+        assert!(other.is_err(), "Bo cannot upload to Anna's request");
+        let uploaded =
+            signing::upload_attachment(&signer, &mut tx, &anna_token, None, id_request, "C:\\scans\\id.pdf", sample_pdf(1)).await.unwrap();
+        assert_eq!(uploaded.file_name.as_deref(), Some("id.pdf"));
+        tx.commit().await.unwrap();
+    }
     let signed = call::<signing::Sign>(
         &signer,
         signing::SignInput {
@@ -343,6 +375,10 @@ async fn sends_signs_seals_and_verifies() {
     let download = call::<docs::Download>(&sender, docs::DownloadInput { id, version: Some(Version::Signed) }).await.unwrap();
     let sealed = B64.decode(download.content_base64).unwrap();
     // CI checks this file with independent validators (poppler's pdfsig, qpdf).
+    let embedded = Document::load_mem(&sealed).unwrap();
+    let names = embedded.catalog().unwrap().get(b"Names").unwrap().as_dict().unwrap();
+    let tree = names.get(b"EmbeddedFiles").unwrap().as_dict().unwrap().get(b"Names").unwrap().as_array().unwrap();
+    assert_eq!(tree[0].as_str().unwrap(), b"attachment-01-id.pdf", "Anna's attachment travels inside the sealed PDF");
     if let Ok(path) = std::env::var("SEALED_PDF_OUT") {
         std::fs::write(path, &sealed).unwrap();
     }

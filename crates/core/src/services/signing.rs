@@ -15,6 +15,7 @@ use uuid::Uuid;
 use super::settings;
 use crate::audit::{Entry, audit};
 use crate::context::Ctx;
+use crate::documents::attachments::{self, AttachmentRequest};
 use crate::documents::{
     AuthMethod, DOCUMENT_COLUMNS, DocumentRow, FieldKind, FieldRow, PartyRole, PartyRow, current_turn, fields, notify, parties,
     party_for_token, status,
@@ -141,6 +142,8 @@ pub struct SignerView {
     pub fields: Vec<FieldRow>,
     pub your_turn: bool,
     pub can_download: bool,
+    /// Files the party is asked to upload before signing.
+    pub attachments: Vec<AttachmentRequest>,
 }
 
 pub struct Open;
@@ -191,6 +194,7 @@ impl Service for Open {
             },
             your_turn,
             can_download: !locked && document.status == status::COMPLETED,
+            attachments: if locked { Vec::new() } else { attachments::for_party(conn, party.id).await? },
         };
         if !locked && party.viewed_at.is_none() && document.status == status::PENDING {
             sqlx::query("update parties set viewed_at = $2, status = case when status in ('waiting', 'notified') then 'viewed' else status end, updated_at = now() where id = $1")
@@ -423,6 +427,9 @@ impl Service for Sign {
         if !input.consent {
             return Err(bad_request("Confirm that you want to sign electronically"));
         }
+        if let Some(missing) = attachments::for_party(conn, party.id).await?.into_iter().find(|r| r.required && r.file_id.is_none()) {
+            return Err(bad_request(format!("Upload \u{201c}{}\u{201d} first", missing.name)));
+        }
 
         let own: Vec<FieldRow> = fields(conn, document.id).await?.into_iter().filter(|f| f.party_id == Some(party.id)).collect();
         for v in &input.values {
@@ -561,6 +568,118 @@ impl Service for Decline {
             conn,
             "document.declined",
             json!({ "documentId": document.id, "externalId": document.external_id, "partyId": party.id, "reason": reason }),
+        )
+        .await?;
+        Ok(super::Ok_::default())
+    }
+}
+
+/// The party may change their attachments: it is their turn, they have not responded, and they
+/// identified as needed to see the document.
+async fn attachment_party(ctx: &Ctx, conn: &mut PgConnection, token: &str, session_token: Option<&str>) -> Result<Resolved> {
+    let resolved = resolve(ctx, conn, token, session_token).await?;
+    let Resolved { party, document, session } = &resolved;
+    if document.status != status::PENDING || !party.must_act() || party.signed_at.is_some() || party.declined_at.is_some() {
+        return Err(conflict("Attachments can no longer be changed"));
+    }
+    if !current_turn(document, &parties(conn, document.id).await?).contains(&party.id) {
+        return Err(conflict("It is not your turn yet. You will get an email when it is."));
+    }
+    if !satisfied(party.auth_to_view(), session.as_ref()) {
+        return Err(AppError::new(ErrorKind::Unauthorized, format!("Identify yourself with {} first", party.auth_to_view().label())));
+    }
+    Ok(resolved)
+}
+
+async fn request_of(conn: &mut PgConnection, party_id: Uuid, id: Uuid) -> Result<AttachmentRequest> {
+    sqlx::query("select 1 from attachment_requests where id = $1 and party_id = $2 for update")
+        .bind(id)
+        .bind(party_id)
+        .fetch_optional(&mut *conn)
+        .await?
+        .ok_or_else(|| crate::error::not_found("Attachment"))?;
+    attachments::for_party(conn, party_id).await?.into_iter().find(|r| r.id == id).ok_or_else(|| crate::error::not_found("Attachment"))
+}
+
+async fn retire_file(conn: &mut PgConnection, file_id: Option<Uuid>) -> Result<()> {
+    if let Some(id) = file_id {
+        sqlx::query("update files set deleted_at = now() where id = $1 and deleted_at is null").bind(id).execute(&mut *conn).await?;
+    }
+    Ok(())
+}
+
+/// Stores a file the party was asked for, cleaned first (see `attachments::clean`), replacing any
+/// earlier upload for the same request.
+pub async fn upload_attachment(
+    ctx: &Ctx,
+    conn: &mut PgConnection,
+    token: &str,
+    session_token: Option<&str>,
+    request_id: Uuid,
+    name: &str,
+    bytes: Vec<u8>,
+) -> Result<AttachmentRequest> {
+    let Resolved { party, document, .. } = attachment_party(ctx, conn, token, session_token).await?;
+    let request = request_of(conn, party.id, request_id).await?;
+    let (file_name, content_type, body) = attachments::clean(bytes, name).await?;
+    let record = store_file(
+        conn,
+        &ctx.app.storage,
+        ctx.keys(),
+        NewFile { kind: "attachment", name: &file_name, content_type, body: &body, uploaded_by: None },
+    )
+    .await?;
+    retire_file(conn, request.file_id).await?;
+    sqlx::query("update attachment_requests set file_id = $2, uploaded_at = $3 where id = $1")
+        .bind(request.id)
+        .bind(record.id)
+        .bind(ctx.now)
+        .execute(&mut *conn)
+        .await?;
+    audit(
+        ctx,
+        conn,
+        Entry::new("party.attachment_uploaded", "document", document.id).metadata(json!({
+            "party": party.id, "name": party.name, "attachment": request.name, "file": record.name, "sha256": record.sha256,
+        })),
+    )
+    .await?;
+    request_of(conn, party.id, request_id).await
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoveAttachmentInput {
+    pub token: String,
+    pub session: Option<String>,
+    /// The attachment request whose upload to remove.
+    pub id: Uuid,
+}
+
+pub struct RemoveAttachment;
+
+#[async_trait]
+impl Service for RemoveAttachment {
+    type Input = RemoveAttachmentInput;
+    type Output = super::Ok_;
+    const META: Meta = Meta::mutation("signing.remove_attachment", "Remove a file the party uploaded, before they sign.", Access::Public);
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: RemoveAttachmentInput) -> Result<super::Ok_> {
+        let Resolved { party, document, .. } = attachment_party(ctx, conn, &input.token, input.session.as_deref()).await?;
+        let request = request_of(conn, party.id, input.id).await?;
+        if request.file_id.is_none() {
+            return Ok(super::Ok_::default());
+        }
+        sqlx::query("update attachment_requests set file_id = null, uploaded_at = null where id = $1")
+            .bind(request.id)
+            .execute(&mut *conn)
+            .await?;
+        retire_file(conn, request.file_id).await?;
+        audit(
+            ctx,
+            conn,
+            Entry::new("party.attachment_removed", "document", document.id)
+                .metadata(json!({ "party": party.id, "name": party.name, "attachment": request.name })),
         )
         .await?;
         Ok(super::Ok_::default())

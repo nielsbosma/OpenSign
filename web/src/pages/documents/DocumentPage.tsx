@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, Link2, MoreHorizontal, Pencil, Plus, Send, Trash2, UserPlus } from 'lucide-react';
+import { ArrowLeft, Download, Link2, MoreHorizontal, Paperclip, Pencil, Plus, Send, Trash2, UserPlus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
@@ -20,6 +20,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  type AttachmentRequest,
   type DocumentView,
   errorMessage,
   type FieldKind,
@@ -88,6 +89,7 @@ function PartyCard({
   editable,
   pending,
   documentId,
+  attachments,
   onEdit,
   onRemove,
 }: {
@@ -96,6 +98,7 @@ function PartyCard({
   editable: boolean;
   pending: boolean;
   documentId: string;
+  attachments: AttachmentRequest[];
   onEdit: () => void;
   onRemove: () => void;
 }) {
@@ -129,6 +132,34 @@ function PartyCard({
             {party.authToView !== 'none' && ` · ${AUTH_LABELS[party.authToView]} to view`}
           </div>
           {party.declineReason && <div className="mt-1 text-xs text-destructive">“{party.declineReason}”</div>}
+          {attachments.length > 0 && (
+            <ul className="mt-1.5 grid gap-0.5 text-xs">
+              {attachments.map((a) => (
+                <li key={a.id} className="flex items-center gap-1.5">
+                  <Paperclip className="size-3 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 truncate">
+                    {a.name}
+                    {!a.required && <span className="text-muted-foreground"> (optional)</span>}
+                  </span>
+                  {a.fileId ? (
+                    <button
+                      type="button"
+                      className="ml-auto shrink-0 underline"
+                      onClick={() =>
+                        fetchPdf(`/api/documents/${documentId}/attachments/${a.id}`)
+                          .then((bytes) => saveBytes(bytes, a.fileName ?? 'attachment', a.contentType ?? 'application/octet-stream'))
+                          .catch((e) => toast.error(errorMessage(e)))
+                      }
+                    >
+                      Download
+                    </button>
+                  ) : (
+                    <span className="ml-auto shrink-0 text-muted-foreground">Not uploaded</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         {editable && (
           <DropdownMenu>
@@ -417,7 +448,7 @@ export function DocumentPage() {
   if (!doc) return <EmptyState title="This document is not available">It may have been deleted, or it was not shared with you.</EmptyState>;
 
   const saveParties = (next: PartyInput[]) => setParties.mutate({ documentId: doc.id, parties: next });
-  const allParties = () => doc.parties.map(partyToInput);
+  const allParties = () => doc.parties.map((p) => partyToInput(p));
 
   const place = (page: number, x: number, y: number) => {
     if (!draft) return;
@@ -650,6 +681,7 @@ export function DocumentPage() {
                     editable={draft}
                     pending={pending && doc.canEdit}
                     documentId={doc.id}
+                    attachments={doc.attachments.filter((a) => a.partyId === p.id)}
                     onEdit={() => setPartyDialog({ open: true, party: p })}
                     onRemove={() => saveParties(allParties().filter((x) => x.id !== p.id))}
                   />
@@ -703,7 +735,7 @@ export function DocumentPage() {
       <PartyDialog
         open={partyDialog.open}
         onOpenChange={(open) => setPartyDialog({ ...partyDialog, open })}
-        party={partyDialog.party ? partyToInput(partyDialog.party) : null}
+        party={partyDialog.party ? partyToInput(partyDialog.party, doc.attachments) : null}
         maskedNumber={partyDialog.party?.personalNumber}
         sequential={doc.sequential}
         available={authMethods.data?.available ?? ['none', 'standard']}

@@ -257,6 +257,20 @@ export type DocumentsCancelInput = {
   reason?: string | null;
 };
 
+export type AttachmentRequest = {
+  contentType?: string | null;
+  description: string;
+  fileId?: string | null;
+  fileName?: string | null;
+  id: string;
+  name: string;
+  partyId: string;
+  required: boolean;
+  sha256?: string | null;
+  sizeBytes?: number | null;
+  uploadedAt?: string | null;
+};
+
 export type FieldRow = {
   height: number;
   id: string;
@@ -306,6 +320,8 @@ export type PartyView = {
 export type DocumentsCancelOutput = DocumentView;
 
 export type DocumentView = {
+  /** Files parties are asked to upload while signing, and what they uploaded. */
+  attachments: Array<AttachmentRequest>;
   canEdit: boolean;
   canceledAt?: string | null;
   completedAt?: string | null;
@@ -502,10 +518,21 @@ export type DocumentsSetFieldsInput = {
 
 export type DocumentsSetFieldsOutput = DocumentView;
 
+export type AttachmentRequestInput = {
+  /** Shown to the party under the name. */
+  description?: string;
+  /** What to upload, e.g. "Copy of your ID". */
+  name: string;
+  /** The party cannot sign without it. Defaults to true. */
+  required?: boolean | null;
+};
+
 /** How the party gets their link. `link` hands it to the sender (or the calling system) instead. */
 export type Delivery = "email" | "sms" | "link" | "none";
 
 export type PartyInput = {
+  /** Files the party must or may upload while signing, such as a copy of an ID. Leave out to keep the current ones. */
+  attachments?: Array<AttachmentRequestInput> | null;
   authToSign?: AuthMethod;
   authToView?: AuthMethod;
   company?: string | null;
@@ -799,6 +826,8 @@ export type SignerParty = {
 export type SigningOpenOutput = SignerView;
 
 export type SignerView = {
+  /** Files the party is asked to upload before signing. */
+  attachments: Array<AttachmentRequest>;
   canDownload: boolean;
   document: SignerDocument;
   /** The party's own fields, and the sender's prefilled text for context. */
@@ -810,6 +839,15 @@ export type SignerView = {
   signAuthentication?: AuthMethod | null;
   yourTurn: boolean;
 };
+
+export type SigningRemoveAttachmentInput = {
+  /** The attachment request whose upload to remove. */
+  id: string;
+  session?: string | null;
+  token: string;
+};
+
+export type SigningRemoveAttachmentOutput = Ok_;
 
 export type SigningRequestCodeInput = {
   session?: string | null;
@@ -1026,6 +1064,7 @@ export interface Services {
   "signing.eid_start": { kind: "mutation"; input: SigningEidStartInput; output: SigningEidStartOutput };
   "signing.eid_status": { kind: "query"; input: SigningEidStatusInput; output: SigningEidStatusOutput };
   "signing.open": { kind: "mutation"; input: SigningOpenInput; output: SigningOpenOutput };
+  "signing.remove_attachment": { kind: "mutation"; input: SigningRemoveAttachmentInput; output: SigningRemoveAttachmentOutput };
   "signing.request_code": { kind: "mutation"; input: SigningRequestCodeInput; output: SigningRequestCodeOutput };
   "signing.sign": { kind: "mutation"; input: SigningSignInput; output: SigningSignOutput };
   "signing.verify_code": { kind: "mutation"; input: SigningVerifyCodeInput; output: SigningVerifyCodeOutput };

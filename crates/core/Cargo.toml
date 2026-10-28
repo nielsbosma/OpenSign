@@ -34,6 +34,8 @@ tracing = { workspace = true }
 url = "2"
 x509-cert = { version = "0.2", features = ["pem"] }
 p12-keystore = "0.2"
+png = "0.17"
+jpeg-decoder = { version = "0.3", default-features = false }
 uuid = { workspace = true }
 
 [features]
