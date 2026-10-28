@@ -6,6 +6,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
+- API Explorer: browse every REST endpoint with its schemas, send live requests as yourself or with an API key, and copy the call as curl, JavaScript or Python.
+
 - Settings → System: the running version against the latest GitHub release, migrations and the job queue; an update notice for admins; one-click update through a Sliplane deploy hook. Migrations run on every start.
 
 - One distroless Docker image (web app, API, MCP and job worker), configured with Postgres, an S3 bucket, `APP_SECRET` and `APP_URL`, and a Sliplane deploy script.

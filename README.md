@@ -92,7 +92,7 @@ Create an API key under **Settings → API Keys**, then:
 curl -H "Authorization: Bearer osk_..." https://sign.example.com/api/v1/documents
 ```
 
-The OpenAPI document is at `/api/v1/openapi.json`. Existing Scrive or DocuSign integrations can point at OpenSign by swapping the base URL and using an OpenSign API key as the bearer token (Scrive's OAuth header takes it as `oauth_token`):
+The **API Explorer** in the sidebar lists every endpoint with its parameters and schemas, sends live requests as you or with a pasted API key, and writes the same call as curl, JavaScript or Python. The OpenAPI document behind it is at `/api/v1/openapi.json`. Existing Scrive or DocuSign integrations can point at OpenSign by swapping the base URL and using an OpenSign API key as the bearer token (Scrive's OAuth header takes it as `oauth_token`):
 
 | API | Vendor base URL | OpenSign base URL |
 | --- | --- | --- |

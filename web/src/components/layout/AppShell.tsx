@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowUpCircle, FileStack, FileText, LogOut, Menu, Moon, Settings, ShieldCheck, Sparkles, Sun } from 'lucide-react';
+import { ArrowUpCircle, Braces, FileStack, FileText, LogOut, Menu, Moon, Settings, ShieldCheck, Sparkles, Sun } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { AssistantPanel } from '@/components/AssistantPanel';
@@ -86,6 +86,9 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             <FileStack className="size-4 opacity-80" /> Templates
           </NavLink>
         )}
+        <NavLink to="/api-explorer" className={linkClass} onClick={onNavigate}>
+          <Braces className="size-4 opacity-80" /> API Explorer
+        </NavLink>
         <a href="/verify" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
           <ShieldCheck className="size-4 opacity-80" /> Verify a Document
         </a>

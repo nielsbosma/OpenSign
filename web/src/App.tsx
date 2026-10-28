@@ -4,6 +4,7 @@ import { Spinner } from '@/components/common';
 import { AppShell } from '@/components/layout/AppShell';
 import { useApi } from '@/lib/api';
 import { useSession } from '@/lib/session';
+import { ApiExplorerPage } from '@/pages/ApiExplorerPage';
 import { InvitePage } from '@/pages/auth/InvitePage';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { ForgotPasswordPage, ResetPasswordPage } from '@/pages/auth/PasswordPages';
@@ -79,6 +80,7 @@ export function App() {
         <Route path="/templates" element={<DocumentsPage templates />} />
         <Route path="/documents/:id" element={<DocumentPage />} />
         <Route path="/bulk/:id" element={<BulkSendPage />} />
+        <Route path="/api-explorer" element={<ApiExplorerPage />} />
         <Route path="/settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="/settings/account" replace />} />
           <Route path="account" element={<AccountPage />} />
