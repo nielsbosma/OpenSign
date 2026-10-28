@@ -890,8 +890,11 @@ impl Service for Send {
         if document.is_template {
             return Err(bad_request("Templates cannot be sent. Create a document from it first."));
         }
-        require_draft(&document)?;
-        sqlx::query("select 1 from documents where id = $1 for update").bind(document.id).execute(&mut *conn).await?;
+        let state: String =
+            sqlx::query_scalar("select status from documents where id = $1 for update").bind(document.id).fetch_one(&mut *conn).await?;
+        if state != status::DRAFT {
+            return Err(conflict("Only drafts can be sent"));
+        }
         let records = files(conn, document.id).await?;
         if records.is_empty() {
             return Err(bad_request("Add a file before sending"));
