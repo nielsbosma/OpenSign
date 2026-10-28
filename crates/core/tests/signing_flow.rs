@@ -342,6 +342,10 @@ async fn sends_signs_seals_and_verifies() {
 
     let download = call::<docs::Download>(&sender, docs::DownloadInput { id, version: Some(Version::Signed) }).await.unwrap();
     let sealed = B64.decode(download.content_base64).unwrap();
+    // CI checks this file with independent validators (poppler's pdfsig, qpdf).
+    if let Ok(path) = std::env::var("SEALED_PDF_OUT") {
+        std::fs::write(path, &sealed).unwrap();
+    }
     let mut conn = app.db.acquire().await.unwrap();
     let verified = docs::verify_pdf(&mut conn, sealed.clone()).await.unwrap();
     assert_eq!(verified.document.map(|d| d.id), Some(id));

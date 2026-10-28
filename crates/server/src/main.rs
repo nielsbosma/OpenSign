@@ -43,12 +43,31 @@ async fn shutdown() {
     tokio::select! { _ = ctrl_c => {}, _ = terminate => {} }
 }
 
+/// `opensign health`: the image's health check, since the runtime image has no shell or curl.
+fn health_check() -> anyhow::Result<()> {
+    use std::io::{Read, Write};
+    let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(3000);
+    let mut stream = std::net::TcpStream::connect_timeout(&SocketAddr::from(([127, 0, 0, 1], port)), Duration::from_secs(3))?;
+    stream.set_read_timeout(Some(Duration::from_secs(3)))?;
+    stream.write_all(b"GET /api/health HTTP/1.0
+Host: localhost
+
+")?;
+    let mut head = [0u8; 12];
+    stream.read_exact(&mut head)?;
+    anyhow::ensure!(head.ends_with(b" 200"), "unhealthy: {}", String::from_utf8_lossy(&head));
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     if std::env::args().nth(1).as_deref() == Some("schema") {
         use std::io::Write;
         writeln!(std::io::stdout(), "{}", serde_json::to_string_pretty(&opensign_server::service_schemas())?)?;
         return Ok(());
+    }
+    if std::env::args().nth(1).as_deref() == Some("health") {
+        return health_check();
     }
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,sqlx=warn")))
