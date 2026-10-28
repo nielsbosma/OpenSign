@@ -21,7 +21,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - Bulk send: a template to every row of a CSV, Excel or OpenDocument file (up to 1,000 rows), with automatic column matching, optional AI matching, row checks before sending, background sending and a progress page. Row data is stored encrypted and dropped once each row is sent.
 - eID setup: certificate files upload as they come from the bank (`.p12`/`.pfx` with their password), BankID's server roots are built in, and BankID test mode works with no setup.
 - Sealed PDFs: stamped values, evidence pages and a JSON evidence attachment, a PAdES seal over the whole file and an RFC 3161 time stamp; a verify page and API.
-- APIs: REST with OpenAPI, Scrive v2 and DocuSign eSignature v2.1 compatible endpoints, signed webhooks, idempotency keys.
+- APIs: REST with OpenAPI, Scrive v2 (`/scrive/api/v2`) and DocuSign eSignature v2.1 (`/docusign/restapi/v2.1`) compatible endpoints, signed webhooks, idempotency keys.
 - MCP server with OAuth 2.1 (dynamic registration, PKCE, rotating refresh tokens).
 - Optional AI assistant and pre-send document review with a monthly token budget.
 - Tamper-evident audit trail, hash-chained and time-stamped hourly.
