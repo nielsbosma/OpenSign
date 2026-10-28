@@ -569,7 +569,15 @@ pub async fn broker_callback(ctx: &Ctx, conn: &mut PgConnection, state: &str, co
         )
         .await?;
         let keys = oidc::keys(http, &discovery).await?;
-        let claims = oidc::verify_id_token(&id_token, &keys, &discovery.issuer, &eid.broker_client_id, &nonce, ctx.now.timestamp())?;
+        let claims = oidc::verify_id_token(
+            &id_token,
+            &keys,
+            &discovery.issuer,
+            &eid.broker_client_id,
+            &nonce,
+            &eid.broker_acr_values,
+            ctx.now.timestamp(),
+        )?;
         let identity = oidc::identity(&claims).ok_or_else(|| bad_request("The eID broker did not say who you are"))?;
         let evidence = json!({ "provider": "broker", "issuer": discovery.issuer, "idToken": id_token });
         if let Err(message) = complete(ctx, conn, &party, id, "broker", &identity, &evidence).await? {
