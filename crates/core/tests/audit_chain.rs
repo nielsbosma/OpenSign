@@ -12,7 +12,7 @@ async fn chain_verifies_and_detects_edits() {
     for i in 0..5 {
         audit(&ctx, &mut conn, Entry::new("test.write", "thing", i).after(json!({ "n": i, "ratio": 0.5, "password": "x" }))).await.unwrap();
     }
-    let report = verify_chain(&mut conn).await.unwrap();
+    let report = verify_chain(&mut conn, &app.keys).await.unwrap();
     assert!(report.valid, "{report:?}");
     assert_eq!(report.entries, 5);
 
@@ -22,7 +22,7 @@ async fn chain_verifies_and_detects_edits() {
 
     sqlx::query("alter table audit_log disable trigger audit_log_append_only").execute(&mut *conn).await.unwrap();
     sqlx::query("update audit_log set after = '{\"n\": 99}' where entity_id = '2'").execute(&mut *conn).await.unwrap();
-    let report = verify_chain(&mut conn).await.unwrap();
+    let report = verify_chain(&mut conn, &app.keys).await.unwrap();
     assert!(!report.valid);
     let tampered: i64 = sqlx::query_scalar("select id from audit_log where entity_id = '2'").fetch_one(&mut *conn).await.unwrap();
     assert_eq!(report.broken_at, Some(tampered));
@@ -45,6 +45,22 @@ async fn concurrent_appends_keep_one_chain() {
         t.await.unwrap();
     }
     let mut conn = app.db.acquire().await.unwrap();
-    let report = verify_chain(&mut conn).await.unwrap();
+    let report = verify_chain(&mut conn, &app.keys).await.unwrap();
     assert!(report.valid && report.entries == 20, "{report:?}");
+}
+
+#[tokio::test]
+async fn anchors_must_match_the_chain() {
+    let Some(app) = app().await else { return };
+    let ctx = system_ctx(&app);
+    let mut conn = app.db.acquire().await.unwrap();
+    let id = audit(&ctx, &mut conn, Entry::new("test.anchor", "thing", 1)).await.unwrap();
+    sqlx::query("insert into audit_anchors (audit_id, head_hash) values ($1, $2)")
+        .bind(id)
+        .bind(vec![7u8; 32])
+        .execute(&mut *conn)
+        .await
+        .unwrap();
+    let report = verify_chain(&mut conn, &app.keys).await.unwrap();
+    assert!(!report.valid && report.broken_anchors.len() == 1, "{report:?}");
 }

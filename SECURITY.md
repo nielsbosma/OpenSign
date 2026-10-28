@@ -31,7 +31,7 @@ It does not protect against someone who holds `APP_SECRET` together with the dat
 - API keys and OAuth tokens are stored as hashes. MCP uses OAuth 2.1 with PKCE (S256 only), exact redirect URIs, audience-bound access tokens, and rotating refresh tokens with reuse detection that revokes the whole grant.
 
 **Roles**
-- Admin, manager, sender, auditor and viewer, enforced in the service layer. The UI only hides what the server would refuse anyway. MCP and the AI assistant act with the user's own permissions; public services are never tools.
+- Admin, manager, sender, auditor and viewer, enforced in the service layer. The UI only hides what the server would refuse anyway. MCP and the AI assistant act with the user's own permissions; public services are never tools. The assistant also never gets tools that change who has access, add webhooks or hand out signing links, since text in documents could try to steer it.
 
 **Signing links and signers**
 - A link is the party id plus a MAC over it and a link version; it lives in the URL fragment, so it never reaches server logs or `Referer` headers, and the signing page removes it from the address bar. Resending or canceling bumps the version and kills old links.
@@ -47,12 +47,12 @@ It does not protect against someone who holds `APP_SECRET` together with the dat
 - Verification checks time stamp authorities' signatures (RSA of 2048 bits or more, ECDSA P-256 and P-384, SHA-2), and compares the revision each signature covers with the final file: only a document security store and invisible document time stamps may be added. Any other later change, including a new annotation or a changed catalog entry, marks the signature as not intact.
 
 **Audit trail**
-- Every change is in an append-only log (database triggers refuse updates, deletes and truncation), hash-chained with a key derived from `APP_SECRET`, and its head is time-stamped by the time stamp authority every hour, so the trail up to then cannot be quietly rebuilt. `audit.verify` checks the chain.
+- Every change is in an append-only log (database triggers refuse updates, deletes and truncation), hash-chained with a key derived from `APP_SECRET`, and its head is time-stamped by the time stamp authority every hour, so the trail up to then cannot be quietly rebuilt. `audit.verify` checks the chain and the anchors.
 
 **The web and the network**
 - Strict CSP (`script-src 'self'`, no inline script, `frame-ancestors 'none'`), HSTS on https, `nosniff`, `no-referrer`, COOP and CORP, and a tight permissions policy.
 - Rate limits per address on sign-in, codes, signing, uploads and verification, on top of the database lockouts.
-- Outbound requests to anything configurable (webhooks, AI endpoints, eID brokers, time stamp authorities) resolve DNS first and refuse private, loopback, link-local and metadata addresses, and follow no redirects.
+- Outbound requests to anything configurable (webhooks, AI endpoints, eID brokers, time stamp authorities) resolve DNS first and refuse private, loopback, link-local and metadata addresses, and follow no redirects. The one exception is a self-hosted AI proxy (LiteLLM or another OpenAI-compatible endpoint), which an admin may point at the private network.
 - Webhooks are signed with a per-webhook secret in the `OpenSign-Signature` header.
 
 **Supply chain and runtime**

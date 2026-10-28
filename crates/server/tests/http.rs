@@ -256,6 +256,9 @@ async fn rest_api_with_keys_idempotency_and_openapi() {
     assert_eq!(response.status(), StatusCode::CREATED);
     assert_eq!(response.headers().get("idempotent-replayed").unwrap(), "true");
     assert_eq!(again["id"], created["id"], "a retry does not create a second document");
+    let stored: String =
+        sqlx::query_scalar("select response::text from idempotency_keys where key = 'create-nda'").fetch_one(&app.db).await.unwrap();
+    assert!(!stored.contains("crm-42"), "stored responses are encrypted");
     let (response, _) = client.send(rest("POST", "/documents", &bearer, Some(json!({ "title": "Other" })), Some("create-nda"))).await;
     assert_eq!(response.status(), StatusCode::CONFLICT, "a reused key with another body is refused");
 

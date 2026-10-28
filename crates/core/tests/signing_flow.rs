@@ -407,7 +407,7 @@ async fn sends_signs_seals_and_verifies() {
 
     let after = call::<signing::Open>(&signer, signing::TokenInput { token: anna_token, session: None }).await.unwrap();
     assert!(after.can_download);
-    let chain = verify_chain(&mut conn).await.unwrap();
+    let chain = verify_chain(&mut conn, &app.keys).await.unwrap();
     assert!(chain.valid, "{chain:?}");
     let actions: Vec<String> = sqlx::query_scalar("select action from audit_log where entity_id = $1 order by id")
         .bind(id.to_string())

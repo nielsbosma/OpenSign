@@ -80,10 +80,8 @@ pub async fn active_identity(ctx: &Ctx, conn: &mut PgConnection) -> Result<SealI
 
 /// An RFC 3161 time stamp token over a SHA-256 digest.
 pub(crate) async fn timestamp(ctx: &Ctx, url: &str, digest: &[u8; 32]) -> Result<Vec<u8>> {
-    let parsed = reqwest::Url::parse(url).map_err(|_| AppError::new(ErrorKind::BadRequest, "The time stamp URL is not valid"))?;
-    if !matches!(parsed.scheme(), "http" | "https") {
-        return Err(AppError::new(ErrorKind::BadRequest, "The time stamp URL must use http or https"));
-    }
+    let parsed = crate::net::check_outbound_url(url, true)
+        .map_err(|e| AppError::new(ErrorKind::BadRequest, format!("The time stamp URL is not usable: {e}")))?;
     let nonce = random_bytes::<16>();
     let response = ctx
         .app
@@ -263,7 +261,7 @@ pub async fn seal_document(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid
                 authentication: auth_label(p),
                 signed_at: p.signed_at.map(|t| fmt_time(Some(t))),
                 ip: p.evidence.as_ref().and_then(|e| e["ip"].as_str()).map(str::to_string),
-                identity: p.evidence.as_ref().and_then(|e| e["identity"].as_str()).map(str::to_string),
+                identity: super::open_identity(ctx.keys(), p),
             })
             .collect(),
         events: evidence_events(conn, document.id).await?,

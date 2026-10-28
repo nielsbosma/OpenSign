@@ -231,6 +231,8 @@ export type AuditVerifyInput = Record<string, unknown>;
 export type AuditVerifyOutput = ChainReport;
 
 export type ChainReport = {
+  /** Hourly time-stamped heads that no longer match the entry they were taken from. */
+  broken_anchors: Array<number>;
   /** The first entry whose stored hash does not match its contents or its predecessor. */
   broken_at?: number | null;
   entries: number;

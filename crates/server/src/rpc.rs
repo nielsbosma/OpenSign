@@ -22,6 +22,8 @@ fn limit_for(name: &str) -> Option<Limit> {
         | "auth.request_password_reset"
         | "auth.reset_password"
         | "users.accept_invite"
+        | "account.change_password"
+        | "account.two_factor_confirm"
         | "setup.create_first_admin" => Some(security::AUTH),
         "signing.request_code" | "signing.verify_code" => Some(security::CODES),
         n if n.starts_with("signing.") => Some(security::SIGNER),

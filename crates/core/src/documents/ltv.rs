@@ -68,8 +68,10 @@ async fn fetch(request: RequestBuilder, limit: usize) -> Result<Vec<u8>> {
     Ok(body)
 }
 
+/// OCSP, CRL and issuer URLs come from certificates, so they get the same checks as any
+/// configurable URL. Plain http is normal for them: what they serve is signed.
 fn parse_url(url: &str) -> Option<reqwest::Url> {
-    reqwest::Url::parse(url).ok().filter(|u| matches!(u.scheme(), "http" | "https"))
+    crate::net::check_outbound_url(url, true).ok()
 }
 
 /// Asks each OCSP responder in turn, then falls back to the CRLs.
