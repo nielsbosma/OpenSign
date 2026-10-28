@@ -69,11 +69,6 @@ pub(crate) fn satisfied(required: AuthMethod, session: Option<&SignerSession>) -
     }
 }
 
-/// The document's status under a row lock, so a signature and a decline or cancel cannot both win.
-async fn locked_status(conn: &mut PgConnection, document_id: Uuid) -> Result<String> {
-    Ok(sqlx::query_scalar("select status from documents where id = $1 for update").bind(document_id).fetch_one(&mut *conn).await?)
-}
-
 pub(crate) struct Resolved {
     pub party: PartyRow,
     pub document: DocumentRow,
@@ -99,6 +94,14 @@ pub(crate) async fn resolve(ctx: &Ctx, conn: &mut PgConnection, token: &str, ses
     }
     let session = session(ctx, &party, session_token);
     Ok(Resolved { party, document, session })
+}
+
+/// `resolve` with the document row locked and everything read again after the lock, so two
+/// responses from the same link (a double click, sign and decline) cannot both pass the checks.
+async fn resolve_locked(ctx: &Ctx, conn: &mut PgConnection, token: &str, session_token: Option<&str>) -> Result<Resolved> {
+    let first = resolve(ctx, conn, token, session_token).await?;
+    sqlx::query("select 1 from documents where id = $1 for update").bind(first.document.id).execute(&mut *conn).await?;
+    resolve(ctx, conn, token, session_token).await
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -415,8 +418,8 @@ impl Service for Sign {
     const META: Meta = Meta::mutation("signing.sign", "Fill in the party's fields and sign or approve.", Access::Public);
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SignInput) -> Result<SignOutput> {
-        let Resolved { party, document, session } = resolve(ctx, conn, &input.token, input.session.as_deref()).await?;
-        if locked_status(conn, document.id).await? != status::PENDING {
+        let Resolved { party, document, session } = resolve_locked(ctx, conn, &input.token, input.session.as_deref()).await?;
+        if document.status != status::PENDING {
             return Err(conflict("This document is no longer waiting for signatures"));
         }
         if !party.must_act() {
@@ -484,7 +487,7 @@ impl Service for Sign {
             sqlx::query("update fields set value = $2 where id = $1").bind(field.id).bind(&value).execute(&mut *conn).await?;
         }
 
-        let method = session.as_ref().map(|s| s.a).filter(|a| *a == party.auth_to_sign()).unwrap_or(party.auth_to_sign());
+        let method = session.as_ref().map_or(party.auth_to_sign(), |s| s.a);
         let evidence = json!({
             "auth": method,
             "identity": session.as_ref().and_then(|s| s.i.as_deref()).map(|i| seal_identity(ctx.keys(), party.id, i)),
@@ -546,10 +549,8 @@ impl Service for Decline {
         Meta::mutation("signing.decline", "Decline to sign. Signing stops for everyone and the sender is told.", Access::Public);
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: DeclineInput) -> Result<super::Ok_> {
-        let Resolved { party, document, session } = resolve(ctx, conn, &input.token, input.session.as_deref()).await?;
-        let pending = locked_status(conn, document.id).await? == status::PENDING;
-        let party = crate::documents::party(conn, party.id).await?.ok_or_else(invalid_link)?;
-        if !pending || !party.must_act() || party.signed_at.is_some() || party.declined_at.is_some() {
+        let Resolved { party, document, session } = resolve_locked(ctx, conn, &input.token, input.session.as_deref()).await?;
+        if document.status != status::PENDING || !party.must_act() || party.signed_at.is_some() || party.declined_at.is_some() {
             return Err(conflict("You cannot decline this document now"));
         }
         if !satisfied(party.auth_to_view(), session.as_ref()) {
@@ -587,7 +588,7 @@ impl Service for Decline {
 /// The party may change their attachments: it is their turn, they have not responded, and they
 /// identified as needed to see the document.
 async fn attachment_party(ctx: &Ctx, conn: &mut PgConnection, token: &str, session_token: Option<&str>) -> Result<Resolved> {
-    let resolved = resolve(ctx, conn, token, session_token).await?;
+    let resolved = resolve_locked(ctx, conn, token, session_token).await?;
     let Resolved { party, document, session } = &resolved;
     if document.status != status::PENDING || !party.must_act() || party.signed_at.is_some() || party.declined_at.is_some() {
         return Err(conflict("Attachments can no longer be changed"));

@@ -117,7 +117,8 @@ pub async fn clean(bytes: Vec<u8>, name: &str) -> Result<(String, &'static str, 
     if bytes.len() > MAX_BYTES {
         return Err(bad_request(format!("Attachments can be at most {} MB", MAX_BYTES / 1024 / 1024)));
     }
-    let stem = name.rsplit(['/', '\\']).next().unwrap_or(name).rsplit_once('.').map_or(name, |(s, _)| s);
+    let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
+    let stem = base.rsplit_once('.').map_or(base, |(s, _)| s);
     let stem: String = stem.chars().filter(|c| !c.is_control()).take(80).collect();
     let stem = if stem.trim().is_empty() { "attachment".to_string() } else { stem.trim().to_string() };
     if bytes[..bytes.len().min(1024)].windows(5).any(|w| w == b"%PDF-") {
@@ -219,6 +220,8 @@ mod tests {
         let (name, content_type, out) = clean(input, "C:\\Users\\me\\passport scan.png").await.unwrap();
         assert_eq!((name.as_str(), content_type), ("passport scan.png", "image/png"));
         assert!(!out.windows(15).any(|w| w == b"secret metadata"));
+        let (name, _, _) = clean(png(1, 1, png::ColorType::Rgb, &[0, 0, 0]), "/home/me/scan").await.unwrap();
+        assert_eq!(name, "scan.png");
         assert!(clean(b"<html><script>alert(1)</script>".to_vec(), "x.png").await.is_err());
         assert!(clean(b"\x89PNG\r\n\x1a\nbroken".to_vec(), "x.png").await.is_err());
     }

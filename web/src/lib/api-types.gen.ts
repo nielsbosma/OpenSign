@@ -242,6 +242,98 @@ export type AuthVerifyTwoFactorOutput = {
   status: "two_factor_required";
 };
 
+export type BulkCancelInput = {
+  id: string;
+};
+
+export type BulkRow = {
+  documentId?: string | null;
+  error?: string | null;
+  label: string;
+  rowNumber: number;
+  status: string;
+};
+
+export type BulkCancelOutput = BulkSend;
+
+export type BulkSend = {
+  createdAt: string;
+  failed: number;
+  fileName: string;
+  finishedAt?: string | null;
+  id: string;
+  rows: Array<BulkRow>;
+  sent: number;
+  status: string;
+  templateId?: string | null;
+  templateTitle: string;
+  total: number;
+};
+
+export type BulkGetInput = {
+  id: string;
+};
+
+export type BulkGetOutput = BulkSend;
+
+export type BulkListInput = Record<string, unknown>;
+
+export type BulkListOutput = Array<BulkSend>;
+
+export type BulkPreviewInput = {
+  contentBase64: string;
+  /** A .csv, .xlsx, .xls or .ods file whose first row names the columns. Up to 1000 rows. */
+  fileName: string;
+  templateId: string;
+  /** Ask the AI provider to match columns the built-in rules could not. Sends the column names, and a few sample rows only if an Admin allows document text to leave the server. */
+  useAi?: boolean;
+};
+
+export type ColumnMapping = {
+  column: string;
+  /** A target key, or empty to ignore the column. */
+  target: string;
+};
+
+export type RowProblem = {
+  message: string;
+  /** 1-based, counting the header row as row 1, as a spreadsheet shows it. */
+  row: number;
+};
+
+export type Target = {
+  /** The template party it belongs to, or "Document". */
+  group: string;
+  /** `party.<n>.<name|email|phone|company|personalNumber>`, `field.<label>`, `title` or `externalId`. */
+  key: string;
+  label: string;
+};
+
+export type BulkPreviewOutput = PreviewOutput;
+
+export type PreviewOutput = {
+  aiUsed: boolean;
+  columns: Array<string>;
+  mapping: Array<ColumnMapping>;
+  /** Rows that cannot be sent with this mapping. At most 20. */
+  problems: Array<RowProblem>;
+  rowCount: number;
+  sampleRows: Array<Array<string>>;
+  targets: Array<Target>;
+};
+
+export type BulkStartInput = {
+  contentBase64: string;
+  /** A .csv, .xlsx, .xls or .ods file whose first row names the columns. Up to 1000 rows. */
+  fileName: string;
+  mapping: Array<ColumnMapping>;
+  templateId: string;
+  /** The documents' title, with `{Column}` for a column's value, e.g. "Lease {Address}". Defaults to the template's title and the first party's name. A mapped title column wins. */
+  titlePattern?: string | null;
+};
+
+export type BulkStartOutput = BulkSend;
+
 export type DocumentsAuthMethodsInput = Record<string, unknown>;
 
 /** Proof of identity a party must give. `standard` is possession of the link. */
@@ -597,6 +689,7 @@ export type DocumentsUnshareOutput = Ok_;
 export type DocumentsUpdateInput = {
   /** When the signing links stop working and the document expires. */
   expiresAt?: string | null;
+  /** Your own reference; "" removes it. */
   externalId?: string | null;
   id: string;
   /** What signers see and receive: `en` or `sv`. */
@@ -1039,6 +1132,11 @@ export interface Services {
   "auth.request_password_reset": { kind: "mutation"; input: AuthRequestPasswordResetInput; output: AuthRequestPasswordResetOutput };
   "auth.reset_password": { kind: "mutation"; input: AuthResetPasswordInput; output: AuthResetPasswordOutput };
   "auth.verify_two_factor": { kind: "mutation"; input: AuthVerifyTwoFactorInput; output: AuthVerifyTwoFactorOutput };
+  "bulk.cancel": { kind: "mutation"; input: BulkCancelInput; output: BulkCancelOutput };
+  "bulk.get": { kind: "query"; input: BulkGetInput; output: BulkGetOutput };
+  "bulk.list": { kind: "query"; input: BulkListInput; output: BulkListOutput };
+  "bulk.preview": { kind: "mutation"; input: BulkPreviewInput; output: BulkPreviewOutput };
+  "bulk.start": { kind: "mutation"; input: BulkStartInput; output: BulkStartOutput };
   "documents.auth_methods": { kind: "query"; input: DocumentsAuthMethodsInput; output: DocumentsAuthMethodsOutput };
   "documents.cancel": { kind: "mutation"; input: DocumentsCancelInput; output: DocumentsCancelOutput };
   "documents.check": { kind: "query"; input: DocumentsCheckInput; output: DocumentsCheckOutput };

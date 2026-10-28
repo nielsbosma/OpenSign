@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApi, useApiMutation } from '@/lib/api';
 import { formatDate, STATUS_LABELS, STATUS_TONES } from '@/lib/format';
 import { useSession } from '@/lib/session';
+import { RecentBulkSends } from './BulkSendPage';
 import { NewDocumentDialog } from './NewDocumentDialog';
 
 const FILTERS = ['all', 'draft', 'pending', 'completed', 'declined', 'canceled', 'expired'] as const;
@@ -122,6 +123,7 @@ export function DocumentsPage({ templates }: { templates: boolean }) {
           </Button>
         </div>
       )}
+      {templates && <RecentBulkSends />}
       <NewDocumentDialog open={creating} onOpenChange={setCreating} />
     </>
   );
