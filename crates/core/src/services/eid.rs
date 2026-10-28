@@ -15,7 +15,7 @@ use super::settings;
 use super::signing::{Resolved, SESSION_MINUTES, issue_session, resolve, satisfied};
 use crate::audit::{Entry, audit};
 use crate::context::Ctx;
-use crate::documents::{AuthMethod, PartyRow, decrypt_personal_number, status};
+use crate::documents::{AuthMethod, PartyRow, required_personal_number, status};
 use crate::eid::bankid::{self, BankId, Collected};
 use crate::eid::freja::{self, Freja, Outcome, User};
 use crate::eid::{Identity, oidc, same_person, se_personal_number};
@@ -36,6 +36,26 @@ fn evidence_context(id: Uuid) -> String {
 
 pub fn state_mac(ctx: &Ctx, state: &str) -> String {
     hex::encode(ctx.keys().mac(KeyPurpose::TokenMac, format!("eid-state:{state}").as_bytes()))
+}
+
+fn number_context(id: Uuid) -> String {
+    format!("eid:{id}:personal_number")
+}
+
+/// The proven identity as stored on the eID session, with the personal number encrypted.
+fn seal_identity(ctx: &Ctx, id: Uuid, identity: &Identity) -> Value {
+    json!({
+        "name": identity.name,
+        "personalNumber": identity.personal_number.as_deref().map(|n| ctx.keys().encrypt_str(KeyPurpose::Settings, &number_context(id), n)),
+    })
+}
+
+fn open_identity(ctx: &Ctx, id: Uuid, stored: &Value) -> Option<Identity> {
+    let personal_number = match stored["personalNumber"].as_str() {
+        Some(sealed) => Some(ctx.keys().decrypt_str(KeyPurpose::Settings, &number_context(id), sealed).ok()?.to_string()),
+        None => None,
+    };
+    Some(Identity { name: stored["name"].as_str()?.to_string(), personal_number })
 }
 
 fn redirect_uri(ctx: &Ctx) -> String {
@@ -153,7 +173,7 @@ impl Service for Start {
             return Err(too_many("Too many identification attempts. Try again in an hour."));
         }
         let eid: EidSettings = settings(ctx, conn).await?;
-        let expected = decrypt_personal_number(ctx.keys(), &party);
+        let expected = required_personal_number(ctx.keys(), &party)?;
         let id = Uuid::now_v7();
         let mut secrets = Secrets { qr_start_token: None, qr_start_secret: None, nonce: None, verifier: None };
         let mut state_mac_value = None;
@@ -334,7 +354,7 @@ async fn complete(
     identity: &Identity,
     evidence: &Value,
 ) -> Result<std::result::Result<(), String>> {
-    if let Some(expected) = decrypt_personal_number(ctx.keys(), party) {
+    if let Some(expected) = required_personal_number(ctx.keys(), party)? {
         let matches = identity.personal_number.as_deref().is_some_and(|proven| same_person(&expected, proven, ctx.now.year()));
         if !matches {
             let message = "This eID belongs to someone other than the person the document was sent to.";
@@ -355,7 +375,7 @@ async fn complete(
          where id = $1 and status = 'pending'",
     )
     .bind(row_id)
-    .bind(serde_json::to_value(identity).map_err(AppError::internal)?)
+    .bind(seal_identity(ctx, row_id, identity))
     .bind(evidence)
     .bind(ctx.now)
     .execute(&mut *conn)
@@ -442,7 +462,7 @@ impl Service for Status {
         .bind(ctx.now)
         .fetch_optional(&mut *conn)
         .await?;
-        let Some(identity) = consumed.and_then(|v| serde_json::from_value::<Identity>(v).ok()) else {
+        let Some(identity) = consumed.and_then(|v| open_identity(ctx, row.id, &v)) else {
             return Ok(failed("This identification was already used. Start again."));
         };
         audit(

@@ -261,7 +261,7 @@ pub async fn seal_document(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid
                 authentication: auth_label(p),
                 signed_at: p.signed_at.map(|t| fmt_time(Some(t))),
                 ip: p.evidence.as_ref().and_then(|e| e["ip"].as_str()).map(str::to_string),
-                identity: p.evidence.as_ref().and_then(|e| e["identity"].as_str()).map(str::to_string),
+                identity: super::open_identity(ctx.keys(), p),
             })
             .collect(),
         events: evidence_events(conn, document.id).await?,
