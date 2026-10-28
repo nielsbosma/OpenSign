@@ -10,6 +10,7 @@ use opensign_core::context::{Actor, App, Credential, Ctx, Surface};
 use opensign_core::documents::attachments::AttachmentRequestInput;
 use opensign_core::documents::{AuthMethod, Delivery, FieldKind, PartyRole, parties, signer_token};
 use opensign_core::error::ErrorKind;
+use opensign_core::services::bulk;
 use opensign_core::services::documents::{self as docs, FieldInput, PartyInput, Version};
 use opensign_core::services::signing::{self, FieldValue, SignatureInput, sms_code_hash};
 use opensign_core::settings::SigningSettings;
@@ -100,7 +101,9 @@ fn field(party_id: Option<Uuid>, kind: FieldKind, page: i32, y: f64) -> FieldInp
 #[tokio::test]
 async fn sends_signs_seals_and_verifies() {
     let Some(app) = app().await else { return };
-    {
+    // TEST_LIVE_TSA=1 uses the default time stamp authority and its OCSP responder: PAdES B-LTA.
+    let live = std::env::var("TEST_LIVE_TSA").is_ok();
+    if !live {
         let mut conn = app.db.acquire().await.unwrap();
         let no_tsa = SigningSettings { tsa_url: String::new(), ..SigningSettings::default() };
         app.settings.save(&mut conn, &app.keys, &no_tsa, None).await.unwrap();
@@ -398,8 +401,8 @@ async fn sends_signs_seals_and_verifies() {
     let mut conn = app.db.acquire().await.unwrap();
     let verified = docs::verify_pdf(&mut conn, sealed.clone()).await.unwrap();
     assert_eq!(verified.document.map(|d| d.id), Some(id));
-    assert_eq!(verified.signatures.len(), 1);
-    assert!(verified.signatures[0].is_intact(), "{:?}", verified.signatures[0]);
+    assert_eq!(verified.signatures.len(), if live { 2 } else { 1 }, "{:?}", verified.signatures);
+    assert!(verified.signatures.iter().all(|s| s.is_intact() && s.problems.is_empty()), "{:?}", verified.signatures);
 
     let mut tampered = sealed;
     let n = tampered.len();
@@ -411,7 +414,7 @@ async fn sends_signs_seals_and_verifies() {
 
     let after = call::<signing::Open>(&signer, signing::TokenInput { token: anna_token, session: None }).await.unwrap();
     assert!(after.can_download);
-    let chain = verify_chain(&mut conn).await.unwrap();
+    let chain = verify_chain(&mut conn, &app.keys).await.unwrap();
     assert!(chain.valid, "{chain:?}");
     let actions: Vec<String> = sqlx::query_scalar("select action from audit_log where entity_id = $1 order by id")
         .bind(id.to_string())
@@ -529,4 +532,163 @@ async fn in_person_signing_issues_a_fresh_link_for_the_party_in_turn() {
     let outsider = user(&app, "Val Viewer", Role::Viewer).await;
     let refused = call::<docs::SignInPerson>(&outsider, docs::InPersonInput { document_id: id, party_id: fia }).await;
     assert!(refused.is_err());
+}
+
+#[tokio::test]
+async fn bulk_send_creates_one_document_per_row() {
+    let Some(app) = app().await else { return };
+    let sender = user(&app, "Bea Bulk", Role::Manager).await;
+    let create = serde_json::from_value::<docs::CreateInput>(serde_json::json!({ "title": "Lease", "isTemplate": true })).unwrap();
+    let template = call::<docs::Create>(&sender, create).await.unwrap().document.id;
+    call::<docs::Upload>(
+        &sender,
+        docs::UploadInput { document_id: template, name: "lease.pdf".into(), content_base64: B64.encode(sample_pdf(1)) },
+    )
+    .await
+    .unwrap();
+    let tenant = call::<docs::SetParties>(
+        &sender,
+        docs::SetPartiesInput {
+            document_id: template,
+            parties: vec![party("Tenant", PartyRole::Signer, Delivery::Email, AuthMethod::Standard)],
+        },
+    )
+    .await
+    .unwrap()[0]
+        .id;
+    let mut address = field(None, FieldKind::Text, 0, 0.2);
+    address.label = Some("Address".into());
+    call::<docs::SetFields>(
+        &sender,
+        docs::SetFieldsInput { document_id: template, fields: vec![field(Some(tenant), FieldKind::Signature, 0, 0.7), address] },
+    )
+    .await
+    .unwrap();
+
+    let csv = "Namn;E-post;Address;Kundnummer\nGöran Åberg;goran@example.test;Storgatan 1;K-1\nHelga Ek;not-an-email;Lillgatan 2;K-2\n";
+    let file = |csv: &str| bulk::FileInput { template_id: template, file_name: "tenants.csv".into(), content_base64: B64.encode(csv) };
+    let preview = call::<bulk::Preview>(&sender, bulk::PreviewInput { file: file(csv), use_ai: false }).await.unwrap();
+    let targets: Vec<&str> = preview.mapping.iter().map(|m| m.target.as_str()).collect();
+    assert_eq!(targets, ["party.0.name", "party.0.email", "field.Address", "externalId"]);
+    assert_eq!(preview.row_count, 2);
+    assert_eq!(preview.problems.len(), 1, "Helga's email is caught before anything is sent");
+    assert_eq!(preview.problems[0].row, 3);
+
+    let refused =
+        call::<bulk::Start>(&sender, bulk::StartInput { file: file(csv), mapping: preview.mapping.clone(), title_pattern: None }).await;
+    assert_eq!(kind(refused), ErrorKind::BadRequest);
+
+    let fixed = csv.replace("not-an-email", "helga@example.test");
+    let started = call::<bulk::Start>(
+        &sender,
+        bulk::StartInput { file: file(&fixed), mapping: preview.mapping, title_pattern: Some("Lease {Address}".into()) },
+    )
+    .await
+    .unwrap();
+    assert_eq!((started.total, started.status.as_str()), (2, "queued"));
+    worker::drain(&app).await.unwrap();
+
+    let done = call::<bulk::Get>(&sender, bulk::BulkIdInput { id: started.id }).await.unwrap();
+    assert_eq!(
+        (done.status.as_str(), done.sent, done.failed),
+        ("done", 2, 0),
+        "{:?}",
+        done.rows.iter().map(|r| &r.error).collect::<Vec<_>>()
+    );
+    let first = call::<docs::Get>(&sender, docs::IdInput { id: done.rows[0].document_id.unwrap() }).await.unwrap();
+    assert_eq!(first.document.title, "Lease Storgatan 1");
+    assert_eq!(first.document.status, "pending");
+    assert_eq!(first.document.external_id.as_deref(), Some("K-1"));
+    assert_eq!(first.parties[0].email.as_deref(), Some("goran@example.test"));
+    assert_eq!(first.fields.iter().find(|f| f.label == "Address").and_then(|f| f.value.as_deref()), Some("Storgatan 1"));
+    let leftover: i64 = sqlx::query_scalar("select count(*) from bulk_rows where data is not null").fetch_one(&app.db).await.unwrap();
+    assert_eq!(leftover, 0, "row data is dropped once a row is handled");
+
+    let other = user(&app, "Olle Other", Role::Sender).await;
+    assert!(call::<bulk::Get>(&other, bulk::BulkIdInput { id: started.id }).await.is_err());
+}
+
+#[tokio::test]
+async fn retention_deletes_due_documents_but_never_held_ones() {
+    use opensign_core::services::retention;
+    use opensign_core::settings::RetentionSettings;
+    let Some(app) = app().await else { return };
+    let manager = user(&app, "Rita Retention", Role::Manager).await;
+    let sender = user(&app, "Sam Sender", Role::Sender).await;
+    let draft = |title: &'static str| {
+        let manager = &manager;
+        async move {
+            let create = serde_json::from_value::<docs::CreateInput>(serde_json::json!({ "title": title })).unwrap();
+            let id = call::<docs::Create>(manager, create).await.unwrap().document.id;
+            call::<docs::Upload>(
+                manager,
+                docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)) },
+            )
+            .await
+            .unwrap();
+            sqlx::query("update documents set updated_at = now() - interval '40 days' where id = $1")
+                .bind(id)
+                .execute(&manager.app.db)
+                .await
+                .unwrap();
+            id
+        }
+    };
+    let stale = draft("Stale Draft").await;
+    let held = draft("Disputed Draft").await;
+    let file_of = |id: Uuid| {
+        let db = app.db.clone();
+        async move {
+            sqlx::query_scalar::<_, Uuid>("select file_id from document_files where document_id = $1")
+                .bind(id)
+                .fetch_one(&db)
+                .await
+                .unwrap()
+        }
+    };
+    let stale_file = file_of(stale).await;
+    let stale_key: String =
+        sqlx::query_scalar("select storage_key from files where id = $1").bind(stale_file).fetch_one(&app.db).await.unwrap();
+
+    let hold = |id: Uuid, hold: bool, reason: &str| retention::LegalHoldInput { id, hold, reason: reason.into() };
+    assert_eq!(kind(call::<retention::SetLegalHold>(&sender, hold(held, true, "Case 12")).await), ErrorKind::Forbidden);
+    assert_eq!(kind(call::<retention::SetLegalHold>(&manager, hold(held, true, " ")).await), ErrorKind::BadRequest, "a reason is required");
+    let placed = call::<retention::SetLegalHold>(&manager, hold(held, true, "Case 12")).await.unwrap();
+    assert!(placed.legal_hold);
+    assert_eq!(kind(call::<docs::Delete>(&manager, docs::IdInput { id: held }).await), ErrorKind::Conflict);
+
+    let mut conn = app.db.acquire().await.unwrap();
+    app.settings.save(&mut conn, &app.keys, &RetentionSettings { draft_days: 30, ..Default::default() }, None).await.unwrap();
+    let preview = call::<retention::Preview>(&manager, Default::default()).await;
+    assert_eq!(kind(preview), ErrorKind::Forbidden, "only admins see retention");
+    let deleted = retention::run(&manager, &mut conn).await.unwrap();
+    assert!(deleted >= 1);
+    let exists = |id: Uuid| sqlx::query_scalar::<_, bool>("select exists (select 1 from documents where id = $1)").bind(id);
+    assert!(!exists(stale).fetch_one(&mut *conn).await.unwrap(), "the stale draft is gone");
+    assert!(exists(held).fetch_one(&mut *conn).await.unwrap(), "the held draft stays");
+    let file_left: bool =
+        sqlx::query_scalar("select exists (select 1 from files where id = $1)").bind(stale_file).fetch_one(&mut *conn).await.unwrap();
+    assert!(!file_left, "its file row and wrapped key are gone");
+    let cleanup: i64 =
+        sqlx::query_scalar("select count(*) from jobs where kind = 'delete_objects' and payload::text like '%' || $1 || '%'")
+            .bind(&stale_key)
+            .fetch_one(&mut *conn)
+            .await
+            .unwrap();
+    assert_eq!(cleanup, 1, "a job removes the encrypted body from the bucket");
+    let reason: String = sqlx::query_scalar(
+        "select metadata->>'reason' from audit_log where action = 'document.deleted' and entity_id = $1::text order by id desc limit 1",
+    )
+    .bind(stale)
+    .fetch_one(&mut *conn)
+    .await
+    .unwrap();
+    assert_eq!(reason, "retention");
+
+    let view = call::<docs::Get>(&manager, docs::IdInput { id: held }).await.unwrap();
+    assert!(view.deletes_at.is_none(), "a held document has no deletion date");
+    call::<retention::SetLegalHold>(&manager, hold(held, false, "")).await.unwrap();
+    let view = call::<docs::Get>(&manager, docs::IdInput { id: held }).await.unwrap();
+    assert!(view.deletes_at.is_some());
+    call::<docs::Delete>(&manager, docs::IdInput { id: held }).await.unwrap();
 }

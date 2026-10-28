@@ -45,7 +45,10 @@ export function AuditPage() {
               </span>
             ) : (
               <span className="flex items-center gap-1.5 text-destructive">
-                <ShieldAlert className="size-4" /> Broken at entry {chain.data.broken_at}
+                <ShieldAlert className="size-4" />{' '}
+                {chain.data.broken_at != null
+                  ? `Broken at entry ${chain.data.broken_at}`
+                  : `${chain.data.broken_anchors.length} time stamp anchors do not match the chain`}
               </span>
             ))}
           <Input

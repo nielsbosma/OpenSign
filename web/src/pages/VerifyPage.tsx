@@ -6,11 +6,12 @@ import { formatDateTime } from '@/lib/format';
 import { AuthLayout, FormError } from './auth/AuthLayout';
 
 type Signature = {
+  kind: 'signature' | 'documentTimestamp';
   signer?: string | null;
   reason?: string | null;
   coversWholeFile: boolean;
-  digestMatches: boolean;
-  signatureValid?: boolean | null;
+  onlyValidationDataAdded: boolean;
+  intact: boolean;
   timestamp?: string | null;
   problems: string[];
 };
@@ -77,15 +78,16 @@ export function VerifyPage() {
                 {signatures.map((s, i) => (
                   <li key={i} className="rounded-md border px-3 py-2">
                     <div className="flex items-center gap-2 font-medium">
-                      {s.coversWholeFile && s.digestMatches && s.signatureValid ? (
-                        <CheckCircle2 className="size-4 text-success" />
-                      ) : (
-                        <XCircle className="size-4 text-warning" />
-                      )}
-                      {s.signer ?? 'Digital signature'}
+                      {s.intact ? <CheckCircle2 className="size-4 text-success" /> : <XCircle className="size-4 text-warning" />}
+                      {s.kind === 'documentTimestamp' ? 'Archive Time Stamp' : (s.signer ?? 'Digital Signature')}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {[s.reason, s.timestamp ? `timestamped ${formatDateTime(s.timestamp)}` : null, ...s.problems]
+                      {[
+                        s.kind === 'documentTimestamp' ? s.signer : s.reason,
+                        s.timestamp ? `timestamped ${formatDateTime(s.timestamp)}` : null,
+                        s.onlyValidationDataAdded ? 'only validation data was added after it' : null,
+                        ...s.problems,
+                      ]
                         .filter(Boolean)
                         .join(' · ')}
                     </div>

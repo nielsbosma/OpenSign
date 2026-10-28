@@ -15,6 +15,7 @@ const SECTIONS: { title: string; items: { path: string; label: string; permissio
       { path: '/settings/admin/org', label: 'Organisation', permission: 'settings.manage' },
       { path: '/settings/admin/signing', label: 'Signing and Seal', permission: 'settings.manage' },
       { path: '/settings/admin/security', label: 'Security', permission: 'settings.manage' },
+      { path: '/settings/admin/retention', label: 'Retention', permission: 'settings.manage' },
       { path: '/settings/audit', label: 'Audit Trail', permission: 'audit.read' },
     ],
   },

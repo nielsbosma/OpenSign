@@ -71,18 +71,32 @@ pub struct SecuritySettings {
     pub idle_minutes: u32,
     pub signer_link_days: u32,
     pub max_upload_mb: u32,
-    /// Completed documents are deleted this many days after completion; 0 keeps them.
-    pub retention_days: u32,
 }
 
 impl Default for SecuritySettings {
     fn default() -> Self {
-        Self { enforce_two_factor: false, session_hours: 12, idle_minutes: 60, signer_link_days: 30, max_upload_mb: 25, retention_days: 0 }
+        Self { enforce_two_factor: false, session_hours: 12, idle_minutes: 60, signer_link_days: 30, max_upload_mb: 25 }
     }
 }
 
 impl SettingsGroup for SecuritySettings {
     const NAME: &'static str = "security";
+}
+
+/// How long documents are kept. 0 keeps them; documents on legal hold and templates are always kept.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(default, rename_all = "camelCase")]
+pub struct RetentionSettings {
+    /// Days after completion before a signed document is deleted.
+    pub completed_days: u32,
+    /// Days after a document was declined, canceled or expired.
+    pub ended_days: u32,
+    /// Days since a draft was last changed.
+    pub draft_days: u32,
+}
+
+impl SettingsGroup for RetentionSettings {
+    const NAME: &'static str = "retention";
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

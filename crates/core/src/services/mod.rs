@@ -1,9 +1,12 @@
 pub mod admin;
 pub mod ai;
 pub mod auth;
+pub mod bulk;
 pub mod documents;
 pub mod eid;
 pub mod oauth;
+pub mod passkeys;
+pub mod retention;
 pub mod setup;
 pub mod signing;
 pub mod users;
@@ -78,11 +81,24 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<documents::Cancel>(),
         erase::<documents::Remind>(),
         erase::<documents::Delete>(),
+        erase::<retention::SetLegalHold>(),
+        erase::<retention::Preview>(),
         erase::<documents::Share>(),
         erase::<documents::Unshare>(),
         erase::<documents::Download>(),
         erase::<documents::IssueSigningLink>(),
         erase::<documents::SignInPerson>(),
+        erase::<passkeys::BeginRegistration>(),
+        erase::<passkeys::FinishRegistration>(),
+        erase::<passkeys::List>(),
+        erase::<passkeys::Remove>(),
+        erase::<passkeys::BeginSignIn>(),
+        erase::<passkeys::SignIn>(),
+        erase::<bulk::Preview>(),
+        erase::<bulk::Start>(),
+        erase::<bulk::Get>(),
+        erase::<bulk::List>(),
+        erase::<bulk::Cancel>(),
         erase::<documents::Verify>(),
         erase::<documents::GetSeal>(),
         erase::<documents::RegenerateSeal>(),

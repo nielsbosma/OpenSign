@@ -59,9 +59,9 @@ fn pdf_string(text: &str) -> Object {
 
 /// A PDF with an empty signature field whose `/Contents` is a fixed-size hole.
 pub struct Prepared {
-    pdf: Vec<u8>,
-    hole_start: usize,
-    hole_end: usize,
+    pub(crate) pdf: Vec<u8>,
+    pub(crate) hole_start: usize,
+    pub(crate) hole_end: usize,
     /// SHA-256 over every byte except the hole: what the signature covers.
     pub digest: [u8; 32],
 }
@@ -106,15 +106,21 @@ pub fn prepare(pdf: &[u8], options: &SealOptions) -> Result<Prepared> {
 
     let mut out = Vec::with_capacity(pdf.len() + CONTENTS_BYTES * 2 + 1024);
     doc.save_to(&mut out).map_err(|e| PdfError::Malformed(e.to_string()))?;
+    fill_byte_range(out, 0, CONTENTS_BYTES)
+}
 
+/// Finds the zero-filled `/Contents` hole and the byte range placeholders written after `from`,
+/// fills in the byte range and hashes everything but the hole.
+pub(crate) fn fill_byte_range(mut out: Vec<u8>, from: usize, contents_bytes: usize) -> Result<Prepared> {
     let mut hole = vec![b'<'];
-    hole.extend(std::iter::repeat_n(b'0', CONTENTS_BYTES * 2));
+    hole.extend(std::iter::repeat_n(b'0', contents_bytes * 2));
     hole.push(b'>');
-    let holes = find(&out, &hole);
+    let holes = find(&out[from..], &hole);
     let [hole_start] = holes[..] else { return Err(sig_err("could not find the signature placeholder")) };
+    let hole_start = from + hole_start;
     let hole_end = hole_start + hole.len();
 
-    let ranges = find(&out, RANGE_PLACEHOLDER);
+    let ranges: Vec<usize> = find(&out[from..], RANGE_PLACEHOLDER).into_iter().map(|at| from + at).collect();
     if ranges.len() != 3 {
         return Err(sig_err("could not find the byte range placeholder"));
     }
@@ -130,6 +136,17 @@ pub fn prepare(pdf: &[u8], options: &SealOptions) -> Result<Prepared> {
     hasher.update(&out[..hole_start]);
     hasher.update(&out[hole_end..]);
     Ok(Prepared { pdf: out, hole_start, hole_end, digest: hasher.finalize().into() })
+}
+
+/// Writes a DER value into a prepared hole.
+pub(crate) fn fill_hole(prepared: Prepared, der: &[u8]) -> Result<Vec<u8>> {
+    let hex = hex::encode_upper(der);
+    if hex.len() > prepared.hole_end - prepared.hole_start - 2 {
+        return Err(sig_err("the signature is larger than the space reserved for it"));
+    }
+    let mut pdf = prepared.pdf;
+    pdf[prepared.hole_start + 1..prepared.hole_start + 1 + hex.len()].copy_from_slice(hex.as_bytes());
+    Ok(pdf)
 }
 
 /// The signer's part of the CMS structure: signed attributes and the signature over them.
@@ -193,14 +210,7 @@ pub fn finish(prepared: Prepared, identity: &SealIdentity, signed: Signed, times
     };
     let content_info = ContentInfo { content_type: ID_SIGNED_DATA, content: Any::encode_from(&signed_data).map_err(sig_err)? };
     let der = content_info.to_der().map_err(sig_err)?;
-    if der.len() > CONTENTS_BYTES {
-        return Err(sig_err("the signature is larger than the space reserved for it"));
-    }
-    let mut pdf = prepared.pdf;
-    let hex = hex::encode_upper(&der);
-    pdf[prepared.hole_start + 1..prepared.hole_start + 1 + hex.len()].copy_from_slice(hex.as_bytes());
-    debug_assert_eq!(pdf[prepared.hole_end - 1], b'>');
-    Ok(pdf)
+    fill_hole(prepared, &der)
 }
 
 trait FromDerBytes: Sized {
@@ -214,15 +224,15 @@ impl FromDerBytes for ContentInfo {
 }
 
 /// Seals in one go when the time stamp can be fetched synchronously. `timestamp` receives the
-/// signature value and returns an RFC 3161 token, or `None` to seal without one (PAdES B-B).
+/// SHA-256 of the signature value and returns an RFC 3161 token, or `None` to seal without one (PAdES B-B).
 pub fn seal(
     pdf: &[u8],
     identity: &SealIdentity,
     options: &SealOptions,
-    timestamp: impl FnOnce(&[u8]) -> Result<Option<Vec<u8>>>,
+    timestamp: impl FnOnce(&[u8; 32]) -> Result<Option<Vec<u8>>>,
 ) -> Result<Vec<u8>> {
     let prepared = prepare(pdf, options)?;
     let signed = sign(identity, &prepared.digest)?;
-    let token = timestamp(&signed.signature)?;
+    let token = timestamp(&Sha256::digest(&signed.signature).into())?;
     finish(prepared, identity, signed, token)
 }

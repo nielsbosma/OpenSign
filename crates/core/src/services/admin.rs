@@ -16,7 +16,8 @@ use crate::error::{AppError, Result, bad_request};
 use crate::permissions::Permission;
 use crate::service::{Access, Meta, Service};
 use crate::settings::{
-    AiSettings, EidSettings, EmailSettings, OrgSettings, SecuritySettings, SettingsGroup, SigningSettings, SmsSettings, public_view,
+    AiSettings, EidSettings, EmailSettings, OrgSettings, RetentionSettings, SecuritySettings, SettingsGroup, SigningSettings, SmsSettings,
+    public_view,
 };
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema)]
@@ -25,6 +26,7 @@ pub enum Group {
     Org,
     Email,
     Security,
+    Retention,
     Signing,
     Ai,
     Sms,
@@ -66,6 +68,7 @@ impl Service for GetSettings {
             Group::Org => view::<OrgSettings>(ctx, conn).await,
             Group::Email => view::<EmailSettings>(ctx, conn).await,
             Group::Security => view::<SecuritySettings>(ctx, conn).await,
+            Group::Retention => view::<RetentionSettings>(ctx, conn).await,
             Group::Signing => view::<SigningSettings>(ctx, conn).await,
             Group::Ai => view::<AiSettings>(ctx, conn).await,
             Group::Sms => view::<SmsSettings>(ctx, conn).await,
@@ -164,11 +167,7 @@ fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
     let value = serde_json::to_value(group).map_err(AppError::internal)?;
     let url = |field: &str| -> Result<()> {
         if let Some(u) = value.get(field).and_then(Value::as_str).filter(|u| !u.is_empty()) {
-            crate::net::check_public_url(u)
-                .or_else(
-                    |e| if G::NAME == "signing" && u.starts_with("http://") { Ok(reqwest::Url::parse(u).map_err(|_| e)?) } else { Err(e) },
-                )
-                .map_err(bad_request)?;
+            crate::net::check_outbound_url(u, G::NAME == "signing").map_err(bad_request)?;
         }
         Ok(())
     };
@@ -202,6 +201,13 @@ fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
             if present(&eid.freja_signing_certificate) {
                 crate::eid::jws::Key::from_certificate_pem(&eid.freja_signing_certificate)
                     .map_err(|e| bad_request(format!("Freja's signing certificate is not usable: {e}")))?;
+            }
+            Ok(())
+        }
+        "retention" => {
+            let rules: RetentionSettings = serde_json::from_value(value.clone()).map_err(AppError::internal)?;
+            if [rules.completed_days, rules.ended_days, rules.draft_days].iter().any(|d| *d > 36_500) {
+                return Err(bad_request("Keep retention periods under 100 years"));
             }
             Ok(())
         }
@@ -243,6 +249,7 @@ impl Service for UpdateSettings {
                 update::<EmailSettings>(ctx, conn, &patch).await
             }
             Group::Security => update::<SecuritySettings>(ctx, conn, &input.values).await,
+            Group::Retention => update::<RetentionSettings>(ctx, conn, &input.values).await,
             Group::Signing => update::<SigningSettings>(ctx, conn, &input.values).await,
             Group::Ai => update::<AiSettings>(ctx, conn, &input.values).await,
             Group::Sms => update::<SmsSettings>(ctx, conn, &input.values).await,
@@ -376,7 +383,7 @@ impl Service for VerifyAudit {
         Access::Permission(Permission::AuditRead),
     );
 
-    async fn run(_ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<ChainReport> {
-        verify_chain(conn).await
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<ChainReport> {
+        verify_chain(conn, ctx.keys()).await
     }
 }
