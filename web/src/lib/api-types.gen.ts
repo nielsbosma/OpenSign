@@ -240,6 +240,18 @@ export type AuthVerifyTwoFactorOutput = {
   status: "two_factor_required";
 };
 
+export type DocumentsAuthMethodsInput = Record<string, unknown>;
+
+/** Proof of identity a party must give. `standard` is possession of the link. */
+export type AuthMethod = "none" | "standard" | "sms_pin" | "se_bankid" | "freja" | "broker";
+
+export type DocumentsAuthMethodsOutput = AuthMethods;
+
+export type AuthMethods = {
+  /** The ways a party can be asked to identify on this server. */
+  available: Array<AuthMethod>;
+};
+
 export type DocumentsCancelInput = {
   id: string;
   reason?: string | null;
@@ -489,9 +501,6 @@ export type DocumentsSetFieldsInput = {
 
 export type DocumentsSetFieldsOutput = DocumentView;
 
-/** Proof of identity a party must give. `standard` is possession of the link. */
-export type AuthMethod = "none" | "standard" | "sms_pin" | "se_bankid" | "freja" | "broker";
-
 /** How the party gets their link. `link` hands it to the sender (or the calling system) instead. */
 export type Delivery = "email" | "sms" | "link" | "none";
 
@@ -504,7 +513,7 @@ export type PartyInput = {
   /** Keep an existing party (and its fields) by passing its id. */
   id?: string | null;
   name: string;
-  /** A national id number to match against the eID result, e.g. a Swedish personnummer. Stored encrypted. */
+  /** A national id number to match against the eID result, e.g. a Swedish personnummer. Stored encrypted. Leave it out (or send the masked value) to keep the stored one; send "" to remove it. */
   personalNumber?: string | null;
   /** With country code, e.g. +46701234567. Needed for SMS delivery and SMS codes. */
   phone?: string | null;
@@ -709,6 +718,54 @@ export type SigningDeclineInput = {
 };
 
 export type SigningDeclineOutput = Ok_;
+
+export type SigningEidCancelInput = {
+  id: string;
+  token: string;
+};
+
+export type SigningEidCancelOutput = Ok_;
+
+export type Purpose = "view" | "sign";
+
+export type SigningEidStartInput = {
+  purpose: Purpose;
+  session?: string | null;
+  token: string;
+};
+
+export type SigningEidStartOutput = Started;
+
+export type Started = {
+  /** Opens the BankID app on this device: `bankid:///?autostarttoken=...&redirect=null`. */
+  autoStartToken?: string | null;
+  expiresAt: string;
+  id: string;
+  method: AuthMethod;
+  /** Content for a QR code to scan with a phone. For BankID it changes every second; poll for it. */
+  qr?: string | null;
+  /** Send the browser here to identify at the eID broker. */
+  redirectUrl?: string | null;
+};
+
+export type SigningEidStatusInput = {
+  id: string;
+  token: string;
+};
+
+export type SigningEidStatusOutput = EidStatus;
+
+export type EidStatus = {
+  expiresAt?: string | null;
+  /** What to tell the person. */
+  message?: string | null;
+  /** The QR code to show now, while pending. */
+  qr?: string | null;
+  /** Set once, when complete: pass it as `session` with the next calls. */
+  session?: string | null;
+  /** `pending`, `complete` or `failed`. */
+  status: string;
+};
 
 export type SigningOpenInput = {
   session?: string | null;
@@ -931,6 +988,7 @@ export interface Services {
   "auth.request_password_reset": { kind: "mutation"; input: AuthRequestPasswordResetInput; output: AuthRequestPasswordResetOutput };
   "auth.reset_password": { kind: "mutation"; input: AuthResetPasswordInput; output: AuthResetPasswordOutput };
   "auth.verify_two_factor": { kind: "mutation"; input: AuthVerifyTwoFactorInput; output: AuthVerifyTwoFactorOutput };
+  "documents.auth_methods": { kind: "query"; input: DocumentsAuthMethodsInput; output: DocumentsAuthMethodsOutput };
   "documents.cancel": { kind: "mutation"; input: DocumentsCancelInput; output: DocumentsCancelOutput };
   "documents.check": { kind: "query"; input: DocumentsCheckInput; output: DocumentsCheckOutput };
   "documents.create": { kind: "mutation"; input: DocumentsCreateInput; output: DocumentsCreateOutput };
@@ -962,6 +1020,9 @@ export interface Services {
   "setup.create_first_admin": { kind: "mutation"; input: SetupCreateFirstAdminInput; output: SetupCreateFirstAdminOutput };
   "setup.status": { kind: "query"; input: SetupStatusInput; output: SetupStatusOutput };
   "signing.decline": { kind: "mutation"; input: SigningDeclineInput; output: SigningDeclineOutput };
+  "signing.eid_cancel": { kind: "mutation"; input: SigningEidCancelInput; output: SigningEidCancelOutput };
+  "signing.eid_start": { kind: "mutation"; input: SigningEidStartInput; output: SigningEidStartOutput };
+  "signing.eid_status": { kind: "query"; input: SigningEidStatusInput; output: SigningEidStatusOutput };
   "signing.open": { kind: "mutation"; input: SigningOpenInput; output: SigningOpenOutput };
   "signing.request_code": { kind: "mutation"; input: SigningRequestCodeInput; output: SigningRequestCodeOutput };
   "signing.sign": { kind: "mutation"; input: SigningSignInput; output: SigningSignOutput };

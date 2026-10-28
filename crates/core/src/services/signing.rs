@@ -25,18 +25,18 @@ use crate::service::{Access, Meta, Service};
 use crate::settings::{OrgSettings, SmsSettings};
 use crate::storage::{FileRecord, NewFile, file_record, store_file};
 
-const SESSION_MINUTES: i64 = 30;
+pub(crate) const SESSION_MINUTES: i64 = 30;
 const CODE_MINUTES: i64 = 10;
 const CODE_ATTEMPTS: i32 = 5;
 const CODES_PER_HOUR: i64 = 5;
 const MAX_SIGNATURE_IMAGE: usize = 300 * 1024;
 
-fn invalid_link() -> AppError {
+pub(crate) fn invalid_link() -> AppError {
     AppError::new(ErrorKind::NotFound, "This signing link is not valid or has expired. Ask the sender for a new one.")
 }
 
 #[derive(Serialize, Deserialize)]
-struct SignerSession {
+pub(crate) struct SignerSession {
     p: Uuid,
     v: i32,
     a: AuthMethod,
@@ -60,7 +60,7 @@ fn session(ctx: &Ctx, party: &PartyRow, token: Option<&str>) -> Option<SignerSes
 }
 
 /// An eID also satisfies an SMS code requirement; nothing weaker satisfies an eID.
-fn satisfied(required: AuthMethod, session: Option<&SignerSession>) -> bool {
+pub(crate) fn satisfied(required: AuthMethod, session: Option<&SignerSession>) -> bool {
     match required {
         AuthMethod::None | AuthMethod::Standard => true,
         AuthMethod::SmsPin => session.is_some_and(|s| s.a != AuthMethod::None && s.a != AuthMethod::Standard),
@@ -68,13 +68,13 @@ fn satisfied(required: AuthMethod, session: Option<&SignerSession>) -> bool {
     }
 }
 
-struct Resolved {
-    party: PartyRow,
-    document: DocumentRow,
-    session: Option<SignerSession>,
+pub(crate) struct Resolved {
+    pub party: PartyRow,
+    pub document: DocumentRow,
+    pub session: Option<SignerSession>,
 }
 
-async fn resolve(ctx: &Ctx, conn: &mut PgConnection, token: &str, session_token: Option<&str>) -> Result<Resolved> {
+pub(crate) async fn resolve(ctx: &Ctx, conn: &mut PgConnection, token: &str, session_token: Option<&str>) -> Result<Resolved> {
     let party = party_for_token(ctx.keys(), conn, token).await?.ok_or_else(invalid_link)?;
     if party.link_expires_at.is_some_and(|at| at < ctx.now) {
         return Err(invalid_link());

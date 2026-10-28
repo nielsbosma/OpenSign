@@ -2,6 +2,7 @@ pub mod admin;
 pub mod ai;
 pub mod auth;
 pub mod documents;
+pub mod eid;
 pub mod oauth;
 pub mod setup;
 pub mod signing;
@@ -72,6 +73,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<documents::Update>(),
         erase::<documents::SetParties>(),
         erase::<documents::SetFields>(),
+        erase::<documents::ListAuthMethods>(),
         erase::<documents::Send>(),
         erase::<documents::Cancel>(),
         erase::<documents::Remind>(),
@@ -86,6 +88,9 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<signing::Open>(),
         erase::<signing::RequestCode>(),
         erase::<signing::VerifyCode>(),
+        erase::<eid::Start>(),
+        erase::<eid::Status>(),
+        erase::<eid::Cancel>(),
         erase::<signing::Sign>(),
         erase::<signing::Decline>(),
         erase::<webhooks::List>(),

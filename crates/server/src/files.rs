@@ -196,3 +196,35 @@ pub async fn verify(State(state): State<AppState>, request: Request) -> Response
         Err(e) => ApiError(e, Some(caller.request_id)).into_response(),
     }
 }
+
+#[derive(Deserialize)]
+pub struct EidCallback {
+    state: Option<String>,
+    code: Option<String>,
+    error: Option<String>,
+}
+
+/// `GET /api/eid/callback`: the eID broker returns the browser here. The signing page picks the
+/// result up with the session id; the page itself still holds the signing link.
+pub async fn eid_callback(State(state): State<AppState>, Query(q): Query<EidCallback>, parts: Parts) -> Response {
+    let caller = match caller(&state, &parts, Surface::Signer, Some(security::SIGNER)).await {
+        Ok(c) => c,
+        Err(r) => return *r,
+    };
+    let result = async {
+        let state = q.state.as_deref().filter(|s| !s.is_empty() && s.len() <= 200).ok_or_else(|| bad_request("Missing state"))?;
+        let mut conn = caller.ctx.db().acquire().await?;
+        opensign_core::services::eid::broker_callback(&caller.ctx, &mut conn, state, q.code.as_deref(), q.error.as_deref()).await
+    }
+    .await;
+    let location = match result {
+        Ok(id) => format!("/sign?eid={id}"),
+        Err(_) => "/sign?eid=invalid".to_string(),
+    };
+    let mut response = axum::http::StatusCode::SEE_OTHER.into_response();
+    if let Ok(value) = HeaderValue::from_str(&location) {
+        response.headers_mut().insert(header::LOCATION, value);
+    }
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}

@@ -1,0 +1,93 @@
+//! Electronic identification of signers: Swedish BankID and Freja eID directly, and the other
+//! Nordic eIDs through an OpenID Connect broker.
+
+pub mod bankid;
+pub mod freja;
+pub mod jws;
+pub mod oidc;
+
+use serde::{Deserialize, Serialize};
+
+/// The person an eID vouched for.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Identity {
+    pub name: String,
+    pub personal_number: Option<String>,
+}
+
+/// A Swedish personal identity (or coordination) number as 12 digits, if the check digit is right.
+/// `+` before the last four digits marks someone 100 or older.
+pub fn se_personal_number(input: &str, this_year: i32) -> Option<String> {
+    let compact: String = input.chars().filter(|c| !c.is_whitespace()).collect();
+    let centenarian = compact.contains('+');
+    let digits: String = compact.chars().filter(|c| *c != '-' && *c != '+').collect();
+    if !digits.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let full = match digits.len() {
+        12 => digits,
+        10 => {
+            let yy: i32 = digits[..2].parse().ok()?;
+            let mut year = this_year - (this_year - yy).rem_euclid(100);
+            if centenarian {
+                year -= 100;
+            }
+            format!("{year:04}{}", &digits[2..])
+        }
+        _ => return None,
+    };
+    let month: u32 = full[4..6].parse().ok()?;
+    let day: u32 = full[6..8].parse().ok()?;
+    let day = if day > 60 { day - 60 } else { day };
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) || !luhn(&full[2..]) {
+        return None;
+    }
+    Some(full)
+}
+
+fn luhn(digits: &str) -> bool {
+    let sum: u32 = digits
+        .bytes()
+        .enumerate()
+        .map(|(i, b)| {
+            let d = u32::from(b - b'0') * if i % 2 == 0 { 2 } else { 1 };
+            if d > 9 { d - 9 } else { d }
+        })
+        .sum();
+    sum.is_multiple_of(10)
+}
+
+/// Whether two personal numbers name the same person, in whatever format each was written.
+pub fn same_person(expected: &str, proven: &str, this_year: i32) -> bool {
+    if let (Some(a), Some(b)) = (se_personal_number(expected, this_year), se_personal_number(proven, this_year)) {
+        return a == b;
+    }
+    let clean = |s: &str| s.chars().filter(char::is_ascii_alphanumeric).collect::<String>().to_ascii_uppercase();
+    let (a, b) = (clean(expected), clean(proven));
+    !a.is_empty() && opensign_crypto::constant_time_eq(a.as_bytes(), b.as_bytes())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn swedish_personal_numbers() {
+        assert_eq!(se_personal_number("19900101-0017", 2026).as_deref(), Some("199001010017"));
+        assert_eq!(se_personal_number("900101-0017", 2026).as_deref(), Some("199001010017"));
+        assert_eq!(se_personal_number("900101+0017", 2026).as_deref(), Some("189001010017"));
+        assert_eq!(se_personal_number("19900161-0014", 2026).as_deref(), Some("199001610014"), "coordination number");
+        assert_eq!(se_personal_number("19900101-0018", 2026), None, "check digit");
+        assert_eq!(se_personal_number("19901301-0017", 2026), None, "month");
+        assert_eq!(se_personal_number("abc", 2026), None);
+    }
+
+    #[test]
+    fn matches_people_across_formats() {
+        assert!(same_person("900101-0017", "199001010017", 2026));
+        assert!(!same_person("900101-0017", "199001010025", 2026));
+        assert!(same_person("12345678901", "123456 78901", 2026));
+        assert!(!same_person("", "", 2026));
+    }
+}

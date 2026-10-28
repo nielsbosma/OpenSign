@@ -92,6 +92,32 @@ impl Default for SafeHttp {
     }
 }
 
+/// A client for one provider that authenticates with a client certificate (BankID, Freja). With
+/// `roots`, only those CAs are trusted, so a public CA cannot impersonate the provider.
+pub fn client_with_certificate(identity_pem: &str, roots: Option<&str>) -> Result<reqwest::Client, String> {
+    let identity = reqwest::Identity::from_pem(identity_pem.as_bytes())
+        .map_err(|_| "The client certificate must be PEM with the certificate and its unencrypted private key".to_string())?;
+    let mut builder = reqwest::Client::builder()
+        .user_agent(format!("OpenSign/{}", crate::env::app_version()))
+        .dns_resolver(Arc::new(FilteringResolver))
+        .redirect(reqwest::redirect::Policy::none())
+        .https_only(true)
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(20))
+        .identity(identity);
+    if let Some(roots) = roots.filter(|r| !r.trim().is_empty()) {
+        let certs = reqwest::Certificate::from_pem_bundle(roots.as_bytes()).map_err(|_| "The CA certificate must be PEM".to_string())?;
+        if certs.is_empty() {
+            return Err("The CA certificate must be PEM".into());
+        }
+        builder = builder.tls_built_in_root_certs(false);
+        for cert in certs {
+            builder = builder.add_root_certificate(cert);
+        }
+    }
+    builder.build().map_err(|e| format!("Could not set up the connection: {e}"))
+}
+
 /// Literal IPs in a URL bypass DNS, so they are checked here as well.
 pub fn check_public_url(url: &str) -> Result<reqwest::Url, String> {
     let parsed = reqwest::Url::parse(url).map_err(|_| "Enter a valid URL".to_string())?;

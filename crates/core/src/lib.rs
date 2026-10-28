@@ -16,6 +16,7 @@ pub use service::{Access, DynService, Kind, Meta, Service, call};
 
 pub mod auth;
 pub mod documents;
+pub mod eid;
 pub mod email;
 pub mod jobs;
 pub mod oauth;

@@ -140,25 +140,32 @@ impl SettingsGroup for SmsSettings {
 #[serde(default, rename_all = "camelCase")]
 pub struct EidSettings {
     pub bankid_enabled: bool,
+    /// BankID's test environment, for test BankIDs only.
     pub bankid_test: bool,
-    /// PKCS#12 relying-party certificate, base64.
+    /// The relying-party certificate and its private key, PEM.
     pub bankid_certificate: Option<String>,
-    pub bankid_certificate_password: Option<String>,
+    /// BankID's issuing CA for the API server, PEM. Only this CA is trusted for BankID.
+    pub bankid_ca_certificate: String,
     pub freja_enabled: bool,
     pub freja_test: bool,
+    /// The relying-party certificate and its private key, PEM.
     pub freja_certificate: Option<String>,
-    pub freja_certificate_password: Option<String>,
+    /// Trusted CA for Freja's API server, PEM. Empty trusts the public CAs.
+    pub freja_ca_certificate: String,
+    /// Freja's result-signing certificate, PEM. Results are refused unless their signature checks out.
+    pub freja_signing_certificate: String,
     /// An OpenID Connect eID broker (Idura/Criipto, Signicat) for the other Nordic eIDs.
     pub broker_enabled: bool,
     pub broker_issuer: String,
     pub broker_client_id: String,
     pub broker_client_secret: Option<String>,
+    /// Picks the eID at the broker, e.g. `urn:grn:authn:no:bankid`. Empty lets the signer choose.
+    pub broker_acr_values: String,
 }
 
 impl SettingsGroup for EidSettings {
     const NAME: &'static str = "eid";
-    const SECRETS: &'static [&'static str] =
-        &["bankidCertificate", "bankidCertificatePassword", "frejaCertificate", "frejaCertificatePassword", "brokerClientSecret"];
+    const SECRETS: &'static [&'static str] = &["bankidCertificate", "frejaCertificate", "brokerClientSecret"];
 }
 
 const TTL: Duration = Duration::from_secs(5);

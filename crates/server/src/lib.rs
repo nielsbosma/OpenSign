@@ -110,6 +110,7 @@ pub fn router(state: AppState) -> Router {
         .route("/documents/{id}/preview", get(files::preview))
         .route("/documents/{id}/files", post(files::upload).layer(DefaultBodyLimit::max(110 * 1024 * 1024)))
         .route("/sign/file", post(files::signer))
+        .route("/eid/callback", get(files::eid_callback))
         .route("/verify", post(files::verify))
         .nest("/v1", rest::router(&state))
         .nest("/v2", compat::scrive::router())

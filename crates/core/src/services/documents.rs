@@ -831,6 +831,43 @@ async fn check_auth_available(ctx: &Ctx, conn: &mut PgConnection, method: AuthMe
     }
 }
 
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthMethods {
+    /// The ways a party can be asked to identify on this server.
+    pub available: Vec<AuthMethod>,
+}
+
+pub struct ListAuthMethods;
+
+#[async_trait]
+impl Service for ListAuthMethods {
+    type Input = super::Empty;
+    type Output = AuthMethods;
+    const META: Meta = Meta::query(
+        "documents.auth_methods",
+        "The identification methods parties can be asked for here: email link always, SMS codes and eIDs when an admin has set them up.",
+        Access::Authenticated,
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, _: super::Empty) -> Result<AuthMethods> {
+        let sms: SmsSettings = settings(ctx, conn).await?;
+        let eid: EidSettings = settings(ctx, conn).await?;
+        let mut available = vec![AuthMethod::None, AuthMethod::Standard];
+        if crate::sms::is_configured(&sms) || ctx.app.env.development {
+            available.push(AuthMethod::SmsPin);
+        }
+        for (on, method) in
+            [(eid.bankid_enabled, AuthMethod::SeBankid), (eid.freja_enabled, AuthMethod::Freja), (eid.broker_enabled, AuthMethod::Broker)]
+        {
+            if on {
+                available.push(method);
+            }
+        }
+        Ok(AuthMethods { available })
+    }
+}
+
 pub struct Send;
 
 #[async_trait]

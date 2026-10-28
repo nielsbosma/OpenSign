@@ -22,6 +22,7 @@ hex = { workspace = true }
 hmac = { workspace = true }
 object_store = { version = "0.12", default-features = false, features = ["aws"] }
 reqwest = { workspace = true }
+rsa = { version = "0.9", features = ["sha2"] }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -31,12 +32,14 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 url = "2"
+x509-cert = { version = "0.2", features = ["pem"] }
 uuid = { workspace = true }
 
 [features]
 testing = ["opensign-db/testing"]
 
 [dev-dependencies]
+rand = { workspace = true }
 opensign-core = { path = ".", features = ["testing"] }
 lopdf = { version = "0.46", default-features = false }
 axum = { workspace = true }

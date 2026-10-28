@@ -12,6 +12,7 @@ import { type AuthMethod, call, errorMessage, fetchPdf, type SignerView } from '
 import { AUTH_LABELS, saveBytes } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { FormError } from '../auth/AuthLayout';
+import { EidIdentify } from './EidIdentify';
 import { type Signature, SignaturePad } from './SignaturePad';
 
 /**
@@ -35,6 +36,37 @@ function useSigningToken() {
     }
   });
   return token;
+}
+
+/** The eID broker sends the browser back with `?eid=<id>`; we take it once and clean the address bar. */
+function useEidResume() {
+  const [resume] = useState(() => {
+    const value = new URLSearchParams(window.location.search).get('eid') ?? undefined;
+    if (value) history.replaceState(null, '', window.location.pathname);
+    return value;
+  });
+  return resume;
+}
+
+const SESSION_KEY = 'opensign-sign-session';
+
+/** The signer session survives the round trip to an eID broker, for this tab and this link only. */
+function useSignerSession(token: string) {
+  const [session, setSession] = useState<string | null>(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? 'null') as { token: string; session: string } | null;
+      return saved?.token === token ? saved.session : null;
+    } catch {
+      return null;
+    }
+  });
+  const update = (value: string) => {
+    setSession(value);
+    try {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ token, session: value }));
+    } catch {}
+  };
+  return [session, update] as const;
 }
 
 function safeColor(color?: string) {
@@ -74,16 +106,20 @@ function Message({ icon, title, children }: { icon: React.ReactNode; title: stri
   );
 }
 
-/** Proves who the party is before they may see or sign. SMS codes work today; eID methods start at the provider. */
+/** Proves who the party is before they may see or sign: an SMS code, or an eID. */
 function Identify({
   token,
+  session,
   method,
   purpose,
+  resume,
   onSession,
 }: {
   token: string;
+  session: string | null;
   method: AuthMethod;
   purpose: 'view' | 'sign';
+  resume?: string;
   onSession: (session: string) => void;
 }) {
   const [sent, setSent] = useState<{ phoneHint: string } | null>(null);
@@ -106,15 +142,11 @@ function Identify({
     void run(async () => onSession((await call('signing.verify_code', { token, code: code.trim() })).session));
   };
 
+  if (method === 'se_bankid' || method === 'freja' || method === 'broker') {
+    return <EidIdentify token={token} session={session} method={method} purpose={purpose} resume={resume} onSession={onSession} />;
+  }
   if (method !== 'sms_pin') {
-    return (
-      <div className="grid gap-3">
-        <p>
-          Identify yourself with {AUTH_LABELS[method]} to {purpose === 'view' ? 'open' : 'sign'} the document.
-        </p>
-        <FormError message={error ?? `${AUTH_LABELS[method]} is not available on this server yet. Ask the sender for another method.`} />
-      </div>
-    );
+    return <FormError message={`${AUTH_LABELS[method]} cannot be used here. Ask the sender for another method.`} />;
   }
   return sent ? (
     <form onSubmit={verify} className="grid gap-3">
@@ -154,7 +186,8 @@ function Identify({
 
 export function SignPage() {
   const token = useSigningToken();
-  const [session, setSession] = useState<string | null>(null);
+  const resume = useEidResume();
+  const [session, setSession] = useSignerSession(token);
   const [view, setView] = useState<SignerView>();
   const [error, setError] = useState<string>();
   const [values, setValues] = useState<Record<string, string>>({});
@@ -227,7 +260,15 @@ export function SignPage() {
       <Shell view={view}>
         <div className="mx-auto mt-6 grid max-w-md gap-4 rounded-lg border bg-background p-6">
           <h1 className="text-lg font-semibold">Hello {view.party.name}</h1>
-          <Identify token={token} method={view.needsAuthentication} purpose="view" onSession={setSession} />
+          {resume === 'invalid' && <FormError message="The identification did not go through. Try again." />}
+          <Identify
+            token={token}
+            session={session}
+            method={view.needsAuthentication}
+            purpose="view"
+            resume={resume !== 'invalid' ? resume : undefined}
+            onSession={setSession}
+          />
         </div>
       </Shell>
     );
@@ -372,7 +413,14 @@ export function SignPage() {
             ) : view.party.role === 'viewer' ? null : !view.yourTurn ? (
               <p className="text-muted-foreground">Others sign before you. We will email you when it is your turn.</p>
             ) : view.signAuthentication ? (
-              <Identify token={token} method={view.signAuthentication} purpose="sign" onSession={setSession} />
+              <Identify
+                token={token}
+                session={session}
+                method={view.signAuthentication}
+                purpose="sign"
+                resume={resume !== 'invalid' ? resume : undefined}
+                onSession={setSession}
+              />
             ) : (
               <>
                 {inputs.length > 0 && <p className="text-xs text-muted-foreground">Fill in the highlighted fields in the document.</p>}

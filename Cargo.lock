@@ -1711,7 +1711,9 @@ dependencies = [
  "opensign-crypto",
  "opensign-db",
  "opensign-pdf",
+ "rand 0.8.8",
  "reqwest",
+ "rsa",
  "schemars",
  "serde",
  "serde_json",
@@ -1722,6 +1724,7 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
+ "x509-cert",
 ]
 
 [[package]]
@@ -2324,6 +2327,7 @@ dependencies = [
  "pkcs1",
  "pkcs8",
  "rand_core 0.6.4",
+ "sha2 0.10.9",
  "signature",
  "spki",
  "subtle",

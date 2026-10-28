@@ -13,7 +13,8 @@ import { SettingsCard } from './SettingsLayout';
 type Spec = {
   key: string;
   label: string;
-  type?: 'text' | 'secret' | 'bool' | 'number' | 'select' | 'file' | 'color';
+  /** `file` is a secret PEM file, `pem` a public one such as a CA certificate. */
+  type?: 'text' | 'secret' | 'bool' | 'number' | 'select' | 'file' | 'pem' | 'color';
   hint?: string;
   options?: [string, string][];
   placeholder?: string;
@@ -115,27 +116,65 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
     fields: [
       { key: 'bankidEnabled', label: 'Swedish BankID', type: 'bool' },
       { key: 'bankidTest', label: 'Use the BankID test environment', type: 'bool', when: 'bankidEnabled' },
-      { key: 'bankidCertificate', label: 'Relying-Party Certificate (.p12)', type: 'file', when: 'bankidEnabled' },
-      { key: 'bankidCertificatePassword', label: 'Certificate Password', type: 'secret', when: 'bankidEnabled' },
+      {
+        key: 'bankidCertificate',
+        label: 'Relying-Party Certificate',
+        type: 'file',
+        hint: 'PEM with the certificate and its private key. From a .p12: openssl pkcs12 -in rp.p12 -out rp.pem -nodes',
+        when: 'bankidEnabled',
+      },
+      {
+        key: 'bankidCaCertificate',
+        label: 'BankID Server CA',
+        type: 'pem',
+        hint: "The issuing CA in BankID's relying-party guidelines, PEM. Only this CA is trusted for BankID.",
+        when: 'bankidEnabled',
+      },
       { key: 'frejaEnabled', label: 'Freja eID', type: 'bool' },
       { key: 'frejaTest', label: 'Use the Freja test environment', type: 'bool', when: 'frejaEnabled' },
-      { key: 'frejaCertificate', label: 'Client Certificate (.p12)', type: 'file', when: 'frejaEnabled' },
-      { key: 'frejaCertificatePassword', label: 'Certificate Password', type: 'secret', when: 'frejaEnabled' },
+      {
+        key: 'frejaCertificate',
+        label: 'Client Certificate',
+        type: 'file',
+        hint: 'PEM with the certificate and its private key. From a .pfx: openssl pkcs12 -in rp.pfx -out rp.pem -nodes',
+        when: 'frejaEnabled',
+      },
+      {
+        key: 'frejaSigningCertificate',
+        label: 'Freja Result-Signing Certificate',
+        type: 'pem',
+        hint: 'From Freja for your environment. Results without a valid signature are refused.',
+        when: 'frejaEnabled',
+      },
+      {
+        key: 'frejaCaCertificate',
+        label: 'Freja Server CA (optional)',
+        type: 'pem',
+        hint: 'Leave empty to trust the public CAs.',
+        when: 'frejaEnabled',
+      },
       { key: 'brokerEnabled', label: 'eID broker (OpenID Connect)', type: 'bool' },
       { key: 'brokerIssuer', label: 'Issuer URL', placeholder: 'https://example.idura.broker', when: 'brokerEnabled' },
       { key: 'brokerClientId', label: 'Client ID', when: 'brokerEnabled' },
       { key: 'brokerClientSecret', label: 'Client Secret', type: 'secret', when: 'brokerEnabled' },
+      {
+        key: 'brokerAcrValues',
+        label: 'eID Choice (acr_values)',
+        placeholder: 'urn:grn:authn:no:bankid',
+        hint: 'Leave empty to let the signer choose at the broker. Register /api/eid/callback as the redirect URI.',
+        when: 'brokerEnabled',
+      },
     ],
   },
 };
 
-function readBase64(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '');
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
+async function readPem(file: File) {
+  const text = await file.text();
+  if (!text.includes('-----BEGIN ')) {
+    toast.error('That is not a PEM file. Convert it with openssl first.');
+    return null;
+  }
+  return text;
 }
 
 function EmailExtras() {
@@ -277,11 +316,12 @@ export function AdminSettingsPage() {
                         <Input
                           id={id}
                           type="file"
-                          accept=".p12,.pfx"
+                          accept=".pem,.crt,.cer,.key"
                           disabled={locked}
                           onChange={async (e) => {
                             const file = e.target.files?.[0];
-                            if (file) set(f.key, await readBase64(file));
+                            const pem = file && (await readPem(file));
+                            if (pem) set(f.key, pem);
                           }}
                         />
                       ) : (
@@ -296,6 +336,31 @@ export function AdminSettingsPage() {
                         />
                       )}
                       {isSet && !locked && (
+                        <Button type="button" variant="ghost" className="text-destructive" onClick={() => set(f.key, '')}>
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                  </Field>
+                );
+              }
+              if (f.type === 'pem') {
+                const current = value(f.key);
+                return (
+                  <Field key={f.key} label={f.label} htmlFor={id} hint={current ? `Saved. ${hint ?? ''}` : hint}>
+                    <div className="flex gap-2">
+                      <Input
+                        id={id}
+                        type="file"
+                        accept=".pem,.crt,.cer"
+                        disabled={locked}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          const pem = file && (await readPem(file));
+                          if (pem) set(f.key, pem);
+                        }}
+                      />
+                      {!!current && !locked && (
                         <Button type="button" variant="ghost" className="text-destructive" onClick={() => set(f.key, '')}>
                           Clear
                         </Button>

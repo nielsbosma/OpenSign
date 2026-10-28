@@ -347,6 +347,7 @@ export function DocumentPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const query = useApi('documents.get', { id });
+  const authMethods = useApi('documents.auth_methods');
   const doc = query.data;
   const draft = !!doc && doc.status === 'draft' && doc.canEdit;
   const pending = !!doc && doc.status === 'pending';
@@ -689,7 +690,7 @@ export function DocumentPage() {
         party={partyDialog.party ? partyToInput(partyDialog.party) : null}
         maskedNumber={partyDialog.party?.personalNumber}
         sequential={doc.sequential}
-        eidAvailable
+        available={authMethods.data?.available ?? ['none', 'standard']}
         onSave={(p) => saveParties(partyDialog.party ? allParties().map((x) => (x.id === p.id ? p : x)) : [...allParties(), p])}
       />
       <SendDialog doc={doc} open={sending} onOpenChange={setSending} onSent={setLinks} />

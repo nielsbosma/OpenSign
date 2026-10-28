@@ -263,7 +263,8 @@ impl Service for BeginTwoFactor {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<TwoFactorSetup> {
         let actor = ctx.actor()?;
-        let enabled: bool = sqlx::query_scalar("select totp_secret is not null from users where id = $1").bind(actor.user_id).fetch_one(&mut *conn).await?;
+        let enabled: bool =
+            sqlx::query_scalar("select totp_secret is not null from users where id = $1").bind(actor.user_id).fetch_one(&mut *conn).await?;
         if enabled {
             // Replacing the authenticator would let a stolen session lock the owner out; an Admin resets it instead.
             return Err(crate::error::conflict("Two-factor authentication is already on"));

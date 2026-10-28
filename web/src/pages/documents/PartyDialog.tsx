@@ -51,7 +51,7 @@ export function PartyDialog({
   open,
   onOpenChange,
   onSave,
-  eidAvailable,
+  available,
 }: {
   party: PartyInput | null;
   maskedNumber?: string | null;
@@ -59,7 +59,8 @@ export function PartyDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (party: PartyInput) => void;
-  eidAvailable: boolean;
+  /** Methods set up on this server; a party keeps a method it already has. */
+  available: AuthMethod[];
 }) {
   const [p, setP] = useState<PartyInput>({ name: '' });
   useEffect(() => {
@@ -69,7 +70,7 @@ export function PartyDialog({
   const needsNumber = EID.includes(p.authToSign ?? 'standard') || EID.includes(p.authToView ?? 'none');
   const authOptions = (list: AuthMethod[]) =>
     list
-      .filter((m) => eidAvailable || !EID.includes(m) || m === p.authToSign || m === p.authToView)
+      .filter((m) => available.includes(m) || m === p.authToSign || m === p.authToView)
       .map((m) => [m, AUTH_LABELS[m]!] as [AuthMethod, string]);
 
   const submit = (e: FormEvent) => {

@@ -165,7 +165,26 @@ fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
             }
         }
         "ai" => url("baseUrl"),
-        "eid" => url("brokerIssuer"),
+        "eid" => {
+            url("brokerIssuer")?;
+            let eid: EidSettings = serde_json::from_value(value.clone()).map_err(AppError::internal)?;
+            let present = |s: &str| !s.trim().is_empty();
+            for (name, ca) in [("BankID server CA", &eid.bankid_ca_certificate), ("Freja server CA", &eid.freja_ca_certificate)] {
+                if present(ca) && reqwest::Certificate::from_pem_bundle(ca.as_bytes()).map_or(true, |c| c.is_empty()) {
+                    return Err(bad_request(format!("The {name} must be a PEM certificate")));
+                }
+            }
+            for (name, identity) in [("BankID", &eid.bankid_certificate), ("Freja eID", &eid.freja_certificate)] {
+                if let Some(pem) = identity.as_deref().filter(|p| present(p)) {
+                    crate::net::client_with_certificate(pem, None).map_err(|e| bad_request(format!("{name}: {e}")))?;
+                }
+            }
+            if present(&eid.freja_signing_certificate) {
+                crate::eid::jws::Key::from_certificate_pem(&eid.freja_signing_certificate)
+                    .map_err(|e| bad_request(format!("Freja's signing certificate is not usable: {e}")))?;
+            }
+            Ok(())
+        }
         "email" => {
             if let Some(from) = value.get("fromAddress").and_then(Value::as_str).filter(|s| !s.is_empty()) {
                 crate::auth::normalize_email(from)?;
