@@ -1322,6 +1322,54 @@ impl Service for IssueSigningLink {
     }
 }
 
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct InPersonInput {
+    pub document_id: Uuid,
+    pub party_id: Uuid,
+}
+
+pub struct SignInPerson;
+
+#[async_trait]
+impl Service for SignInPerson {
+    type Input = InPersonInput;
+    type Output = SignerLink;
+    const META: Meta = Meta::mutation(
+        "documents.sign_in_person",
+        "Start in-person signing: a fresh signing link for a party who signs on the sender's own device. Earlier links for the party stop working. Only for parties whose delivery is in_person and whose turn it is.",
+        Access::Permission(Permission::DocumentsCreate),
+    )
+    .not_a_tool();
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: InPersonInput) -> Result<SignerLink> {
+        let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
+        if document.status != status::PENDING {
+            return Err(conflict("Only a pending document can be signed"));
+        }
+        let all = parties(conn, document.id).await?;
+        let party = all.iter().find(|p| p.id == input.party_id).ok_or_else(|| not_found("Party"))?;
+        if party.delivery != Delivery::InPerson.as_str() || !party.must_act() {
+            return Err(bad_request(format!("{} does not sign in person", party.name)));
+        }
+        if party.signed_at.is_some() || party.declined_at.is_some() {
+            return Err(conflict(format!("{} has already answered", party.name)));
+        }
+        if !current_turn(&document, &all).contains(&party.id) {
+            return Err(conflict(format!("It is not {}'s turn yet", party.name)));
+        }
+        sqlx::query("update parties set link_version = link_version + 1 where id = $1").bind(party.id).execute(&mut *conn).await?;
+        let party = parties(conn, document.id).await?.into_iter().find(|p| p.id == input.party_id).ok_or_else(|| not_found("Party"))?;
+        audit(
+            ctx,
+            conn,
+            Entry::new("party.in_person_started", "document", document.id).metadata(json!({ "party": party.id, "name": party.name })),
+        )
+        .await?;
+        Ok(SignerLink { party_id: party.id, name: party.name.clone(), url: signer_url(ctx, ctx.keys(), &party) })
+    }
+}
+
 /// Current signing links of a pending document's parties that sign through a link the sender hands
 /// over, for compatibility APIs that show them on every read. Editors only; issuing a link stays audited.
 pub async fn handed_over_links(ctx: &Ctx, conn: &mut PgConnection, id: Uuid) -> Result<Vec<(Uuid, String)>> {

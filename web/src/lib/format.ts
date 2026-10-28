@@ -61,6 +61,7 @@ export const DELIVERY_LABELS: Record<string, string> = {
   email: 'Email',
   sms: 'SMS',
   link: 'Link (you hand it over)',
+  in_person: 'In Person (on your device)',
   none: 'None',
 };
 

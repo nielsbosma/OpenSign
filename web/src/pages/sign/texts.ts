@@ -10,6 +10,7 @@ const en = {
   approved: 'Approved',
   signed: 'Signed',
   completedNote: 'Everyone has signed. The sealed document is on its way to you by email.',
+  completedNoEmail: 'Everyone has signed. The sender has the sealed document.',
   signedNote: 'Thank you. You will receive the signed document when everyone has signed.',
   declinedNote: 'The sender has been told. You can close this page.',
   hello: (name: string) => `Hello ${name}`,
@@ -65,6 +66,12 @@ const en = {
   replaceFile: 'Replace',
   removeFile: 'Remove',
   attachmentsNote: 'PDF, JPEG or PNG, up to 10 MB. The files are sealed into the signed document.',
+  handOver: (name: string) => `Hand the device to ${name}`,
+  handOverNote: (sender: string) =>
+    `${sender} has asked you to read and sign the document on this device. Everything you do is recorded in the document's evidence.`,
+  iAm: (name: string) => `I Am ${name}`,
+  handBack: (sender: string) => `Hand the device back to ${sender}.`,
+  backToDocument: 'Back to the Document',
   methods: { sms_pin: 'SMS code', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-ID' } as Record<string, string>,
 };
 
@@ -79,6 +86,7 @@ const sv: Texts = {
   approved: 'Godkänt',
   signed: 'Signerat',
   completedNote: 'Alla har signerat. Det förseglade dokumentet skickas till dig via e-post.',
+  completedNoEmail: 'Alla har signerat. Avsändaren har det förseglade dokumentet.',
   signedNote: 'Tack. Du får det signerade dokumentet när alla har signerat.',
   declinedNote: 'Avsändaren har fått besked. Du kan stänga sidan.',
   hello: (name) => `Hej ${name}`,
@@ -135,6 +143,11 @@ const sv: Texts = {
   replaceFile: 'Byt fil',
   removeFile: 'Ta bort',
   attachmentsNote: 'PDF, JPEG eller PNG, högst 10 MB. Filerna förseglas i det signerade dokumentet.',
+  handOver: (name) => `Lämna enheten till ${name}`,
+  handOverNote: (sender) => `${sender} ber dig läsa och signera dokumentet på den här enheten. Allt du gör sparas i dokumentets bevisning.`,
+  iAm: (name) => `Jag är ${name}`,
+  handBack: (sender) => `Lämna tillbaka enheten till ${sender}.`,
+  backToDocument: 'Tillbaka till dokumentet',
   methods: { sms_pin: 'SMS-kod', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-legitimation' },
 };
 

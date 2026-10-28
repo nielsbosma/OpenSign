@@ -17,7 +17,7 @@ use crate::audit::{Entry, audit};
 use crate::context::Ctx;
 use crate::documents::attachments::{self, AttachmentRequest};
 use crate::documents::{
-    AuthMethod, DOCUMENT_COLUMNS, DocumentRow, FieldKind, FieldRow, PartyRole, PartyRow, current_turn, fields, notify, parties,
+    AuthMethod, DOCUMENT_COLUMNS, Delivery, DocumentRow, FieldKind, FieldRow, PartyRole, PartyRow, current_turn, fields, notify, parties,
     party_for_token, status,
 };
 use crate::error::{AppError, ErrorKind, Result, bad_request, conflict, too_many};
@@ -127,6 +127,8 @@ pub struct SignerParty {
     pub role: String,
     pub status: String,
     pub signed_at: Option<DateTime<Utc>>,
+    /// The party signs on the sender's device, which is handed over to them.
+    pub in_person: bool,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -184,6 +186,7 @@ impl Service for Open {
                 role: party.role.clone(),
                 status: party.status.clone(),
                 signed_at: party.signed_at,
+                in_person: party.delivery == Delivery::InPerson.as_str(),
             },
             needs_authentication: locked.then(|| party.auth_to_view()),
             sign_authentication: (!satisfied(party.auth_to_sign(), session.as_ref())).then(|| party.auth_to_sign()),

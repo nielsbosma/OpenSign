@@ -478,3 +478,42 @@ async fn cancel_revokes_links_and_decline_stops_signing() {
     let status: String = sqlx::query_scalar("select status from documents where id = $1").bind(ids[1]).fetch_one(&app.db).await.unwrap();
     assert_eq!(status, "declined");
 }
+
+#[tokio::test]
+async fn in_person_signing_issues_a_fresh_link_for_the_party_in_turn() {
+    let Some(app) = app().await else { return };
+    let sender = user(&app, "Sam Sender", Role::Sender).await;
+    let create = serde_json::from_value::<docs::CreateInput>(serde_json::json!({ "title": "At the desk", "sequential": true })).unwrap();
+    let id = call::<docs::Create>(&sender, create).await.unwrap().document.id;
+    call::<docs::Upload>(&sender, docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)) })
+        .await
+        .unwrap();
+    let mut second = party("Gus", PartyRole::Signer, Delivery::InPerson, AuthMethod::Standard);
+    second.sign_order = Some(2);
+    let saved = call::<docs::SetParties>(
+        &sender,
+        docs::SetPartiesInput {
+            document_id: id,
+            parties: vec![party("Fia", PartyRole::Signer, Delivery::InPerson, AuthMethod::Standard), second],
+        },
+    )
+    .await
+    .unwrap();
+    let (fia, gus) = (saved[0].id, saved[1].id);
+    call::<docs::Send>(&sender, docs::SendInput { id, expires_at: None }).await.unwrap();
+
+    let not_yet = call::<docs::SignInPerson>(&sender, docs::InPersonInput { document_id: id, party_id: gus }).await;
+    assert_eq!(kind(not_yet), ErrorKind::Conflict, "Gus signs after Fia");
+    let first = call::<docs::SignInPerson>(&sender, docs::InPersonInput { document_id: id, party_id: fia }).await.unwrap();
+    let again = call::<docs::SignInPerson>(&sender, docs::InPersonInput { document_id: id, party_id: fia }).await.unwrap();
+    let token = |url: &str| url.split_once('#').unwrap().1.to_string();
+    let signer = signer_ctx(&app);
+    let stale = call::<signing::Open>(&signer, signing::TokenInput { token: token(&first.url), session: None }).await;
+    assert_eq!(kind(stale), ErrorKind::NotFound, "starting again retires the earlier link");
+    let view = call::<signing::Open>(&signer, signing::TokenInput { token: token(&again.url), session: None }).await.unwrap();
+    assert!(view.party.in_person && view.your_turn);
+
+    let outsider = user(&app, "Val Viewer", Role::Viewer).await;
+    let refused = call::<docs::SignInPerson>(&outsider, docs::InPersonInput { document_id: id, party_id: fia }).await;
+    assert!(refused.is_err());
+}

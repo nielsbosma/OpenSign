@@ -527,8 +527,8 @@ export type AttachmentRequestInput = {
   required?: boolean | null;
 };
 
-/** How the party gets their link. `link` hands it to the sender (or the calling system) instead. */
-export type Delivery = "email" | "sms" | "link" | "none";
+/** How the party gets their link. `link` hands it to the sender (or the calling system) instead; `in_person` means the party signs on the sender's own device, started from the document page. */
+export type Delivery = "email" | "sms" | "link" | "in_person" | "none";
 
 export type PartyInput = {
   /** Files the party must or may upload while signing, such as a copy of an ID. Leave out to keep the current ones. */
@@ -568,6 +568,13 @@ export type DocumentsShareInput = {
 };
 
 export type DocumentsShareOutput = Ok_;
+
+export type DocumentsSignInPersonInput = {
+  documentId: string;
+  partyId: string;
+};
+
+export type DocumentsSignInPersonOutput = SignerLink;
 
 export type DocumentsSigningLinkInput = {
   documentId: string;
@@ -817,6 +824,8 @@ export type SignerParty = {
   company?: string | null;
   email?: string | null;
   id: string;
+  /** The party signs on the sender's device, which is handed over to them. */
+  inPerson: boolean;
   name: string;
   role: string;
   signedAt?: string | null;
@@ -1044,6 +1053,7 @@ export interface Services {
   "documents.set_fields": { kind: "mutation"; input: DocumentsSetFieldsInput; output: DocumentsSetFieldsOutput };
   "documents.set_parties": { kind: "mutation"; input: DocumentsSetPartiesInput; output: DocumentsSetPartiesOutput };
   "documents.share": { kind: "mutation"; input: DocumentsShareInput; output: DocumentsShareOutput };
+  "documents.sign_in_person": { kind: "mutation"; input: DocumentsSignInPersonInput; output: DocumentsSignInPersonOutput };
   "documents.signing_link": { kind: "mutation"; input: DocumentsSigningLinkInput; output: DocumentsSigningLinkOutput };
   "documents.unshare": { kind: "mutation"; input: DocumentsUnshareInput; output: DocumentsUnshareOutput };
   "documents.update": { kind: "mutation"; input: DocumentsUpdateInput; output: DocumentsUpdateOutput };

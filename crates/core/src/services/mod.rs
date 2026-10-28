@@ -82,6 +82,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<documents::Unshare>(),
         erase::<documents::Download>(),
         erase::<documents::IssueSigningLink>(),
+        erase::<documents::SignInPerson>(),
         erase::<documents::Verify>(),
         erase::<documents::GetSeal>(),
         erase::<documents::RegenerateSeal>(),

@@ -172,6 +172,7 @@ async fn evidence_events(conn: &mut PgConnection, document_id: Uuid) -> Result<V
                 "party.notified" => format!("Invitation sent to {name} by {}", metadata["channel"].as_str().unwrap_or("email")),
                 "party.reminded" => format!("Reminder sent to {name}"),
                 "party.viewed" => format!("Opened by {name}{ip}"),
+                "party.in_person_started" => format!("In-person signing for {name} started by {actor} on their device"),
                 "party.authenticated" => format!(
                     "{name} identified with {}",
                     metadata["method"].as_str().and_then(AuthMethod::parse).map(AuthMethod::label).unwrap_or("a code")

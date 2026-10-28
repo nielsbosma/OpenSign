@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, Link2, MoreHorizontal, Paperclip, Pencil, Plus, Send, Trash2, UserPlus } from 'lucide-react';
+import { ArrowLeft, Download, HandHelping, Link2, MoreHorizontal, Paperclip, Pencil, Plus, Send, Trash2, UserPlus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
@@ -104,6 +104,7 @@ function PartyCard({
 }) {
   const [link, setLink] = useState<SignerLink | null>(null);
   const signingLink = useApiMutation('documents.signing_link', { onSuccess: setLink });
+  const inPerson = useApiMutation('documents.sign_in_person', { onSuccess: (l) => window.location.assign(l.url) });
   const done = party.status === 'signed' || party.status === 'declined';
   return (
     <div className="rounded-md border p-3">
@@ -128,7 +129,7 @@ function PartyCard({
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
             {party.role === 'viewer' ? 'Receives a copy' : party.role === 'approver' ? 'Approves' : 'Signs'} ·{' '}
-            {DELIVERY_LABELS[party.delivery]?.replace(' (you hand it over)', '')} · {AUTH_LABELS[party.authToSign]}
+            {DELIVERY_LABELS[party.delivery]?.replace(/ \(.*\)$/, '')} · {AUTH_LABELS[party.authToSign]}
             {party.authToView !== 'none' && ` · ${AUTH_LABELS[party.authToView]} to view`}
           </div>
           {party.declineReason && <div className="mt-1 text-xs text-destructive">“{party.declineReason}”</div>}
@@ -193,6 +194,11 @@ function PartyCard({
             </div>
           ) : (
             <>
+              {party.delivery === 'in_person' && (
+                <Button size="sm" disabled={inPerson.isPending} onClick={() => inPerson.mutate({ documentId, partyId: party.id })}>
+                  <HandHelping /> Sign in Person
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
