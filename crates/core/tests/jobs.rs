@@ -64,3 +64,35 @@ async fn the_sweep_does_not_expire_a_document_waiting_for_its_seal() {
         sqlx::query_as("select title, status from documents order by title").fetch_all(&mut *conn).await.unwrap();
     assert_eq!(statuses, vec![("Signed".into(), "pending".into()), ("Unsigned".into(), "expired".into())]);
 }
+
+#[tokio::test]
+async fn a_canceled_document_tells_each_notified_party_in_its_own_job() {
+    let Some(app) = app().await else { return };
+    let mut conn = app.db.acquire().await.unwrap();
+    let document = uuid::Uuid::now_v7();
+    sqlx::query("insert into documents (id, title, status) values ($1, 'Lease', 'canceled')")
+        .bind(document)
+        .execute(&mut *conn)
+        .await
+        .unwrap();
+    let anna = uuid::Uuid::now_v7();
+    for (id, name, notified) in [(anna, "Anna", true), (uuid::Uuid::now_v7(), "Bo", false)] {
+        sqlx::query(
+            "insert into parties (id, document_id, name, email, notified_at) values ($1, $2, $3, 'x@example.com', case when $4 then now() end)",
+        )
+        .bind(id)
+        .bind(document)
+        .bind(name)
+        .bind(notified)
+        .execute(&mut *conn)
+        .await
+        .unwrap();
+    }
+    enqueue(&mut conn, "notify_canceled", json!({ "document": document }), None, None).await.unwrap();
+    worker::drain(&app).await.unwrap();
+    let sent: Vec<(String, bool)> = sqlx::query_as("select payload->>'party', done_at is not null from jobs where kind = 'notify_stopped'")
+        .fetch_all(&mut *conn)
+        .await
+        .unwrap();
+    assert_eq!(sent, vec![(anna.to_string(), true)]);
+}
