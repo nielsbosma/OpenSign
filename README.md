@@ -3,6 +3,7 @@
 An open source electronic signing service you run yourself. Upload a Word or PDF document, place fields, send it, and get back a sealed PDF that any PDF reader can verify, with an evidence report of who signed, when, and how they proved who they were.
 
 - **Signing flows**: signers, approvers and viewers, in order or all at once; email, SMS or link delivery, or in person on your own device; reminders, expiry, decline with a reason; templates. Signers can be asked for attachments (an ID copy, a certificate), which are cleaned and sealed into the signed PDF. Signers see everything in English or Swedish.
+- **Bulk send**: send a template to every row of a CSV or Excel file. Columns are matched to parties and fields by name (Swedish or English), optionally with AI, and every row is checked before anything is sent.
 - **Identification**: email link, SMS code (46elks or Twilio), Swedish BankID (with your own agreement or through TIC Identity), Freja eID, and other Nordic eIDs through an OpenID Connect broker (Idura/Criipto, Signicat). With a personal number on the party, only that person can sign.
 - **Sealed PDFs**: PAdES (ETSI.CAdES.detached) seal over the whole file, RFC 3161 time stamp, appended evidence pages, and a verify page and API that check any OpenSign document.
 - **Word and PDF uploads**: Word, ODT and RTF are converted by Gotenberg on a private network; every PDF is sanitized (no JavaScript, forms actions, embedded files or XFA) before anyone sees it.

@@ -38,6 +38,10 @@ p12-keystore = "0.2"
 png = "0.17"
 jpeg-decoder = { version = "0.3", default-features = false }
 uuid = { workspace = true }
+csv = "1.4.0"
+calamine = { version = "0.37.0", features = ["chrono"] }
+encoding_rs = "0.8.42"
+zip = { version = "9", default-features = false }
 
 [features]
 testing = ["opensign-db/testing"]

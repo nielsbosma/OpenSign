@@ -41,6 +41,10 @@ async fn run(ctx: &Ctx, job: &Job) -> Result<()> {
             let mut conn = ctx.db().acquire().await?;
             return notify::deliver_webhook(ctx, &mut conn, id(job, "delivery")?).await;
         }
+        "bulk_send" => {
+            drop(tx);
+            return crate::services::bulk::run_job(ctx, id(job, "bulk")?).await;
+        }
         "sweep" => sweep(ctx, &mut tx).await?,
         "anchor_audit" => {
             drop(tx);
