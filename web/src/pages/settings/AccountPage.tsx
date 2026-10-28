@@ -5,8 +5,9 @@ import { toast } from 'sonner';
 import { CopyButton, Field, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { type TwoFactorSetup, useApi, useApiMutation } from '@/lib/api';
+import { call, errorMessage, type TwoFactorSetup, useApi, useApiMutation } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
+import { createPasskey, passkeyCanceled, passkeysSupported } from '@/lib/passkeys';
 import { useSession } from '@/lib/session';
 import { FormError, PASSWORD_HINT } from '../auth/AuthLayout';
 import { SettingsCard } from './SettingsLayout';
@@ -49,6 +50,94 @@ function PasswordCard() {
           Change Password
         </Button>
       </form>
+    </SettingsCard>
+  );
+}
+
+function PasskeysCard() {
+  const queryClient = useQueryClient();
+  const passkeys = useApi('account.passkeys', {});
+  const remove = useApiMutation('account.passkey_remove', { invalidates: ['account.passkeys', 'account.me'] });
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  const add = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(undefined);
+    setBusy(true);
+    try {
+      const begin = await call('account.passkey_begin', { currentPassword: password });
+      const response = await createPasskey(begin.options as Record<string, unknown>);
+      await call('account.passkey_add', { state: begin.state, name: name.trim() || 'Passkey', ...response });
+      await queryClient.invalidateQueries({ queryKey: ['account.passkeys'] });
+      await queryClient.invalidateQueries({ queryKey: ['account.me'] });
+      setAdding(false);
+      setName('');
+      setPassword('');
+      toast.success('Passkey added. You can now sign in with it.');
+    } catch (e) {
+      setError(passkeyCanceled(e) ? 'The passkey was not created.' : errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <SettingsCard
+      title="Passkeys"
+      description="Sign in with your fingerprint, face or device PIN instead of a password and code. Works with iCloud Keychain, Google Password Manager, Windows Hello and security keys."
+    >
+      <div className="grid gap-3">
+        {passkeys.data?.map((p) => (
+          <div key={p.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
+            <div className="min-w-0">
+              <div className="truncate font-medium">{p.name}</div>
+              <div className="text-xs text-muted-foreground">
+                Added {formatDateTime(p.createdAt)}
+                {p.lastUsedAt && ` · last used ${formatDateTime(p.lastUsedAt)}`}
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => remove.mutate({ id: p.id })} disabled={remove.isPending}>
+              Remove
+            </Button>
+          </div>
+        ))}
+        {!passkeysSupported() ? (
+          <p className="text-muted-foreground">This browser does not support passkeys.</p>
+        ) : adding ? (
+          <form onSubmit={add} className="grid max-w-md gap-4">
+            <FormError message={error} />
+            <Field label="Name" htmlFor="passkey-name" hint="To tell your passkeys apart.">
+              <Input id="passkey-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="MacBook" autoFocus />
+            </Field>
+            <Field label="Current Password" htmlFor="passkey-password">
+              <Input
+                id="passkey-password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </Field>
+            <div className="flex gap-2">
+              <Button type="submit" disabled={busy}>
+                {busy && <Spinner className="text-primary-foreground" />} Create Passkey
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <Button variant="outline" className="justify-self-start" onClick={() => setAdding(true)}>
+            Add a Passkey
+          </Button>
+        )}
+      </div>
     </SettingsCard>
   );
 }
@@ -179,6 +268,7 @@ export function AccountPage() {
       <SettingsCard title={user?.name ?? 'You'} description={`${user?.email} · ${user?.role}`}>
         <p className="text-muted-foreground">Ask an Admin to change your name, email or role.</p>
       </SettingsCard>
+      <PasskeysCard />
       <TwoFactorCard />
       <PasswordCard />
       <McpCard />
