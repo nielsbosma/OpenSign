@@ -21,12 +21,12 @@ import { formatDate, formatDateTime } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { SettingsCard } from './SettingsLayout';
 
-export const ROLES: Record<Role, string> = {
-  admin: 'Admin: everything, including settings and users',
-  manager: 'Manager: all documents, templates and users',
-  sender: 'Sender: their own documents and templates',
-  auditor: 'Auditor: reads every document and the audit trail',
-  viewer: 'Viewer: documents shared with them',
+export const ROLES: Record<Role, { label: string; description: string }> = {
+  admin: { label: 'Admin', description: 'Everything, including settings and users' },
+  manager: { label: 'Manager', description: 'All documents, templates and users' },
+  sender: { label: 'Sender', description: 'Their own documents and templates' },
+  auditor: { label: 'Auditor', description: 'Reads every document and the audit trail' },
+  viewer: { label: 'Viewer', description: 'Documents shared with them' },
 };
 
 function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -66,8 +66,8 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(ROLES).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
+                {Object.entries(ROLES).map(([value, { label, description }]) => (
+                  <SelectItem key={value} value={value} description={description}>
                     {label}
                   </SelectItem>
                 ))}
@@ -152,9 +152,10 @@ export function UsersPage() {
                                 key={role}
                                 disabled={role === u.role}
                                 onSelect={() => update.mutate({ id: u.id, role })}
-                                className="capitalize"
+                                className="grid gap-0.5"
                               >
-                                {role}
+                                <span className="font-medium">{ROLES[role].label}</span>
+                                <span className="text-xs text-muted-foreground">{ROLES[role].description}</span>
                               </DropdownMenuItem>
                             ))}
                             <DropdownMenuSeparator />
