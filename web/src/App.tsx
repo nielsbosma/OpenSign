@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router';
 import { Spinner } from '@/components/common';
 import { AppShell } from '@/components/layout/AppShell';
 import { useApi } from '@/lib/api';
+import { useLanguage } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { ApiExplorerPage } from '@/pages/ApiExplorerPage';
 import { InvitePage } from '@/pages/auth/InvitePage';
@@ -39,6 +40,10 @@ function RequireSession({ children }: { children: ReactNode }) {
   const { user, loading, can } = useSession();
   const setup = useApi('setup.status', undefined, { staleTime: 60_000 });
   const location = useLocation();
+  const { language, setLanguage } = useLanguage();
+  useEffect(() => {
+    if (user?.language && user.language !== language) setLanguage(user.language);
+  }, [user?.language, language, setLanguage]);
   if (loading || setup.isPending) return <FullPageSpinner />;
   if (!user) {
     if (setup.data?.needsSetup) return <Navigate to="/setup" replace />;

@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { Logo } from '@/components/common';
+import { LanguagePicker } from '@/components/LanguagePicker';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { msg } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 export function AuthLayout({
@@ -27,6 +29,7 @@ export function AuthLayout({
         </CardHeader>
         <CardContent>{children}</CardContent>
       </Card>
+      <LanguagePicker className="mt-6" />
     </div>
   );
 }
@@ -45,4 +48,4 @@ export function useHashToken() {
   return decodeURIComponent(window.location.hash.slice(1));
 }
 
-export const PASSWORD_HINT = 'At least 12 characters. A few unrelated words make a strong one.';
+export const PASSWORD_HINT = msg('At least 12 characters. A few unrelated words make a strong one.');

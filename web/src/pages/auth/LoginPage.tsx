@@ -6,6 +6,7 @@ import { Field, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { call, errorMessage, useApiMutation } from '@/lib/api';
+import { t } from '@/lib/i18n';
 import { getPasskey, passkeyCanceled, passkeysSupported } from '@/lib/passkeys';
 import { useSession } from '@/lib/session';
 import { AuthLayout, FormError } from './AuthLayout';
@@ -68,10 +69,13 @@ export function LoginPage() {
 
   if (challenge) {
     return (
-      <AuthLayout title="Two-Factor Authentication" description="Enter the 6-digit code from your authenticator app, or a recovery code.">
+      <AuthLayout
+        title={t('Two-Factor Authentication')}
+        description={t('Enter the 6-digit code from your authenticator app, or a recovery code.')}
+      >
         <form onSubmit={submitCode} className="grid gap-4">
           <FormError message={error} />
-          <Field label="Code" htmlFor="code">
+          <Field label={t('Code')} htmlFor="code">
             <Input
               id="code"
               autoComplete="one-time-code"
@@ -82,10 +86,10 @@ export function LoginPage() {
             />
           </Field>
           <Button type="submit" disabled={verify.isPending || !code.trim()}>
-            {verify.isPending && <Spinner className="text-primary-foreground" />} Verify
+            {verify.isPending && <Spinner className="text-primary-foreground" />} {t('Verify')}
           </Button>
           <Button type="button" variant="ghost" onClick={() => setChallenge(null)}>
-            Back
+            {t('Back')}
           </Button>
         </form>
       </AuthLayout>
@@ -93,10 +97,10 @@ export function LoginPage() {
   }
 
   return (
-    <AuthLayout title="Sign In">
+    <AuthLayout title={t('Sign In')}>
       <form onSubmit={submitPassword} className="grid gap-4">
         <FormError message={error} />
-        <Field label="Email" htmlFor="email">
+        <Field label={t('Email')} htmlFor="email">
           <Input
             id="email"
             type="email"
@@ -107,7 +111,7 @@ export function LoginPage() {
             autoFocus
           />
         </Field>
-        <Field label="Password" htmlFor="password">
+        <Field label={t('Password')} htmlFor="password">
           <Input
             id="password"
             type="password"
@@ -118,15 +122,15 @@ export function LoginPage() {
           />
         </Field>
         <Button type="submit" disabled={login.isPending}>
-          {login.isPending && <Spinner className="text-primary-foreground" />} Sign In
+          {login.isPending && <Spinner className="text-primary-foreground" />} {t('Sign In')}
         </Button>
         {passkeysSupported() && (
           <Button type="button" variant="outline" disabled={passkeyBusy} onClick={() => void signInWithPasskey()}>
-            {passkeyBusy ? <Spinner /> : <KeyRound />} Sign In with a Passkey
+            {passkeyBusy ? <Spinner /> : <KeyRound />} {t('Sign In with a Passkey')}
           </Button>
         )}
         <Link to="/forgot-password" className="text-center text-muted-foreground hover:text-foreground">
-          Forgot Your Password?
+          {t('Forgot Your Password?')}
         </Link>
       </form>
     </AuthLayout>

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { type AuditView, call, useApi } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import { SettingsCard } from './SettingsLayout';
 
 const PAGE = 100;
@@ -31,24 +32,26 @@ export function AuditPage() {
   return (
     <div className="grid gap-6">
       <SettingsCard
-        title="Audit Trail"
-        description="Every change, sign-in and signature, in a hash chain: each entry includes the hash of the one before, so a changed or deleted entry shows."
+        title={t('Audit Trail')}
+        description={t(
+          'Every change, sign-in and signature, in a hash chain: each entry includes the hash of the one before, so a changed or deleted entry shows.',
+        )}
       >
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <Button variant="outline" onClick={() => chain.refetch()} disabled={chain.isFetching}>
-            {chain.isFetching ? <Spinner /> : <ShieldCheck />} Verify the Chain
+            {chain.isFetching ? <Spinner /> : <ShieldCheck />} {t('Verify the Chain')}
           </Button>
           {chain.data &&
             (chain.data.valid ? (
               <span className="flex items-center gap-1.5 text-success">
-                <ShieldCheck className="size-4" /> All {chain.data.entries} entries intact
+                <ShieldCheck className="size-4" /> {t('All {count} entries intact', { count: chain.data.entries })}
               </span>
             ) : (
               <span className="flex items-center gap-1.5 text-destructive">
                 <ShieldAlert className="size-4" />{' '}
                 {chain.data.broken_at != null
-                  ? `Broken at entry ${chain.data.broken_at}`
-                  : `${chain.data.broken_anchors.length} time stamp anchors do not match the chain`}
+                  ? t('Broken at entry {entry}', { entry: chain.data.broken_at })
+                  : t('{count} time stamp anchors do not match the chain', { count: chain.data.broken_anchors.length })}
               </span>
             ))}
           <Input
@@ -57,8 +60,8 @@ export function AuditPage() {
               setAction(e.target.value);
               setMore([]);
             }}
-            placeholder="Filter by action, e.g. document.signed"
-            className="ml-auto max-w-xs font-mono text-xs"
+            placeholder={t('Filter by action, e.g. document.signed')}
+            className="ms-auto max-w-xs font-mono text-xs"
           />
         </div>
         {first.isPending ? (
@@ -72,7 +75,8 @@ export function AuditPage() {
               >
                 <span className="text-xs text-muted-foreground">{formatDateTime(e.occurredAt)}</span>
                 <span className="min-w-0 truncate">
-                  <code className="text-xs">{e.action}</code> <span className="text-muted-foreground">by {e.actorLabel}</span>
+                  <code className="text-xs">{e.action}</code>{' '}
+                  <span className="text-muted-foreground">{t('by {name}', { name: e.actorLabel })}</span>
                 </span>
                 <span className="text-xs text-muted-foreground">
                   {e.entityType}
@@ -85,7 +89,7 @@ export function AuditPage() {
         {first.data?.length === PAGE && (
           <div className="mt-4 flex justify-center">
             <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
-              Show Older
+              {t('Show Older')}
             </Button>
           </div>
         )}

@@ -6,13 +6,14 @@ import { Field, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { call, useApi } from '@/lib/api';
+import { t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { AuthLayout, FormError, PASSWORD_HINT } from './auth/AuthLayout';
 
 function Steps({ step }: { step: 1 | 2 }) {
   return (
     <ol className="mb-5 flex gap-4 text-xs text-muted-foreground">
-      {['Administrator', 'Email'].map((label, i) => (
+      {[t('Administrator'), t('Email')].map((label, i) => (
         <li key={label} className={i + 1 === step ? 'font-medium text-foreground' : undefined}>
           {i + 1}. {label}
         </li>
@@ -37,36 +38,40 @@ function AdminStep() {
       await call('auth.login', { email: values.email.trim(), password: values.password });
       await queryClient.invalidateQueries();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Setup failed');
+      setError(e instanceof Error ? e.message : t('Setup failed'));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <AuthLayout title="Set Up OpenSign" description="Create the first administrator. Everyone else is invited from Settings." wide>
+    <AuthLayout
+      title={t('Set Up OpenSign')}
+      description={t('Create the first administrator. Everyone else is invited from Settings.')}
+      wide
+    >
       <Steps step={1} />
       <form onSubmit={submit} className="grid gap-4">
         <FormError message={error} />
-        <Field label="Setup Code" htmlFor="setupCode" hint="Printed in the server log when OpenSign starts without any users.">
+        <Field label={t('Setup Code')} htmlFor="setupCode" hint={t('Printed in the server log when OpenSign starts without any users.')}>
           <Input id="setupCode" value={values.setupCode} onChange={set('setupCode')} className="font-mono" required autoFocus />
         </Field>
-        <Field label="Organisation" htmlFor="orgName">
+        <Field label={t('Organisation')} htmlFor="orgName">
           <Input id="orgName" autoComplete="organization" value={values.orgName} onChange={set('orgName')} required />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Your Name" htmlFor="name">
+          <Field label={t('Your Name')} htmlFor="name">
             <Input id="name" autoComplete="name" value={values.name} onChange={set('name')} required />
           </Field>
-          <Field label="Email" htmlFor="email">
+          <Field label={t('Email')} htmlFor="email">
             <Input id="email" type="email" autoComplete="username" value={values.email} onChange={set('email')} required />
           </Field>
         </div>
-        <Field label="Password" htmlFor="password" hint={PASSWORD_HINT}>
+        <Field label={t('Password')} htmlFor="password" hint={t(PASSWORD_HINT)}>
           <Input id="password" type="password" autoComplete="new-password" value={values.password} onChange={set('password')} required />
         </Field>
         <Button type="submit" disabled={busy}>
-          {busy && <Spinner className="text-primary-foreground" />} Create Administrator
+          {busy && <Spinner className="text-primary-foreground" />} {t('Create Administrator')}
         </Button>
       </form>
     </AuthLayout>
@@ -102,7 +107,7 @@ function EmailStep() {
       await queryClient.invalidateQueries({ queryKey: ['setup.status'] });
       setDone(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'The test email failed');
+      setError(e instanceof Error ? e.message : t('The test email failed'));
     } finally {
       setBusy(false);
     }
@@ -110,11 +115,11 @@ function EmailStep() {
 
   if (done) {
     return (
-      <AuthLayout title="Email Works" description="A test email is on its way to you. OpenSign is ready." wide>
+      <AuthLayout title={t('Email Works')} description={t('A test email is on its way to you. OpenSign is ready.')} wide>
         <div className="flex flex-col items-center gap-4 py-2">
           <CheckCircle2 className="size-10 text-success" />
           <Button className="w-full" onClick={() => navigate('/documents', { replace: true })}>
-            Go to Documents
+            {t('Go to Documents')}
           </Button>
         </div>
       </AuthLayout>
@@ -123,17 +128,19 @@ function EmailStep() {
 
   return (
     <AuthLayout
-      title="Connect Resend"
-      description="OpenSign sends signing invitations, codes and signed documents through Resend. It needs a working setup before anyone can sign."
+      title={t('Connect Resend')}
+      description={t(
+        'OpenSign sends signing invitations, codes and signed documents through Resend. It needs a working setup before anyone can sign.',
+      )}
       wide
     >
       <Steps step={2} />
       <form onSubmit={submit} className="grid gap-4">
         <FormError message={error} />
         <Field
-          label="Resend API Key"
+          label={t('Resend API Key')}
           htmlFor="apiKey"
-          hint={values.apiKey ? 'A key is saved. Leave empty to keep it.' : 'Create one at resend.com with permission to send email.'}
+          hint={values.apiKey ? t('A key is saved. Leave empty to keep it.') : t('Create one at resend.com with permission to send email.')}
         >
           <Input
             id="apiKey"
@@ -146,7 +153,7 @@ function EmailStep() {
           />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="From Address" htmlFor="fromAddress" hint="On a domain you verified in Resend.">
+          <Field label={t('From Address')} htmlFor="fromAddress" hint={t('On a domain you verified in Resend.')}>
             <Input
               id="fromAddress"
               type="email"
@@ -156,17 +163,17 @@ function EmailStep() {
               required
             />
           </Field>
-          <Field label="From Name" htmlFor="fromName">
+          <Field label={t('From Name')} htmlFor="fromName">
             <Input
               id="fromName"
               value={fromName ?? values.fromName ?? ''}
               onChange={(e) => setFromName(e.target.value)}
-              placeholder="Acme Signing"
+              placeholder={t('Acme Signing')}
             />
           </Field>
         </div>
         <Button type="submit" disabled={busy || current.isPending}>
-          {busy && <Spinner className="text-primary-foreground" />} Save and Send Test Email
+          {busy && <Spinner className="text-primary-foreground" />} {t('Save and Send Test Email')}
         </Button>
       </form>
     </AuthLayout>

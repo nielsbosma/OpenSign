@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApi, useApiMutation } from '@/lib/api';
 import { formatDate, STATUS_LABELS, STATUS_TONES } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { RecentBulkSends } from './BulkSendPage';
 import { NewDocumentDialog } from './NewDocumentDialog';
@@ -38,15 +39,15 @@ export function DocumentsPage({ templates }: { templates: boolean }) {
   return (
     <>
       <PageHeader
-        title={templates ? 'Templates' : 'Documents'}
-        description={templates ? 'Reusable documents with parties and fields set up in advance.' : undefined}
+        title={templates ? t('Templates') : t('Documents')}
+        description={templates ? t('Reusable documents with parties and fields set up in advance.') : undefined}
         actions={
           can('documents.create') && (
             <Button
-              onClick={() => (templates ? createTemplate.mutate({ title: 'Untitled Template', isTemplate: true }) : setCreating(true))}
+              onClick={() => (templates ? createTemplate.mutate({ title: t('Untitled Template'), isTemplate: true }) : setCreating(true))}
               disabled={createTemplate.isPending}
             >
-              <Plus /> {templates ? 'New Template' : 'New Document'}
+              <Plus /> {templates ? t('New Template') : t('New Document')}
             </Button>
           )
         }
@@ -57,15 +58,20 @@ export function DocumentsPage({ templates }: { templates: boolean }) {
             <TabsList className="max-w-full justify-start overflow-x-auto">
               {FILTERS.map((f) => (
                 <TabsTrigger key={f} value={f}>
-                  {f === 'all' ? 'All' : STATUS_LABELS[f]}
+                  {f === 'all' ? t('All') : STATUS_LABELS[f]}
                 </TabsTrigger>
               ))}
             </TabsList>
           </Tabs>
         )}
         <div className="relative sm:w-72">
-          <Search className="pointer-events-none absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by title or reference" className="pl-8" />
+          <Search className="pointer-events-none absolute top-2.5 start-2.5 size-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('Search by title or reference')}
+            className="ps-8"
+          />
         </div>
       </div>
       {list.isPending ? (
@@ -73,20 +79,20 @@ export function DocumentsPage({ templates }: { templates: boolean }) {
       ) : !list.data?.length ? (
         <EmptyState
           icon={templates ? <FileStack /> : <FileText />}
-          title={search ? 'Nothing matches' : templates ? 'No templates yet' : 'No documents yet'}
+          title={search ? t('Nothing matches') : templates ? t('No templates yet') : t('No documents yet')}
         >
-          {!search && !templates && 'Upload a PDF or Word document, add the people who should sign, and send it.'}
+          {!search && !templates && t('Upload a PDF or Word document, add the people who should sign, and send it.')}
         </EmptyState>
       ) : (
         <div className="rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Title</TableHead>
-                {!templates && <TableHead>Status</TableHead>}
-                {!templates && <TableHead>Signed</TableHead>}
-                <TableHead className="hidden md:table-cell">Owner</TableHead>
-                <TableHead className="text-right">{templates ? 'Created' : 'Updated'}</TableHead>
+                <TableHead>{t('Title')}</TableHead>
+                {!templates && <TableHead>{t('Status')}</TableHead>}
+                {!templates && <TableHead>{t('Signed')}</TableHead>}
+                <TableHead className="hidden md:table-cell">{t('Owner')}</TableHead>
+                <TableHead className="text-end">{templates ? t('Created') : t('Updated')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -103,11 +109,11 @@ export function DocumentsPage({ templates }: { templates: boolean }) {
                   )}
                   {!templates && (
                     <TableCell className="tabular text-muted-foreground">
-                      {doc.partiesTotal ? `${doc.partiesDone} of ${doc.partiesTotal}` : '–'}
+                      {doc.partiesTotal ? t('{done} of {total}', { done: doc.partiesDone, total: doc.partiesTotal }) : '–'}
                     </TableCell>
                   )}
                   <TableCell className="hidden text-muted-foreground md:table-cell">{doc.ownerName}</TableCell>
-                  <TableCell className="text-right text-muted-foreground">
+                  <TableCell className="text-end text-muted-foreground">
                     {formatDate(doc.completedAt ?? doc.sentAt ?? doc.createdAt)}
                   </TableCell>
                 </TableRow>
@@ -119,7 +125,7 @@ export function DocumentsPage({ templates }: { templates: boolean }) {
       {list.data?.length === limit && (
         <div className="mt-4 flex justify-center">
           <Button variant="outline" onClick={() => setLimit(limit + PAGE)}>
-            Show More
+            {t('Show More')}
           </Button>
         </div>
       )}

@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { call, errorMessage, uploadFile, useApi } from '@/lib/api';
+import { t } from '@/lib/i18n';
 import { FormError } from '../auth/AuthLayout';
 
 export const ACCEPT = '.pdf,.docx,.doc,.odt,.rtf,application/pdf';
@@ -35,8 +36,8 @@ export function FileDrop({ onFiles, busy }: { onFiles: (files: File[]) => void; 
       className={`flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed px-6 py-8 text-center transition-colors hover:bg-accent/50 ${over ? 'border-primary bg-primary/5' : ''}`}
     >
       {busy ? <Spinner className="size-5" /> : <Upload className="size-5 text-muted-foreground" />}
-      <span className="font-medium">Drop PDF or Word files here</span>
-      <span className="text-xs text-muted-foreground">or click to choose. Word documents are converted to PDF.</span>
+      <span className="font-medium">{t('Drop PDF or Word files here')}</span>
+      <span className="text-xs text-muted-foreground">{t('or click to choose. Word documents are converted to PDF.')}</span>
       <input type="file" accept={ACCEPT} multiple className="sr-only" onChange={(e) => onFiles([...(e.target.files ?? [])])} />
     </label>
   );
@@ -58,7 +59,7 @@ export function NewDocumentDialog({ open, onOpenChange }: { open: boolean; onOpe
     try {
       const fromTemplate = templateId !== 'none' ? templateId : null;
       const doc = await call('documents.create', {
-        title: title.trim() || (files[0] ? titleFrom(files[0].name) : 'Untitled Document'),
+        title: title.trim() || (files[0] ? titleFrom(files[0].name) : t('Untitled Document')),
         templateId: fromTemplate,
       });
       for (const file of files) await uploadFile(doc.id, file);
@@ -76,29 +77,29 @@ export function NewDocumentDialog({ open, onOpenChange }: { open: boolean; onOpe
       <DialogContent className="sm:max-w-lg">
         <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
-            <DialogTitle>New Document</DialogTitle>
-            <DialogDescription>Start from files or a template. You add signers and fields next.</DialogDescription>
+            <DialogTitle>{t('New Document')}</DialogTitle>
+            <DialogDescription>{t('Start from files or a template. You add signers and fields next.')}</DialogDescription>
           </DialogHeader>
           <FormError message={error} />
-          <Field label="Title" htmlFor="title">
+          <Field label={t('Title')} htmlFor="title">
             <Input
               id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder={files[0] ? titleFrom(files[0].name) : 'Employment agreement'}
+              placeholder={files[0] ? titleFrom(files[0].name) : t('Employment agreement')}
             />
           </Field>
           {!!templates.data?.length && (
-            <Field label="Template">
+            <Field label={t('Template')}>
               <Select value={templateId} onValueChange={setTemplateId}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">No template</SelectItem>
-                  {templates.data.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.title}
+                  <SelectItem value="none">{t('No template')}</SelectItem>
+                  {templates.data.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.title}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -112,7 +113,7 @@ export function NewDocumentDialog({ open, onOpenChange }: { open: boolean; onOpe
                 <li key={i} className="flex items-center justify-between gap-2">
                   <span className="truncate">{f.name}</span>
                   <Button type="button" variant="ghost" size="sm" onClick={() => setFiles(files.filter((_, j) => j !== i))}>
-                    Remove
+                    {t('Remove')}
                   </Button>
                 </li>
               ))}
@@ -120,10 +121,10 @@ export function NewDocumentDialog({ open, onOpenChange }: { open: boolean; onOpe
           )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t('Cancel')}
             </Button>
             <Button type="submit" disabled={busy}>
-              {busy && <Spinner className="text-primary-foreground" />} Create
+              {busy && <Spinner className="text-primary-foreground" />} {t('Create')}
             </Button>
           </DialogFooter>
         </form>

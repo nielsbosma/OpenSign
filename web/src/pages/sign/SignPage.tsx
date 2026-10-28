@@ -1,4 +1,5 @@
 import { CheckCircle2, Download, FileSignature, HandHelping, Languages, ShieldCheck, XCircle } from 'lucide-react';
+import { Direction } from 'radix-ui';
 import { type FormEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Logo, Spinner } from '@/components/common';
 import { PdfLoading, PdfPages, usePdf } from '@/components/PdfPages';
@@ -123,23 +124,30 @@ function LanguagePicker() {
 function Shell({ view, children }: { view?: SignerView; children: React.ReactNode }) {
   const t = useTexts();
   const { code } = useContext(LanguageContext);
+  const dir = isRtl(code) ? 'rtl' : 'ltr';
+  useEffect(() => {
+    document.documentElement.lang = code;
+    document.documentElement.dir = dir;
+  }, [code, dir]);
   return (
-    <div className="min-h-svh bg-muted/40" lang={code} dir={isRtl(code) ? 'rtl' : 'ltr'}>
-      <header className="border-b bg-background">
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4">
-          <Logo className="size-6" />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold">{view?.document.title ?? 'OpenSign'}</div>
-            {view && (
-              <div className="truncate text-xs text-muted-foreground">{t.from(view.document.sender, view.document.organisation)}</div>
-            )}
+    <Direction.Provider dir={dir}>
+      <div className="min-h-svh bg-muted/40" lang={code} dir={dir}>
+        <header className="border-b bg-background">
+          <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4">
+            <Logo className="size-6" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold">{view?.document.title ?? 'OpenSign'}</div>
+              {view && (
+                <div className="truncate text-xs text-muted-foreground">{t.from(view.document.sender, view.document.organisation)}</div>
+              )}
+            </div>
+            <LanguagePicker />
+            <ShieldCheck className="size-4 shrink-0 text-success" aria-label={t.secureConnection} />
           </div>
-          <LanguagePicker />
-          <ShieldCheck className="size-4 shrink-0 text-success" aria-label={t.secureConnection} />
-        </div>
-      </header>
-      <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
-    </div>
+        </header>
+        <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
+      </div>
+    </Direction.Provider>
   );
 }
 

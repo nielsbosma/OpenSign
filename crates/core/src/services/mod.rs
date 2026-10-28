@@ -47,6 +47,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<auth::VerifyTwoFactor>(),
         erase::<auth::Logout>(),
         erase::<auth::WhoAmI>(),
+        erase::<auth::SetLanguage>(),
         erase::<auth::BeginTwoFactor>(),
         erase::<auth::ConfirmTwoFactor>(),
         erase::<auth::ChangePassword>(),

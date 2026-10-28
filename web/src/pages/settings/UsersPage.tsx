@@ -18,16 +18,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { type Role, useApi, useApiMutation } from '@/lib/api';
 import { formatDate, formatDateTime } from '@/lib/format';
+import { labels, msg, t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { SettingsCard } from './SettingsLayout';
 
-export const ROLES: Record<Role, string> = {
-  admin: 'Admin: everything, including settings and users',
-  manager: 'Manager: all documents, templates and users',
-  sender: 'Sender: their own documents and templates',
-  auditor: 'Auditor: reads every document and the audit trail',
-  viewer: 'Viewer: documents shared with them',
-};
+export const ROLES = labels({
+  admin: msg('Admin: everything, including settings and users'),
+  manager: msg('Manager: all documents, templates and users'),
+  sender: msg('Sender: their own documents and templates'),
+  auditor: msg('Auditor: reads every document and the audit trail'),
+  viewer: msg('Viewer: documents shared with them'),
+}) as Record<Role, string>;
 
 function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [email, setEmail] = useState('');
@@ -36,7 +37,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
   const invite = useApiMutation('users.invite', {
     invalidates: ['users.'],
     onSuccess: (out) => {
-      toast.success(`Invitation sent to ${out.email}`);
+      toast.success(t('Invitation sent to {email}', { email: out.email }));
       onOpenChange(false);
       setEmail('');
       setName('');
@@ -51,16 +52,16 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
       <DialogContent>
         <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
-            <DialogTitle>Invite a User</DialogTitle>
-            <DialogDescription>They get an email with a link to choose a password. The link works for 7 days.</DialogDescription>
+            <DialogTitle>{t('Invite a User')}</DialogTitle>
+            <DialogDescription>{t('They get an email with a link to choose a password. The link works for 7 days.')}</DialogDescription>
           </DialogHeader>
-          <Field label="Email" htmlFor="invite-email">
+          <Field label={t('Email')} htmlFor="invite-email">
             <Input id="invite-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
           </Field>
-          <Field label="Name" htmlFor="invite-name">
+          <Field label={t('Name')} htmlFor="invite-name">
             <Input id="invite-name" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
-          <Field label="Role">
+          <Field label={t('Role')}>
             <Select value={role} onValueChange={(v) => setRole(v as Role)}>
               <SelectTrigger className="w-full">
                 <SelectValue />
@@ -76,10 +77,10 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
           </Field>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t('Cancel')}
             </Button>
             <Button type="submit" disabled={invite.isPending}>
-              Send Invitation
+              {t('Send Invitation')}
             </Button>
           </DialogFooter>
         </form>
@@ -96,17 +97,17 @@ export function UsersPage() {
   const update = useApiMutation('users.update', { invalidates: ['users.'] });
   const reset = useApiMutation('users.reset_two_factor', {
     invalidates: ['users.'],
-    onSuccess: () => toast.success('Two-factor authentication reset'),
+    onSuccess: () => toast.success(t('Two-factor authentication reset')),
   });
   const revoke = useApiMutation('users.revoke_invite', { invalidates: ['users.'] });
   const [inviting, setInviting] = useState(false);
 
   return (
     <div className="grid gap-6">
-      <SettingsCard title="Users" description="Everyone who can sign in. Roles decide what each person may see and do.">
+      <SettingsCard title={t('Users')} description={t('Everyone who can sign in. Roles decide what each person may see and do.')}>
         {manage && (
           <Button className="mb-4" onClick={() => setInviting(true)}>
-            <UserPlus /> Invite
+            <UserPlus /> {t('Invite')}
           </Button>
         )}
         {users.isPending ? (
@@ -116,9 +117,9 @@ export function UsersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead className="hidden md:table-cell">Last Sign-In</TableHead>
+                  <TableHead>{t('Name')}</TableHead>
+                  <TableHead>{t('Role')}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('Last Sign-In')}</TableHead>
                   <TableHead />
                 </TableRow>
               </TableHeader>
@@ -132,21 +133,23 @@ export function UsersPage() {
                     <TableCell>
                       <div className="flex items-center gap-1.5">
                         <span className="capitalize">{u.role}</span>
-                        {!u.active && <Badge variant="outline">Deactivated</Badge>}
-                        {u.twoFactorEnabled && <Badge variant="secondary">2FA</Badge>}
+                        {!u.active && <Badge variant="outline">{t('Deactivated')}</Badge>}
+                        {u.twoFactorEnabled && <Badge variant="secondary">{t('2FA')}</Badge>}
                       </div>
                     </TableCell>
-                    <TableCell className="hidden text-muted-foreground md:table-cell">{formatDateTime(u.lastLoginAt) || 'Never'}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="hidden text-muted-foreground md:table-cell">
+                      {formatDateTime(u.lastLoginAt) || t('Never')}
+                    </TableCell>
+                    <TableCell className="text-end">
                       {manage && u.id !== me?.id && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm">
-                              Change
+                              {t('Change')}
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Role</DropdownMenuLabel>
+                            <DropdownMenuLabel>{t('Role')}</DropdownMenuLabel>
                             {(Object.keys(ROLES) as Role[]).map((role) => (
                               <DropdownMenuItem
                                 key={role}
@@ -159,13 +162,13 @@ export function UsersPage() {
                             ))}
                             <DropdownMenuSeparator />
                             {u.twoFactorEnabled && (
-                              <DropdownMenuItem onSelect={() => reset.mutate({ id: u.id })}>Reset Two-Factor</DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => reset.mutate({ id: u.id })}>{t('Reset Two-Factor')}</DropdownMenuItem>
                             )}
                             <DropdownMenuItem
                               onSelect={() => update.mutate({ id: u.id, active: !u.active })}
                               className={u.active ? 'text-destructive' : undefined}
                             >
-                              {u.active ? 'Deactivate' : 'Reactivate'}
+                              {u.active ? t('Deactivate') : t('Reactivate')}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -179,7 +182,7 @@ export function UsersPage() {
         )}
       </SettingsCard>
       {manage && !!invites.data?.length && (
-        <SettingsCard title="Pending Invitations">
+        <SettingsCard title={t('Pending Invitations')}>
           <ul className="grid gap-2">
             {invites.data.map((i) => (
               <li key={i.id} className="flex items-center gap-3 rounded-md border px-3 py-2">
@@ -190,7 +193,7 @@ export function UsersPage() {
                   </div>
                 </div>
                 <Button variant="ghost" className="text-destructive" onClick={() => revoke.mutate({ id: i.id })}>
-                  Revoke
+                  {t('Revoke')}
                 </Button>
               </li>
             ))}
