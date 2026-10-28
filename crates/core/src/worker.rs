@@ -25,7 +25,10 @@ async fn run(ctx: &Ctx, job: &Job) -> Result<()> {
     match job.kind.as_str() {
         "notify_party" => notify::notify_party(ctx, &mut tx, id(job, "party")?, job.payload["reminder"].as_bool().unwrap_or(false)).await?,
         "seal_document" => seal::seal_document(ctx, &mut tx, id(job, "document")?, job.attempts).await?,
-        "notify_completed" => notify::notify_completed(ctx, &mut tx, id(job, "document")?).await?,
+        "notify_completed" => {
+            let to = job.payload["to"].as_str().and_then(notify::Recipient::parse);
+            notify::notify_completed(ctx, &mut tx, id(job, "document")?, to).await?
+        }
         "notify_declined" => notify::notify_declined(ctx, &mut tx, id(job, "document")?, id(job, "party")?).await?,
         "notify_canceled" => {
             let document = sqlx::query_as(&format!("select {} from documents d where id = $1", crate::documents::DOCUMENT_COLUMNS))
@@ -33,9 +36,10 @@ async fn run(ctx: &Ctx, job: &Job) -> Result<()> {
                 .fetch_optional(&mut *tx)
                 .await?;
             if let Some(document) = document {
-                notify::notify_stopped(ctx, &mut tx, &document, None, crate::i18n::Stopped::Canceled).await?;
+                notify::queue_stopped(&mut tx, &document, None).await?;
             }
         }
+        "notify_stopped" => notify::notify_stopped(ctx, &mut tx, id(job, "document")?, id(job, "party")?).await?,
         "webhook" => {
             drop(tx);
             let mut conn = ctx.db().acquire().await?;

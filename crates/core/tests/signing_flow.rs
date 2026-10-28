@@ -373,6 +373,12 @@ async fn sends_signs_seals_and_verifies() {
     let failed: Vec<(String, Option<String>)> =
         sqlx::query_as("select kind, last_error from jobs where done_at is null and kind <> 'sweep'").fetch_all(&app.db).await.unwrap();
     assert!(failed.is_empty(), "jobs left over: {failed:?}");
+    let emails: Vec<String> =
+        sqlx::query_scalar("select payload->>'to' from jobs where kind = 'notify_completed' and payload ? 'to' order by 1")
+            .fetch_all(&app.db)
+            .await
+            .unwrap();
+    assert!(emails.len() >= 2 && emails.iter().all(|to| to == "owner" || Uuid::try_parse(to).is_ok()), "one email job each: {emails:?}");
 
     let finished = call::<docs::Get>(&sender, docs::IdInput { id }).await.unwrap();
     assert_eq!(finished.document.status, "completed");
