@@ -1787,6 +1787,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "base64 0.22.1",
  "bytes",
  "chrono",
  "http-body-util",
@@ -1794,6 +1795,7 @@ dependencies = [
  "opensign-core",
  "opensign-crypto",
  "opensign-db",
+ "opensign-pdf",
  "serde",
  "serde_json",
  "sqlx",

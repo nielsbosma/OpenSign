@@ -1252,6 +1252,24 @@ impl Service for IssueSigningLink {
     }
 }
 
+/// Current signing links of a pending document's parties that sign through a link the sender hands
+/// over, for compatibility APIs that show them on every read. Editors only; issuing a link stays audited.
+pub async fn handed_over_links(ctx: &Ctx, conn: &mut PgConnection, id: Uuid) -> Result<Vec<(Uuid, String)>> {
+    if !ctx.can(Permission::DocumentsCreate) {
+        return Ok(Vec::new());
+    }
+    let document = match load_document(ctx, conn, id, Need::Edit).await {
+        Ok(d) if d.status == status::PENDING => d,
+        _ => return Ok(Vec::new()),
+    };
+    Ok(parties(conn, document.id)
+        .await?
+        .iter()
+        .filter(|p| p.delivery == "link" && p.must_act() && p.signed_at.is_none() && p.declined_at.is_none())
+        .map(|p| (p.id, signer_url(ctx, ctx.keys(), p)))
+        .collect())
+}
+
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct VerifyInput {

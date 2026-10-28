@@ -87,7 +87,7 @@ fn typed(schema: &Value, name: &str, raw: &str) -> Result<Value, AppError> {
     })
 }
 
-fn query_pairs(raw: &str) -> Vec<(String, String)> {
+pub fn query_pairs(raw: &str) -> Vec<(String, String)> {
     raw.split('&')
         .filter(|p| !p.is_empty())
         .map(|pair| {
@@ -97,7 +97,7 @@ fn query_pairs(raw: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-fn decode(s: &str) -> String {
+pub fn decode(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;

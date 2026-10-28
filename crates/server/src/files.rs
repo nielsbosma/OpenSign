@@ -20,7 +20,7 @@ use crate::{AppState, RequestId, auth};
 
 const VERIFY_LIMIT: usize = 40 * 1024 * 1024;
 
-fn content_disposition(name: &str) -> HeaderValue {
+pub fn content_disposition(name: &str) -> HeaderValue {
     let ascii: String =
         name.chars().map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | ' ') { c } else { '_' }).collect();
     let encoded: String = name

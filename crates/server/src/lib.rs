@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod compat;
 pub mod error;
 pub mod files;
 pub mod openapi;
@@ -92,11 +93,13 @@ pub fn router(state: AppState) -> Router {
         .route("/sign/file", post(files::signer))
         .route("/verify", post(files::verify))
         .nest("/v1", rest::router(&state))
+        .nest("/v2", compat::scrive::router())
         .fallback(api_not_found)
         .layer(middleware::from_fn_with_state(state.clone(), security::same_origin))
         .layer(middleware::from_fn_with_state(state.clone(), security::general_limit));
 
-    let mut app = Router::new().nest("/api", api);
+    let docusign = compat::docusign::router().layer(middleware::from_fn_with_state(state.clone(), security::general_limit));
+    let mut app = Router::new().nest("/api", api).nest("/restapi/v2.1", docusign);
     if let Some(dist) = web_dist() {
         let spa = ServeDir::new(&dist).fallback(ServeFile::new(dist.join("index.html")));
         app = app.fallback_service(spa).layer(middleware::from_fn(no_cache_html));

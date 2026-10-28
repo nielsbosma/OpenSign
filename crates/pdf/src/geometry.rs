@@ -84,6 +84,12 @@ pub fn page_box(doc: &Document, page: ObjectId) -> Result<PageBox> {
     Ok(PageBox { x: visible[0], y: visible[1], width, height, rotate: rotate.rem_euclid(360) / 90 * 90 })
 }
 
+/// Displayed width and height of each page, in order. For files OpenSign produced or sanitized.
+pub fn page_sizes(pdf: &[u8]) -> Result<Vec<(f64, f64)>> {
+    let doc = Document::load_mem(pdf)?;
+    doc.get_pages().values().map(|&page| page_box(&doc, page).map(|b| b.displayed())).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
