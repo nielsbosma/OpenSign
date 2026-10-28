@@ -164,11 +164,7 @@ fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
     let value = serde_json::to_value(group).map_err(AppError::internal)?;
     let url = |field: &str| -> Result<()> {
         if let Some(u) = value.get(field).and_then(Value::as_str).filter(|u| !u.is_empty()) {
-            crate::net::check_public_url(u)
-                .or_else(
-                    |e| if G::NAME == "signing" && u.starts_with("http://") { Ok(reqwest::Url::parse(u).map_err(|_| e)?) } else { Err(e) },
-                )
-                .map_err(bad_request)?;
+            crate::net::check_outbound_url(u, G::NAME == "signing").map_err(bad_request)?;
         }
         Ok(())
     };

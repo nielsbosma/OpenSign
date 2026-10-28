@@ -78,10 +78,8 @@ pub async fn active_identity(ctx: &Ctx, conn: &mut PgConnection) -> Result<SealI
 }
 
 pub(crate) async fn timestamp(ctx: &Ctx, url: &str, signature: &[u8]) -> Result<Vec<u8>> {
-    let parsed = reqwest::Url::parse(url).map_err(|_| AppError::new(ErrorKind::BadRequest, "The time stamp URL is not valid"))?;
-    if !matches!(parsed.scheme(), "http" | "https") {
-        return Err(AppError::new(ErrorKind::BadRequest, "The time stamp URL must use http or https"));
-    }
+    let parsed = crate::net::check_outbound_url(url, true)
+        .map_err(|e| AppError::new(ErrorKind::BadRequest, format!("The time stamp URL is not usable: {e}")))?;
     let nonce = random_bytes::<16>();
     let response = ctx
         .app
