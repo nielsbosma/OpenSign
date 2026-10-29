@@ -207,7 +207,21 @@ async fn docusign_compatible_api() {
 
     let tabs = json!({
         "signHereTabs": [{ "documentId": "1", "pageNumber": "1", "xPosition": "100", "yPosition": "600" }],
-        "dateSignedTabs": [{ "documentId": "1", "pageNumber": "1", "xPosition": "300", "yPosition": "640" }]
+        "dateSignedTabs": [{ "documentId": "1", "pageNumber": "1", "xPosition": "300", "yPosition": "640" }],
+        "numberTabs": [{ "documentId": "1", "pageNumber": "1", "xPosition": "100", "yPosition": "100", "tabLabel": "Seats",
+            "minNumericalValue": "1", "maxNumericalValue": "50", "validationMessage": "1 to 50 seats" }],
+        "listTabs": [{ "documentId": "1", "pageNumber": "1", "xPosition": "100", "yPosition": "140", "tabLabel": "Plan",
+            "listItems": [{ "text": "Basic", "value": "b" }, { "text": "Pro", "value": "p", "selected": "true" }] }],
+        "radioGroupTabs": [{ "documentId": "1", "groupName": "Billing", "radios": [
+            { "pageNumber": "1", "xPosition": "100", "yPosition": "180", "value": "Monthly" },
+            { "pageNumber": "1", "xPosition": "160", "yPosition": "180", "value": "Yearly", "selected": "true" }
+        ] }],
+        "textTabs": [{ "documentId": "1", "pageNumber": "1", "xPosition": "100", "yPosition": "220", "tabLabel": "Org",
+            "validationPattern": "[0-9]{6}-[0-9]{4}", "validationMessage": "Write it as 556677-8899",
+            "conditionalParentLabel": "Plan", "conditionalParentValue": "Pro" }],
+        "formulaTabs": [{ "documentId": "1", "pageNumber": "1", "xPosition": "300", "yPosition": "100", "tabLabel": "Price",
+            "formula": "[Seats] * 10" }],
+        "signerAttachmentTabs": [{ "documentId": "1", "pageNumber": "1", "xPosition": "100", "yPosition": "260", "tabLabel": "ID" }]
     });
     let (response, created) =
         send(&router, with("POST", &format!("{base}/envelopes"), &bearer, json_ct, envelope(tabs).to_string().into_bytes())).await;
@@ -219,6 +233,17 @@ async fn docusign_compatible_api() {
     let field = native["fields"].as_array().unwrap().iter().find(|f| f["kind"] == "signature").unwrap();
     assert!((field["x"].as_f64().unwrap() - 100.0 / 595.0).abs() < 1e-6, "points become page fractions: {field}");
     assert!((field["y"].as_f64().unwrap() - 600.0 / 842.0).abs() < 1e-6);
+    let of = |kind: &str| native["fields"].as_array().unwrap().iter().filter(|f| f["kind"] == kind).cloned().collect::<Vec<_>>();
+    assert_eq!(of("number")[0]["validation"], json!({ "min": "1", "max": "50", "message": "1 to 50 seats" }));
+    assert_eq!((of("select")[0]["options"].clone(), of("select")[0]["value"].clone()), (json!(["Basic", "Pro"]), json!("Pro")));
+    let radios = of("radio");
+    assert_eq!(radios.len(), 2);
+    assert_eq!(radios[0]["groupKey"], radios[1]["groupKey"]);
+    assert_eq!(radios.iter().filter_map(|r| r["value"].as_str()).collect::<Vec<_>>(), ["Yearly"]);
+    assert_eq!(of("text")[0]["validation"]["pattern"], "[0-9]{6}-[0-9]{4}");
+    assert_eq!(of("file").len(), 1);
+    assert_eq!(of("text")[0]["conditions"], json!([{ "field": "Plan", "op": "equals", "value": "Pro" }]));
+    assert_eq!(of("formula")[0]["formula"], "{Seats} * 10");
 
     let (response, envelope) = send(&router, with("GET", &format!("{base}/envelopes/{id}"), &bearer, None, vec![])).await;
     assert_eq!(response.status(), StatusCode::OK);

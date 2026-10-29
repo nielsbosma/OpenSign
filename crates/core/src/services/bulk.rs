@@ -107,6 +107,9 @@ async fn template(ctx: &Ctx, conn: &mut PgConnection, id: Uuid) -> Result<Templa
     if !document.is_template {
         return Err(bad_request("Bulk send starts from a template"));
     }
+    if document.archived_at.is_some() {
+        return Err(bad_request("That template is archived. Restore it before using it."));
+    }
     let parties = parties(conn, id).await?;
     if !parties.iter().any(PartyRow::must_act) {
         return Err(bad_request("The template needs at least one party who signs or approves"));
@@ -115,7 +118,12 @@ async fn template(ctx: &Ctx, conn: &mut PgConnection, id: Uuid) -> Result<Templa
 }
 
 fn sender_fields(t: &Template) -> impl Iterator<Item = &FieldRow> {
-    t.fields.iter().filter(|f| f.party_id.is_none() && !f.label.trim().is_empty() && f.kind != FieldKind::Signature.as_str())
+    t.fields.iter().filter(|f| {
+        f.party_id.is_none()
+            && !f.label.trim().is_empty()
+            && f.kind != FieldKind::Signature.as_str()
+            && f.kind != FieldKind::Formula.as_str()
+    })
 }
 
 fn targets(t: &Template) -> Vec<Target> {
@@ -639,6 +647,7 @@ async fn send_row(ctx: &Ctx, conn: &mut PgConnection, bulk: &BulkJob, values: &B
             sequential: None,
             external_id: mapped.get("externalId").filter(|e| !e.is_empty()).cloned(),
             metadata: Some(json!({ "bulkSend": bulk.id })),
+            folder_id: None,
         },
     )
     .await?;
@@ -677,22 +686,13 @@ async fn send_row(ctx: &Ctx, conn: &mut PgConnection, bulk: &BulkJob, values: &B
         let inputs = current
             .into_iter()
             .map(|f| {
-                let value = match f.party_id {
-                    None => mapped.get(&format!("field.{}", f.label)).cloned().or(f.value),
-                    Some(_) => f.value,
-                };
-                Ok(FieldInput {
-                    party_id: f.party_id,
-                    kind: FieldKind::parse(&f.kind).ok_or_else(|| AppError::internal(anyhow::anyhow!("field kind {}", f.kind)))?,
-                    page: f.page,
-                    x: f.x,
-                    y: f.y,
-                    width: f.width,
-                    height: f.height,
-                    required: Some(f.required),
-                    label: Some(f.label),
-                    value,
-                })
+                let mut input = FieldInput::from_row(&f)?;
+                if f.party_id.is_none()
+                    && let Some(value) = mapped.get(&format!("field.{}", f.label))
+                {
+                    input.value = Some(value.clone());
+                }
+                Ok(input)
             })
             .collect::<Result<Vec<_>>>()?;
         docs::SetFields::run(ctx, conn, docs::SetFieldsInput { document_id, fields: inputs }).await?;

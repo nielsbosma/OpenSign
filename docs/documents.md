@@ -45,18 +45,95 @@ Add everyone who signs, approves or receives a copy. For each party you choose t
 
 ### Fields
 
-Pick a party in the field toolbar, then place fields on the pages. Each field belongs to one party, who fills it in when signing.
+Pick a party in the field toolbar, then place fields on the pages. Each field belongs to one party, who fills it in when signing. Select a field to change it in the **Field** panel: who fills it in, its label, whether it is required, and the settings below.
 
 | Field | |
 | --- | --- |
 | Signature | A drawn or typed signature. |
 | Initials | The party's initials. |
-| Text | Free text. Can be required and have a label. |
-| Date | Filled in with the date of signing. |
-| Checkbox | Can be required, or prefilled as checked. |
+| Text | Free text. Can have a pattern, a length and a default. |
+| Number | A number, with a smallest and largest value and a [format](#number-and-date-formats). |
+| Dropdown | One choice from a list of options. |
+| Multi-Select | Any number of choices from a list, written comma-separated on the page. |
+| Radio | A group of buttons of which the party picks one. See [Radio groups](#radio-groups). |
+| Checkbox | Can be required, or ticked by default. |
+| Phone | A phone number with its country code, stored as +46701234567. |
+| Date Picker | A date the party picks from a calendar, with an earliest and latest date and a [format](#number-and-date-formats). |
+| Image | The party uploads an image or takes a photo. It is drawn into the box, scaled to fit. |
+| File | The party uploads a PDF, JPEG or PNG in place on the page. Its name goes in the box and the file is sealed into the signed PDF, like [attachments](attachments.md). |
+| Formula | A number worked out from other fields, such as a total with VAT. See [Formulas](#formulas). |
+| Date | Filled in with the date of signing, in the format you choose. |
 | Name, Email, Company | Filled in from the party's details. |
 
-Choose **Me, now (prefilled)** in the toolbar to place text that you fill in yourself before sending, such as a contract number. Required fields of this kind must be filled in before the document can be sent.
+Choose **Me, now (prefilled)** in the toolbar to place a value you fill in yourself before sending, such as a contract number, an amount or a date. Required fields of this kind must be filled in before the document can be sent.
+
+A party's text, number, list, radio, checkbox, phone and date fields can have a **Default Value** they start from. Turn on **Read-Only** and they see it but cannot change it.
+
+#### Checks and error texts
+
+Checks run on the signing page as the party types, and again on the server when they sign, so a value that breaks a check can never reach the sealed PDF.
+
+| Check | Applies to | |
+| --- | --- | --- |
+| Allowed Format | Text, initials, company | A preset (email address, digits only, Swedish postcode, personal number or organisation number) or a regular expression of your own. The whole value must match. |
+| Min Length, Max Length | Text, initials, company | In characters. |
+| Smallest, Largest | Number | Inclusive. |
+| Earliest, Latest | Date Picker | Inclusive. |
+| Required | Every field the party fills in | |
+
+**Error Text** replaces the built-in error with your own, for any check on that field, such as *Write the order number as AB1234*. Without it, the party sees a built-in error in their own language.
+
+Patterns use the common regular expression syntax: classes such as `[0-9]` and `\d`, repetition such as `{3}`, `+` and `?`, alternatives with `|` and groups. Look-ahead and back-references are not supported, which keeps every check fast.
+
+#### Number and date formats
+
+The format decides how a value is written on the page; what is stored stays plain (`1234.5`, `2026-12-31`), so exports and the API always get the same shape.
+
+Write a number format as 1234 would look in it. `1,234.00` gives a comma between thousands and two decimals, `1 234,00 kr` a space, a decimal comma and a currency after, and `$1234` no decimals with a dollar sign. Values are rounded half up to the format's decimals. Parties can type numbers either way, such as `1 234,5` or `1,234.50`.
+
+Dates can be written as YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY, DD.MM.YYYY or D MMM YYYY (31 Dec 2026). The same formats apply to the date of signing.
+
+#### Radio groups
+
+Placing **Radio** adds one button. Select it and choose **Add a Button to the Group** for each further option, then drag the buttons where they belong. Each button holds one option; the group shares its label and whether an answer is required. The party can pick one button of the group.
+
+#### Conditional fields
+
+Under **Show Only When** in the Field panel, add conditions on other fields. The field is shown only while all of them hold, for example *Org Number* only when *Type* is *Company*, or a *Reason* box only when the *Other* checkbox is ticked. Fields with conditions are drawn with a dashed border in the editor.
+
+| Rule | |
+| --- | --- |
+| Is, Is Not | Compares with an option, a number or text. Text is compared without regard to case, and numbers by value, so 10 and 10.0 are the same. |
+| Is Filled In, Is Empty | For a checkbox: Is Ticked, Is Not Ticked. |
+| Contains | A multi-select list has the option ticked, or a text contains the words. |
+| Is More Than, Is Less Than | Numbers, and dates (Is After, Is Before). |
+
+A hidden field is never required, is left empty when the party signs, and is not written on the signed PDF. A field that depends on a hidden field sees it as empty, so hiding cascades.
+
+Conditions refer to fields by their label, so the field you look at needs a label, and only one field may have it. Renaming a field in the editor updates the conditions and formulas that use it. A party's field can look at their own fields, at values you prefilled, and at fields of parties who sign earlier when **Sign in Order** is on. The server checks the conditions again when the party signs, so a party cannot skip a field by changing the page.
+
+#### Formulas
+
+A **Formula** field computes a number from other fields while the party fills in the document. The party sees the result but cannot change it, and the server computes it again from the submitted values when they sign, so the stored result can be trusted. Give it a [number format](#number-and-date-formats) to round and write it, such as `1 234,00 kr`.
+
+Write other fields' labels in braces, and use `+ - * /` (or `× ÷`), brackets and these functions:
+
+| Function | |
+| --- | --- |
+| `round(x, 2)` | Rounds half up to 0 to 6 decimals; without a second value, to a whole number. |
+| `floor(x)`, `ceil(x)`, `abs(x)` | Down, up, or without its sign. |
+| `min(a, b, …)`, `max(a, b, …)`, `sum(a, b, …)` | |
+| `if(condition, then, else)` | Conditions compare with `=`, `!=`, `<`, `<=`, `>` and `>=`, and combine with `and(…)`, `or(…)` and `not(…)`. |
+| `contains(list, "text")` | Whether a multi-select list has the option ticked, or a text contains the words. |
+
+Examples:
+
+- VAT on a price: `{Price} * 0.25`
+- A total with VAT: `round({Hours} * {Rate} * 1.25, 2)`
+- A discount over an amount: `if({Amount} >= 10000, {Amount} * 0.05, 0)`
+- A price by plan: `if({Plan} = "Pro", 99, 49) * {Seats}`
+
+An empty field counts as 0, a ticked checkbox as 1. A formula that divides by zero, or uses text that is not a number, stays empty. A formula you fill in yourself can only use your own prefilled fields and is worked out when you save; a party's formula can use the same fields as a [condition](#conditional-fields).
 
 Fields are stored as fractions of the page, so they stay in place whatever the page size.
 
@@ -108,3 +185,5 @@ A document that is not pending can be deleted with its files. Cancel a pending d
 ## Finding documents
 
 The **Documents** page lists the documents you can see, newest first, with tabs per status. Search by title or by your reference.
+
+Sort documents into folders from the folder column beside the list, and archive finished ones so they leave the status tabs. The **Archived** tab lists them. See [Folders and archive](folders.md).

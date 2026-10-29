@@ -148,15 +148,15 @@ fn recipients_out(doc: &Value) -> Value {
     json!({ "signers": signers, "carbonCopies": copies, "recipientCount": (signers.len() + copies.len()).to_string() })
 }
 
-struct Tab<'a> {
-    tab: &'a Value,
+struct Tab {
+    tab: Value,
     kind: &'static str,
     width: f64,
     height: f64,
 }
 
-fn tabs_of(recipient: &Value) -> Vec<Tab<'_>> {
-    let kinds: [(&str, &'static str, f64, f64); 9] = [
+fn tabs_of(recipient: &Value) -> Vec<Tab> {
+    let kinds: [(&str, &'static str, f64, f64); 15] = [
         ("signHereTabs", "signature", 150.0, 40.0),
         ("initialHereTabs", "initials", 60.0, 30.0),
         ("dateSignedTabs", "date", 100.0, 18.0),
@@ -165,13 +165,91 @@ fn tabs_of(recipient: &Value) -> Vec<Tab<'_>> {
         ("companyTabs", "company", 150.0, 18.0),
         ("textTabs", "text", 150.0, 18.0),
         ("checkboxTabs", "checkbox", 14.0, 14.0),
-        ("dateTabs", "text", 100.0, 18.0),
+        ("dateTabs", "date_input", 100.0, 18.0),
+        ("numberTabs", "number", 100.0, 18.0),
+        ("listTabs", "select", 150.0, 18.0),
+        ("phoneNumberTabs", "phone", 130.0, 18.0),
+        ("signerAttachmentTabs", "file", 150.0, 30.0),
+        ("zipTabs", "text", 80.0, 18.0),
+        ("formulaTabs", "formula", 100.0, 18.0),
     ];
     let mut out = Vec::new();
     for (key, kind, width, height) in kinds {
         for tab in recipient["tabs"][key].as_array().into_iter().flatten() {
+            let mut tab = tab.clone();
+            if key == "zipTabs" && tab.get("validationPattern").is_none() {
+                tab["validationPattern"] = json!("[0-9]{5}(-[0-9]{4})?");
+            }
             out.push(Tab { tab, kind, width, height });
         }
+    }
+    // A radio group's buttons share its document, name and requirement but have their own place.
+    for (n, group) in recipient["tabs"]["radioGroupTabs"].as_array().into_iter().flatten().enumerate() {
+        let name = str_of(group, "groupName").map_or_else(|| format!("radio{}", n + 1), str::to_string);
+        for radio in group["radios"].as_array().into_iter().flatten() {
+            let mut tab = radio.clone();
+            tab["documentId"] = group["documentId"].clone();
+            tab["tabLabel"] = json!(name);
+            tab["groupKey"] = json!(name);
+            if radio.get("required").is_none() {
+                tab["required"] = group["required"].clone();
+            }
+            out.push(Tab { tab, kind: "radio", width: 14.0, height: 14.0 });
+        }
+    }
+    out
+}
+
+/// What a DocuSign tab adds beyond its place: a list's items, a radio button's option and group,
+/// a formula, the parent tab it is shown under, and the validation DocuSign tabs carry.
+fn tab_details(tab: &Value, kind: &str) -> Value {
+    let mut out = json!({});
+    match kind {
+        "select" => {
+            let items = tab["listItems"].as_array().cloned().unwrap_or_default();
+            out["options"] = json!(items.iter().filter_map(|i| str_of(i, "text").or_else(|| str_of(i, "value"))).collect::<Vec<_>>());
+            if let Some(chosen) = items.iter().find(|i| i["selected"] == "true" || i["selected"] == true) {
+                out["value"] = json!(str_of(chosen, "text").or_else(|| str_of(chosen, "value")));
+            }
+        }
+        "radio" => {
+            out["options"] = json!([str_of(tab, "value").unwrap_or("Yes")]);
+            out["groupKey"] = tab["groupKey"].clone();
+            if tab["selected"] == "true" || tab["selected"] == true {
+                out["value"] = json!(str_of(tab, "value").unwrap_or("Yes"));
+            }
+        }
+        // DocuSign writes `[Hours] * [Rate]`; OpenSign names fields in braces.
+        "formula" => out["formula"] = json!(str_of(tab, "formula").unwrap_or("0").replace('[', "{").replace(']', "}")),
+        _ => {}
+    }
+    if let Some(parent) = str_of(tab, "conditionalParentLabel").filter(|p| !p.trim().is_empty()) {
+        let (op, value) = match str_of(tab, "conditionalParentValue").unwrap_or("on") {
+            "on" => ("filled", None),
+            "off" => ("empty", None),
+            v => ("equals", Some(v)),
+        };
+        out["conditions"] = json!([{ "field": parent, "op": op, "value": value }]);
+    }
+    let keys: &[(&str, &str)] = match kind {
+        "text" | "company" | "initials" => &[("validationPattern", "pattern"), ("maxLength", "maxLength")],
+        "number" => &[("minNumericalValue", "min"), ("maxNumericalValue", "max")],
+        _ => &[],
+    };
+    let mut validation = serde_json::Map::new();
+    for (from, to) in keys {
+        let value = match tab[*from] {
+            Value::String(ref v) if !v.trim().is_empty() => v.trim().to_string(),
+            Value::Number(ref n) => n.to_string(),
+            _ => continue,
+        };
+        validation.insert((*to).into(), if *to == "maxLength" { json!(value.parse::<u32>().unwrap_or(0)) } else { json!(value) });
+    }
+    if !validation.is_empty() {
+        if let Some(message) = str_of(tab, "validationMessage").filter(|m| !m.is_empty()) {
+            validation.insert("message".into(), json!(message));
+        }
+        out["validation"] = Value::Object(validation);
     }
     out
 }
@@ -310,16 +388,27 @@ async fn fill(api: &Api, id: Uuid, body: &Value) -> Result<(), AppError> {
             let required = tab["required"].as_str().map(|r| r != "false").or(tab["required"].as_bool()).unwrap_or(*kind != "checkbox");
             let value = match *kind {
                 "checkbox" => (tab["selected"] == "true" || tab["selected"] == true).then(|| json!("true")),
-                "text" => str_of(tab, "value").map(|v| json!(v)),
+                "text" | "number" | "date_input" | "phone" => str_of(tab, "value").filter(|v| !v.is_empty()).map(|v| json!(v)),
                 _ => None,
             };
-            fields.push(json!({
+            let mut field = json!({
                 "partyId": party, "kind": kind, "page": index,
                 "x": x / pw, "y": y / ph, "width": w / pw, "height": h / ph,
                 "required": required,
-                "label": str_of(tab, "tabLabel").unwrap_or_default(),
+                "label": str_of(tab, "tabLabel").or_else(|| str_of(tab, "name")).unwrap_or_default(),
                 "value": value,
-            }));
+                "readOnly": (tab["locked"] == "true" || tab["locked"] == true) && value.is_some(),
+            });
+            if let (Some(out), Some(extra)) = (field.as_object_mut(), tab_details(tab, kind).as_object()) {
+                out.extend(extra.clone());
+            }
+            if let Some(group) = field["groupKey"]
+                .as_str()
+                .map(|g| format!("{}-{}", party.as_str().unwrap_or_default(), g.chars().take(20).collect::<String>()))
+            {
+                field["groupKey"] = json!(group);
+            }
+            fields.push(field);
         }
     }
     api.call("documents.set_fields", json!({ "documentId": id, "fields": fields })).await?;

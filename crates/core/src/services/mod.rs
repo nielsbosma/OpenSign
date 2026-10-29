@@ -6,6 +6,7 @@ pub mod bulk;
 pub mod docs;
 pub mod documents;
 pub mod eid;
+pub mod folders;
 pub mod oauth;
 pub mod passkeys;
 pub mod retention;
@@ -94,6 +95,12 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<documents::Cancel>(),
         erase::<documents::Remind>(),
         erase::<documents::Delete>(),
+        erase::<folders::List>(),
+        erase::<folders::Create>(),
+        erase::<folders::Update>(),
+        erase::<folders::Delete>(),
+        erase::<folders::Move>(),
+        erase::<folders::Archive>(),
         erase::<retention::SetLegalHold>(),
         erase::<retention::Preview>(),
         erase::<system::GetVersion>(),
@@ -130,6 +137,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<signing::Sign>(),
         erase::<signing::Decline>(),
         erase::<signing::RemoveAttachment>(),
+        erase::<signing::RemoveFieldFile>(),
         erase::<review::CreateLink>(),
         erase::<review::RevokeLink>(),
         erase::<review::SetReviewLinks>(),
@@ -194,6 +202,10 @@ mod tests {
     /// Calls that only change the caller's own preferences, allowed to read-only roles.
     const PERSONAL: &[&str] = &["account.set_language"];
 
+    /// Open to any signed-in user because the permission depends on the input (a template folder
+    /// needs templates.manage, a document folder documents.create); the service checks it.
+    const CHECKED_INSIDE: &[&str] = &["folders.create", "folders.update", "folders.delete"];
+
     #[test]
     fn names_are_unique_dotted_and_described() {
         let mut seen = HashSet::new();
@@ -254,7 +266,10 @@ mod tests {
 
         let kinds: std::collections::HashMap<&str, Kind> = registry().iter().map(|s| (s.meta().name, s.meta().kind)).collect();
         for role in [Role::Viewer, Role::Auditor] {
-            let writes: Vec<_> = tools(role).into_iter().filter(|n| kinds[n] == Kind::Mutation && !PERSONAL.contains(n)).collect();
+            let writes: Vec<_> = tools(role)
+                .into_iter()
+                .filter(|n| kinds[n] == Kind::Mutation && !PERSONAL.contains(n) && !CHECKED_INSIDE.contains(n))
+                .collect();
             assert!(writes.is_empty(), "{role:?} can change {writes:?}");
         }
 

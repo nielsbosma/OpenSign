@@ -78,6 +78,22 @@ export async function uploadAttachment(
   return parse(response);
 }
 
+/** The image or file a party puts in one of their image or file fields. */
+export async function uploadFieldFile(
+  token: string,
+  session: string | null,
+  field: string,
+  file: File,
+): Promise<import('./api-types.gen').FieldRow> {
+  const form = new FormData();
+  form.append('token', token);
+  if (session) form.append('session', session);
+  form.append('field', field);
+  form.append('file', file, file.name);
+  const response = await fetch('/api/sign/field-file', { method: 'POST', credentials: 'same-origin', body: form });
+  return parse(response);
+}
+
 export async function verifyFile(file: File): Promise<Output<'documents.verify'>> {
   const response = await fetch('/api/verify', { method: 'POST', credentials: 'same-origin', body: file });
   return parse(response);

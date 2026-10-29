@@ -229,6 +229,53 @@ pub async fn signer_attachment(State(state): State<AppState>, request: Request) 
     }
 }
 
+/// `POST /api/sign/field-file`, multipart with `token`, `session` (optional), `field` and `file`:
+/// the upload for one of the party's image or file fields.
+pub async fn signer_field_file(State(state): State<AppState>, request: Request) -> Response {
+    let (parts, body) = request.into_parts();
+    let caller = match caller(&state, &parts, Surface::Signer, Some(security::UPLOAD)).await {
+        Ok(c) => c,
+        Err(r) => return *r,
+    };
+    let fail = |e| ApiError(e, Some(caller.request_id.clone())).into_response();
+    let mut multipart = match Multipart::from_request(Request::from_parts(parts, body), &state).await {
+        Ok(m) => m,
+        Err(_) => return fail(bad_request("Send the file as multipart/form-data")),
+    };
+    let (mut token, mut session, mut field_id, mut file) = (None, None, None, None);
+    while let Ok(Some(field)) = multipart.next_field().await {
+        match field.name() {
+            Some("token") => token = field.text().await.ok(),
+            Some("session") => session = field.text().await.ok().filter(|s| !s.is_empty()),
+            Some("field") => field_id = field.text().await.ok().and_then(|r| Uuid::parse_str(r.trim()).ok()),
+            Some("file") => {
+                let name = field.file_name().unwrap_or("upload").to_string();
+                match field.bytes().await {
+                    Ok(bytes) => file = Some((name, bytes.to_vec())),
+                    Err(_) => return fail(bad_request("The upload was interrupted or is too large")),
+                }
+            }
+            _ => {}
+        }
+    }
+    let (Some(token), Some(field_id), Some((name, bytes))) = (token, field_id, file) else {
+        return fail(bad_request("Send token, field and file"));
+    };
+    let result = async {
+        let mut tx = caller.ctx.db().begin().await?;
+        let out =
+            opensign_core::services::signing::upload_field_file(&caller.ctx, &mut tx, &token, session.as_deref(), field_id, &name, bytes)
+                .await?;
+        tx.commit().await?;
+        Ok::<_, opensign_core::AppError>(out)
+    }
+    .await;
+    match result {
+        Ok(out) => Json(out).into_response(),
+        Err(e) => fail(e),
+    }
+}
+
 #[derive(Deserialize)]
 pub struct SignerFileInput {
     token: String,

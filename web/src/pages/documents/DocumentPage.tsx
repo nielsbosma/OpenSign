@@ -1,9 +1,12 @@
 import {
+  Archive,
+  ArchiveRestore,
   ArrowLeft,
   ChevronDown,
   ChevronUp,
   Download,
   Eye,
+  Folder,
   HandHelping,
   History,
   Link2,
@@ -68,7 +71,9 @@ import { ActivityPanel } from './ActivityPanel';
 import { BulkSendDialog } from './BulkSendDialog';
 import { StatusBadge } from './DocumentsPage';
 import { FieldLayer } from './FieldLayer';
-import { clamp, type EditableField, FIELD_KINDS, partyColor, toEditable, toInput } from './fields';
+import { FieldSettings } from './FieldSettings';
+import { folderPath, MoveToSubmenu } from './Folders';
+import { clamp, type EditableField, FIELD_KINDS, newGroupKey, partyColor, SENDER_KINDS, toEditable, toInput } from './fields';
 import { FileDrop } from './NewDocumentDialog';
 import { PartyDialog, partyToInput } from './PartyDialog';
 import { PartyPhoto } from './PartyPhoto';
@@ -510,6 +515,7 @@ export function DocumentPage() {
   const query = useApi('documents.get', { id });
   const authMethods = useApi('documents.auth_methods');
   const doc = query.data;
+  const folders = useApi('folders.list', { scope: doc?.isTemplate ? 'templates' : 'documents' }, { enabled: !!doc });
   const draft = !!doc && doc.status === 'draft' && doc.canEdit;
   const pending = !!doc && doc.status === 'pending';
   const { fields, update, flush, saving } = useFields(doc, draft);
@@ -540,6 +546,11 @@ export function DocumentPage() {
     onSuccess: () => navigate(doc?.isTemplate ? '/templates' : '/documents'),
   });
   const fromTemplate = useApiMutation('documents.create', { onSuccess: (d) => navigate(`/documents/${d.id}`) });
+  const move = useApiMutation('documents.move', { invalidates: ['documents.', 'folders.'], onSuccess: () => toast.success(t('Moved')) });
+  const archive = useApiMutation('documents.archive', {
+    invalidates: ['documents.', 'folders.'],
+    onSuccess: (_, input) => toast.success(input.archived ? t('Archived') : t('Restored from the archive')),
+  });
   const legalHold = useApiMutation('documents.legal_hold', {
     invalidates: ['documents.'],
     onSuccess: (out) => {
@@ -627,7 +638,15 @@ export function DocumentPage() {
       kind,
       page,
       partyId: placingFor,
-      required: kind !== 'checkbox',
+      required: kind !== 'checkbox' && kind !== 'formula',
+      formula: kind === 'formula' ? '0' : null,
+      options:
+        kind === 'select' || kind === 'multiselect'
+          ? [t('Option {n}', { n: 1 }), t('Option {n}', { n: 2 })]
+          : kind === 'radio'
+            ? [t('Option {n}', { n: 1 })]
+            : [],
+      groupKey: kind === 'radio' ? newGroupKey() : null,
       x: clamp(x - spec.width / 2, 0, 1 - spec.width),
       y: clamp(y - spec.height / 2, 0, 1 - spec.height),
       width: spec.width,
@@ -687,17 +706,27 @@ export function DocumentPage() {
                 · <Scale className="size-3.5" /> {t('Legal Hold')}
               </span>
             )}
+            {doc.folderId && folders.data && (
+              <span className="inline-flex min-w-0 items-center gap-1">
+                · <Folder className="size-3.5 shrink-0" /> <span className="truncate">{folderPath(folders.data, doc.folderId)}</span>
+              </span>
+            )}
+            {doc.archivedAt && (
+              <span className="inline-flex items-center gap-1 font-medium">
+                · <Archive className="size-3.5" /> {t('Archived')}
+              </span>
+            )}
             {doc.deletesAt && <span>· Kept until {formatDate(doc.deletesAt)}</span>}
             {saving && <span>{t('· Saving…')}</span>}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {doc.isTemplate && (
+          {doc.isTemplate && !doc.archivedAt && (
             <Button onClick={() => fromTemplate.mutate({ title: doc.title, templateId: doc.id })} disabled={fromTemplate.isPending}>
               <Plus /> {t('Use Template')}
             </Button>
           )}
-          {doc.isTemplate && can('documents.create') && (
+          {doc.isTemplate && !doc.archivedAt && can('documents.create') && (
             <Button variant="outline" onClick={() => setBulkSending(true)}>
               <Users /> {t('Bulk Send')}
             </Button>
@@ -750,6 +779,18 @@ export function DocumentPage() {
                   {t('Cancel Signing')}
                 </DropdownMenuItem>
               )}
+              {doc.canEdit && folders.data && (
+                <MoveToSubmenu
+                  folders={folders.data}
+                  current={doc.folderId ?? null}
+                  onMove={(folderId) => move.mutate({ ids: [doc.id], folderId })}
+                />
+              )}
+              {doc.canEdit && (doc.isTemplate || ['completed', 'declined', 'canceled', 'expired'].includes(doc.status)) && (
+                <DropdownMenuItem onSelect={() => archive.mutate({ ids: [doc.id], archived: !doc.archivedAt })}>
+                  {doc.archivedAt ? <ArchiveRestore /> : <Archive />} {doc.archivedAt ? t('Restore') : t('Archive')}
+                </DropdownMenuItem>
+              )}
               {!doc.isTemplate && can('documents.legal_hold') && (
                 <DropdownMenuItem onSelect={() => (doc.legalHold ? legalHold.mutate({ id: doc.id, hold: false }) : setHolding(true))}>
                   <Scale /> {doc.legalHold ? t('Release Legal Hold') : t('Place on Legal Hold')}
@@ -787,40 +828,26 @@ export function DocumentPage() {
                   ))}
                 <option value="">{t('Me, now (prefilled)')}</option>
               </select>
-              {FIELD_KINDS.filter((k) => placingFor || ['text', 'date', 'checkbox', 'name', 'company', 'email'].includes(k.kind)).map(
-                (k) => (
-                  <Button
-                    key={k.kind}
-                    size="sm"
-                    variant={armed === k.kind ? 'default' : 'ghost'}
-                    onClick={() => setArmed(armed === k.kind ? null : k.kind)}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData(FIELD_DRAG_TYPE, k.kind);
-                      e.dataTransfer.effectAllowed = 'copy';
-                    }}
-                    className="cursor-grab active:cursor-grabbing"
-                    style={armed === k.kind ? undefined : { color: partyColor(doc.parties, placingFor) }}
-                  >
-                    {k.label}
-                  </Button>
-                ),
-              )}
+              {FIELD_KINDS.filter((k) => placingFor || SENDER_KINDS.includes(k.kind)).map((k) => (
+                <Button
+                  key={k.kind}
+                  size="sm"
+                  variant={armed === k.kind ? 'default' : 'ghost'}
+                  onClick={() => setArmed(armed === k.kind ? null : k.kind)}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData(FIELD_DRAG_TYPE, k.kind);
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
+                  className="cursor-grab active:cursor-grabbing"
+                  style={armed === k.kind ? undefined : { color: partyColor(doc.parties, placingFor) }}
+                >
+                  {k.label}
+                </Button>
+              ))}
               <span className="ms-auto text-xs text-muted-foreground">
                 {armed ? t('Click on the page to place it') : t('Drag a field onto the page, or pick one and click')}
               </span>
-            </div>
-          )}
-          {draft && selectedField && !selectedField.partyId && (
-            <div className="mb-3 flex items-center gap-2">
-              <Label htmlFor="prefill" className="shrink-0">
-                {t('Prefilled Value')}
-              </Label>
-              <Input
-                id="prefill"
-                value={selectedField.value ?? ''}
-                onChange={(e) => update(fields.map((f) => (f.key === selected ? { ...f, value: e.target.value } : f)))}
-              />
             </div>
           )}
           {!doc.files.length ? (
@@ -867,6 +894,21 @@ export function DocumentPage() {
         </div>
 
         <aside className="min-w-0 lg:sticky lg:top-3 lg:max-h-[calc(100svh-1.5rem)] lg:self-start lg:overflow-y-auto lg:pb-4 [scrollbar-width:thin]">
+          {draft && selectedField && (
+            <div className="mb-4">
+              <FieldSettings
+                key={selectedField.key}
+                field={selectedField}
+                fields={fields}
+                parties={doc.parties}
+                onChange={update}
+                onRemove={() => {
+                  update(fields.filter((f) => f.key !== selectedField.key));
+                  setSelected(null);
+                }}
+              />
+            </div>
+          )}
           <Tabs defaultValue="setup">
             <TabsList className="w-full">
               <TabsTrigger value="setup">{draft ? t('Setup') : t('Parties')}</TabsTrigger>

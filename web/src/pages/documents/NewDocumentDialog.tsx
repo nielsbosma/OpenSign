@@ -43,7 +43,15 @@ export function FileDrop({ onFiles, busy }: { onFiles: (files: File[]) => void; 
   );
 }
 
-export function NewDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function NewDocumentDialog({
+  open,
+  onOpenChange,
+  folderId,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  folderId?: string | null;
+}) {
   const navigate = useNavigate();
   const templates = useApi('documents.list', { templates: true, limit: 100 }, { enabled: open });
   const [title, setTitle] = useState('');
@@ -61,6 +69,7 @@ export function NewDocumentDialog({ open, onOpenChange }: { open: boolean; onOpe
       const doc = await call('documents.create', {
         title: title.trim() || (files[0] ? titleFrom(files[0].name) : t('Untitled Document')),
         templateId: fromTemplate,
+        folderId: folderId ?? null,
       });
       for (const file of files) await uploadFile(doc.id, file);
       onOpenChange(false);

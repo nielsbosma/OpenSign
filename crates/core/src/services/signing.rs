@@ -16,9 +16,11 @@ use super::settings;
 use crate::audit::{Entry, audit};
 use crate::context::Ctx;
 use crate::documents::attachments::{self, AttachmentRequest};
+use crate::documents::logic;
+use crate::documents::values::{self, Spec};
 use crate::documents::{
-    AuthMethod, DOCUMENT_COLUMNS, Delivery, DocumentRow, FieldKind, FieldRow, PartyRole, PartyRow, current_turn, fields, notify, parties,
-    party_for_token, seal_identity, status,
+    AuthMethod, DOCUMENT_COLUMNS, Delivery, DocumentRow, FIELD_COLUMNS, FieldKind, FieldRow, PartyRole, PartyRow, current_turn, fields,
+    notify, parties, party_for_token, seal_identity, status,
 };
 use crate::error::{AppError, ErrorKind, Result, bad_request, conflict, too_many};
 use crate::jobs::enqueue;
@@ -150,7 +152,8 @@ pub struct SignerView {
     pub needs_authentication: Option<AuthMethod>,
     /// Set when the party must identify before signing.
     pub sign_authentication: Option<AuthMethod>,
-    /// The party's own fields, and the sender's prefilled text for context.
+    /// The party's own fields, the sender's prefilled text for context, and the fields of earlier
+    /// parties that the conditions and formulas of these look at.
     pub fields: Vec<FieldRow>,
     pub your_turn: bool,
     pub can_download: bool,
@@ -221,7 +224,10 @@ pub(crate) async fn signer_view(
         fields: if locked {
             Vec::new()
         } else {
-            fields(conn, document.id).await?.into_iter().filter(|f| f.party_id == Some(party.id) || f.party_id.is_none()).collect()
+            let every = fields(conn, document.id).await?;
+            let wanted: Vec<bool> = every.iter().map(|f| f.party_id == Some(party.id) || f.party_id.is_none()).collect();
+            let needed = logic::needed(&every, &wanted);
+            every.into_iter().zip(needed).filter_map(|(f, keep)| keep.then_some(f)).collect()
         },
         your_turn: false,
         can_download: false,
@@ -499,9 +505,10 @@ impl Service for Sign {
             return Err(bad_request(format!("Upload \u{201c}{}\u{201d} first", missing.name)));
         }
 
-        let own: Vec<FieldRow> = fields(conn, document.id).await?.into_iter().filter(|f| f.party_id == Some(party.id)).collect();
+        let every = fields(conn, document.id).await?;
+        let own: Vec<usize> = (0..every.len()).filter(|i| every[*i].party_id == Some(party.id)).collect();
         for v in &input.values {
-            if !own.iter().any(|f| f.id == v.field_id) {
+            if !own.iter().any(|i| every[*i].id == v.field_id) {
                 return Err(bad_request("A value was given for a field that is not yours"));
             }
         }
@@ -516,32 +523,110 @@ impl Service for Sign {
             return Err(bad_request("Draw or type your signature"));
         }
         let today = ctx.now.format("%Y-%m-%d").to_string();
-        for field in &own {
-            let given = input.values.iter().find(|v| v.field_id == field.id).map(|v| clean_value(&v.value)).transpose()?;
+        // Values are checked before conditions are applied, but a refused value only counts if
+        // its field turns out to be shown.
+        let mut candidates: Vec<Option<String>> = every.iter().map(|f| f.value.clone()).collect();
+        let mut refused: Vec<Option<AppError>> = (0..every.len()).map(|_| None).collect();
+        for &i in &own {
+            let field = &every[i];
             let kind = FieldKind::parse(&field.kind).unwrap_or(FieldKind::Text);
-            let value = match kind {
-                FieldKind::Name => Some(party.name.clone()),
-                FieldKind::Email => party.email.clone(),
-                FieldKind::Date => Some(today.clone()),
-                FieldKind::Signature => Some("signed".into()),
-                FieldKind::Initials => given.filter(|v| !v.is_empty()),
-                FieldKind::Company => given.filter(|v| !v.is_empty()).or_else(|| party.company.clone()),
-                FieldKind::Checkbox => match given.as_deref() {
-                    None | Some("") | Some("false") => Some("false".into()),
-                    Some("true") => Some("true".into()),
-                    Some(_) => return Err(bad_request("A checkbox value is true or false")),
-                },
-                FieldKind::Text => given.filter(|v| !v.is_empty()).or_else(|| field.value.clone()),
+            let spec = Spec::of(field);
+            let label = if field.label.is_empty() { kind.as_str() } else { field.label.as_str() };
+            let given = match input.values.iter().find(|v| v.field_id == field.id) {
+                _ if field.read_only => None,
+                Some(v) => Some(clean_value(&v.value)?),
+                None => None,
             };
+            let checked = |raw: &str| values::normalize(kind, &spec, raw).map_err(|e| bad_request(values::error_message(&spec, label, &e)));
+            let value = match kind {
+                FieldKind::Name => Ok(Some(party.name.clone())),
+                FieldKind::Email => Ok(party.email.clone()),
+                FieldKind::Date => Ok(Some(today.clone())),
+                FieldKind::Signature => Ok(Some("signed".into())),
+                FieldKind::Formula => Ok(None),
+                FieldKind::Checkbox => match given.as_deref() {
+                    None if field.read_only => Ok(field.value.clone()),
+                    None | Some("") | Some("false") => Ok(Some("false".into())),
+                    Some("true") => Ok(Some("true".into())),
+                    Some(_) => Err(bad_request("A checkbox value is true or false")),
+                },
+                FieldKind::Radio => match given.as_deref() {
+                    None => Ok(field.value.clone()),
+                    Some("" | "false") => Ok(None),
+                    Some("true") => Ok(spec.options.first().cloned()),
+                    Some(v) => checked(v),
+                },
+                FieldKind::Image | FieldKind::File => Ok(field.file_id.and(field.value.clone())),
+                FieldKind::Company => match given {
+                    Some(v) => checked(&v),
+                    None => Ok(field.value.clone()),
+                }
+                .map(|v| v.or_else(|| party.company.clone())),
+                _ => match given {
+                    Some(v) => checked(&v),
+                    None => Ok(field.value.clone()),
+                },
+            };
+            match value {
+                Ok(v) => candidates[i] = v,
+                Err(e) => {
+                    candidates[i] = None;
+                    refused[i] = Some(e);
+                }
+            }
+        }
+        let outcomes = logic::evaluate_rows(&every, Some(&candidates));
+        let mut filled: Vec<(&FieldRow, Option<String>)> = Vec::with_capacity(own.len());
+        for &i in &own {
+            let field = &every[i];
+            let kind = FieldKind::parse(&field.kind).unwrap_or(FieldKind::Text);
+            let label = if field.label.is_empty() { kind.as_str() } else { field.label.as_str() };
+            if !outcomes[i].visible {
+                filled.push((field, None));
+                continue;
+            }
+            if let Some(e) = refused[i].take() {
+                return Err(e);
+            }
+            let value = outcomes[i].value.clone();
             let missing = match kind {
                 FieldKind::Checkbox => field.required && value.as_deref() != Some("true"),
+                FieldKind::Radio | FieldKind::Formula => false,
                 _ => field.required && value.as_deref().is_none_or(str::is_empty),
             };
             if missing {
-                let label = if field.label.is_empty() { kind.as_str() } else { field.label.as_str() };
-                return Err(bad_request(format!("Fill in \u{201c}{label}\u{201d}")));
+                return Err(bad_request(match kind {
+                    FieldKind::Image | FieldKind::File => format!("Upload \u{201c}{label}\u{201d} first"),
+                    _ => format!("Fill in \u{201c}{label}\u{201d}"),
+                }));
             }
-            sqlx::query("update fields set value = $2 where id = $1").bind(field.id).bind(&value).execute(&mut *conn).await?;
+            filled.push((field, value));
+        }
+        let mut groups: Vec<&str> = filled.iter().filter_map(|(f, _)| f.group_key.as_deref()).collect();
+        groups.sort_unstable();
+        groups.dedup();
+        for group in groups {
+            let boxes: Vec<&(&FieldRow, Option<String>)> = filled.iter().filter(|(f, _)| f.group_key.as_deref() == Some(group)).collect();
+            let chosen = boxes.iter().filter(|(_, v)| v.is_some()).count();
+            let label = boxes.iter().map(|(f, _)| f.label.as_str()).find(|l| !l.is_empty()).unwrap_or("radio");
+            let shown = boxes.iter().any(|(f, _)| own.iter().any(|i| every[*i].id == f.id && outcomes[*i].visible));
+            if chosen > 1 {
+                return Err(bad_request(format!("Choose only one option for \u{201c}{label}\u{201d}")));
+            }
+            if shown && chosen == 0 && boxes.iter().any(|(f, _)| f.required) {
+                return Err(bad_request(format!("Choose an option for \u{201c}{label}\u{201d}")));
+            }
+        }
+        for (field, value) in &filled {
+            // An upload in a field that a condition hid is dropped, so it is neither stamped nor embedded.
+            let dropped = value.is_none().then_some(field.file_id).flatten();
+            sqlx::query("update fields set value = $2, file_id = case when $3 then null else file_id end where id = $1")
+                .bind(field.id)
+                .bind(value)
+                .bind(dropped.is_some())
+                .execute(&mut *conn)
+                .await?;
+            retire_file(conn, dropped).await?;
         }
 
         let method = session.as_ref().map_or(party.auth_to_sign(), |s| s.a);
@@ -750,6 +835,100 @@ impl Service for RemoveAttachment {
             conn,
             Entry::new("party.attachment_removed", "document", document.id)
                 .metadata(json!({ "party": party.id, "name": party.name, "attachment": request.name })),
+        )
+        .await?;
+        Ok(super::Ok_::default())
+    }
+}
+
+async fn upload_field(conn: &mut PgConnection, party_id: Uuid, id: Uuid) -> Result<FieldRow> {
+    let field: FieldRow = sqlx::query_as(&format!(
+        "select {FIELD_COLUMNS} from fields where id = $1 and party_id = $2 and kind in ('image', 'file') for update"
+    ))
+    .bind(id)
+    .bind(party_id)
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or_else(|| crate::error::not_found("Field"))?;
+    Ok(field)
+}
+
+/// Stores the image or file a party puts in one of their image or file fields, cleaned first
+/// (images are re-encoded and scaled down, see `attachments`), replacing any earlier upload.
+#[allow(clippy::too_many_arguments)]
+pub async fn upload_field_file(
+    ctx: &Ctx,
+    conn: &mut PgConnection,
+    token: &str,
+    session_token: Option<&str>,
+    field_id: Uuid,
+    name: &str,
+    bytes: Vec<u8>,
+) -> Result<FieldRow> {
+    let Resolved { party, document, .. } = attachment_party(ctx, conn, token, session_token).await?;
+    let field = upload_field(conn, party.id, field_id).await?;
+    let image = field.kind == FieldKind::Image.as_str();
+    let (file_name, content_type, body) =
+        if image { attachments::clean_field_image(bytes, name).await? } else { attachments::clean(bytes, name).await? };
+    let record = store_file(
+        conn,
+        &ctx.app.storage,
+        ctx.keys(),
+        NewFile { kind: if image { "field_image" } else { "field_file" }, name: &file_name, content_type, body: &body, uploaded_by: None },
+    )
+    .await?;
+    retire_file(conn, field.file_id).await?;
+    sqlx::query("update fields set file_id = $2, value = $3 where id = $1")
+        .bind(field.id)
+        .bind(record.id)
+        .bind(&record.name)
+        .execute(&mut *conn)
+        .await?;
+    audit(
+        ctx,
+        conn,
+        Entry::new("party.field_file_uploaded", "document", document.id).metadata(json!({
+            "party": party.id, "name": party.name, "field": field.id, "label": field.label, "file": record.name, "sha256": record.sha256,
+        })),
+    )
+    .await?;
+    upload_field(conn, party.id, field_id).await
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoveFieldFileInput {
+    pub token: String,
+    pub session: Option<String>,
+    /// The image or file field to empty.
+    pub field_id: Uuid,
+}
+
+pub struct RemoveFieldFile;
+
+#[async_trait]
+impl Service for RemoveFieldFile {
+    type Input = RemoveFieldFileInput;
+    type Output = super::Ok_;
+    const META: Meta = Meta::mutation(
+        "signing.remove_field_file",
+        "Remove what the party uploaded to an image or file field, before they sign.",
+        Access::Public,
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: RemoveFieldFileInput) -> Result<super::Ok_> {
+        let Resolved { party, document, .. } = attachment_party(ctx, conn, &input.token, input.session.as_deref()).await?;
+        let field = upload_field(conn, party.id, input.field_id).await?;
+        if field.file_id.is_none() {
+            return Ok(super::Ok_::default());
+        }
+        sqlx::query("update fields set file_id = null, value = null where id = $1").bind(field.id).execute(&mut *conn).await?;
+        retire_file(conn, field.file_id).await?;
+        audit(
+            ctx,
+            conn,
+            Entry::new("party.field_file_removed", "document", document.id)
+                .metadata(json!({ "party": party.id, "name": party.name, "field": field.id, "label": field.label })),
         )
         .await?;
         Ok(super::Ok_::default())

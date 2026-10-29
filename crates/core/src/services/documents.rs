@@ -16,6 +16,8 @@ use crate::audit::{Entry, audit};
 use crate::auth::normalize_email;
 use crate::context::Ctx;
 use crate::documents::attachments::{self, AttachmentRequestInput};
+use crate::documents::logic::{self, Condition, Owner};
+use crate::documents::values::{self, Spec, Validation};
 use crate::documents::{
     AuthMethod, Delivery, DocumentRow, DocumentView, FieldKind, Need, PartyRole, PartyRow, PartyView, VISIBLE, current_turn,
     decrypt_personal_number, files, load_document, notify, parties, personal_number_context, signer_url, status, upload, view, visibility,
@@ -78,6 +80,11 @@ pub struct ListInput {
     /// List templates instead of documents.
     #[serde(default)]
     pub templates: bool,
+    /// Only what is directly in this folder. Leave out to list everything regardless of folder.
+    pub folder_id: Option<Uuid>,
+    /// List the archive instead: archived documents or templates only. Archived ones are left out otherwise.
+    #[serde(default)]
+    pub archived: bool,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }
@@ -97,6 +104,8 @@ pub struct DocumentSummary {
     pub expires_at: Option<DateTime<Utc>>,
     pub parties_total: i64,
     pub parties_done: i64,
+    pub folder_id: Option<Uuid>,
+    pub archived_at: Option<DateTime<Utc>>,
 }
 
 fn like_pattern(search: &str) -> String {
@@ -112,7 +121,7 @@ impl Service for List {
     type Output = Vec<DocumentSummary>;
     const META: Meta = Meta::query(
         "documents.list",
-        "List documents (or templates) you can see, newest first, optionally filtered by status or a search on the title.",
+        "List documents (or templates) you can see, newest first, optionally filtered by status, folder or a search on the title. Archived ones are only listed with archived true.",
         Access::Authenticated,
     )
     .tool();
@@ -123,10 +132,12 @@ impl Service for List {
         Ok(sqlx::query_as(&format!(
             "select d.id, d.title, d.status, d.is_template, u.name as owner_name, d.external_id, d.created_at, d.sent_at, d.completed_at, d.expires_at,
                     (select count(*) from parties p where p.document_id = d.id and p.role <> 'viewer') as parties_total,
-                    (select count(*) from parties p where p.document_id = d.id and p.role <> 'viewer' and p.signed_at is not null) as parties_done
+                    (select count(*) from parties p where p.document_id = d.id and p.role <> 'viewer' and p.signed_at is not null) as parties_done,
+                    d.folder_id, d.archived_at
              from documents d left join users u on u.id = d.owner_id
              where {VISIBLE} and d.is_template = $4 and ($5::text is null or d.status = $5)
                and ($6::text is null or d.title ilike $7 escape '\\' or d.external_id = $6)
+               and ($10::uuid is null or d.folder_id = $10) and (d.archived_at is not null) = $11
              order by d.created_at desc limit $8 offset $9"
         ))
         .bind(read_all)
@@ -138,6 +149,8 @@ impl Service for List {
         .bind(search.map(like_pattern))
         .bind(input.limit.unwrap_or(50).clamp(1, 200))
         .bind(input.offset.unwrap_or(0).max(0))
+        .bind(input.folder_id)
+        .bind(input.archived)
         .fetch_all(&mut *conn)
         .await?)
     }
@@ -148,6 +161,11 @@ impl Service for List {
 pub struct CountsInput {
     /// Matches the title, or an exact external id, as in documents.list.
     pub search: Option<String>,
+    /// Count templates instead of documents.
+    #[serde(default)]
+    pub templates: bool,
+    /// Only what is directly in this folder, as in documents.list.
+    pub folder_id: Option<Uuid>,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -156,6 +174,8 @@ pub struct StatusCounts {
     pub all: i64,
     /// Documents per status: draft, pending, completed, declined, canceled and expired. Missing means none.
     pub by_status: std::collections::BTreeMap<String, i64>,
+    /// Archived ones, which `all` and `byStatus` leave out.
+    pub archived: i64,
 }
 
 pub struct Counts;
@@ -166,27 +186,32 @@ impl Service for Counts {
     type Output = StatusCounts;
     const META: Meta = Meta::query(
         "documents.counts",
-        "Count the documents you can see, in total and per status, optionally matching a search on the title. Use it for an overview before listing.",
+        "Count the documents (or templates) you can see, in total, per status and archived, optionally in one folder or matching a search on the title. Use it for an overview before listing.",
         Access::Authenticated,
     ).tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CountsInput) -> Result<StatusCounts> {
         let (read_all, user_id, can_create) = visibility(ctx)?;
         let search = input.search.as_deref().map(str::trim).filter(|s| !s.is_empty());
-        let rows: Vec<(String, i64)> = sqlx::query_as(&format!(
-            "select d.status, count(*) from documents d
-             where {VISIBLE} and not d.is_template
+        let rows: Vec<(String, bool, i64)> = sqlx::query_as(&format!(
+            "select d.status, d.archived_at is not null, count(*) from documents d
+             where {VISIBLE} and d.is_template = $6
                and ($4::text is null or d.title ilike $5 escape '\\' or d.external_id = $4)
-             group by d.status"
+               and ($7::uuid is null or d.folder_id = $7)
+             group by 1, 2"
         ))
         .bind(read_all)
         .bind(user_id)
         .bind(can_create)
         .bind(search)
         .bind(search.map(like_pattern))
+        .bind(input.templates)
+        .bind(input.folder_id)
         .fetch_all(&mut *conn)
         .await?;
-        Ok(StatusCounts { all: rows.iter().map(|(_, n)| n).sum(), by_status: rows.into_iter().collect() })
+        let archived = rows.iter().filter(|(_, a, _)| *a).map(|(_, _, n)| n).sum();
+        let active: Vec<_> = rows.into_iter().filter(|(_, a, _)| !a).map(|(s, _, n)| (s, n)).collect();
+        Ok(StatusCounts { all: active.iter().map(|(_, n)| n).sum(), by_status: active.into_iter().collect(), archived })
     }
 }
 
@@ -222,6 +247,8 @@ pub struct CreateInput {
     /// Your own reference, e.g. a CRM id. Searchable.
     pub external_id: Option<String>,
     pub metadata: Option<Value>,
+    /// Put it in this folder: a document folder for documents, a template folder for templates.
+    pub folder_id: Option<Uuid>,
 }
 
 pub fn language(value: Option<&str>) -> Result<String> {
@@ -265,10 +292,16 @@ impl Service for Create {
                 if !t.is_template {
                     return Err(bad_request("That document is not a template"));
                 }
+                if t.archived_at.is_some() {
+                    return Err(conflict("That template is archived. Restore it before using it."));
+                }
                 Some(t)
             }
             None => None,
         };
+        if let Some(folder_id) = input.folder_id {
+            super::folders::check_folder(conn, folder_id, input.is_template).await?;
+        }
         let org: crate::settings::OrgSettings = settings(ctx, conn).await?;
         let id = Uuid::now_v7();
         let message = match (&input.message, &template) {
@@ -277,8 +310,8 @@ impl Service for Create {
             (None, None) => String::new(),
         };
         sqlx::query(
-            "insert into documents (id, title, is_template, template_id, owner_id, message, language, sequential, reminder_days, external_id, metadata, review_links)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+            "insert into documents (id, title, is_template, template_id, owner_id, message, language, sequential, reminder_days, external_id, metadata, review_links, folder_id)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
         )
         .bind(id)
         .bind(title(&input.title)?)
@@ -295,6 +328,7 @@ impl Service for Create {
         .bind(input.external_id.as_deref().map(|e| clean_text(e, "The external id", 200)).transpose()?.filter(|e| !e.is_empty()))
         .bind(metadata(input.metadata)?)
         .bind(template.as_ref().is_none_or(|t| t.review_links))
+        .bind(input.folder_id)
         .execute(&mut *conn)
         .await?;
         if let Some(t) = &template {
@@ -304,7 +338,7 @@ impl Service for Create {
             ctx,
             conn,
             Entry::new("document.created", "document", id)
-                .metadata(json!({ "template": input.template_id, "isTemplate": input.is_template })),
+                .metadata(json!({ "template": input.template_id, "isTemplate": input.is_template, "folder": input.folder_id })),
         )
         .await?;
         if !input.is_template {
@@ -356,8 +390,8 @@ async fn copy_template(ctx: &Ctx, conn: &mut PgConnection, from: Uuid, to: Uuid)
     attachments::copy(conn, to, &ids, from).await?;
     for f in crate::documents::fields(conn, from).await? {
         sqlx::query(
-            "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+            "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only, conditions, formula)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)",
         )
         .bind(Uuid::now_v7())
         .bind(to)
@@ -370,8 +404,14 @@ async fn copy_template(ctx: &Ctx, conn: &mut PgConnection, from: Uuid, to: Uuid)
         .bind(f.height)
         .bind(f.required)
         .bind(&f.label)
-        .bind(&f.value)
+        .bind(f.file_id.is_none().then_some(f.value.as_ref()).flatten())
         .bind(&f.options)
+        .bind(&f.validation)
+        .bind(&f.format)
+        .bind(&f.group_key)
+        .bind(f.read_only)
+        .bind(&f.conditions)
+        .bind(&f.formula)
         .execute(&mut *conn)
         .await?;
     }
@@ -793,8 +833,59 @@ pub struct FieldInput {
     pub height: f64,
     pub required: Option<bool>,
     pub label: Option<String>,
-    /// A prefilled value.
+    /// A prefilled value: for a party's field, what they start from. Numbers as `1234.5`, dates as
+    /// YYYY-MM-DD, a multiselect as a JSON array of options, a radio button as its option when chosen.
     pub value: Option<String>,
+    /// The choices of a `select` or `multiselect` field, or the one option of a `radio` button.
+    #[serde(default)]
+    pub options: Vec<String>,
+    /// Checks the signer's value must pass, with an optional error text of your own.
+    #[serde(default)]
+    pub validation: Option<Validation>,
+    /// How a date or number is written on the page. Dates: YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY,
+    /// DD.MM.YYYY or D MMM YYYY. Numbers: how 1234 would look, such as `1,234.00`, `1 234,00 kr` or `$1234`.
+    pub format: Option<String>,
+    /// Ties `radio` buttons into one group: give every button of the group the same key.
+    pub group_key: Option<String>,
+    /// The party sees the prefilled value but cannot change it.
+    pub read_only: Option<bool>,
+    /// Show the field only when all of these hold. Each looks at another field by its label. A
+    /// party's field may look at their own fields, the sender's, and fields of parties who sign
+    /// earlier in order; a hidden field is never required and is left empty.
+    #[serde(default)]
+    pub conditions: Vec<Condition>,
+    /// For a `formula` field: the number it computes from other fields, which are named by label in
+    /// braces. `+ - * /`, brackets, comparisons (`= != < <= > >=`) and the functions round(x, decimals),
+    /// floor, ceil, abs, min, max, sum, if(condition, then, else), and, or, not and contains. Example:
+    /// `round({Hours} * {Rate} * 1.25, 2)`. The signer cannot change it; the server computes it when they sign.
+    pub formula: Option<String>,
+}
+
+impl FieldInput {
+    /// The input that would save a stored field as it is.
+    pub fn from_row(f: &crate::documents::FieldRow) -> Result<FieldInput> {
+        let kind = FieldKind::parse(&f.kind).ok_or_else(|| AppError::internal(anyhow::anyhow!("field kind {}", f.kind)))?;
+        let spec = Spec::of(f);
+        Ok(FieldInput {
+            party_id: f.party_id,
+            kind,
+            page: f.page,
+            x: f.x,
+            y: f.y,
+            width: f.width,
+            height: f.height,
+            required: Some(f.required),
+            label: Some(f.label.clone()),
+            value: f.value.clone(),
+            options: spec.options,
+            validation: (!spec.validation.is_empty()).then_some(spec.validation),
+            format: spec.format,
+            group_key: f.group_key.clone(),
+            read_only: Some(f.read_only),
+            conditions: f.conditions(),
+            formula: f.formula.clone(),
+        })
+    }
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -834,7 +925,7 @@ impl Service for SetFields {
     type Output = DocumentView;
     const META: Meta = Meta::mutation(
         "documents.set_fields",
-        "Place the fields of a draft: signatures, initials, text, dates, checkboxes, names, emails and companies, each assigned to a party.",
+        "Place the fields of a draft, each assigned to a party: signatures, initials, text, numbers, dropdowns, multi-select lists, radio groups, checkboxes, phone numbers, date pickers, image and file uploads, formulas, and the automatic name, email, company and date of signing. Text fields take a pattern and length limits, numbers and dates a smallest and largest value and a format, each with an optional error text of your own. Any field can be shown only when other fields hold given values, and a formula field computes a number from other fields.",
         Access::Permission(Permission::DocumentsCreate),
     ).tool();
 
@@ -845,7 +936,8 @@ impl Service for SetFields {
             return Err(bad_request(format!("A document can have at most {MAX_FIELDS} fields")));
         }
         let all = parties(conn, document.id).await?;
-        sqlx::query("delete from fields where document_id = $1").bind(document.id).execute(&mut *conn).await?;
+        let mut groups: std::collections::HashMap<String, (Option<Uuid>, Vec<String>, bool)> = Default::default();
+        let mut prepared = Vec::with_capacity(input.fields.len());
         for f in &input.fields {
             check_box(f)?;
             let party = match f.party_id {
@@ -855,13 +947,114 @@ impl Service for SetFields {
             if matches!(f.kind, FieldKind::Signature | FieldKind::Initials) && !party.is_some_and(|p| p.role() == PartyRole::Signer) {
                 return Err(bad_request("Signature and initials fields belong to a signer"));
             }
-            let value = f.value.as_deref().map(|v| clean_text(v, "A field value", 2000)).transpose()?.filter(|v| !v.is_empty());
-            if f.kind == FieldKind::Checkbox && value.as_deref().is_some_and(|v| v != "true" && v != "false") {
-                return Err(bad_request("A checkbox value is true or false"));
+            if (f.kind.is_upload() || f.kind == FieldKind::Radio) && !party.is_some_and(|p| p.must_act()) {
+                return Err(bad_request("Image, file and radio fields belong to a party who signs or approves"));
             }
+            if f.kind == FieldKind::Formula && party.is_some_and(|p| !p.must_act()) {
+                return Err(bad_request("A formula belongs to you or to a party who signs or approves"));
+            }
+            let label = f.label.as_deref().map(|l| clean_text(l, "A field label", 200)).transpose()?.unwrap_or_default();
+            let spec = Spec {
+                options: f.options.clone(),
+                validation: f.validation.clone().unwrap_or_default(),
+                format: f.format.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string),
+            };
+            let group_key = f.group_key.as_deref().map(str::trim).filter(|g| !g.is_empty());
+            let options = values::check_spec(f.kind, &spec, group_key)?;
+            let spec = Spec { options, ..spec };
+            let value = f.value.as_deref().map(|v| clean_text(v, "A field value", 2000)).transpose()?.filter(|v| !v.is_empty());
+            let value = match f.kind {
+                FieldKind::Checkbox if value.as_deref().is_some_and(|v| v != "true" && v != "false") => {
+                    return Err(bad_request("A checkbox value is true or false"));
+                }
+                _ if f.kind.is_upload() && value.is_some() => return Err(bad_request("Image and file fields are filled by the party")),
+                FieldKind::Formula => None,
+                FieldKind::Checkbox | FieldKind::Signature => value,
+                kind => match value {
+                    Some(v) => values::normalize(kind, &spec, &v).map_err(|e| {
+                        bad_request(values::error_message(&spec, if label.is_empty() { kind.as_str() } else { &label }, &e))
+                    })?,
+                    None => None,
+                },
+            };
+            let read_only = f.read_only.unwrap_or(false);
+            if read_only
+                && (f.party_id.is_none()
+                    || f.kind.is_upload()
+                    || f.kind.is_automatic()
+                    || matches!(f.kind, FieldKind::Signature | FieldKind::Initials | FieldKind::Formula))
+            {
+                return Err(bad_request("Only a party's fields that take a value can be read-only"));
+            }
+            if let Some(key) = group_key {
+                let group = groups.entry(key.to_string()).or_insert((f.party_id, Vec::new(), false));
+                if group.0 != f.party_id {
+                    return Err(bad_request("All radio buttons of a group belong to the same party"));
+                }
+                if group.1.contains(&spec.options[0]) {
+                    return Err(bad_request(format!("The option \u{201c}{}\u{201d} is in its radio group twice", spec.options[0])));
+                }
+                group.1.push(spec.options[0].clone());
+                if value.is_some() {
+                    if group.2 {
+                        return Err(bad_request("Only one radio button of a group can be chosen"));
+                    }
+                    group.2 = true;
+                }
+            }
+            let conditions: Vec<Condition> = f
+                .conditions
+                .iter()
+                .map(|c| Condition {
+                    field: c.field.trim().to_string(),
+                    op: c.op,
+                    value: c.value.as_deref().map(str::trim).filter(|v| c.op.takes_value() && !v.is_empty()).map(str::to_string),
+                })
+                .collect();
+            let formula = f.formula.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
+            let owner = match party {
+                Some(p) => Owner::Party(p.id, document.sequential.then_some(p.sign_order)),
+                None => Owner::Sender,
+            };
+            prepared.push(Prepared {
+                input: f,
+                owner,
+                label,
+                value,
+                spec,
+                group_key: group_key.map(str::to_string),
+                read_only,
+                required: f.kind != FieldKind::Formula && f.required.unwrap_or(f.kind != FieldKind::Checkbox),
+                conditions,
+                formula,
+            });
+        }
+        let items: Vec<logic::Item> = prepared
+            .iter()
+            .map(|p| logic::Item {
+                label: &p.label,
+                kind: p.input.kind,
+                value: p.value.as_deref(),
+                conditions: &p.conditions,
+                formula: p.formula.as_deref(),
+                format: p.spec.format.as_deref(),
+            })
+            .collect();
+        let owners: Vec<Owner> = prepared.iter().map(|p| p.owner).collect();
+        logic::check(&items, &owners)?;
+        // Formulas the sender fills in only use the sender's own fields, so they are known now.
+        let outcomes = logic::evaluate(&items);
+
+        sqlx::query("delete from fields where document_id = $1").bind(document.id).execute(&mut *conn).await?;
+        for (p, outcome) in prepared.iter().zip(outcomes) {
+            let f = p.input;
+            let value = match (f.kind, p.owner) {
+                (FieldKind::Formula, Owner::Sender) => outcome.value,
+                _ => p.value.clone(),
+            };
             sqlx::query(
-                "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value)
-                 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+                "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only, conditions, formula)
+                 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)",
             )
             .bind(Uuid::now_v7())
             .bind(document.id)
@@ -872,9 +1065,16 @@ impl Service for SetFields {
             .bind(f.y)
             .bind(f.width)
             .bind(f.height)
-            .bind(f.required.unwrap_or(f.kind != FieldKind::Checkbox))
-            .bind(f.label.as_deref().map(|l| clean_text(l, "A field label", 200)).transpose()?.unwrap_or_default())
+            .bind(p.required)
+            .bind(&p.label)
             .bind(value)
+            .bind(json!(p.spec.options))
+            .bind(serde_json::to_value(&p.spec.validation).map_err(AppError::internal)?)
+            .bind(&p.spec.format)
+            .bind(&p.group_key)
+            .bind(p.read_only)
+            .bind(serde_json::to_value(&p.conditions).map_err(AppError::internal)?)
+            .bind(&p.formula)
             .execute(&mut *conn)
             .await?;
         }
@@ -882,6 +1082,19 @@ impl Service for SetFields {
             .await?;
         reload(ctx, conn, document.id).await
     }
+}
+
+struct Prepared<'a> {
+    input: &'a FieldInput,
+    owner: Owner,
+    label: String,
+    value: Option<String>,
+    spec: Spec,
+    group_key: Option<String>,
+    read_only: bool,
+    required: bool,
+    conditions: Vec<Condition>,
+    formula: Option<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]

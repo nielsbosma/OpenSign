@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiError, type AttachmentRequest, type AuthMethod, call, errorMessage, fetchPdf, type SignerView } from '@/lib/api';
+import { display } from '@/lib/field-values';
 import { saveBytes } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { FormError } from '../auth/AuthLayout';
@@ -19,6 +20,7 @@ import { AttachmentUploads } from './AttachmentUploads';
 import { EidIdentify } from './EidIdentify';
 import { framed, notifyHost, redirectAfter } from './embed';
 import { type Signature, SignaturePad } from './SignaturePad';
+import { INPUT_KINDS, initialValues, outcomes, problems, SignerField, type Upload } from './SignerFields';
 import { isRtl, LanguageContext, languageFor, SIGNER_LANGUAGES, TextsContext, textsFor, useTexts } from './texts';
 import { WebcamPhoto } from './WebcamPhoto';
 
@@ -450,7 +452,11 @@ function SignerScreen({
   onError?: (message: string) => void;
 }) {
   const t = useTexts();
-  const [values, setValues] = useState<Record<string, string>>({});
+  const own = view.fields.filter((f) => f.partyId === view.party.id);
+  const [initial] = useState(() => initialValues(own, view.party.company));
+  const [values, setValues] = useState<Record<string, string>>(initial.values);
+  const [uploads, setUploads] = useState<Record<string, Upload>>(initial.uploads);
+  const [touched, setTouched] = useState<Set<string>>(new Set());
   const [signature, setSignature] = useState<Signature | null>(null);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -462,11 +468,21 @@ function SignerScreen({
 
   const done = view.party.status === 'signed' || view.party.status === 'declined';
   const canAct = view.party.role !== 'viewer' && (preview || (view.yourTurn && !done && view.document.status === 'pending'));
-  const own = view.fields.filter((f) => f.partyId === view.party.id);
-  const inputs = own.filter((f) => ['text', 'initials', 'company', 'checkbox'].includes(f.kind));
+  const logic = useMemo(() => outcomes(view.fields, view.party, values, uploads), [view.fields, view.party, values, uploads]);
+  const shown = (f: { id: string }) => logic.get(f.id)?.visible !== false;
+  const inputs = own.filter((f) => INPUT_KINDS.includes(f.kind) && !f.readOnly && shown(f));
+  const issues = problems(own, values, uploads, t, shown);
+  const touch = (id: string) => setTouched((s) => (s.has(id) ? s : new Set(s).add(id)));
   const isSigner = view.party.role === 'signer';
 
   const sign = async () => {
+    const first = own.find((f) => issues[f.id]);
+    if (first) {
+      setTouched(new Set(Object.keys(issues)));
+      setSignError(issues[first.id]);
+      document.getElementById(`field-${first.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     setBusy(true);
     setSignError(undefined);
     try {
@@ -475,7 +491,9 @@ function SignerScreen({
         session,
         consent,
         signature: isSigner ? signature : null,
-        values: Object.entries(values).map(([fieldId, value]) => ({ fieldId, value })),
+        values: Object.entries(values)
+          .filter(([id]) => own.some((f) => f.id === id))
+          .map(([fieldId, value]) => ({ fieldId, value })),
       });
       onResult(out.completed ? 'completed' : 'signed');
     } catch (e) {
@@ -533,29 +551,46 @@ function SignerScreen({
                           width: `${f.width * 100}%`,
                           height: `${f.height * 100}%`,
                         };
-                        if (!mine) return null;
-                        if (canAct && f.kind === 'checkbox') {
+                        if (!mine || !shown(f)) return null;
+                        if (f.kind === 'formula') {
+                          const value = logic.get(f.id)?.value;
                           return (
-                            <label key={f.id} className="pointer-events-auto absolute flex items-center justify-center" style={style}>
-                              <Checkbox
-                                checked={values[f.id] === 'true'}
-                                onCheckedChange={(c) => setValues({ ...values, [f.id]: c ? 'true' : 'false' })}
-                                aria-label={f.label || t.checkbox}
-                              />
-                            </label>
+                            <div
+                              key={f.id}
+                              id={`field-${f.id}`}
+                              role="status"
+                              aria-label={f.label || undefined}
+                              className="absolute flex items-center rounded-[3px] border border-dashed border-zinc-400 px-1 text-[11px] text-zinc-800"
+                              style={style}
+                            >
+                              <span dir="ltr" className="truncate">
+                                {value != null ? display('formula', f.format, value) : '—'}
+                              </span>
+                            </div>
                           );
                         }
-                        if (canAct && ['text', 'initials', 'company'].includes(f.kind)) {
+                        if (canAct && INPUT_KINDS.includes(f.kind)) {
                           return (
-                            <input
+                            <SignerField
                               key={f.id}
-                              dir="auto"
-                              aria-label={f.label || f.kind}
-                              placeholder={f.label || (f.kind === 'initials' ? t.initials : f.kind === 'company' ? t.company : t.text)}
-                              value={values[f.id] ?? (f.kind === 'company' ? (view.party.company ?? '') : '')}
-                              onChange={(e) => setValues({ ...values, [f.id]: e.target.value })}
-                              className="pointer-events-auto absolute rounded-[3px] border border-primary bg-primary/10 px-1 text-[11px] text-zinc-900 outline-none focus:bg-white"
+                              field={f}
+                              fields={own}
                               style={style}
+                              values={values}
+                              onValues={setValues}
+                              uploads={uploads}
+                              onUpload={(id, upload) =>
+                                setUploads(({ [id]: old, ...rest }) => {
+                                  if (old?.preview) URL.revokeObjectURL(old.preview);
+                                  return upload ? { ...rest, [id]: upload } : rest;
+                                })
+                              }
+                              problem={issues[f.id]}
+                              showProblem={touched.has(f.id)}
+                              onTouch={touch}
+                              token={token}
+                              session={session}
+                              preview={preview}
                             />
                           );
                         }

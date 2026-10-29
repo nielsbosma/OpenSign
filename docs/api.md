@@ -146,8 +146,8 @@ Send answers `{ "document": {…}, "links": [{ "partyId", "name", "url" }] }`. T
 
 | Method | Path | |
 | --- | --- | --- |
-| GET | `/documents` | List. Query: `status`, `search` (title or exact external id), `templates`, `limit`, `offset` |
-| POST | `/documents` | Create a draft or template. Body: `title`, `message`, `language`, `templateId`, `isTemplate`, `sequential`, `externalId`, `metadata` |
+| GET | `/documents` | List. Query: `status`, `search` (title or exact external id), `templates`, `folderId`, `archived`, `limit`, `offset`. Archived ones are listed only with `archived=true` |
+| POST | `/documents` | Create a draft or template. Body: `title`, `message`, `language`, `templateId`, `isTemplate`, `sequential`, `externalId`, `metadata`, `folderId` |
 | GET | `/templates` | List templates |
 | GET | `/documents/{id}` | One document with files, parties and fields |
 | PATCH | `/documents/{id}` | Change `title`, `message`, `language`, `sequential`, `expiresAt`, `reminderDays` (0 turns reminders off), `externalId`, `metadata` |
@@ -164,8 +164,14 @@ Send answers `{ "document": {…}, "links": [{ "partyId", "name", "url" }] }`. T
 | POST | `/documents/{documentId}/parties/{partyId}/signing-link` | Issue a signing link to hand over. `rotate: true` revokes earlier links first; `redirectUrl` sends the party to your site afterwards (see [Embedded signing](embedding.md#redirect-after-signing)) |
 | PUT | `/documents/{id}/legal-hold` | Body `hold`, `reason`. See [Retention and legal hold](retention.md) |
 | GET | `/documents/{id}/file` | The PDF. `version=signed` (sealed, completed only) or `original` (as sent) |
+| POST | `/documents/move` | Move documents or templates to a folder. Body: `ids`, `folderId` (`null` for none) |
+| POST | `/documents/archive` | Archive finished documents or templates, or restore them. Body: `ids`, `archived` |
+| GET | `/folders` | List folders. Query: `scope` (`documents` or `templates`) |
+| POST | `/folders` | Create a folder. Body: `scope`, `name`, `parentId` |
+| PUT | `/folders/{id}` | Rename or move a folder. Body: `name`, `parentId` |
+| DELETE | `/folders/{id}` | Delete a folder; what was in it moves up a level |
 
-Editing calls work on drafts and templates. Once a document is sent they answer `409`.
+Editing calls work on drafts and templates. Once a document is sent they answer `409`. Moving to a folder and archiving work at any status.
 
 ### Bulk send
 
@@ -230,12 +236,23 @@ See [Webhooks](webhooks.md).
 | Field | |
 | --- | --- |
 | `partyId` | Who fills it in. Omit for a value the sender fills in now |
-| `kind` | `signature`, `initials`, `text`, `date`, `checkbox`, `name`, `email`, `company` |
+| `kind` | `signature`, `initials`, `text`, `number`, `select`, `multiselect`, `radio`, `checkbox`, `phone`, `date_input`, `image`, `file`, `formula`, and the automatic `date` (of signing), `name`, `email`, `company` |
 | `page` | Zero-based page in the combined document (all files in order) |
 | `x`, `y` | Top-left corner as fractions of the page (0 to 1), origin top-left |
 | `width`, `height` | Fractions of the page |
 | `required`, `label` | Optional |
-| `value` | A prefilled value; `"true"` checks a checkbox |
+| `value` | A prefilled value: `"true"` ticks a checkbox, numbers as `1234.5`, dates as `2026-12-31`, a multiselect as a JSON array such as `"[\"A\",\"C\"]"`, a radio button as its option when chosen |
+| `options` | The choices of a `select` or `multiselect`, or the one option of a `radio` button |
+| `groupKey` | Ties `radio` buttons into one group; every button of the group has the same key |
+| `validation` | `{ "pattern", "minLength", "maxLength", "min", "max", "message" }`, see [Checks](documents.md#checks-and-error-texts) |
+| `format` | How a number or date is written on the page, see [formats](documents.md#number-and-date-formats) |
+| `readOnly` | The party sees the value but cannot change it |
+| `conditions` | Show the field only when all of these hold: `[{ "field": "Type", "op": "equals", "value": "Company" }]`. `field` is another field's label; `op` is `equals`, `not_equals`, `filled`, `empty`, `contains`, `greater` or `less`. See [Conditional fields](documents.md#conditional-fields) |
+| `formula` | For a `formula` field, such as `{Hours} * {Rate} * 1.25`. See [Formulas](documents.md#formulas) |
+
+Values the signer gives come back normalised: numbers as plain decimals, phone numbers in E.164, dates as YYYY-MM-DD and multi-select choices as a JSON array. Image and file fields hold the name of the upload. A formula holds the number the server computed, and a field its conditions hid is empty.
+
+Parties upload to an image or file field with `POST /api/sign/field-file` (multipart with `token`, `session`, `field` and `file`) from their signing page; `signing.remove_field_file` empties it again.
 
 ## Calls by name
 

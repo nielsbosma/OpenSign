@@ -1,10 +1,12 @@
 //! Documents, their parties and fields: shared types, who may see what, and signer links.
 
 pub mod attachments;
+pub mod logic;
 pub mod ltv;
 pub mod notify;
 pub mod seal;
 pub mod upload;
+pub mod values;
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64;
@@ -67,6 +69,10 @@ string_enum!(
 );
 
 string_enum!(
+    /// `date` is the date of signing, filled in automatically; `date_input` is a date the signer picks.
+    /// `select` is a dropdown, `multiselect` a list to tick several from, and each `radio` is one
+    /// button of a group (`groupKey`) holding one option. `image` and `file` take an upload. `formula`
+    /// is a number computed from other fields.
     FieldKind {
         Signature = "signature",
         Initials = "initials",
@@ -76,6 +82,15 @@ string_enum!(
         Name = "name",
         Email = "email",
         Company = "company",
+        Number = "number",
+        Select = "select",
+        Multiselect = "multiselect",
+        Radio = "radio",
+        Phone = "phone",
+        DateInput = "date_input",
+        Image = "image",
+        File = "file",
+        Formula = "formula",
     }
 );
 
@@ -96,6 +111,11 @@ impl FieldKind {
     pub fn is_automatic(self) -> bool {
         matches!(self, FieldKind::Date | FieldKind::Name | FieldKind::Email)
     }
+
+    /// Filled by uploading an image or a file while signing.
+    pub fn is_upload(self) -> bool {
+        matches!(self, FieldKind::Image | FieldKind::File)
+    }
 }
 
 pub mod status {
@@ -105,11 +125,13 @@ pub mod status {
     pub const DECLINED: &str = "declined";
     pub const CANCELED: &str = "canceled";
     pub const EXPIRED: &str = "expired";
+    /// Statuses a document can be archived in.
+    pub const FINISHED: &[&str] = &[COMPLETED, DECLINED, CANCELED, EXPIRED];
 }
 
 pub const DOCUMENT_COLUMNS: &str = "id, title, status, is_template, template_id, owner_id, message, language, sequential, expires_at, reminder_days, \
      source_file_id, sealed_file_id, original_sha256, sealed_sha256, page_count, external_id, metadata, sent_at, completed_at, canceled_at, created_at, updated_at, \
-     legal_hold, legal_hold_reason, legal_hold_at, review_links";
+     legal_hold, legal_hold_reason, legal_hold_at, review_links, folder_id, archived_at";
 
 #[derive(Debug, Clone, Serialize, JsonSchema, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -147,6 +169,9 @@ pub struct DocumentRow {
     pub legal_hold_at: Option<DateTime<Utc>>,
     /// Signers may share a read-only copy with their own AI agent.
     pub review_links: bool,
+    pub folder_id: Option<Uuid>,
+    /// Archived documents and templates are left out of lists unless asked for; archived templates cannot be used.
+    pub archived_at: Option<DateTime<Utc>>,
 }
 
 pub const PARTY_COLUMNS: &str = "id, document_id, role, name, email, phone, personal_number, company, sign_order, delivery, auth_to_view, auth_to_sign, \
@@ -323,11 +348,36 @@ pub struct FieldRow {
     pub height: f64,
     pub required: bool,
     pub label: String,
+    /// The value; for image and file fields, the name of the upload.
     pub value: Option<String>,
+    /// The choices of a list field, or the one option of a radio button.
+    #[schemars(with = "Vec<String>")]
     pub options: Value,
+    #[schemars(with = "values::Validation")]
+    pub validation: Value,
+    /// How a date or number is written on the page.
+    pub format: Option<String>,
+    /// Radio buttons with the same key form one group.
+    pub group_key: Option<String>,
+    /// The signer sees the value but cannot change it.
+    pub read_only: bool,
+    /// The field is shown only when all of these hold.
+    #[schemars(with = "Vec<logic::Condition>")]
+    pub conditions: Value,
+    /// For a formula field, the expression it computes.
+    pub formula: Option<String>,
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub file_id: Option<Uuid>,
 }
 
-pub const FIELD_COLUMNS: &str = "id, party_id, kind, page, x, y, width, height, required, label, value, options";
+impl FieldRow {
+    pub fn conditions(&self) -> Vec<logic::Condition> {
+        serde_json::from_value(self.conditions.clone()).unwrap_or_default()
+    }
+}
+
+pub const FIELD_COLUMNS: &str = "id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only, conditions, formula, file_id";
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -474,6 +524,7 @@ pub async fn purge(ctx: &Ctx, conn: &mut PgConnection, document: &DocumentRow, r
            union select sealed_file_id from documents where id = $1
            union select file_id from document_files where document_id = $1
            union select file_id from attachment_requests where document_id = $1
+           union select file_id from fields where document_id = $1
            union select (signature->>'imageFileId')::uuid from parties
              where document_id = $1 and signature->>'imageFileId' ~ '^[0-9a-f-]{36}$'
          ) ids where f is not null",
@@ -487,6 +538,7 @@ pub async fn purge(ctx: &Ctx, conn: &mut PgConnection, document: &DocumentRow, r
            and not exists (select 1 from documents d where d.source_file_id = f.id or d.sealed_file_id = f.id)
            and not exists (select 1 from document_files x where x.file_id = f.id)
            and not exists (select 1 from attachment_requests a where a.file_id = f.id)
+           and not exists (select 1 from fields x where x.file_id = f.id)
            and not exists (select 1 from parties p where p.signature->>'imageFileId' = f.id::text)
          returning storage_key",
     )

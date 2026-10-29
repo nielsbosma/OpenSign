@@ -112,6 +112,7 @@ pub fn router(state: AppState) -> Router {
         .route("/documents/{id}/files", post(files::upload).layer(DefaultBodyLimit::max(110 * 1024 * 1024)))
         .route("/sign/file", post(files::signer))
         .route("/sign/attachment", post(files::signer_attachment).layer(DefaultBodyLimit::max(11 * 1024 * 1024)))
+        .route("/sign/field-file", post(files::signer_field_file).layer(DefaultBodyLimit::max(11 * 1024 * 1024)))
         .route("/documents/{id}/attachments/{request}", get(files::document_attachment))
         .route("/eid/callback", get(files::eid_callback))
         .route("/verify", post(files::verify))

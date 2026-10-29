@@ -517,6 +517,19 @@ export type SearchHit = {
 
 export type DocsSearchOutput = Array<SearchHit>;
 
+export type DocumentsArchiveInput = {
+  /** true archives, false restores from the archive. */
+  archived: boolean;
+  /** Documents or templates, at most 200. */
+  ids: Array<string>;
+};
+
+export type DocumentsArchiveOutput = ArchiveOutput;
+
+export type ArchiveOutput = {
+  changed: number;
+};
+
 export type DocumentsAuthMethodsInput = Record<string, unknown>;
 
 /** Proof of identity a party must give. `standard` is possession of the link. */
@@ -550,15 +563,39 @@ export type AttachmentRequest = {
   uploadedAt?: string | null;
 };
 
+/** One rule of when a field is shown. A field with several rules shows only when all hold. */
+export type Condition = {
+  /** The label of the field the rule looks at. */
+  field: string;
+  op: ConditionOp;
+  /** What to compare with: an option, a number, a date as YYYY-MM-DD or text. Not used by `filled` and `empty`. */
+  value?: string | null;
+};
+
+export type ConditionOp = "equals" | "not_equals" | "empty" | "greater" | "less" | "filled" | "contains";
+
 export type FieldRow = {
+  /** The field is shown only when all of these hold. */
+  conditions: Array<Condition>;
+  /** How a date or number is written on the page. */
+  format?: string | null;
+  /** For a formula field, the expression it computes. */
+  formula?: string | null;
+  /** Radio buttons with the same key form one group. */
+  groupKey?: string | null;
   height: number;
   id: string;
   kind: string;
   label: string;
-  options: unknown;
+  /** The choices of a list field, or the one option of a radio button. */
+  options: Array<string>;
   page: number;
   partyId?: string | null;
+  /** The signer sees the value but cannot change it. */
+  readOnly: boolean;
   required: boolean;
+  validation: Validation;
+  /** The value; for image and file fields, the name of the upload. */
   value?: string | null;
   width: number;
   x: number;
@@ -600,9 +637,27 @@ export type PartyView = {
   webcamPhoto: boolean;
 };
 
+/** Checks on what a signer types. Each applies only to the kinds it makes sense for. */
+export type Validation = {
+  /** Largest number for a number field, or latest date as YYYY-MM-DD for a date picker. */
+  max?: string | null;
+  /** Most characters (text, initials and company fields). */
+  maxLength?: number | null;
+  /** Shown to the signer instead of the built-in error when any check fails. */
+  message?: string | null;
+  /** Smallest number for a number field, or earliest date as YYYY-MM-DD for a date picker. */
+  min?: string | null;
+  /** Fewest characters (text, initials and company fields). */
+  minLength?: number | null;
+  /** A regular expression the whole value must match (text, initials and company fields), such as `[0-9]{3} ?[0-9]{2}` for a Swedish postcode. */
+  pattern?: string | null;
+};
+
 export type DocumentsCancelOutput = DocumentView;
 
 export type DocumentView = {
+  /** Archived documents and templates are left out of lists unless asked for; archived templates cannot be used. */
+  archivedAt?: string | null;
   /** Files parties are asked to upload while signing, and what they uploaded. */
   attachments: Array<AttachmentRequest>;
   canEdit: boolean;
@@ -615,6 +670,7 @@ export type DocumentView = {
   externalId?: string | null;
   fields: Array<FieldRow>;
   files: Array<FileRecord>;
+  folderId?: string | null;
   id: string;
   isTemplate: boolean;
   language: string;
@@ -657,14 +713,20 @@ export type Check = {
 export type DocumentsCheckOutput = Array<Check>;
 
 export type DocumentsCountsInput = {
+  /** Only what is directly in this folder, as in documents.list. */
+  folderId?: string | null;
   /** Matches the title, or an exact external id, as in documents.list. */
   search?: string | null;
+  /** Count templates instead of documents. */
+  templates?: boolean;
 };
 
 export type DocumentsCountsOutput = StatusCounts;
 
 export type StatusCounts = {
   all: number;
+  /** Archived ones, which `all` and `byStatus` leave out. */
+  archived: number;
   /** Documents per status: draft, pending, completed, declined, canceled and expired. Missing means none. */
   byStatus: {
     [key: string]: number;
@@ -674,6 +736,8 @@ export type StatusCounts = {
 export type DocumentsCreateInput = {
   /** Your own reference, e.g. a CRM id. Searchable. */
   externalId?: string | null;
+  /** Put it in this folder: a document folder for documents, a template folder for templates. */
+  folderId?: string | null;
   /** Create a reusable template instead of a document. */
   isTemplate?: boolean;
   /** What signers see and receive unless a party has its own: en, zh, hi, es, fr, ar, bn, pt, ru, ur or sv. Defaults to the template's, then the organisation's. */
@@ -765,6 +829,10 @@ export type LegalHoldView = {
 };
 
 export type DocumentsListInput = {
+  /** List the archive instead: archived documents or templates only. Archived ones are left out otherwise. */
+  archived?: boolean;
+  /** Only what is directly in this folder. Leave out to list everything regardless of folder. */
+  folderId?: string | null;
   limit?: number | null;
   offset?: number | null;
   /** Matches the title, or an exact external id. */
@@ -776,10 +844,12 @@ export type DocumentsListInput = {
 };
 
 export type DocumentSummary = {
+  archivedAt?: string | null;
   completedAt?: string | null;
   createdAt: string;
   expiresAt?: string | null;
   externalId?: string | null;
+  folderId?: string | null;
   id: string;
   isTemplate: boolean;
   ownerName?: string | null;
@@ -791,6 +861,19 @@ export type DocumentSummary = {
 };
 
 export type DocumentsListOutput = Array<DocumentSummary>;
+
+export type DocumentsMoveInput = {
+  /** The folder to move them to, or null for no folder. Documents go in document folders, templates in template folders. */
+  folderId?: string | null;
+  /** Documents or templates to move, at most 200. */
+  ids: Array<string>;
+};
+
+export type DocumentsMoveOutput = MoveOutput;
+
+export type MoveOutput = {
+  moved: number;
+};
 
 export type DocumentsRemindInput = {
   id: string;
@@ -833,15 +916,29 @@ export type SendOutput = {
 };
 
 export type FieldInput = {
+  /** Show the field only when all of these hold. Each looks at another field by its label. A party's field may look at their own fields, the sender's, and fields of parties who sign earlier in order; a hidden field is never required and is left empty. */
+  conditions?: Array<Condition>;
+  /** How a date or number is written on the page. Dates: YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY, DD.MM.YYYY or D MMM YYYY. Numbers: how 1234 would look, such as `1,234.00`, `1 234,00 kr` or `$1234`. */
+  format?: string | null;
+  /** For a `formula` field: the number it computes from other fields, which are named by label in braces. `+ - * /`, brackets, comparisons (`= != < <= > >=`) and the functions round(x, decimals), floor, ceil, abs, min, max, sum, if(condition, then, else), and, or, not and contains. Example: `round({Hours} * {Rate} * 1.25, 2)`. The signer cannot change it; the server computes it when they sign. */
+  formula?: string | null;
+  /** Ties `radio` buttons into one group: give every button of the group the same key. */
+  groupKey?: string | null;
   height: number;
   kind: FieldKind;
   label?: string | null;
+  /** The choices of a `select` or `multiselect` field, or the one option of a `radio` button. */
+  options?: Array<string>;
   /** Zero-based page index in the combined document. */
   page: number;
   /** The party who fills it in. Leave out for text the sender fills in now. */
   partyId?: string | null;
+  /** The party sees the prefilled value but cannot change it. */
+  readOnly?: boolean | null;
   required?: boolean | null;
-  /** A prefilled value. */
+  /** Checks the signer's value must pass, with an optional error text of your own. */
+  validation?: Validation | null;
+  /** A prefilled value: for a party's field, what they start from. Numbers as `1234.5`, dates as YYYY-MM-DD, a multiselect as a JSON array of options, a radio button as its option when chosen. */
   value?: string | null;
   width: number;
   /** Position and size as fractions of the page (0 to 1), origin top-left. */
@@ -849,7 +946,8 @@ export type FieldInput = {
   y: number;
 };
 
-export type FieldKind = "signature" | "initials" | "text" | "date" | "checkbox" | "name" | "email" | "company";
+/** `date` is the date of signing, filled in automatically; `date_input` is a date the signer picks. `select` is a dropdown, `multiselect` a list to tick several from, and each `radio` is one button of a group (`groupKey`) holding one option. `image` and `file` take an upload. `formula` is a number computed from other fields. */
+export type FieldKind = "signature" | "initials" | "text" | "date" | "checkbox" | "name" | "email" | "company" | "number" | "select" | "multiselect" | "radio" | "phone" | "date_input" | "image" | "file" | "formula";
 
 export type DocumentsSetFieldsInput = {
   documentId: string;
@@ -1000,7 +1098,7 @@ export type SignerView = {
   document: SignerDocument;
   /** Set for a link the sender hands over while embedded signing is on. */
   embed?: EmbedView | null;
-  /** The party's own fields, and the sender's prefilled text for context. */
+  /** The party's own fields, the sender's prefilled text for context, and the fields of earlier parties that the conditions and formulas of these look at. */
   fields: Array<FieldRow>;
   /** Set when the party must identify before seeing the document; nothing else is filled in. */
   needsAuthentication?: AuthMethod | null;
@@ -1090,6 +1188,52 @@ export type VerifyOutput = {
   sha256: string;
   signatures: Array<unknown>;
 };
+
+export type Scope = "documents" | "templates";
+
+export type FoldersCreateInput = {
+  name: string;
+  /** Put the new folder inside this one; leave out for a top-level folder. */
+  parentId?: string | null;
+  /** documents or templates. */
+  scope: Scope;
+};
+
+export type FoldersCreateOutput = FolderView;
+
+export type FolderView = {
+  canEdit: boolean;
+  createdAt: string;
+  createdBy?: string | null;
+  id: string;
+  /** Documents or templates you can see directly in this folder, not counting archived ones or subfolders. */
+  itemCount: number;
+  name: string;
+  parentId?: string | null;
+  scope: string;
+};
+
+export type FoldersDeleteInput = {
+  id: string;
+};
+
+export type FoldersDeleteOutput = Ok_;
+
+export type FoldersListInput = {
+  /** documents or templates. */
+  scope: Scope;
+};
+
+export type FoldersListOutput = Array<FolderView>;
+
+export type FoldersUpdateInput = {
+  id: string;
+  name: string;
+  /** The folder to put it in, or null to make it a top-level folder. */
+  parentId?: string | null;
+};
+
+export type FoldersUpdateOutput = FolderView;
 
 export type OauthApproveInput = {
   /** The `request` parameter of the consent page. */
@@ -1291,6 +1435,15 @@ export type SigningRemoveAttachmentInput = {
 };
 
 export type SigningRemoveAttachmentOutput = Ok_;
+
+export type SigningRemoveFieldFileInput = {
+  /** The image or file field to empty. */
+  fieldId: string;
+  session?: string | null;
+  token: string;
+};
+
+export type SigningRemoveFieldFileOutput = Ok_;
 
 export type SigningRequestCodeInput = {
   session?: string | null;
@@ -1664,6 +1817,7 @@ export interface Services {
   "bulk.start": { kind: "mutation"; input: BulkStartInput; output: BulkStartOutput };
   "docs.read": { kind: "query"; input: DocsReadInput; output: DocsReadOutput };
   "docs.search": { kind: "query"; input: DocsSearchInput; output: DocsSearchOutput };
+  "documents.archive": { kind: "mutation"; input: DocumentsArchiveInput; output: DocumentsArchiveOutput };
   "documents.auth_methods": { kind: "query"; input: DocumentsAuthMethodsInput; output: DocumentsAuthMethodsOutput };
   "documents.cancel": { kind: "mutation"; input: DocumentsCancelInput; output: DocumentsCancelOutput };
   "documents.check": { kind: "query"; input: DocumentsCheckInput; output: DocumentsCheckOutput };
@@ -1676,6 +1830,7 @@ export interface Services {
   "documents.latest_review": { kind: "query"; input: DocumentsLatestReviewInput; output: DocumentsLatestReviewOutput };
   "documents.legal_hold": { kind: "mutation"; input: DocumentsLegalHoldInput; output: DocumentsLegalHoldOutput };
   "documents.list": { kind: "query"; input: DocumentsListInput; output: DocumentsListOutput };
+  "documents.move": { kind: "mutation"; input: DocumentsMoveInput; output: DocumentsMoveOutput };
   "documents.remind": { kind: "mutation"; input: DocumentsRemindInput; output: DocumentsRemindOutput };
   "documents.remove_file": { kind: "mutation"; input: DocumentsRemoveFileInput; output: DocumentsRemoveFileOutput };
   "documents.review": { kind: "mutation"; input: DocumentsReviewInput; output: DocumentsReviewOutput };
@@ -1692,6 +1847,10 @@ export interface Services {
   "documents.upload": { kind: "mutation"; input: DocumentsUploadInput; output: DocumentsUploadOutput };
   "documents.upload_url": { kind: "mutation"; input: DocumentsUploadUrlInput; output: DocumentsUploadUrlOutput };
   "documents.verify": { kind: "query"; input: DocumentsVerifyInput; output: DocumentsVerifyOutput };
+  "folders.create": { kind: "mutation"; input: FoldersCreateInput; output: FoldersCreateOutput };
+  "folders.delete": { kind: "mutation"; input: FoldersDeleteInput; output: FoldersDeleteOutput };
+  "folders.list": { kind: "query"; input: FoldersListInput; output: FoldersListOutput };
+  "folders.update": { kind: "mutation"; input: FoldersUpdateInput; output: FoldersUpdateOutput };
   "oauth.approve": { kind: "mutation"; input: OauthApproveInput; output: OauthApproveOutput };
   "oauth.deny": { kind: "mutation"; input: OauthDenyInput; output: OauthDenyOutput };
   "oauth.describe": { kind: "query"; input: OauthDescribeInput; output: OauthDescribeOutput };
@@ -1710,6 +1869,7 @@ export interface Services {
   "signing.eid_status": { kind: "query"; input: SigningEidStatusInput; output: SigningEidStatusOutput };
   "signing.open": { kind: "mutation"; input: SigningOpenInput; output: SigningOpenOutput };
   "signing.remove_attachment": { kind: "mutation"; input: SigningRemoveAttachmentInput; output: SigningRemoveAttachmentOutput };
+  "signing.remove_field_file": { kind: "mutation"; input: SigningRemoveFieldFileInput; output: SigningRemoveFieldFileOutput };
   "signing.request_code": { kind: "mutation"; input: SigningRequestCodeInput; output: SigningRequestCodeOutput };
   "signing.revoke_review_link": { kind: "mutation"; input: SigningRevokeReviewLinkInput; output: SigningRevokeReviewLinkOutput };
   "signing.sign": { kind: "mutation"; input: SigningSignInput; output: SigningSignOutput };

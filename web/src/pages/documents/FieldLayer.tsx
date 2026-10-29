@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { useRef } from 'react';
 import type { PartyView } from '@/lib/api';
+import { display } from '@/lib/field-values';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { clamp, type EditableField, kindLabel, partyColor } from './fields';
@@ -65,11 +66,15 @@ export function FieldLayer({
               key={f.key}
               role={editable ? 'button' : undefined}
               tabIndex={editable ? 0 : undefined}
-              title={
+              title={[
                 party
                   ? t('{field} for {name}', { field: kindLabel(f.kind), name: party.name })
-                  : t('{field} for the sender', { field: kindLabel(f.kind) })
-              }
+                  : t('{field} for the sender', { field: kindLabel(f.kind) }),
+                f.formula && `= ${f.formula}`,
+                f.conditions?.length && t('Shown only when its conditions hold'),
+              ]
+                .filter(Boolean)
+                .join('\n')}
               onPointerDown={(e) => start(e, f, 'move')}
               onPointerMove={(e) => move(e)}
               onPointerUp={(e) => move(e, true)}
@@ -84,14 +89,26 @@ export function FieldLayer({
                 width: `${f.width * 100}%`,
                 height: `${f.height * 100}%`,
                 borderColor: color,
+                borderStyle: f.conditions?.length ? 'dashed' : undefined,
                 backgroundColor: `${color}1f`,
                 color,
                 ['--tw-ring-color' as string]: color,
               }}
             >
-              <span className="truncate px-1 font-medium">
-                {f.value && !f.partyId ? f.value : f.kind === 'checkbox' ? '' : `${kindLabel(f.kind)}${f.required === false ? '' : ' *'}`}
-              </span>
+              {f.kind === 'radio' ? (
+                <span
+                  className="mx-auto aspect-square h-[70%] rounded-full border"
+                  style={{ borderColor: color, backgroundColor: f.value ? color : undefined }}
+                />
+              ) : (
+                <span className="truncate px-1 font-medium">
+                  {f.value && (!f.partyId || f.readOnly)
+                    ? display(f.kind, f.format, f.value)
+                    : f.kind === 'checkbox'
+                      ? ''
+                      : `${f.kind === 'formula' ? 'ƒ ' : ''}${f.label || kindLabel(f.kind)}${f.required === false || f.kind === 'formula' ? '' : ' *'}`}
+                </span>
+              )}
               {editable && active && (
                 <>
                   <button

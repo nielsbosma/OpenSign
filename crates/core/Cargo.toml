@@ -38,6 +38,7 @@ lettre = { version = "0.11", default-features = false, features = ["builder", "s
 x509-cert = { version = "0.2", features = ["pem"] }
 p12-keystore = "0.2"
 png = "0.17"
+regex = { version = "1", default-features = false, features = ["std", "unicode", "perf"] }
 jpeg-decoder = { version = "0.3", default-features = false }
 uuid = { workspace = true }
 csv = "1.4.0"

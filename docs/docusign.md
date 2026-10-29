@@ -45,8 +45,17 @@ All paths are under `/accounts/{accountId}`.
 | `fullNameTabs` | name | 150 × 18 |
 | `emailAddressTabs` | email | 180 × 18 |
 | `companyTabs` | company | 150 × 18 |
-| `textTabs`, `dateTabs` | text | 150 × 18, 100 × 18 |
+| `textTabs`, `zipTabs` | text | 150 × 18, 80 × 18 |
+| `dateTabs` | date picker | 100 × 18 |
+| `numberTabs` | number | 100 × 18 |
+| `listTabs` | dropdown, from `listItems` | 150 × 18 |
+| `radioGroupTabs` | radio group, one button per entry in `radios` | 14 × 14 |
+| `phoneNumberTabs` | phone | 130 × 18 |
+| `signerAttachmentTabs` | file | 150 × 30 |
 | `checkboxTabs` | checkbox | 14 × 14 |
+| `formulaTabs` | formula, with `[Label]` written as `{Label}` | 100 × 18 |
+
+`validationPattern`, `validationMessage` and `maxLength` become the field's [checks](documents.md#checks-and-error-texts), as do `minNumericalValue` and `maxNumericalValue` on number tabs. A `locked` tab with a value is read-only. `conditionalParentLabel` and `conditionalParentValue` become a [condition](documents.md#conditional-fields): the value `on` means the parent checkbox is ticked, `off` that it is not, and anything else that the parent equals it.
 
 Tabs are placed by `documentId`, `pageNumber`, `xPosition` and `yPosition` in points, measured against the real page size of the uploaded file and clamped onto the page.
 
