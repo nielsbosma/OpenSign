@@ -508,7 +508,6 @@
   "Sent for signing": "हस्ताक्षर के लिए भेजा गया",
   "Sent {date}": "{date} को भेजा गया",
   "Session Length (Hours)": "सेशन की अवधि (घंटे)",
-  "Sessions, sign-in and uploads.": "सेशन, साइन-इन और अपलोड।",
   "Set It Up Now": "अभी सेट करें",
   "Set Password": "पासवर्ड सेट करें",
   "Set Up": "सेट करें",
@@ -732,5 +731,10 @@
   "Continue": "जारी रखें",
   "Confirm Your New Email": "अपने नए ईमेल की पुष्टि करें",
   "Confirm to start signing in with this address.": "इस पते से साइन इन शुरू करने के लिए पुष्टि करें।",
-  "Confirm Email": "ईमेल की पुष्टि करें"
+  "Confirm Email": "ईमेल की पुष्टि करें",
+  "Sessions, sign-in, uploads and embedded signing.": "सेशन, साइन-इन, अपलोड और एम्बेडेड हस्ताक्षर।",
+  "Allow Embedded Signing": "एम्बेडेड हस्ताक्षर की अनुमति दें",
+  "Lets the sites listed below show the signing page inside their own app. Off, no site can frame OpenSign.": "नीचे दी गई साइटों को अपने ऐप में हस्ताक्षर पेज दिखाने देता है। बंद होने पर कोई भी साइट OpenSign को फ़्रेम में नहीं दिखा सकती।",
+  "Sites Allowed to Embed": "एम्बेड करने की अनुमति वाली साइटें",
+  "One per line, with https and without a path. Only links you hand over yourself can be signed in a frame.": "हर पंक्ति में एक, https के साथ और बिना पाथ के। फ़्रेम में केवल वे लिंक साइन किए जा सकते हैं जिन्हें आप ख़ुद सौंपते हैं।"
 }

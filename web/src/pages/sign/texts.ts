@@ -106,6 +106,13 @@ const en = {
   reviewSafety: (date: string) =>
     `The link cannot sign anything. It stops working on ${date}, every use is recorded, and you can revoke it at any time.`,
   revokeLink: 'Revoke Link',
+  securedBy: 'Secured by OpenSign',
+  embedRefused: 'This page cannot be shown here',
+  embedRefusedNote: 'Open your signing link directly in your browser instead.',
+  eidPopup: (label: string) => `Finish identifying with ${label} in the window that opened.`,
+  eidPopupBlocked: 'Allow pop-ups for this site, then try again.',
+  eidWindowDone: 'Identification finished',
+  eidWindowDoneNote: 'You can close this window and go back to the signing page.',
   methods: { sms_pin: 'SMS code', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-ID' } as Record<string, string>,
 };
 

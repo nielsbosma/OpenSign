@@ -97,5 +97,12 @@ export const fr: Texts = {
   reviewSafety: (date) =>
     `Le lien ne peut rien signer. Il cesse de fonctionner le ${date}, chaque utilisation est enregistrée et vous pouvez le révoquer à tout moment.`,
   revokeLink: 'Révoquer le lien',
+  securedBy: 'Sécurisé par OpenSign',
+  embedRefused: 'Cette page ne peut pas être affichée ici',
+  embedRefusedNote: 'Ouvrez plutôt votre lien de signature directement dans votre navigateur.',
+  eidPopup: (label) => `Terminez votre identification avec ${label} dans la fenêtre qui s’est ouverte.`,
+  eidPopupBlocked: 'Autorisez les fenêtres pop-up pour ce site, puis réessayez.',
+  eidWindowDone: 'Identification terminée',
+  eidWindowDoneNote: 'Vous pouvez fermer cette fenêtre et revenir à la page de signature.',
   methods: { sms_pin: 'code SMS', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-ID' },
 };

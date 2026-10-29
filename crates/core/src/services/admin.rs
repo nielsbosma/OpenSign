@@ -128,6 +128,18 @@ async fn update<G: SettingsGroup>(ctx: &Ctx, conn: &mut PgConnection, patch: &Va
             changes.insert("verifiedAt".into(), Value::Null);
         }
     }
+    if G::NAME == "security"
+        && let Some(Value::Array(origins)) = patch.get_mut("embedOrigins")
+    {
+        // Typed with a trailing slash or in capitals is still the same origin; anything else is refused below.
+        for origin in origins.iter_mut() {
+            if let Some(canonical) = origin.as_str().and_then(crate::settings::canonical_origin) {
+                *origin = Value::String(canonical);
+            }
+        }
+        let mut seen = std::collections::HashSet::new();
+        origins.retain(|o| o.as_str().is_none_or(|s| !s.trim().is_empty() && seen.insert(s.to_string())));
+    }
     if G::NAME == "eid"
         && let Value::Object(changes) = &mut patch
     {
@@ -217,6 +229,21 @@ pub(crate) fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
                 if let Some(url) = value.get(key).and_then(Value::as_str).filter(|u| !u.is_empty()) {
                     crate::net::check_public_url(url).map_err(bad_request)?;
                 }
+            }
+            Ok(())
+        }
+        "security" => {
+            let security: SecuritySettings = serde_json::from_value(value.clone()).map_err(AppError::internal)?;
+            if security.embed_origins.len() > 20 {
+                return Err(bad_request("List at most 20 sites allowed to embed"));
+            }
+            if let Some(bad) = security.embed_origins.iter().find(|o| crate::settings::canonical_origin(o).as_deref() != Some(o.as_str())) {
+                return Err(bad_request(format!(
+                    "{bad} is not a site address. Enter each as https://app.example.com, without a path or wildcards."
+                )));
+            }
+            if security.embed_signing && security.embed_origins.is_empty() {
+                return Err(bad_request("List the sites allowed to embed the signing page before turning embedding on"));
             }
             Ok(())
         }

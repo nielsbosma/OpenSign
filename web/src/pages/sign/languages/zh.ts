@@ -91,5 +91,12 @@ export const zh: Texts = {
   reviewActive: (date, uses) => `审阅链接在 ${date} 之前有效。已打开 ${uses} 次。`,
   reviewSafety: (date) => `该链接无法签署任何内容。它将于 ${date} 失效，每次使用都会被记录，你可以随时撤销。`,
   revokeLink: '撤销链接',
+  securedBy: '由 OpenSign 提供安全保护',
+  embedRefused: '此页面无法在此处显示',
+  embedRefusedNote: '请直接在浏览器中打开您的签署链接。',
+  eidPopup: (label) => `请在打开的窗口中完成 ${label} 身份验证。`,
+  eidPopupBlocked: '请允许此网站弹出窗口，然后重试。',
+  eidWindowDone: '身份验证已完成',
+  eidWindowDoneNote: '您可以关闭此窗口并返回签署页面。',
   methods: { sms_pin: '短信验证码', se_bankid: 'BankID', freja: 'Freja eID', broker: '电子身份' },
 };

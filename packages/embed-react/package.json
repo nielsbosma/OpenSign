@@ -1,0 +1,22 @@
+{
+  "name": "@opensign/embed-react",
+  "version": "0.1.0",
+  "description": "Show an OpenSign signing page inside a React app.",
+  "license": "MIT",
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nielsbosma/OpenSign.git",
+    "directory": "packages/embed-react"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  }
+}

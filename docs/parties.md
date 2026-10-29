@@ -36,7 +36,7 @@ The document is completed when every signer and approver has acted.
 | --- | --- |
 | **Email** | The default. OpenSign emails an invitation with the personal link, and reminders if they are on. |
 | **SMS** | OpenSign texts the link. Needs an SMS provider in **Settings → SMS**. |
-| **Link (you hand it over)** | OpenSign sends nothing. When you send the document, it shows you the link to pass on, for example in your own email or chat. |
+| **Link (you hand it over)** | OpenSign sends nothing. When you send the document, it shows you the link to pass on, for example in your own email or chat, or to show inside your own app with [embedded signing](embedding.md). |
 | **In Person (on your device)** | The party signs on your computer or tablet, started from the document page. See [In-person signing](in-person.md). |
 | **None** | OpenSign sends nothing and shows no link. Useful for viewers who only need the signed copy, which goes to their email address. |
 

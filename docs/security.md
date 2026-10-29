@@ -66,7 +66,8 @@ Append-only by database trigger, hash-chained with a secret key, and time-stampe
 
 ## Web and network
 
-- A strict Content Security Policy (`script-src 'self'`, no inline script, `frame-ancestors 'none'`), HSTS on https, `nosniff`, `no-referrer`, cross-origin isolation headers and a tight permissions policy (only the signing page may use the camera, for [webcam photos](identification.md#webcam-photo)). The web app loads nothing from other origins.
+- A strict Content Security Policy (`script-src 'self'`, no inline script, `frame-ancestors 'none'`) against clickjacking, HSTS on https, `nosniff`, `no-referrer`, cross-origin isolation headers and a tight permissions policy (only the signing page may use the camera, for [webcam photos](identification.md#webcam-photo)). The web app loads nothing from other origins.
+- No page can be shown in another site's frame, with one opt-in exception: when an admin turns on [embedded signing](embedding.md), the signing page names the listed sites in `frame-ancestors`. Every other page stays `frame-ancestors 'none'`, the list holds exact https origins without wildcards, and links sent by email or SMS still refuse to render in a frame.
 - Rate limits per address on sign-in, codes, signing, uploads and verification, on top of the account lockouts.
 - Outbound requests to anything configurable (webhooks, AI endpoints, eID brokers, time stamp authorities) resolve DNS first, refuse private, loopback, link-local and metadata addresses, and follow no redirects. The one exception is a self-hosted AI proxy, which an admin may point at the private network.
 - Webhooks are signed per webhook. See [Webhooks](webhooks.md).
