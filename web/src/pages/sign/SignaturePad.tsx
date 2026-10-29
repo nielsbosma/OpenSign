@@ -28,12 +28,38 @@ function typedImage(name: string) {
   return c.toDataURL('image/png').split(',')[1]!;
 }
 
-/** Draw with a finger, pen or mouse, or type the name. Drawn strokes are exported as a PNG with a transparent background. */
-export function SignaturePad({ defaultName, onChange }: { defaultName: string; onChange: (s: Signature | null) => void }) {
+/** A saved signature as it will be applied. */
+export function SignaturePreview({ signature }: { signature: Signature }) {
+  return signature.imagePngBase64 ? (
+    <img src={`data:image/png;base64,${signature.imagePngBase64}`} alt="" className="h-20 max-w-full object-contain" />
+  ) : (
+    <span dir="auto" className="font-serif text-3xl text-indigo-950 italic">
+      {signature.typedName}
+    </span>
+  );
+}
+
+type Mode = 'saved' | 'draw' | 'type';
+
+/**
+ * Draw with a finger, pen or mouse, or type the name. Drawn strokes are exported as a PNG with a transparent background.
+ * A saved signature is offered first, but only used while its tab is chosen.
+ */
+export function SignaturePad({
+  defaultName,
+  onChange,
+  saved,
+  onForget,
+}: {
+  defaultName: string;
+  onChange: (s: Signature | null) => void;
+  saved?: { signature: Signature; note: string } | null;
+  onForget?: () => void;
+}) {
   const t = useTexts();
   const canvas = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
-  const [mode, setMode] = useState<'draw' | 'type'>('draw');
+  const [mode, setMode] = useState<Mode>(saved ? 'saved' : 'draw');
   const [drawn, setDrawn] = useState(false);
   const [typed, setTyped] = useState(defaultName);
 
@@ -54,10 +80,11 @@ export function SignaturePad({ defaultName, onChange }: { defaultName: string; o
   // biome-ignore lint/correctness/useExhaustiveDependencies: report when the signature itself changes
   useEffect(() => {
     const name = typed.trim();
-    if (mode === 'type') onChange(name ? { imagePngBase64: NON_LATIN.test(name) ? typedImage(name) : null, typedName: name } : null);
+    if (mode === 'saved') onChange(saved?.signature ?? null);
+    else if (mode === 'type') onChange(name ? { imagePngBase64: NON_LATIN.test(name) ? typedImage(name) : null, typedName: name } : null);
     else
       onChange(drawn && canvas.current ? { imagePngBase64: canvas.current.toDataURL('image/png').split(',')[1]!, typedName: null } : null);
-  }, [mode, typed, drawn]);
+  }, [mode, typed, drawn, saved]);
 
   const point = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -93,12 +120,32 @@ export function SignaturePad({ defaultName, onChange }: { defaultName: string; o
     setDrawn(false);
   };
 
+  useEffect(() => {
+    if (!saved && mode === 'saved') setMode('draw');
+  }, [saved, mode]);
+
   return (
-    <Tabs value={mode} onValueChange={(v) => setMode(v as 'draw' | 'type')}>
+    <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
       <TabsList>
+        {saved && <TabsTrigger value="saved">{t.savedSignature}</TabsTrigger>}
         <TabsTrigger value="draw">{t.draw}</TabsTrigger>
         <TabsTrigger value="type">{t.type}</TabsTrigger>
       </TabsList>
+      {saved && (
+        <TabsContent value="saved">
+          <div className="flex h-36 flex-col items-center justify-center gap-1 rounded-md border bg-white px-4">
+            <SignaturePreview signature={saved.signature} />
+          </div>
+          <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span>{saved.note}</span>
+            {onForget && (
+              <Button type="button" variant="link" size="sm" className="h-auto p-0 text-xs" onClick={onForget}>
+                {t.forgetSignature}
+              </Button>
+            )}
+          </div>
+        </TabsContent>
+      )}
       <TabsContent value="draw" forceMount className="data-[state=inactive]:hidden">
         <div className="relative">
           <canvas

@@ -43,6 +43,7 @@ Each tool is a service the connected user's role allows, named with underscores 
 | Documents | `documents_list`, `documents_get`, `documents_create`, `documents_upload`, `documents_replace_file`, `documents_remove_file`, `documents_update`, `documents_set_parties`, `documents_set_fields`, `documents_detect_fields`, `documents_check`, `documents_auth_methods`, `documents_send`, `documents_remind`, `documents_cancel`, `documents_delete`, `documents_share`, `documents_unshare`, `documents_signing_link`, `documents_download`, `documents_verify`, `documents_legal_hold`, `documents_move`, `documents_archive`, `documents_values`, `documents_export` |
 | Templates | `templates_versions`, `templates_version`, `templates_compare`, `templates_save_version`, `templates_restore` |
 | Folders | `folders_list`, `folders_create`, `folders_update`, `folders_delete` |
+| Share links | `share_links_get`, `share_links_set`, `share_links_rotate` |
 | Bulk send | `bulk_preview`, `bulk_start`, `bulk_list`, `bulk_get`, `bulk_cancel` |
 | Webhooks | `webhooks_list`, `webhooks_create`, `webhooks_delete`, `webhooks_test`, `webhooks_deliveries`, `webhooks_delivery`, `webhooks_resend`, `webhooks_resend_failed` |
 | Users | `users_list`, `users_invite`, `users_list_invites`, `users_revoke_invite`, `users_update` |
@@ -50,7 +51,7 @@ Each tool is a service the connected user's role allows, named with underscores 
 | Account and keys | `account_me`, `api_keys_list`, `api_keys_update`, `api_keys_revoke` |
 | Settings and system | `settings_get`, `settings_send_test_email`, `seal_get`, `retention_preview`, `system_version`, `system_status`, `ai_usage` |
 
-Not offered as tools: signing in, passwords, two-factor and passkey setup, creating API keys, changing settings, the in-app update, replacing the seal key, in-person signing, anything a signer does, OAuth consent, and the AI chat itself.
+Not offered as tools: signing in, passwords, two-factor and passkey setup, creating API keys, changing settings, the in-app update, replacing the seal key, in-person signing, signing a document yourself, your saved signature, anything a signer does, OAuth consent, and the AI chat itself.
 
 ## Things to try
 

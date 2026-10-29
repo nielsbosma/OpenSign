@@ -27,7 +27,8 @@ In a document that signs in order, a party who opens their link early sees "Othe
 A signature is either:
 
 - **Draw**: with a finger, a pen or the mouse, or
-- **Type**: the party types their name, and it is shown in a signature style.
+- **Type**: the party types their name, and it is shown in a signature style, or
+- **Saved**: a signature saved earlier, offered first when there is one. OpenSign users who sign their own documents get the one from their [account](account-security.md#saved-signature). Other signers can tick **Remember my signature in this browser** when they sign; next time a party with the same name signs in that browser, it is offered here, with **Forget** to remove it. It stays in the browser and is never sent anywhere until they sign with it. Nothing is remembered during in-person signing on someone else's device.
 
 Before signing, the party confirms: "I have read the document and agree to sign it electronically. This is as binding as a signature on paper." If the party must identify to sign, they do that now. Then they choose **Sign** (or **Approve** for approvers).
 

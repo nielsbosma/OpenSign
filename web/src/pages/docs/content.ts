@@ -12,6 +12,7 @@ const NAV: { group: string; slugs: string[] }[] = [
       'documents',
       'text-tags',
       'templates',
+      'share-links',
       'folders',
       'parties',
       'identification',

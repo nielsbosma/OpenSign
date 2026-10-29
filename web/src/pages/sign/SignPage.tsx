@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ApiError, type AttachmentRequest, type AuthMethod, call, errorMessage, fetchPdf, type SignerView } from '@/lib/api';
+import { ApiError, type AttachmentRequest, type AuthMethod, call, errorMessage, fetchPdf, type SignerView, useApi } from '@/lib/api';
 import { display } from '@/lib/field-values';
 import { saveBytes } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,7 @@ import { EidIdentify } from './EidIdentify';
 import { framed, notifyHost, redirectAfter } from './embed';
 import { type Signature, SignaturePad } from './SignaturePad';
 import { INPUT_KINDS, initialValues, outcomes, problems, SignerField, type Upload } from './SignerFields';
+import { deviceSignature, forgetSignature, rememberSignature } from './saved';
 import { isRtl, LanguageContext, languageFor, SIGNER_LANGUAGES, TextsContext, textsFor, useTexts } from './texts';
 import { WebcamPhoto } from './WebcamPhoto';
 
@@ -107,7 +108,7 @@ function useChosenLanguage(token: string) {
   return [chosen, choose] as const;
 }
 
-function LanguagePicker() {
+export function LanguagePicker() {
   const t = useTexts();
   const { code, choose } = useContext(LanguageContext);
   return (
@@ -127,7 +128,9 @@ function LanguagePicker() {
   );
 }
 
-function Shell({ view, children }: { view?: SignerView; children: React.ReactNode }) {
+type ShellDocument = { title: string; sender?: string | null; organisation: string; logoUrl?: string | null; brandColor?: string };
+
+export function Shell({ view, doc = view?.document, children }: { view?: SignerView; doc?: ShellDocument; children: React.ReactNode }) {
   const t = useTexts();
   const { code } = useContext(LanguageContext);
   const dir = isRtl(code) ? 'rtl' : 'ltr';
@@ -140,12 +143,10 @@ function Shell({ view, children }: { view?: SignerView; children: React.ReactNod
       <div className="min-h-svh bg-muted/40" lang={code} dir={dir}>
         <header className="border-b bg-background">
           <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4">
-            <BrandLogo className="h-6" markClassName="size-6" branding={view?.document} />
+            <BrandLogo className="h-6" markClassName="size-6" branding={doc} />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold">{view?.document.title ?? 'OpenSign'}</div>
-              {view && (
-                <div className="truncate text-xs text-muted-foreground">{t.from(view.document.sender, view.document.organisation)}</div>
-              )}
+              <div className="truncate text-sm font-semibold">{doc?.title ?? 'OpenSign'}</div>
+              {doc && <div className="truncate text-xs text-muted-foreground">{t.from(doc.sender, doc.organisation)}</div>}
             </div>
             <LanguagePicker />
             <ShieldCheck className="size-4 shrink-0 text-success" aria-label={t.secureConnection} />
@@ -162,7 +163,7 @@ function Shell({ view, children }: { view?: SignerView; children: React.ReactNod
   );
 }
 
-function Message({ icon, title, children }: { icon: React.ReactNode; title: string; children?: React.ReactNode }) {
+export function Message({ icon, title, children }: { icon: React.ReactNode; title: string; children?: React.ReactNode }) {
   return (
     <div className="mx-auto mt-10 flex max-w-md flex-col items-center gap-3 rounded-lg border bg-background p-8 text-center">
       {icon}
@@ -370,7 +371,9 @@ function SigningFlow({ token, redirect, onLanguage }: { token: string; redirect:
               : t.declinedNote}
           {view.party.inPerson && (
             <div className="mt-4 grid justify-items-center gap-3">
-              <p className="font-medium text-foreground">{t.handBack(view.document.sender ?? view.document.organisation)}</p>
+              {!view.party.isSender && (
+                <p className="font-medium text-foreground">{t.handBack(view.document.sender ?? view.document.organisation)}</p>
+              )}
               <Button variant="outline" onClick={() => window.location.assign(`/documents/${view.document.id}`)}>
                 {t.backToDocument}
               </Button>
@@ -380,7 +383,7 @@ function SigningFlow({ token, redirect, onLanguage }: { token: string; redirect:
       </Shell>
     );
   }
-  if (view.party.inPerson && !handedOver && view.yourTurn) {
+  if (view.party.inPerson && !view.party.isSender && !handedOver && view.yourTurn) {
     return (
       <Shell view={view}>
         <Message icon={<HandHelping className="size-10 text-muted-foreground" />} title={t.handOver(view.party.name)}>
@@ -474,6 +477,30 @@ function SignerScreen({
   const issues = problems(own, values, uploads, t, shown);
   const touch = (id: string) => setTouched((s) => (s.has(id) ? s : new Set(s).add(id)));
   const isSigner = view.party.role === 'signer';
+  const me = useApi('account.me', undefined, { enabled: !preview && !framed && isSigner, retry: false });
+  const ownAccount = !!me.data && !!view.party.email && me.data.email.toLowerCase() === view.party.email.toLowerCase();
+  const account = useApi('account.signature', undefined, { enabled: ownAccount, retry: false });
+  // The sender's device is handed to someone else for in-person signing, so nothing is remembered there.
+  const deviceAllowed = !preview && (!view.party.inPerson || view.party.isSender);
+  const [device, setDevice] = useState(() => (deviceAllowed ? deviceSignature(view.party.name) : null));
+  const [remember, setRemember] = useState(false);
+  const fromAccount =
+    ownAccount && account.data && (account.data.imagePngBase64 || account.data.typedName)
+      ? { imagePngBase64: account.data.imagePngBase64 ?? null, typedName: account.data.typedName ?? null }
+      : null;
+  const saved = fromAccount
+    ? { signature: fromAccount, note: t.savedInAccount }
+    : device
+      ? { signature: device, note: t.savedOnDevice }
+      : null;
+  const savedInitials = ownAccount ? account.data?.initials : null;
+  useEffect(() => {
+    if (!savedInitials) return;
+    setValues((v) => {
+      const empty = own.filter((f) => f.kind === 'initials' && !f.readOnly && !v[f.id]);
+      return empty.length ? { ...v, ...Object.fromEntries(empty.map((f) => [f.id, savedInitials])) } : v;
+    });
+  }, [savedInitials, own]);
 
   const sign = async () => {
     const first = own.find((f) => issues[f.id]);
@@ -495,6 +522,7 @@ function SignerScreen({
           .filter(([id]) => own.some((f) => f.id === id))
           .map(([fieldId, value]) => ({ fieldId, value })),
       });
+      if (remember && signature && deviceAllowed) rememberSignature(view.party.name, signature);
       onResult(out.completed ? 'completed' : 'signed');
     } catch (e) {
       setSignError(errorMessage(e));
@@ -688,7 +716,28 @@ function SignerScreen({
                     onChange={(files) => setAttachments([...attachments.filter((a) => a.kind === 'photo'), ...files])}
                   />
                 )}
-                {isSigner && <SignaturePad defaultName={view.party.name} onChange={setSignature} />}
+                {isSigner && (
+                  <SignaturePad
+                    key={saved ? 'saved' : 'new'}
+                    defaultName={view.party.name}
+                    onChange={setSignature}
+                    saved={saved}
+                    onForget={
+                      fromAccount
+                        ? undefined
+                        : () => {
+                            forgetSignature();
+                            setDevice(null);
+                          }
+                    }
+                  />
+                )}
+                {isSigner && deviceAllowed && !fromAccount && !device && (
+                  <label className="flex items-start gap-2.5 text-xs text-muted-foreground">
+                    <Checkbox checked={remember} onCheckedChange={(c) => setRemember(c === true)} className="mt-0.5" />
+                    <span>{t.rememberSignature}</span>
+                  </label>
+                )}
                 <label className="flex items-start gap-2.5">
                   <Checkbox checked={consent} onCheckedChange={(c) => setConsent(c === true)} className="mt-0.5" />
                   <span>{t.consent(isSigner)}</span>

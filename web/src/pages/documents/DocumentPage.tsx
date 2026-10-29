@@ -14,6 +14,7 @@ import {
   MoreHorizontal,
   Paperclip,
   Pencil,
+  PenLine,
   Plus,
   RefreshCw,
   Scale,
@@ -44,6 +45,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import {
   type AttachmentRequest,
+  type AuthMethod,
   type DocumentView,
   errorMessage,
   type FieldKind,
@@ -83,6 +85,7 @@ import { FileDrop } from './NewDocumentDialog';
 import { PartyDialog, partyToInput } from './PartyDialog';
 import { PartyPhoto } from './PartyPhoto';
 import { Checks, ReviewPanel } from './ReviewPanel';
+import { ShareLinkSection } from './ShareLinkSection';
 import { SigningPreviewDialog } from './SigningPreviewDialog';
 import { announceUpload, DetectButton, SuggestionBar, SuggestionLayer } from './SuggestedFields';
 import { TemplateHistoryDialog } from './TemplateHistory';
@@ -164,7 +167,7 @@ function PartyCard({
 }) {
   const [link, setLink] = useState<SignerLink | null>(null);
   const signingLink = useApiMutation('documents.signing_link', { onSuccess: setLink });
-  const inPerson = useApiMutation('documents.sign_in_person', { onSuccess: (l) => window.location.assign(l.url) });
+  const inPerson = useApiMutation('documents.sign_in_person', { onSuccess: (l) => openSigning(l.url, l.session) });
   const done = party.status === 'signed' || party.status === 'declined';
   return (
     <div className="rounded-md border p-3">
@@ -324,6 +327,82 @@ function PartyCard({
         </div>
       )}
     </div>
+  );
+}
+
+const SESSION_KEY = 'opensign-sign-session';
+
+/** Opens the signing page here; a session for your own party rides along in this tab, as the signing page expects. */
+function openSigning(url: string, session?: string | null) {
+  if (session) {
+    try {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ token: decodeURIComponent(url.split('#')[1] ?? ''), session }));
+    } catch {}
+  }
+  window.location.assign(url);
+}
+
+/** You sign the draft yourself, here and now: the server makes you the only signer, sends it and hands back your link. */
+function SignMyselfDialog({
+  doc,
+  available,
+  open,
+  onOpenChange,
+}: {
+  doc: DocumentView;
+  available: AuthMethod[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [auth, setAuth] = useState<AuthMethod>('standard');
+  const others = doc.parties.filter((p) => p.role !== 'viewer');
+  const start = useApiMutation('documents.sign_myself', {
+    onSuccess: (out) => openSigning(out.url, out.session),
+  });
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('Sign It Myself')}</DialogTitle>
+          <DialogDescription>
+            {others.length
+              ? t(
+                  'You become the only signer and the document is sent now. Fields for {names} become yours. People who receive a copy still get one.',
+                  { names: others.map((p) => p.name).join(', ') },
+                )
+              : t(
+                  'You become the signer and the document is sent now, then you sign it on this device. People who receive a copy get one.',
+                )}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-2">
+          <Label htmlFor="self-auth">{t('Identify With')}</Label>
+          <Select value={auth} onValueChange={(v) => setAuth(v as AuthMethod)}>
+            <SelectTrigger id="self-auth" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {available
+                .filter((m) => m !== 'none' && m !== 'sms_pin')
+                .map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m === 'standard' ? t('My OpenSign sign-in') : (AUTH_LABELS[m] ?? m)}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">{t('What you choose is recorded as your identification in the signed document.')}</p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('Cancel')}
+          </Button>
+          <Button disabled={start.isPending} onClick={() => start.mutate({ id: doc.id, authToSign: auth })}>
+            {start.isPending ? <Spinner className="text-primary-foreground" /> : <PenLine />} {t('Sign Now')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -563,6 +642,7 @@ export function DocumentPage() {
   const [placingFor, setPlacingFor] = useState<string | null>(null);
   const [partyDialog, setPartyDialog] = useState<{ open: boolean; party: PartyView | null }>({ open: false, party: null });
   const [sending, setSending] = useState(false);
+  const [signingMyself, setSigningMyself] = useState(false);
   const [bulkSending, setBulkSending] = useState(false);
   const { can } = useSession();
   const [links, setLinks] = useState<SignerLink[]>([]);
@@ -882,6 +962,11 @@ export function DocumentPage() {
             </Button>
           )}
           {draft && !doc.isTemplate && (
+            <Button variant="outline" onClick={() => flush().then(() => setSigningMyself(true))} disabled={!doc.files.length}>
+              <PenLine /> {t('Sign Myself')}
+            </Button>
+          )}
+          {draft && !doc.isTemplate && (
             <Button onClick={() => setSending(true)} disabled={!doc.files.length}>
               <Send /> {t('Send')}
             </Button>
@@ -1186,6 +1271,7 @@ export function DocumentPage() {
               )}
               {draft && <DetailsSection key={doc.id} doc={doc} />}
               {(draft || (pending && doc.canEdit)) && <AiReviewSection doc={doc} />}
+              {doc.isTemplate && doc.canEdit && can('documents.create') && <ShareLinkSection doc={doc} />}
               {doc.status === 'completed' && doc.sealedSha256 && (
                 <Section title={t('Seal')}>
                   <p className="text-muted-foreground">
@@ -1219,6 +1305,14 @@ export function DocumentPage() {
         onSave={(p) => saveParties(partyDialog.party ? allParties().map((x) => (x.id === p.id ? p : x)) : [...allParties(), p])}
       />
       <SendDialog doc={doc} open={sending} onOpenChange={setSending} onSent={setLinks} />
+      {draft && !doc.isTemplate && (
+        <SignMyselfDialog
+          doc={doc}
+          available={authMethods.data?.available ?? ['standard']}
+          open={signingMyself}
+          onOpenChange={setSigningMyself}
+        />
+      )}
       <SigningPreviewDialog doc={doc} open={previewing} onOpenChange={setPreviewing} />
       {doc.isTemplate && (
         <TemplateHistoryDialog

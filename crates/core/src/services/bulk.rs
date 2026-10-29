@@ -631,7 +631,7 @@ fn title_for(pattern: &str, template_title: &str, values: &BTreeMap<String, Stri
 async fn send_row(ctx: &Ctx, conn: &mut PgConnection, bulk: &BulkJob, values: &BTreeMap<String, String>) -> Result<Uuid> {
     let mapped: Values = bulk.mapping.iter().map(|m| (m.target.clone(), values.get(&m.column).cloned().unwrap_or_default())).collect();
     let template_id = bulk.template_id.ok_or_else(|| not_found("Template"))?;
-    let created = docs::Create::run(
+    let (created, _) = docs::create(
         ctx,
         conn,
         docs::CreateInput {
@@ -645,6 +645,7 @@ async fn send_row(ctx: &Ctx, conn: &mut PgConnection, bulk: &BulkJob, values: &B
             metadata: Some(json!({ "bulkSend": bulk.id })),
             folder_id: None,
         },
+        docs::Origin::BulkSend,
     )
     .await?;
     let document_id = created.document.id;
