@@ -48,19 +48,45 @@ impl SettingsGroup for OrgSettings {
     const NAME: &'static str = "org";
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(default, rename_all = "camelCase")]
 pub struct EmailSettings {
+    /// `resend` or `smtp`.
+    pub provider: String,
     pub api_key: Option<String>,
+    pub smtp_host: String,
+    pub smtp_port: u16,
+    /// `starttls` (usually port 587) or `tls` (usually port 465). Plain-text SMTP is not offered.
+    pub smtp_security: String,
+    pub smtp_username: String,
+    pub smtp_password: Option<String>,
     pub from_address: String,
     pub from_name: String,
     pub reply_to: String,
     pub verified_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+impl Default for EmailSettings {
+    fn default() -> Self {
+        Self {
+            provider: "resend".into(),
+            api_key: None,
+            smtp_host: String::new(),
+            smtp_port: 587,
+            smtp_security: "starttls".into(),
+            smtp_username: String::new(),
+            smtp_password: None,
+            from_address: String::new(),
+            from_name: String::new(),
+            reply_to: String::new(),
+            verified_at: None,
+        }
+    }
+}
+
 impl SettingsGroup for EmailSettings {
     const NAME: &'static str = "email";
-    const SECRETS: &'static [&'static str] = &["apiKey"];
+    const SECRETS: &'static [&'static str] = &["apiKey", "smtpPassword"];
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
