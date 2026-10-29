@@ -1,5 +1,7 @@
 import {
   ArrowLeft,
+  ChevronDown,
+  ChevronUp,
   Download,
   Eye,
   HandHelping,
@@ -129,11 +131,17 @@ function PartyCard({
   attachments,
   onEdit,
   onRemove,
+  step,
+  onMove,
 }: {
   party: PartyView;
   parties: PartyView[];
   editable: boolean;
   pending: boolean;
+  /** The party's step when signing in order. */
+  step?: number;
+  /** Moves the party one step earlier (-1) or later (1); absent at that end of the list. */
+  onMove?: { up?: () => void; down?: () => void };
   documentId: string;
   attachments: AttachmentRequest[];
   onEdit: () => void;
@@ -146,7 +154,17 @@ function PartyCard({
   return (
     <div className="rounded-md border p-3">
       <div className="flex items-start gap-2.5">
-        <span className="mt-1 size-2.5 shrink-0 rounded-full" style={{ backgroundColor: partyColor(parties, party.id) }} />
+        {step ? (
+          <span
+            className="flex size-5 shrink-0 items-center justify-center rounded-full font-semibold text-[11px] text-white"
+            style={{ backgroundColor: partyColor(parties, party.id) }}
+            title={`Step ${step} in the signing order`}
+          >
+            {step}
+          </span>
+        ) : (
+          <span className="mt-1 size-2.5 shrink-0 rounded-full" style={{ backgroundColor: partyColor(parties, party.id) }} />
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate font-medium">{party.name}</span>
@@ -199,6 +217,30 @@ function PartyCard({
             </ul>
           )}
         </div>
+        {editable && onMove && (
+          <div className="-my-1 flex flex-col">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-5"
+              disabled={!onMove.up}
+              onClick={onMove.up}
+              aria-label={`Move ${party.name} earlier`}
+            >
+              <ChevronUp />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-5"
+              disabled={!onMove.down}
+              onClick={onMove.down}
+              aria-label={`Move ${party.name} later`}
+            >
+              <ChevronDown />
+            </Button>
+          </div>
+        )}
         {editable && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -405,13 +447,6 @@ function DetailsSection({ doc }: { doc: DocumentView }) {
           />
         </div>
       </div>
-      <label className="flex items-center justify-between gap-3">
-        <span>
-          <span className="block">Sign in Order</span>
-          <span className="block text-xs text-muted-foreground">Parties are invited one signing-order group at a time.</span>
-        </span>
-        <Switch checked={doc.sequential} onCheckedChange={(sequential) => update.mutate({ id: doc.id, sequential })} />
-      </label>
     </Section>
   );
 }
@@ -462,6 +497,7 @@ export function DocumentPage() {
   const [previewing, setPreviewing] = useState(false);
 
   const setParties = useApiMutation('documents.set_parties', { invalidates: ['documents.'] });
+  const setSequential = useApiMutation('documents.update', { invalidates: ['documents.'] });
   const removeFile = useApiMutation('documents.remove_file', { invalidates: ['documents.'] });
   const remind = useApiMutation('documents.remind', { onSuccess: () => toast.success('Reminders sent') });
   const cancel = useApiMutation('documents.cancel', { invalidates: ['documents.'], onSuccess: () => setCanceling(false) });
@@ -502,6 +538,21 @@ export function DocumentPage() {
   useEffect(() => {
     if (doc && placingFor !== null && !doc.parties.some((p) => p.id === placingFor)) setPlacingFor(null);
   }, [doc, placingFor]);
+  useEffect(() => {
+    if (!draft || !selected) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return;
+      if (e.key === 'Escape') setSelected(null);
+      else if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        update(fields.filter((f) => f.key !== selected));
+        setSelected(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [draft, selected, fields, update]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: only when the parties change
   useEffect(() => {
     if (doc && placingFor === null) setPlacingFor(doc.parties.find((p) => p.role !== 'viewer')?.id ?? null);
@@ -512,6 +563,22 @@ export function DocumentPage() {
 
   const saveParties = (next: PartyInput[]) => setParties.mutate({ documentId: doc.id, parties: next });
   const allParties = () => doc.parties.map((p) => partyToInput(p));
+  const signers = doc.parties.filter((p) => p.role !== 'viewer');
+  const orderedParties = [...doc.parties].sort(
+    (a, b) => Number(a.role === 'viewer') - Number(b.role === 'viewer') || a.signOrder - b.signOrder,
+  );
+  // Parties sharing a number sign together, so steps count distinct numbers.
+  const steps = new Map([...new Set(signers.map((p) => p.signOrder))].sort((a, b) => a - b).map((order, i) => [order, i + 1]));
+  const moves = (id: string) => {
+    const order = orderedParties.filter((p) => p.role !== 'viewer').map((p) => p.id);
+    const i = order.indexOf(id);
+    const to = (j: number) => () => {
+      const next = [...order];
+      [next[i], next[j]] = [next[j]!, next[i]!];
+      saveParties(allParties().map((p) => (p.id && next.includes(p.id) ? { ...p, signOrder: next.indexOf(p.id) + 1 } : p)));
+    };
+    return { up: i > 0 ? to(i - 1) : undefined, down: i < order.length - 1 ? to(i + 1) : undefined };
+  };
 
   const place = (page: number, x: number, y: number, kind: FieldKind | null = armed) => {
     if (!draft) return;
@@ -776,8 +843,34 @@ export function DocumentPage() {
                 }
               >
                 {doc.parties.length === 0 && <p className="text-muted-foreground">Add the people who sign, approve or receive a copy.</p>}
-                {doc.parties.map((p) => (
+                {draft && signers.length > 1 && (
+                  <label className="flex items-center justify-between gap-3 rounded-md bg-muted/50 px-3 py-2">
+                    <span>
+                      <span className="block">Sign in Order</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {doc.sequential
+                          ? 'Each step is invited when the one before has signed. Use the arrows to reorder; give parties the same step under Edit to sign together.'
+                          : 'Everyone is invited at once. Turn on to invite one step at a time.'}
+                      </span>
+                    </span>
+                    <Switch
+                      checked={doc.sequential}
+                      onCheckedChange={(sequential) => {
+                        setSequential.mutate({ id: doc.id, sequential });
+                        // Everyone on the same step would still sign at once, so start from the listed order.
+                        if (sequential && steps.size === 1) {
+                          saveParties(
+                            allParties().map((p) => ({ ...p, signOrder: signers.findIndex((s) => s.id === p.id) + 1 || p.signOrder })),
+                          );
+                        }
+                      }}
+                    />
+                  </label>
+                )}
+                {(doc.sequential ? orderedParties : doc.parties).map((p) => (
                   <PartyCard
+                    step={doc.sequential && p.role !== 'viewer' ? steps.get(p.signOrder) : undefined}
+                    onMove={doc.sequential && p.role !== 'viewer' && signers.length > 1 ? moves(p.id) : undefined}
                     key={p.id}
                     party={p}
                     parties={doc.parties}
