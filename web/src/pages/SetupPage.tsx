@@ -287,7 +287,8 @@ function EmailStep() {
                 'A key is saved. Leave empty to keep it.'
               ) : (
                 <>
-                  Create one in <ExternalLink href="https://resend.com/api-keys">Resend API Keys</ExternalLink> with permission to send email.
+                  Create one in <ExternalLink href="https://resend.com/api-keys">Resend API Keys</ExternalLink> with permission to send
+                  email.
                 </>
               )
             }
