@@ -30,6 +30,7 @@ const SECTIONS: { title: string; items: { path: string; label: string; permissio
       { path: '/settings/admin/ai', label: msg('AI'), permission: 'settings.manage' },
       { path: '/settings/api-keys', label: msg('API Keys'), permission: 'api_keys.manage' },
       { path: '/settings/webhooks', label: msg('Webhooks'), permission: 'webhooks.manage' },
+      { path: '/settings/automations', label: msg('Automations'), permission: 'automations.manage' },
     ],
   },
 ];

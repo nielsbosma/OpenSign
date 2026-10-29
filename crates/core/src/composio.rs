@@ -79,9 +79,17 @@ impl Composio {
             StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
                 bad_request("Composio refused the API key. Check it under Settings, Automations.")
             }
-            StatusCode::TOO_MANY_REQUESTS => AppError::new(ErrorKind::TooManyRequests, "Composio is rate limiting requests. Try again soon."),
-            StatusCode::NOT_FOUND => AppError::new(ErrorKind::NotFound, error_text(&body).unwrap_or_else(|| "Not found at Composio".into())),
-            _ => bad_request(format!("Composio answered {}: {}", status.as_u16(), error_text(&body).unwrap_or_else(|| "no reason given".into()))),
+            StatusCode::TOO_MANY_REQUESTS => {
+                AppError::new(ErrorKind::TooManyRequests, "Composio is rate limiting requests. Try again soon.")
+            }
+            StatusCode::NOT_FOUND => {
+                AppError::new(ErrorKind::NotFound, error_text(&body).unwrap_or_else(|| "Not found at Composio".into()))
+            }
+            _ => bad_request(format!(
+                "Composio answered {}: {}",
+                status.as_u16(),
+                error_text(&body).unwrap_or_else(|| "no reason given".into())
+            )),
         })
     }
 
@@ -154,15 +162,10 @@ impl Composio {
             if self.public {
                 crate::net::check_public_url(url).map_err(bad_request)?;
             }
-            let response = self
-                .http
-                .put(url)
-                .header("content-type", mimetype)
-                .timeout(Duration::from_secs(120))
-                .body(bytes)
-                .send()
-                .await
-                .map_err(|e| AppError::new(ErrorKind::Unavailable, "The file could not be uploaded to Composio").with_cause(e.without_url()))?;
+            let response =
+                self.http.put(url).header("content-type", mimetype).timeout(Duration::from_secs(120)).body(bytes).send().await.map_err(
+                    |e| AppError::new(ErrorKind::Unavailable, "The file could not be uploaded to Composio").with_cause(e.without_url()),
+                )?;
             if !response.status().is_success() {
                 return Err(bad_request(format!("Composio's file storage answered {}", response.status().as_u16())));
             }

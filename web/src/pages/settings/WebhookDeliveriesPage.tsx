@@ -266,7 +266,8 @@ export function DeliveryLog({
           </Button>
           {failed > 0 && (
             <Button size="sm" onClick={() => resendFailed.mutate(ownerInput(kind, owner))} disabled={resendFailed.isPending}>
-              <RotateCcw /> {kind === 'webhook' ? t('Resend {count} Failed', { count: failed }) : t('Run {count} Failed Again', { count: failed })}
+              <RotateCcw />{' '}
+              {kind === 'webhook' ? t('Resend {count} Failed', { count: failed }) : t('Run {count} Failed Again', { count: failed })}
             </Button>
           )}
         </div>

@@ -39,7 +39,10 @@ pub const EVENTS: &[&str] = &[
 async fn client(ctx: &Ctx, conn: &mut PgConnection) -> Result<Composio> {
     let automations: AutomationSettings = settings(ctx, conn).await?;
     let key = automations.key().ok_or_else(|| {
-        AppError::new(ErrorKind::Unavailable, "Automations are off. An admin turns them on and adds a Composio API key in Settings, Automations.")
+        AppError::new(
+            ErrorKind::Unavailable,
+            "Automations are off. An admin turns them on and adds a Composio API key in Settings, Automations.",
+        )
     })?;
     Ok(Composio::new(&ctx.app, key))
 }
@@ -163,8 +166,11 @@ pub struct Connections;
 impl Service for Connections {
     type Input = Empty;
     type Output = Vec<ConnectionView>;
-    const META: Meta =
-        Meta::query("automations.connections", "List the app accounts connected to this OpenSign through Composio, with their status.", ACCESS);
+    const META: Meta = Meta::query(
+        "automations.connections",
+        "List the app accounts connected to this OpenSign through Composio, with their status.",
+        ACCESS,
+    );
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<Vec<ConnectionView>> {
         let composio = client(ctx, conn).await?;
@@ -254,12 +260,9 @@ pub struct Disconnect;
 impl Service for Disconnect {
     type Input = ConnectionInput;
     type Output = DisconnectOutput;
-    const META: Meta = Meta::mutation(
-        "automations.disconnect",
-        "Remove a connected app account from Composio. Rules that use it are turned off.",
-        ACCESS,
-    )
-    .without_transaction();
+    const META: Meta =
+        Meta::mutation("automations.disconnect", "Remove a connected app account from Composio. Rules that use it are turned off.", ACCESS)
+            .without_transaction();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ConnectionInput) -> Result<DisconnectOutput> {
         let composio = client(ctx, conn).await?;
@@ -508,7 +511,8 @@ async fn check(ctx: &Ctx, conn: &mut PgConnection, input: &AutomationInput) -> R
         return Err(bad_request(format!("{} is a {} tool, but the connection is to {app}", tool.slug, tool.app)));
     }
     let properties = tool.input_schema["properties"].as_object();
-    if let Some(unknown) = arguments.as_object().into_iter().flatten().map(|(k, _)| k).find(|k| properties.is_none_or(|p| !p.contains_key(*k)))
+    if let Some(unknown) =
+        arguments.as_object().into_iter().flatten().map(|(k, _)| k).find(|k| properties.is_none_or(|p| !p.contains_key(*k)))
     {
         return Err(bad_request(format!("{} has no input called {unknown}", tool.slug)));
     }
@@ -639,11 +643,8 @@ pub struct Delete;
 impl Service for Delete {
     type Input = IdInput;
     type Output = Ok_;
-    const META: Meta = Meta::mutation(
-        "automations.delete",
-        "Remove an automation rule and its run history. The connected app account stays.",
-        ACCESS,
-    );
+    const META: Meta =
+        Meta::mutation("automations.delete", "Remove an automation rule and its run history. The connected app account stays.", ACCESS);
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<Ok_> {
         let before = load(conn, input.id).await?;
@@ -683,8 +684,12 @@ impl Service for Test {
         let (title, external_id) = document.ok_or_else(|| not_found("Document"))?;
         let data = json!({ "documentId": input.document_id, "title": title, "externalId": external_id, "test": true });
         let id = queue_delivery(conn, Target::Automation(rule.id), &rule.event, &data, ctx.now, None).await?;
-        audit(ctx, conn, Entry::new("automations.test", "automation", rule.id).metadata(json!({ "document": input.document_id, "run": id })))
-            .await?;
+        audit(
+            ctx,
+            conn,
+            Entry::new("automations.test", "automation", rule.id).metadata(json!({ "document": input.document_id, "run": id })),
+        )
+        .await?;
         Ok(ResendOutput { id })
     }
 }
@@ -783,8 +788,12 @@ impl Service for ResendFailed {
         load(conn, input.automation_id).await?;
         let count = super::webhooks::resend_failed(conn, Log::Automation, input.automation_id).await?;
         if count > 0 {
-            audit(ctx, conn, Entry::new("automations.resend_failed", "automation", input.automation_id).metadata(json!({ "count": count })))
-                .await?;
+            audit(
+                ctx,
+                conn,
+                Entry::new("automations.resend_failed", "automation", input.automation_id).metadata(json!({ "count": count })),
+            )
+            .await?;
         }
         Ok(ResendFailedOutput { count })
     }

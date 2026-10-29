@@ -170,7 +170,8 @@ impl Service for Test {
 pub(crate) const FAILED: &str = "f.delivered_at is null and f.next_attempt_at is null and f.attempts > 0
     and not exists (select 1 from webhook_deliveries r where r.resent_from = f.id)";
 
-const DELIVERY_COLUMNS: &str = "f.id, f.webhook_id, f.automation_id, f.event, f.created_at, f.attempts, f.status_code, f.error, f.delivered_at,
+const DELIVERY_COLUMNS: &str =
+    "f.id, f.webhook_id, f.automation_id, f.event, f.created_at, f.attempts, f.status_code, f.error, f.delivered_at,
     f.last_attempt_at, f.next_attempt_at, f.resent_from,
     case when f.delivered_at is not null then 'delivered' when f.next_attempt_at is not null then 'pending' else 'failed' end as status";
 

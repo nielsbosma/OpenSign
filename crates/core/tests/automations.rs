@@ -143,7 +143,8 @@ async fn rules_send_document_data_and_the_sealed_pdf_to_composio() {
 
     let (kind, _) = error(call::<automations::Apps>(&ada, input(json!({}))).await);
     assert_eq!(kind, ErrorKind::Unavailable, "off by default");
-    let (_, message) = error(call::<admin::UpdateSettings>(&ada, input(json!({ "group": "automations", "values": { "enabled": true } }))).await);
+    let (_, message) =
+        error(call::<admin::UpdateSettings>(&ada, input(json!({ "group": "automations", "values": { "enabled": true } }))).await);
     assert!(message.contains("Composio API key"), "{message}");
     let settings = json!({ "group": "automations", "values": { "enabled": true, "composioApiKey": "ak_test" } });
     let saved = call::<admin::UpdateSettings>(&ada, input(settings)).await.unwrap();
@@ -166,15 +167,19 @@ async fn rules_send_document_data_and_the_sealed_pdf_to_composio() {
     let file_args = json!({ "file_to_upload": "{{sealedPdf}}", "description": "{{document.title}} signed by {{parties}}", "total": "{{fields.Total}}" });
     let (kind, _) = error(call::<automations::Create>(&ada, rule("ca_other", "document.completed", file_args.clone())).await);
     assert_eq!(kind, ErrorKind::NotFound, "another install's connection is not usable");
-    let (_, message) =
-        error(call::<automations::Create>(&ada, rule("ca_drive", "document.completed", json!({ "file_to_upload": "{{party.personalNumber}}" }))).await);
+    let (_, message) = error(
+        call::<automations::Create>(&ada, rule("ca_drive", "document.completed", json!({ "file_to_upload": "{{party.personalNumber}}" })))
+            .await,
+    );
     assert!(message.contains("party.personalNumber"), "{message}");
     let (_, message) = error(call::<automations::Create>(&ada, rule("ca_drive", "document.sent", file_args.clone())).await);
     assert!(message.contains("document.completed"), "{message}");
-    let (_, message) = error(call::<automations::Create>(&ada, rule("ca_drive", "document.completed", json!({ "description": "x" }))).await);
-    assert!(message.contains("file_to_upload"), "{message}");
     let (_, message) =
-        error(call::<automations::Create>(&ada, rule("ca_drive", "document.completed", json!({ "file_to_upload": "x", "folder": "y" }))).await);
+        error(call::<automations::Create>(&ada, rule("ca_drive", "document.completed", json!({ "description": "x" }))).await);
+    assert!(message.contains("file_to_upload"), "{message}");
+    let (_, message) = error(
+        call::<automations::Create>(&ada, rule("ca_drive", "document.completed", json!({ "file_to_upload": "x", "folder": "y" }))).await,
+    );
     assert!(message.contains("folder"), "{message}");
 
     let created = call::<automations::Create>(&ada, rule("ca_drive", "document.completed", file_args)).await.unwrap();
@@ -240,7 +245,10 @@ async fn rules_send_document_data_and_the_sealed_pdf_to_composio() {
     let list = call::<automations::List>(&ada, Empty {}).await.unwrap();
     assert_eq!((list[0].last_status.as_deref(), list[0].failed), (Some("delivered"), 0));
     let actions: Vec<(String, Value)> =
-        sqlx::query_as("select action, metadata from audit_log where action = 'automations.run' order by id").fetch_all(&mut *conn).await.unwrap();
+        sqlx::query_as("select action, metadata from audit_log where action = 'automations.run' order by id")
+            .fetch_all(&mut *conn)
+            .await
+            .unwrap();
     assert_eq!(actions.len(), 2);
     assert_eq!(actions[1].1["sent"], json!(["document.title", "fields.Total", "parties", "sealedPdf"]));
 
@@ -254,6 +262,7 @@ async fn rules_send_document_data_and_the_sealed_pdf_to_composio() {
     assert_eq!(state.lock().unwrap().executed.len(), 2);
 
     call::<automations::Delete>(&ada, input(json!({ "id": created.id }))).await.unwrap();
-    let left: i64 = sqlx::query_scalar("select count(*) from webhook_deliveries where automation_id is not null").fetch_one(&mut *conn).await.unwrap();
+    let left: i64 =
+        sqlx::query_scalar("select count(*) from webhook_deliveries where automation_id is not null").fetch_one(&mut *conn).await.unwrap();
     assert_eq!(left, 0, "runs go with their rule");
 }

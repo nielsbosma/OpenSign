@@ -4,15 +4,16 @@
 use std::collections::BTreeSet;
 use std::time::Instant;
 
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
 use crate::audit::{Entry, audit};
 use crate::composio::{self, Composio};
 use crate::context::Ctx;
+use crate::documents::export::document_data;
 use crate::documents::notify::{Attempt, EXCERPT_BYTES, excerpt_text, record_attempt, sanitize_filename};
-use crate::documents::{DOCUMENT_COLUMNS, DocumentRow, FieldKind, fields, parties, status, values};
+use crate::documents::{DOCUMENT_COLUMNS, DocumentRow, fields, parties, status};
 use crate::error::{AppError, Result, bad_request};
 use crate::jobs::Job;
 use crate::services::settings;
@@ -36,6 +37,7 @@ pub const PLACEHOLDERS: &[(&str, &str)] = &[
     ("document.sentAt", "When it was sent"),
     ("document.completedAt", "When the last party signed"),
     ("document.sealedSha256", "The SHA-256 of the sealed PDF"),
+    ("document.valuesUrl", "The API address of the document's filled-in values"),
     ("party.name", "The party the event is about (signed, viewed, declined)"),
     ("party.email", "Their email address"),
     ("party.phone", "Their phone number"),
@@ -47,41 +49,26 @@ pub const PLACEHOLDERS: &[(&str, &str)] = &[
     (SEALED_PDF, "The sealed PDF as a file, for a tool's file input. Only on document.completed."),
 ];
 
-/// The data a rule can send for one event. Personal numbers, signatures and evidence are never in it.
+/// The data a rule can send for one event, with field values as the data export has them.
+/// Personal numbers, signatures and evidence are never in it.
 pub async fn context(ctx: &Ctx, conn: &mut PgConnection, event: &str, payload: &Value) -> Result<Option<(DocumentRow, Value)>> {
     let data = &payload["data"];
     let Some(id) = data["documentId"].as_str().and_then(|id| Uuid::try_parse(id).ok()) else { return Ok(None) };
-    let document: Option<DocumentRow> = sqlx::query_as(&format!("select {DOCUMENT_COLUMNS} from documents d where id = $1"))
-        .bind(id)
-        .fetch_optional(&mut *conn)
-        .await?;
+    let document: Option<DocumentRow> =
+        sqlx::query_as(&format!("select {DOCUMENT_COLUMNS} from documents d where id = $1")).bind(id).fetch_optional(&mut *conn).await?;
     let Some(document) = document else { return Ok(None) };
     let all = parties(conn, id).await?;
-    let party = |p: &crate::documents::PartyRow| {
-        json!({
-            "id": p.id, "name": p.name, "email": p.email, "phone": p.phone, "company": p.company, "role": p.role,
-            "status": p.status, "signedAt": p.signed_at, "declinedAt": p.declined_at,
-        })
-    };
-    let acting = data["partyId"].as_str().and_then(|id| Uuid::try_parse(id).ok()).and_then(|id| all.iter().find(|p| p.id == id));
+    let data_out = document_data(&document, &all, &fields(conn, id).await?);
+    let parties_out = serde_json::to_value(&data_out.parties).map_err(AppError::internal)?;
+    let acting = data["partyId"]
+        .as_str()
+        .and_then(|id| Uuid::try_parse(id).ok())
+        .and_then(|id| parties_out.as_array().and_then(|all| all.iter().position(|p| p["id"] == json!(id))));
+    let decline_reason = acting.and_then(|i| all[i].decline_reason.clone());
     let owner: Option<(String, String)> = match document.owner_id {
         Some(owner) => sqlx::query_as("select name, email from users where id = $1").bind(owner).fetch_optional(&mut *conn).await?,
         None => None,
     };
-    let mut values = Map::new();
-    for field in fields(conn, id).await? {
-        let Some(kind) = FieldKind::parse(&field.kind).filter(|k| *k != FieldKind::Signature) else { continue };
-        let label = field.label.trim();
-        let Some(value) = field.value.as_deref().filter(|v| !v.trim().is_empty() && !label.is_empty()) else { continue };
-        let typed = match kind {
-            FieldKind::Number | FieldKind::Formula => serde_json::from_str::<serde_json::Number>(value).map(Value::Number).ok(),
-            FieldKind::Checkbox => Some(Value::Bool(value == "true")),
-            FieldKind::Multiselect => serde_json::from_str::<Vec<String>>(value).ok().map(Value::from),
-            _ => None,
-        };
-        let text = values::display(kind, field.format.as_deref(), value);
-        values.entry(label.to_string()).or_insert_with(|| typed.unwrap_or(Value::String(text)));
-    }
     let context = json!({
         "event": event,
         "eventTime": payload["createdAt"],
@@ -95,12 +82,13 @@ pub async fn context(ctx: &Ctx, conn: &mut PgConnection, event: &str, payload: &
             "sentAt": document.sent_at,
             "completedAt": document.completed_at,
             "sealedSha256": document.sealed_sha256,
+            "valuesUrl": crate::services::exports::values_url(ctx, document.id),
         },
-        "party": acting.map(party),
-        "declineReason": acting.and_then(|p| p.decline_reason.clone()),
-        "parties": all.iter().map(party).collect::<Vec<_>>(),
+        "party": acting.map(|i| parties_out[i].clone()),
+        "declineReason": decline_reason,
+        "parties": parties_out,
         "owner": owner.map(|(name, email)| json!({ "name": name, "email": email })),
-        "fields": values,
+        "fields": data_out.values,
     });
     Ok(Some((document, context)))
 }
@@ -160,7 +148,9 @@ pub fn known(placeholder: &str) -> bool {
     if let Some(rest) = placeholder.strip_prefix("parties.") {
         let mut parts = rest.splitn(2, '.');
         let index_ok = parts.next().is_some_and(|i| i.parse::<usize>().is_ok());
-        let field_ok = parts.next().is_none_or(|f| matches!(f, "name" | "email" | "phone" | "company" | "role" | "status" | "signedAt"));
+        let field_ok = parts
+            .next()
+            .is_none_or(|f| matches!(f, "name" | "email" | "phone" | "company" | "role" | "status" | "slot" | "signedAt" | "declinedAt"));
         return index_ok && field_ok;
     }
     PLACEHOLDERS.iter().any(|(name, _)| *name == placeholder)
@@ -333,7 +323,10 @@ mod tests {
         let c = context();
         let out = render(&json!({ "text": "Signed: {{document.title}} by {{parties}}, total {{fields.Total}}", "n": 3 }), &c, None);
         assert_eq!(out, json!({ "text": "Signed: NDA by Anna, Bo, total 1250.5", "n": 3 }));
-        assert_eq!(render(&json!("{{parties.0.email}} / {{fields.Name (Party 2)}} / {{nothing}}"), &c, None), json!("anna@example.com / Bo B / "));
+        assert_eq!(
+            render(&json!("{{parties.0.email}} / {{fields.Name (Party 2)}} / {{nothing}}"), &c, None),
+            json!("anna@example.com / Bo B / ")
+        );
         assert_eq!(render(&json!("open {{ only"), &c, None), json!("open {{ only"));
     }
 

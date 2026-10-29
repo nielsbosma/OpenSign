@@ -16,8 +16,8 @@ use crate::error::{AppError, Result, bad_request};
 use crate::permissions::Permission;
 use crate::service::{Access, Meta, Service};
 use crate::settings::{
-    AiSettings, AutomationSettings, EidSettings, EmailSettings, OrgSettings, RetentionSettings, SecuritySettings, SettingsGroup, SigningSettings, SmsSettings,
-    public_view,
+    AiSettings, AutomationSettings, EidSettings, EmailSettings, OrgSettings, RetentionSettings, SecuritySettings, SettingsGroup,
+    SigningSettings, SmsSettings, public_view,
 };
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema)]
@@ -166,8 +166,8 @@ async fn update<G: SettingsGroup>(ctx: &Ctx, conn: &mut PgConnection, patch: &Va
     let saved: G = settings(ctx, conn).await?;
     if G::NAME == "automations" {
         // Checked after saving, since a kept secret is only known to the stored row.
-        let automations: AutomationSettings = serde_json::from_value(serde_json::to_value(&saved).map_err(AppError::internal)?)
-            .map_err(AppError::internal)?;
+        let automations: AutomationSettings =
+            serde_json::from_value(serde_json::to_value(&saved).map_err(AppError::internal)?).map_err(AppError::internal)?;
         if automations.enabled && automations.key().is_none() {
             ctx.app.settings.invalidate(G::NAME);
             return Err(bad_request("Enter your Composio API key before turning automations on"));
