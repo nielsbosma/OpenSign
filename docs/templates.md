@@ -12,7 +12,7 @@ A template is a document you prepare once and send many times: an employment con
 1. Go to **Templates** and choose **New Template**. OpenSign creates an untitled template and opens it.
 2. Give it a title, upload the files, and set the message, language, signing order and reminders as for a document.
 3. Add the parties. For a template these are usually placeholders, such as "Tenant" or "Employee", with the role, delivery and identification you want. Whoever uses the template fills in the real names and contact details.
-4. Place the fields for each party.
+4. Place the fields for each party. [Text tags](text-tags.md) in the file can place them for you: a tag's `role` names the placeholder party, and a role the template does not have yet is added.
 
 A template stays a template; there is no "send" step.
 

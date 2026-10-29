@@ -166,7 +166,12 @@ async fn sends_signs_seals_and_verifies() {
 
     let first = call::<docs::Upload>(
         &sender,
-        docs::UploadInput { document_id: id, name: "agreement.pdf".into(), content_base64: B64.encode(sample_pdf(2)) },
+        docs::UploadInput {
+            document_id: id,
+            name: "agreement.pdf".into(),
+            content_base64: B64.encode(sample_pdf(2)),
+            ..Default::default()
+        },
     )
     .await
     .unwrap();
@@ -175,7 +180,7 @@ async fn sends_signs_seals_and_verifies() {
         let docx = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/agreement.docx")).unwrap();
         let converted = call::<docs::Upload>(
             &sender,
-            docs::UploadInput { document_id: id, name: "appendix.docx".into(), content_base64: B64.encode(docx) },
+            docs::UploadInput { document_id: id, name: "appendix.docx".into(), content_base64: B64.encode(docx), ..Default::default() },
         )
         .await
         .unwrap();
@@ -184,7 +189,12 @@ async fn sends_signs_seals_and_verifies() {
     }
     let rejected = call::<docs::Upload>(
         &sender,
-        docs::UploadInput { document_id: id, name: "invoice.pdf".into(), content_base64: B64.encode(b"MZ\x90\x00 not really a pdf") },
+        docs::UploadInput {
+            document_id: id,
+            name: "invoice.pdf".into(),
+            content_base64: B64.encode(b"MZ\x90\x00 not really a pdf"),
+            ..Default::default()
+        },
     )
     .await;
     assert_eq!(kind(rejected), ErrorKind::BadRequest);
@@ -529,7 +539,7 @@ async fn cancel_revokes_links_and_decline_stops_signing() {
         let id = call::<docs::Create>(&sender, create(title)).await.unwrap().document.id;
         call::<docs::Upload>(
             &sender,
-            docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)) },
+            docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)), ..Default::default() },
         )
         .await
         .unwrap();
@@ -590,9 +600,12 @@ async fn in_person_signing_issues_a_fresh_link_for_the_party_in_turn() {
     let sender = user(&app, "Sam Sender", Role::Sender).await;
     let create = serde_json::from_value::<docs::CreateInput>(serde_json::json!({ "title": "At the desk", "sequential": true })).unwrap();
     let id = call::<docs::Create>(&sender, create).await.unwrap().document.id;
-    call::<docs::Upload>(&sender, docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)) })
-        .await
-        .unwrap();
+    call::<docs::Upload>(
+        &sender,
+        docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)), ..Default::default() },
+    )
+    .await
+    .unwrap();
     let mut second = party("Gus", PartyRole::Signer, Delivery::InPerson, AuthMethod::Standard);
     second.sign_order = Some(2);
     let saved = call::<docs::SetParties>(
@@ -632,7 +645,12 @@ async fn bulk_send_creates_one_document_per_row() {
     let template = call::<docs::Create>(&sender, create).await.unwrap().document.id;
     call::<docs::Upload>(
         &sender,
-        docs::UploadInput { document_id: template, name: "lease.pdf".into(), content_base64: B64.encode(sample_pdf(1)) },
+        docs::UploadInput {
+            document_id: template,
+            name: "lease.pdf".into(),
+            content_base64: B64.encode(sample_pdf(1)),
+            ..Default::default()
+        },
     )
     .await
     .unwrap();
@@ -712,7 +730,12 @@ async fn retention_deletes_due_documents_but_never_held_ones() {
             let id = call::<docs::Create>(manager, create).await.unwrap().document.id;
             call::<docs::Upload>(
                 manager,
-                docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)) },
+                docs::UploadInput {
+                    document_id: id,
+                    name: "a.pdf".into(),
+                    content_base64: B64.encode(sample_pdf(1)),
+                    ..Default::default()
+                },
             )
             .await
             .unwrap();
@@ -805,9 +828,12 @@ async fn webcam_photo_is_required_taken_and_sealed() {
     let sender = user(&app, "Pia Photo", Role::Sender).await;
     let create = serde_json::from_value::<docs::CreateInput>(serde_json::json!({ "title": "Show your face" })).unwrap();
     let id = call::<docs::Create>(&sender, create).await.unwrap().document.id;
-    call::<docs::Upload>(&sender, docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)) })
-        .await
-        .unwrap();
+    call::<docs::Upload>(
+        &sender,
+        docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)), ..Default::default() },
+    )
+    .await
+    .unwrap();
     let anna = PartyInput { webcam_photo: Some(true), ..party("Anna", PartyRole::Signer, Delivery::Link, AuthMethod::Standard) };
     let copy = PartyInput { webcam_photo: Some(true), ..party("Cia", PartyRole::Viewer, Delivery::Link, AuthMethod::Standard) };
     let saved = call::<docs::SetParties>(&sender, docs::SetPartiesInput { document_id: id, parties: vec![anna, copy] }).await.unwrap();
@@ -896,9 +922,12 @@ async fn field_types_are_validated_and_stamped() {
     let sender = user(&app, "Fia Fields", Role::Sender).await;
     let create = serde_json::from_value::<docs::CreateInput>(serde_json::json!({ "title": "Order form" })).unwrap();
     let id = call::<docs::Create>(&sender, create).await.unwrap().document.id;
-    call::<docs::Upload>(&sender, docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)) })
-        .await
-        .unwrap();
+    call::<docs::Upload>(
+        &sender,
+        docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)), ..Default::default() },
+    )
+    .await
+    .unwrap();
     let saved = call::<docs::SetParties>(
         &sender,
         docs::SetPartiesInput { document_id: id, parties: vec![party("Anna", PartyRole::Signer, Delivery::Link, AuthMethod::Standard)] },
@@ -1067,9 +1096,12 @@ async fn conditions_and_formulas_are_worked_out_by_the_server() {
     let sender = user(&app, "Cora Conditions", Role::Sender).await;
     let create = serde_json::from_value::<docs::CreateInput>(serde_json::json!({ "title": "Quote" })).unwrap();
     let id = call::<docs::Create>(&sender, create).await.unwrap().document.id;
-    call::<docs::Upload>(&sender, docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)) })
-        .await
-        .unwrap();
+    call::<docs::Upload>(
+        &sender,
+        docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)), ..Default::default() },
+    )
+    .await
+    .unwrap();
     let saved = call::<docs::SetParties>(
         &sender,
         docs::SetPartiesInput { document_id: id, parties: vec![party("Anna", PartyRole::Signer, Delivery::Link, AuthMethod::Standard)] },

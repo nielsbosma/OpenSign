@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use lopdf::{Dictionary, Document, LoadOptions, Object};
 use serde::Serialize;
 
+use crate::form::{FormField, read_form};
 use crate::geometry::{PageBox, page_box};
 use crate::{PdfError, Result};
 
@@ -28,6 +29,8 @@ pub struct Sanitized {
     pub pages: Vec<PageBox>,
     /// What was taken out, for the uploader and the audit log.
     pub removed: Vec<String>,
+    /// The fillable form's fields, read before the form was taken out.
+    pub form: Vec<FormField>,
 }
 
 /// Catalog entries that run code, carry files or replace the page content.
@@ -174,6 +177,7 @@ pub fn sanitize(input: &[u8], limits: Limits) -> Result<Sanitized> {
         return Err(reject("The PDF has too many pages"));
     }
 
+    let form = read_form(&doc, &pages);
     let mut removed = BTreeSet::new();
     {
         let catalog = doc.catalog_mut()?;
@@ -216,5 +220,5 @@ pub fn sanitize(input: &[u8], limits: Limits) -> Result<Sanitized> {
     if boxes.len() != pages.len() {
         return Err(PdfError::Malformed("pages were lost while cleaning the file".into()));
     }
-    Ok(Sanitized { pdf, pages: boxes, removed: removed.into_iter().map(String::from).collect() })
+    Ok(Sanitized { pdf, pages: boxes, removed: removed.into_iter().map(String::from).collect(), form })
 }

@@ -12,7 +12,7 @@ use opensign_core::call;
 use opensign_core::context::{App, Ctx, Surface};
 use opensign_core::error::ErrorKind;
 use opensign_core::services::auth::{self, LoginResult};
-use opensign_core::services::{Empty, admin, ai, documents, setup};
+use opensign_core::services::{Empty, admin, ai, detect, documents, setup};
 use opensign_core::settings::SecuritySettings;
 use opensign_core::testing::app;
 use serde_json::{Value, json};
@@ -29,6 +29,10 @@ async fn fake_llm(State(seen): State<Seen>, Json(body): Json<Value>) -> Json<Val
     let usage = json!({ "prompt_tokens": 100, "completion_tokens": 20 });
     if system.contains("You review agreements") {
         let reply = "Sure:\n```json\n{\"summary\": \"A short NDA.\", \"risks\": [{\"severity\": \"high\", \"title\": \"No term\", \"detail\": \"Confidentiality never ends\", \"page\": 1, \"suggestion\": \"Add five years\"}], \"keyTerms\": []}\n```";
+        return Json(json!({ "choices": [{ "message": { "content": reply } }], "usage": usage }));
+    }
+    if system.contains("You find where a document asks") {
+        let reply = "{\"fields\": [{\"page\": 0, \"kind\": \"signature\", \"label\": \"Signed by\", \"x\": 0.1, \"y\": 0.8, \"width\": 0.3, \"height\": 0.05}]}";
         return Json(json!({ "choices": [{ "message": { "content": reply } }], "usage": usage }));
     }
     if messages.iter().any(|m| m["role"] == "tool") {
@@ -176,6 +180,11 @@ async fn assistant_and_review() {
     assert!(prompt.contains("We are Acme"));
     let latest = call::<ai::LatestReview>(&ada, ai::IdInput { id }).await.unwrap().unwrap();
     assert_eq!(latest.id, review.id);
+
+    let found = call::<detect::DetectFields>(&ada, detect::DetectInput { document_id: id, ai: true }).await.unwrap();
+    assert!(found.ai_used && found.suggestions.iter().any(|s| s.source == "ai" && s.label == "Signed by"), "{found:?}");
+    let sent = seen.lock().unwrap().last().unwrap().clone();
+    assert!(sent["messages"][1]["content"].as_str().unwrap().contains("non-disclosure"), "the page text goes to the model");
 
     call::<admin::UpdateSettings>(&ada, admin::UpdateInput { group: admin::Group::Ai, values: json!({ "monthlyTokenBudget": 100 }) })
         .await

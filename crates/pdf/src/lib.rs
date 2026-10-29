@@ -2,7 +2,9 @@
 //! that parses them, and it rewrites the file from scratch without active content.
 
 mod cert;
+mod detect;
 mod evidence;
+mod form;
 mod geometry;
 mod hidden;
 mod ltv;
@@ -10,6 +12,8 @@ mod merge;
 mod sanitize;
 mod seal;
 mod stamp;
+mod tags;
+mod text;
 mod tsa;
 mod verify;
 mod x509;
@@ -20,7 +24,9 @@ mod ltv_tests;
 mod tests;
 
 pub use cert::{SealIdentity, generate_seal_identity};
+pub use detect::{DetectedField, PageText, TextLine, detect_fields, page_text};
 pub use evidence::{EvidenceAttachment, EvidenceEvent, EvidenceParty, EvidenceReport, append_evidence};
+pub use form::{FormField, FormKind};
 pub use geometry::{PageBox, extract_text, page_sizes};
 pub use hidden::{HiddenText, hidden_text};
 pub use ltv::{
@@ -31,6 +37,7 @@ pub use merge::merge;
 pub use sanitize::{Limits, Sanitized, sanitize};
 pub use seal::{Prepared, SealOptions, Signed, finish, prepare, seal, sign};
 pub use stamp::{Stamp, StampContent, check_signature_image, stamp};
+pub use tags::{TagScan, TextTag, take_text_tags};
 pub use tsa::{TimestampError, build_request as build_timestamp_request, parse_response as parse_timestamp_response, token_time};
 pub use verify::{SignatureCheck, verify_signatures};
 

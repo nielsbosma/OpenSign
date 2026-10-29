@@ -26,6 +26,8 @@ Choose **New Document** on the **Documents** page. Drop one or more files, or st
 - A document can have several files. When you send it, they are combined in order into one PDF.
 - The largest upload is set by an admin in **Settings → Security** (25 MB by default).
 
+Text tags and fillable form fields in the file become fields when you upload it. OpenSign tells you how many it added and which tags it could not use. See [Text tags, form import and field detection](text-tags.md).
+
 Every PDF is checked by its content, not its name, and rewritten without JavaScript, form actions, embedded files, XFA, and launch or URI actions. If something was removed, OpenSign tells you what. Nobody, including the signers, ever sees the original active content.
 
 ### Details
@@ -45,7 +47,7 @@ Add everyone who signs, approves or receives a copy. For each party you choose t
 
 ### Fields
 
-Pick a party in the field toolbar, then place fields on the pages. Each field belongs to one party, who fills it in when signing. Select a field to change it in the **Field** panel: who fills it in, its label, whether it is required, and the settings below.
+Pick a party in the field toolbar, then place fields on the pages. Fields can also come from the file itself: [text tags](text-tags.md#text-tags) such as `{{Sign;type=signature;role=Tenant}}` and the fields of a [fillable PDF form](text-tags.md#pdf-forms) become fields when you upload, and [Detect Fields](text-tags.md#detect-fields) in the toolbar suggests fields where the page has lines and boxes to fill in. Each field belongs to one party, who fills it in when signing. Select a field to change it in the **Field** panel: who fills it in, its label, whether it is required, and the settings below.
 
 | Field | |
 | --- | --- |
