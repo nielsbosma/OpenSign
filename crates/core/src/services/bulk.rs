@@ -663,6 +663,7 @@ async fn send_row(ctx: &Ctx, conn: &mut PgConnection, bulk: &BulkJob, values: &B
                     .filter(|l| !l.trim().is_empty())
                     .map(str::to_string)
                     .or_else(|| p.language.clone()),
+                webcam_photo: None,
             }
         })
         .collect();

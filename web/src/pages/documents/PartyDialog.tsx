@@ -29,8 +29,9 @@ export function partyToInput(p: PartyView, requests?: AttachmentRequest[]): Part
     authToSign: p.authToSign as AuthMethod,
     signOrder: p.signOrder,
     language: p.language ?? null,
+    webcamPhoto: p.webcamPhoto,
     attachments: requests
-      ?.filter((r) => r.partyId === p.id)
+      ?.filter((r) => r.partyId === p.id && r.kind !== 'photo')
       .map((r) => ({ name: r.name, description: r.description, required: r.required })),
   };
 }
@@ -145,7 +146,16 @@ export function PartyDialog({
   useEffect(() => {
     if (open)
       setP(
-        party ?? { name: '', role: 'signer', delivery: 'email', authToView: 'none', authToSign: 'standard', signOrder: 1, attachments: [] },
+        party ?? {
+          name: '',
+          role: 'signer',
+          delivery: 'email',
+          authToView: 'none',
+          authToSign: 'standard',
+          signOrder: 1,
+          attachments: [],
+          webcamPhoto: false,
+        },
       );
   }, [open, party]);
   const set = (patch: Partial<PartyInput>) => setP({ ...p, ...patch });
@@ -254,6 +264,19 @@ export function PartyDialog({
                   onChange={(e) => set({ signOrder: Number(e.target.value) || 1 })}
                 />
               </Field>
+            )}
+            {(p.role ?? 'signer') !== 'viewer' && (
+              <label className="flex items-start gap-2.5 sm:col-span-2">
+                <Checkbox checked={p.webcamPhoto ?? false} onCheckedChange={(c) => set({ webcamPhoto: c === true })} className="mt-0.5" />
+                <span className="grid gap-0.5">
+                  <span className="text-sm font-medium">{t('Ask for Webcam Identification')}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {t(
+                      'The party takes a live photo of themselves with their camera before signing. You see it here and it is sealed into the evidence.',
+                    )}
+                  </span>
+                </span>
+              </label>
             )}
             {(p.role ?? 'signer') !== 'viewer' && (
               <AttachmentRequests value={p.attachments ?? []} onChange={(attachments) => set({ attachments })} />

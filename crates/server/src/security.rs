@@ -17,6 +17,8 @@ const CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self' 'unsa
     connect-src 'self'; worker-src 'self' blob:; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'";
 
 pub async fn headers(State(state): State<AppState>, request: Request, next: Next) -> Response {
+    // Only the signing page may ask for the camera, for the webcam photo.
+    let camera = request.uri().path() == "/sign";
     let mut response = next.run(request).await;
     let h = response.headers_mut();
     h.entry(header::CONTENT_SECURITY_POLICY).or_insert(HeaderValue::from_static(CSP));
@@ -27,7 +29,11 @@ pub async fn headers(State(state): State<AppState>, request: Request, next: Next
     h.insert("cross-origin-resource-policy", HeaderValue::from_static("same-origin"));
     h.insert(
         "permissions-policy",
-        HeaderValue::from_static("camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"),
+        HeaderValue::from_static(if camera {
+            "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+        } else {
+            "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+        }),
     );
     if state.https {
         h.insert(header::STRICT_TRANSPORT_SECURITY, HeaderValue::from_static("max-age=63072000; includeSubDomains"));

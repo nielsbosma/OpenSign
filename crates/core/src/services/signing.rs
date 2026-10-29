@@ -457,6 +457,9 @@ impl Service for Sign {
             return Err(bad_request("Confirm that you want to sign electronically"));
         }
         if let Some(missing) = attachments::for_party(conn, party.id).await?.into_iter().find(|r| r.required && r.file_id.is_none()) {
+            if missing.kind == attachments::KIND_PHOTO {
+                return Err(bad_request("Take a photo of yourself with your camera first"));
+            }
             return Err(bad_request(format!("Upload \u{201c}{}\u{201d} first", missing.name)));
         }
 
@@ -650,12 +653,14 @@ pub async fn upload_attachment(
 ) -> Result<AttachmentRequest> {
     let Resolved { party, document, .. } = attachment_party(ctx, conn, token, session_token).await?;
     let request = request_of(conn, party.id, request_id).await?;
-    let (file_name, content_type, body) = attachments::clean(bytes, name).await?;
+    let photo = request.kind == attachments::KIND_PHOTO;
+    let (file_name, content_type, body) =
+        if photo { attachments::clean_photo(bytes).await? } else { attachments::clean(bytes, name).await? };
     let record = store_file(
         conn,
         &ctx.app.storage,
         ctx.keys(),
-        NewFile { kind: "attachment", name: &file_name, content_type, body: &body, uploaded_by: None },
+        NewFile { kind: if photo { "photo" } else { "attachment" }, name: &file_name, content_type, body: &body, uploaded_by: None },
     )
     .await?;
     retire_file(conn, request.file_id).await?;
@@ -668,7 +673,7 @@ pub async fn upload_attachment(
     audit(
         ctx,
         conn,
-        Entry::new("party.attachment_uploaded", "document", document.id).metadata(json!({
+        Entry::new(if photo { "party.photo_taken" } else { "party.attachment_uploaded" }, "document", document.id).metadata(json!({
             "party": party.id, "name": party.name, "attachment": request.name, "file": record.name, "sha256": record.sha256,
         })),
     )

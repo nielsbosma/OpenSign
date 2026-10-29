@@ -337,6 +337,19 @@ fn every_rest_path_parameter_is_an_input_field() {
 }
 
 #[tokio::test]
+async fn only_the_signing_page_may_use_the_camera() {
+    let Some(app) = app().await else { return };
+    let client = Client { router: router(AppState::new(app.clone())), ip: "203.0.113.9" };
+    let policy = |response: &Response<Body>| response.headers().get("permissions-policy").unwrap().to_str().unwrap().to_string();
+    let (sign, _) = client.send(Request::get("/sign").body(Body::empty()).unwrap()).await;
+    assert!(policy(&sign).starts_with("camera=(self)"), "{}", policy(&sign));
+    for path in ["/documents", "/sign/x", "/api/health"] {
+        let (other, _) = client.send(Request::get(path).body(Body::empty()).unwrap()).await;
+        assert!(policy(&other).starts_with("camera=()"), "{path}: {}", policy(&other));
+    }
+}
+
+#[tokio::test]
 async fn review_links_serve_text_without_indexing() {
     let Some(app) = app().await else { return };
     let client = Client { router: router(AppState::new(app.clone())), ip: "203.0.113.9" };

@@ -71,6 +71,7 @@ import { FieldLayer } from './FieldLayer';
 import { clamp, type EditableField, FIELD_KINDS, partyColor, toEditable, toInput } from './fields';
 import { FileDrop } from './NewDocumentDialog';
 import { PartyDialog, partyToInput } from './PartyDialog';
+import { PartyPhoto } from './PartyPhoto';
 import { Checks, ReviewPanel } from './ReviewPanel';
 import { SigningPreviewDialog } from './SigningPreviewDialog';
 
@@ -189,34 +190,42 @@ function PartyCard({
             {DELIVERY_LABELS[party.delivery]?.replace(/ \(.*\)$/, '').replace(/（.*）$/, '')} · {AUTH_LABELS[party.authToSign]}
             {party.authToView !== 'none' && ` · ${t('{method} to view', { method: AUTH_LABELS[party.authToView] ?? party.authToView })}`}
             {party.language && ` · ${languageName(party.language)}`}
+            {party.webcamPhoto && ` · ${t('Webcam photo')}`}
           </div>
           {party.declineReason && <div className="mt-1 text-xs text-destructive">“{party.declineReason}”</div>}
-          {attachments.length > 0 && (
+          {attachments
+            .filter((a) => a.kind === 'photo')
+            .map((a) => (
+              <PartyPhoto key={a.id} documentId={documentId} request={a} />
+            ))}
+          {attachments.some((a) => a.kind !== 'photo') && (
             <ul className="mt-1.5 grid gap-0.5 text-xs">
-              {attachments.map((a) => (
-                <li key={a.id} className="flex items-center gap-1.5">
-                  <Paperclip className="size-3 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 truncate">
-                    {a.name}
-                    {!a.required && <span className="text-muted-foreground"> {t('(optional)')}</span>}
-                  </span>
-                  {a.fileId ? (
-                    <button
-                      type="button"
-                      className="ms-auto shrink-0 underline"
-                      onClick={() =>
-                        fetchPdf(`/api/documents/${documentId}/attachments/${a.id}`)
-                          .then((bytes) => saveBytes(bytes, a.fileName ?? 'attachment', a.contentType ?? 'application/octet-stream'))
-                          .catch((e) => toast.error(errorMessage(e)))
-                      }
-                    >
-                      {t('Download')}
-                    </button>
-                  ) : (
-                    <span className="ms-auto shrink-0 text-muted-foreground">{t('Not uploaded')}</span>
-                  )}
-                </li>
-              ))}
+              {attachments
+                .filter((a) => a.kind !== 'photo')
+                .map((a) => (
+                  <li key={a.id} className="flex items-center gap-1.5">
+                    <Paperclip className="size-3 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 truncate">
+                      {a.name}
+                      {!a.required && <span className="text-muted-foreground"> {t('(optional)')}</span>}
+                    </span>
+                    {a.fileId ? (
+                      <button
+                        type="button"
+                        className="ms-auto shrink-0 underline"
+                        onClick={() =>
+                          fetchPdf(`/api/documents/${documentId}/attachments/${a.id}`)
+                            .then((bytes) => saveBytes(bytes, a.fileName ?? 'attachment', a.contentType ?? 'application/octet-stream'))
+                            .catch((e) => toast.error(errorMessage(e)))
+                        }
+                      >
+                        {t('Download')}
+                      </button>
+                    ) : (
+                      <span className="ms-auto shrink-0 text-muted-foreground">{t('Not uploaded')}</span>
+                    )}
+                  </li>
+                ))}
             </ul>
           )}
         </div>

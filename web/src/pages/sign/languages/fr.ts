@@ -66,6 +66,15 @@ export const fr: Texts = {
   replaceFile: 'Remplacer',
   removeFile: 'Supprimer',
   attachmentsNote: 'PDF, JPEG ou PNG, 10 Mo maximum. Les fichiers sont scellés dans le document signé.',
+  photoTitle: 'Photo de vous',
+  photoIntro: 'L’expéditeur demande une photo de vous, prise maintenant avec votre caméra. Elle est scellée dans le document signé.',
+  photoStart: 'Activer la caméra',
+  photoCapture: 'Prendre la photo',
+  photoRetake: 'Reprendre',
+  photoUse: 'Utiliser la photo',
+  photoSaved: 'Photo enregistrée',
+  photoNoCamera:
+    'Aucune caméra n’a pu être ouverte. Autorisez l’accès à la caméra dans votre navigateur ou ouvrez le lien sur un téléphone.',
   handOver: (name) => `Remettez l’appareil à ${name}`,
   handOverNote: (sender) =>
     `${sender} vous demande de lire et de signer le document sur cet appareil. Tout ce que vous faites est enregistré dans les preuves du document.`,

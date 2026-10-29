@@ -92,6 +92,7 @@ fn party(name: &str, role: PartyRole, delivery: Delivery, auth_to_sign: AuthMeth
         auth_to_sign,
         attachments: None,
         language: None,
+        webcam_photo: None,
     }
 }
 
@@ -729,4 +730,98 @@ async fn retention_deletes_due_documents_but_never_held_ones() {
     let view = call::<docs::Get>(&manager, docs::IdInput { id: held }).await.unwrap();
     assert!(view.deletes_at.is_some());
     call::<docs::Delete>(&manager, docs::IdInput { id: held }).await.unwrap();
+}
+
+fn camera_png(width: u32, height: u32) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut encoder = png::Encoder::new(&mut out, width, height);
+    encoder.set_color(png::ColorType::Rgb);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().unwrap();
+    writer.write_image_data(&vec![120; (width * height * 3) as usize]).unwrap();
+    writer.finish().unwrap();
+    out
+}
+
+#[tokio::test]
+async fn webcam_photo_is_required_taken_and_sealed() {
+    let Some(app) = app().await else { return };
+    {
+        let mut conn = app.db.acquire().await.unwrap();
+        let no_tsa = SigningSettings { tsa_url: String::new(), ..SigningSettings::default() };
+        app.settings.save(&mut conn, &app.keys, &no_tsa, None).await.unwrap();
+    }
+    let sender = user(&app, "Pia Photo", Role::Sender).await;
+    let create = serde_json::from_value::<docs::CreateInput>(serde_json::json!({ "title": "Show your face" })).unwrap();
+    let id = call::<docs::Create>(&sender, create).await.unwrap().document.id;
+    call::<docs::Upload>(&sender, docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)) })
+        .await
+        .unwrap();
+    let anna = PartyInput { webcam_photo: Some(true), ..party("Anna", PartyRole::Signer, Delivery::Link, AuthMethod::Standard) };
+    let copy = PartyInput { webcam_photo: Some(true), ..party("Cia", PartyRole::Viewer, Delivery::Link, AuthMethod::Standard) };
+    let saved = call::<docs::SetParties>(&sender, docs::SetPartiesInput { document_id: id, parties: vec![anna, copy] }).await.unwrap();
+    assert!(saved[0].webcam_photo && !saved[1].webcam_photo, "viewers sign nothing, so they take no photo");
+    let anna_id = saved[0].id;
+
+    let resave = PartyInput {
+        id: Some(anna_id),
+        attachments: Some(vec![]),
+        ..party("Anna", PartyRole::Signer, Delivery::Link, AuthMethod::Standard)
+    };
+    call::<docs::SetParties>(&sender, docs::SetPartiesInput { document_id: id, parties: vec![resave] }).await.unwrap();
+    let view = call::<docs::Get>(&sender, docs::IdInput { id }).await.unwrap();
+    assert!(view.parties[0].webcam_photo, "clearing the file requests keeps the photo request");
+    assert_eq!(view.attachments.iter().map(|a| a.kind.as_str()).collect::<Vec<_>>(), ["photo"]);
+    call::<docs::Send>(&sender, docs::SendInput { id, expires_at: None }).await.unwrap();
+
+    let token = {
+        let mut conn = app.db.acquire().await.unwrap();
+        signer_token(&app.keys, &parties(&mut conn, id).await.unwrap()[0])
+    };
+    let signer = signer_ctx(&app);
+    let opened = call::<signing::Open>(&signer, signing::TokenInput { token: token.clone(), session: None }).await.unwrap();
+    let request = opened.attachments.iter().find(|a| a.kind == "photo").unwrap().id;
+    let sign = || {
+        call::<signing::Sign>(
+            &signer,
+            signing::SignInput {
+                token: token.clone(),
+                session: None,
+                values: vec![],
+                signature: Some(SignatureInput { typed_name: Some("Anna".into()), image_png_base64: None }),
+                consent: true,
+            },
+        )
+    };
+    assert_eq!(kind(sign().await), ErrorKind::BadRequest, "no photo yet");
+    let taken = {
+        let mut tx = app.db.begin().await.unwrap();
+        let pdf = signing::upload_attachment(&signer, &mut tx, &token, None, request, "me.pdf", sample_pdf(1)).await;
+        assert_eq!(kind(pdf), ErrorKind::BadRequest, "a photo is an image, never a PDF");
+        let tiny = signing::upload_attachment(&signer, &mut tx, &token, None, request, "me.png", camera_png(8, 8)).await;
+        assert_eq!(kind(tiny), ErrorKind::BadRequest);
+        let taken = signing::upload_attachment(&signer, &mut tx, &token, None, request, "x.png", camera_png(320, 240)).await.unwrap();
+        tx.commit().await.unwrap();
+        taken
+    };
+    assert_eq!(taken.file_name.as_deref(), Some("webcam-photo.png"));
+    let logged: String = sqlx::query_scalar(
+        "select metadata->>'sha256' from audit_log where entity_id = $1 and action = 'party.photo_taken' order by id desc limit 1",
+    )
+    .bind(id.to_string())
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(Some(logged), taken.sha256, "the audit trail records the photo's hash");
+
+    assert!(sign().await.unwrap().completed);
+    worker::drain(&app).await.unwrap();
+    let failed: Vec<(String, Option<String>)> =
+        sqlx::query_as("select kind, last_error from jobs where done_at is null and kind <> 'sweep'").fetch_all(&app.db).await.unwrap();
+    assert!(failed.is_empty(), "jobs left over: {failed:?}");
+    let download = call::<docs::Download>(&sender, docs::DownloadInput { id, version: Some(Version::Signed) }).await.unwrap();
+    let sealed = Document::load_mem(&B64.decode(download.content_base64).unwrap()).unwrap();
+    let names = sealed.catalog().unwrap().get(b"Names").unwrap().as_dict().unwrap();
+    let tree = names.get(b"EmbeddedFiles").unwrap().as_dict().unwrap().get(b"Names").unwrap().as_array().unwrap();
+    assert_eq!(tree[0].as_str().unwrap(), b"attachment-01-webcam-photo.png", "the photo is sealed into the evidence");
 }

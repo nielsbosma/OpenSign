@@ -67,13 +67,13 @@ export async function uploadAttachment(
   token: string,
   session: string | null,
   request: string,
-  file: File,
+  file: Blob,
 ): Promise<import('./api-types.gen').AttachmentRequest> {
   const form = new FormData();
   form.append('token', token);
   if (session) form.append('session', session);
   form.append('request', request);
-  form.append('file', file, file.name);
+  form.append('file', file, file instanceof File ? file.name : 'webcam-photo.jpg');
   const response = await fetch('/api/sign/attachment', { method: 'POST', credentials: 'same-origin', body: form });
   return parse(response);
 }

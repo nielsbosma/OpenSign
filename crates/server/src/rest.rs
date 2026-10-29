@@ -331,6 +331,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .route("/openapi.json", get(openapi))
         .route("/documents/{id}/files", post(files::upload).layer(axum::extract::DefaultBodyLimit::max(110 * 1024 * 1024)))
         .route("/documents/{id}/file", get(files::document_file))
+        .route("/documents/{id}/attachments/{request}", get(files::document_attachment))
         .route("/verify", post(files::verify));
     let mut by_path: HashMap<&str, Vec<&'static Route>> = HashMap::new();
     for r in ROUTES {

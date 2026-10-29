@@ -179,6 +179,9 @@ async fn evidence_events(conn: &mut PgConnection, document_id: Uuid) -> Result<V
                 ),
                 "party.signed" => format!("Signed by {name}{ip}"),
                 "party.approved" => format!("Approved by {name}{ip}"),
+                "party.photo_taken" => {
+                    format!("{name} took a webcam photo (SHA-256 {})", metadata["sha256"].as_str().unwrap_or(""))
+                }
                 "party.attachment_uploaded" => {
                     format!(
                         "{name} uploaded {} ({})",

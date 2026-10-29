@@ -537,6 +537,9 @@ pub struct PartyInput {
     /// The language of this party's emails, SMS and signing page, if not the document's: en, zh, hi, es, fr, ar, bn, pt, ru,
     /// ur or sv. Leave out to use the document's.
     pub language: Option<String>,
+    /// Ask the party to take a live photo of themselves with their webcam or phone camera before they can sign. The photo is
+    /// stored encrypted, shown to the sender and sealed into the evidence. Leave out to keep the current setting.
+    pub webcam_photo: Option<bool>,
 }
 
 fn default_role() -> PartyRole {
@@ -575,6 +578,7 @@ struct CleanParty {
     auth_to_sign: AuthMethod,
     attachments: Option<Vec<AttachmentRequestInput>>,
     language: Option<String>,
+    webcam_photo: Option<bool>,
 }
 
 fn clean_party(input: PartyInput, existing: &[PartyRow]) -> Result<CleanParty> {
@@ -612,6 +616,7 @@ fn clean_party(input: PartyInput, existing: &[PartyRow]) -> Result<CleanParty> {
         auth_to_sign: input.auth_to_sign,
         attachments: input.attachments,
         language: input.language.as_deref().map(str::trim).filter(|l| !l.is_empty()).map(|l| language(Some(l))).transpose()?,
+        webcam_photo: if input.role == PartyRole::Viewer { Some(false) } else { input.webcam_photo },
     })
 }
 
@@ -678,6 +683,9 @@ impl Service for SetParties {
             if let Some(requests) = &p.attachments {
                 attachments::set(conn, document.id, p.id, requests).await?;
             }
+            if let Some(wanted) = p.webcam_photo {
+                attachments::set_photo(conn, document.id, p.id, wanted).await?;
+            }
         }
         sqlx::query("update fields set party_id = null where document_id = $1 and party_id is not null and not (party_id = any($2))")
             .bind(document.id)
@@ -694,13 +702,14 @@ impl Service for SetParties {
                         json!({
                             "id": p.id, "name": p.name, "email": p.email, "role": p.role, "authToSign": p.auth_to_sign, "language": p.language,
                             "attachments": p.attachments.as_ref().map(|a| a.iter().map(|r| r.name.clone()).collect::<Vec<_>>()),
+                            "webcamPhoto": p.webcam_photo,
                         })
                     })
                     .collect::<Vec<_>>(),
             ),
         )
         .await?;
-        Ok(parties(conn, document.id).await?.iter().map(|p| PartyView::from_row(ctx.keys(), p)).collect())
+        crate::documents::party_views(ctx, conn, document.id).await
     }
 }
 

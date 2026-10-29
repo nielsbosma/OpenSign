@@ -98,6 +98,7 @@ async fn sent_document(app: &Arc<App>, sender: &Ctx) -> (Uuid, String) {
                 auth_to_sign: AuthMethod::Standard,
                 attachments: None,
                 language: None,
+                webcam_photo: None,
             }],
         },
     )
