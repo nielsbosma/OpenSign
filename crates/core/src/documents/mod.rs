@@ -8,6 +8,7 @@ pub mod seal;
 pub mod tags;
 pub mod upload;
 pub mod values;
+pub mod versions;
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64;
@@ -132,7 +133,7 @@ pub mod status {
 
 pub const DOCUMENT_COLUMNS: &str = "id, title, status, is_template, template_id, owner_id, message, language, sequential, expires_at, reminder_days, \
      source_file_id, sealed_file_id, original_sha256, sealed_sha256, page_count, external_id, metadata, sent_at, completed_at, canceled_at, created_at, updated_at, \
-     legal_hold, legal_hold_reason, legal_hold_at, review_links, folder_id, archived_at";
+     legal_hold, legal_hold_reason, legal_hold_at, review_links, folder_id, archived_at, template_version";
 
 #[derive(Debug, Clone, Serialize, JsonSchema, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -173,6 +174,8 @@ pub struct DocumentRow {
     pub folder_id: Option<Uuid>,
     /// Archived documents and templates are left out of lists unless asked for; archived templates cannot be used.
     pub archived_at: Option<DateTime<Utc>>,
+    /// The version of the template this document was made from.
+    pub template_version: Option<i32>,
 }
 
 pub const PARTY_COLUMNS: &str = "id, document_id, role, name, email, phone, personal_number, company, sign_order, delivery, auth_to_view, auth_to_sign, \
@@ -396,6 +399,8 @@ pub struct DocumentView {
     pub can_edit: bool,
     /// When the retention rules will delete this document, if any rule applies to it.
     pub deletes_at: Option<DateTime<Utc>>,
+    /// The title of the template this document was made from, if you can see it.
+    pub template_title: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -509,7 +514,31 @@ pub async fn view(ctx: &Ctx, conn: &mut PgConnection, document: DocumentRow) -> 
     };
     let rules: crate::settings::RetentionSettings = crate::services::settings(ctx, conn).await?;
     let deletes_at = crate::services::retention::deletes_at(&rules, &document);
-    Ok(DocumentView { document, owner_name, files, parties, fields, attachments, sealed_with_timestamp, can_edit, deletes_at })
+    let template_title = match document.template_id {
+        Some(id) => {
+            let (read_all, user_id, can_create) = visibility(ctx)?;
+            sqlx::query_scalar(&format!("select d.title from documents d where d.id = $4 and {VISIBLE}"))
+                .bind(read_all)
+                .bind(user_id)
+                .bind(can_create)
+                .bind(id)
+                .fetch_optional(&mut *conn)
+                .await?
+        }
+        None => None,
+    };
+    Ok(DocumentView {
+        document,
+        owner_name,
+        files,
+        parties,
+        fields,
+        attachments,
+        sealed_with_timestamp,
+        can_edit,
+        deletes_at,
+        template_title,
+    })
 }
 
 /// Deletes a document with everything that belongs to it. File rows go in the same transaction,
@@ -526,6 +555,7 @@ pub async fn purge(ctx: &Ctx, conn: &mut PgConnection, document: &DocumentRow, r
            union select file_id from document_files where document_id = $1
            union select file_id from attachment_requests where document_id = $1
            union select file_id from fields where document_id = $1
+           union select vf.file_id from template_version_files vf join template_versions v on v.id = vf.version_id where v.template_id = $1
            union select (signature->>'imageFileId')::uuid from parties
              where document_id = $1 and signature->>'imageFileId' ~ '^[0-9a-f-]{36}$'
          ) ids where f is not null",
@@ -540,6 +570,7 @@ pub async fn purge(ctx: &Ctx, conn: &mut PgConnection, document: &DocumentRow, r
            and not exists (select 1 from document_files x where x.file_id = f.id)
            and not exists (select 1 from attachment_requests a where a.file_id = f.id)
            and not exists (select 1 from fields x where x.file_id = f.id)
+           and not exists (select 1 from template_version_files x where x.file_id = f.id)
            and not exists (select 1 from parties p where p.signature->>'imageFileId' = f.id::text)
          returning storage_key",
     )

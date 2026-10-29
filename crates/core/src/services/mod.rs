@@ -14,6 +14,7 @@ pub mod review;
 pub mod setup;
 pub mod signing;
 pub mod system;
+pub mod templates;
 pub mod users;
 pub mod webhooks;
 
@@ -86,6 +87,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<documents::Create>(),
         erase::<documents::Upload>(),
         erase::<documents::RemoveFile>(),
+        erase::<documents::ReplaceFile>(),
         erase::<documents::Update>(),
         erase::<documents::SetParties>(),
         erase::<documents::SetFields>(),
@@ -95,6 +97,11 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<documents::Cancel>(),
         erase::<documents::Remind>(),
         erase::<documents::Delete>(),
+        erase::<templates::Versions>(),
+        erase::<templates::GetVersion>(),
+        erase::<templates::Compare>(),
+        erase::<templates::Save>(),
+        erase::<templates::Restore>(),
         erase::<folders::List>(),
         erase::<folders::Create>(),
         erase::<folders::Update>(),
