@@ -270,6 +270,7 @@ pub async fn seal_document(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid
         events: evidence_events(conn, document.id).await?,
         attachments: evidence_attachments(ctx, conn, &document, &parties).await?,
         audit_head,
+        logo_png: crate::services::branding::logo_png(ctx, conn).await,
     };
     let identity = active_identity(ctx, conn).await?;
     let options = SealOptions {

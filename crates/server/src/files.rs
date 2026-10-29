@@ -279,6 +279,36 @@ pub async fn verify(State(state): State<AppState>, request: Request) -> Response
     }
 }
 
+/// `GET /api/logo/<id>.png`: the organisation's logo, public because signers and email clients
+/// load it without signing in. Only the current logo is served, and it was re-encoded on upload.
+pub async fn logo(State(state): State<AppState>, Path(file): Path<String>, parts: Parts) -> Response {
+    let caller = match caller(&state, &parts, Surface::Signer, None).await {
+        Ok(c) => c,
+        Err(r) => return *r,
+    };
+    let Some(id) = file.strip_suffix(".png").and_then(|id| Uuid::parse_str(id).ok()) else {
+        return ApiError(opensign_core::error::not_found("Logo"), Some(caller.request_id)).into_response();
+    };
+    let result = async {
+        let mut conn = caller.ctx.db().acquire().await?;
+        let record = opensign_core::services::branding::logo_file(&caller.ctx, &mut conn, id).await?;
+        read_file(&caller.ctx.app.storage, caller.ctx.keys(), &record).await
+    }
+    .await;
+    match result {
+        Ok(body) => {
+            let mut response = Body::from(body).into_response();
+            let h = response.headers_mut();
+            h.insert(header::CONTENT_TYPE, HeaderValue::from_static("image/png"));
+            h.insert(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=31536000, immutable"));
+            h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("sandbox; default-src 'none'"));
+            h.insert("cross-origin-resource-policy", HeaderValue::from_static("cross-origin"));
+            response
+        }
+        Err(e) => ApiError(e, Some(caller.request_id)).into_response(),
+    }
+}
+
 #[derive(Deserialize)]
 pub struct EidCallback {
     state: Option<String>,

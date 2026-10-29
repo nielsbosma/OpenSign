@@ -15,7 +15,29 @@ Shown to the people you send documents to, in emails and on the signing page.
 | Country | `OPENSIGN_ORG_COUNTRY` | `SE` |
 | Time Zone | `OPENSIGN_ORG_TIME_ZONE` | `Europe/Stockholm` |
 | Language for Signers | `OPENSIGN_ORG_LOCALE` | `en`. The default for new documents; see [The signing page](signing-page.md#languages). |
-| Brand Color | `OPENSIGN_ORG_BRAND_COLOR` | `#4f46e5` |
+| Brand Color | `OPENSIGN_ORG_BRAND_COLOR` | `#4f46e5`. Used for buttons on the signing page and in emails, and for the OpenSign mark when there is no logo. |
+
+### Logo
+
+Upload your organisation's logo under **Settings → Organisation → Logo**. It replaces the OpenSign mark in:
+
+- the app's sidebar and the sign-in, setup and [verification](verification.md) pages,
+- the [signing page](signing-page.md#branding) and its preview,
+- every email OpenSign sends,
+- the evidence page at the end of each [sealed PDF](sealed-pdfs.md).
+
+Without a logo, the OpenSign mark is shown in your brand color.
+
+The logo must be a PNG or JPEG of at most 2 MB, between 16 and 2000 pixels on each side. A PNG with a transparent background looks best on both light and dark pages. SVG is not accepted, because an SVG file can contain script; export it as PNG first.
+
+What happens to an upload:
+
+- The image is decoded and encoded again as a new PNG. This keeps transparency but drops metadata (such as camera details or GPS positions) and anything else hidden in the file.
+- It is stored encrypted in your S3 bucket, like documents.
+- It is served at `/api/logo/<id>.png` without signing in, because signers and email clients load it. Only the current logo is served there; a replaced or removed logo is deleted. Each new logo gets a new address, so nobody sees an old one from a cache.
+- Uploading and removing are recorded in the audit trail as `branding.logo_set` and `branding.logo_removed`.
+
+Through the API, use `branding.set_logo` (with the image as base64) and `branding.remove_logo`. `branding.get` returns the name, brand color and logo address and needs no sign-in.
 
 ## Email
 

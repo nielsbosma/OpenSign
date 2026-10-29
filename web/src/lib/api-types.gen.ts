@@ -350,6 +350,28 @@ export type AuthVerifyTwoFactorOutput = {
   status: "two_factor_required";
 };
 
+export type BrandingGetInput = Record<string, unknown>;
+
+export type BrandingGetOutput = Branding;
+
+export type Branding = {
+  brandColor: string;
+  /** Relative to the app, such as `/api/logo/<id>.png`. Unset when no logo is uploaded. */
+  logoUrl?: string | null;
+  organisation: string;
+};
+
+export type BrandingRemoveLogoInput = Record<string, unknown>;
+
+export type BrandingRemoveLogoOutput = Branding;
+
+export type BrandingSetLogoInput = {
+  /** The image's bytes, base64. PNG or JPEG, at most 2 MB and 2000 pixels on a side. SVG is refused. */
+  contentBase64: string;
+};
+
+export type BrandingSetLogoOutput = Branding;
+
 export type BulkCancelInput = {
   id: string;
 };
@@ -854,6 +876,8 @@ export type SignerDocument = {
   brandColor: string;
   id: string;
   language: string;
+  /** The organisation's logo, relative to the app. */
+  logoUrl?: string | null;
   message?: string | null;
   organisation: string;
   pageCount?: number | null;
@@ -1410,6 +1434,9 @@ export interface Services {
   "auth.request_password_reset": { kind: "mutation"; input: AuthRequestPasswordResetInput; output: AuthRequestPasswordResetOutput };
   "auth.reset_password": { kind: "mutation"; input: AuthResetPasswordInput; output: AuthResetPasswordOutput };
   "auth.verify_two_factor": { kind: "mutation"; input: AuthVerifyTwoFactorInput; output: AuthVerifyTwoFactorOutput };
+  "branding.get": { kind: "query"; input: BrandingGetInput; output: BrandingGetOutput };
+  "branding.remove_logo": { kind: "mutation"; input: BrandingRemoveLogoInput; output: BrandingRemoveLogoOutput };
+  "branding.set_logo": { kind: "mutation"; input: BrandingSetLogoInput; output: BrandingSetLogoOutput };
   "bulk.cancel": { kind: "mutation"; input: BulkCancelInput; output: BulkCancelOutput };
   "bulk.get": { kind: "query"; input: BulkGetInput; output: BulkGetOutput };
   "bulk.list": { kind: "query"; input: BulkListInput; output: BulkListOutput };

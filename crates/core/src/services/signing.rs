@@ -121,6 +121,8 @@ pub struct SignerDocument {
     pub page_count: Option<i32>,
     pub organisation: String,
     pub brand_color: String,
+    /// The organisation's logo, relative to the app.
+    pub logo_url: Option<String>,
     pub sender: Option<String>,
     pub language: String,
 }
@@ -180,6 +182,7 @@ pub(crate) async fn signer_view(
             page_count: (!locked).then_some(document.page_count).flatten(),
             organisation: if org.name.is_empty() { "OpenSign".into() } else { org.name.clone() },
             brand_color: org.brand_color.clone(),
+            logo_url: super::branding::logo_path(&org),
             sender,
             language: party.lang(document).code().to_string(),
         },
