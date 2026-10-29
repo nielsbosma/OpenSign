@@ -54,8 +54,19 @@ export const AUTH_LABELS: Record<string, string> = {
 /** Languages signers can get their emails, SMS and signing page in. */
 export const LANGUAGES: [string, string][] = [
   ['en', 'English'],
-  ['sv', 'Svenska'],
+  ['zh', 'Chinese (中文)'],
+  ['hi', 'Hindi (हिन्दी)'],
+  ['es', 'Spanish (Español)'],
+  ['fr', 'French (Français)'],
+  ['ar', 'Arabic (العربية)'],
+  ['bn', 'Bengali (বাংলা)'],
+  ['pt', 'Portuguese (Português)'],
+  ['ru', 'Russian (Русский)'],
+  ['ur', 'Urdu (اردو)'],
+  ['sv', 'Swedish (Svenska)'],
 ];
+
+export const languageName = (code: string) => LANGUAGES.find(([c]) => c === code)?.[1] ?? code;
 
 export const DELIVERY_LABELS: Record<string, string> = {
   email: 'Email',

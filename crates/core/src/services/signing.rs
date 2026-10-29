@@ -181,7 +181,7 @@ pub(crate) async fn signer_view(
             organisation: if org.name.is_empty() { "OpenSign".into() } else { org.name.clone() },
             brand_color: org.brand_color.clone(),
             sender,
-            language: document.language.clone(),
+            language: party.lang(document).code().to_string(),
         },
         party: SignerParty {
             id: party.id,
@@ -296,8 +296,7 @@ impl Service for RequestCode {
         let org: OrgSettings = settings(ctx, conn).await?;
         let sms: SmsSettings = settings(ctx, conn).await?;
         let org_name = if org.name.is_empty() { "OpenSign" } else { org.name.as_str() };
-        crate::sms::send(&ctx.app, &sms, &phone, &crate::i18n::Lang::of(&document.language).code_sms(&code, &document.title, org_name))
-            .await?;
+        crate::sms::send(&ctx.app, &sms, &phone, &party.lang(&document).code_sms(&code, &document.title, org_name)).await?;
         audit(ctx, conn, Entry::new("party.code_sent", "document", document.id).metadata(json!({ "party": party.id, "name": party.name })))
             .await?;
         let hint: String = phone.chars().rev().take(3).collect::<Vec<_>>().into_iter().rev().collect();

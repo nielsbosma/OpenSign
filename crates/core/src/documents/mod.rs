@@ -150,7 +150,7 @@ pub struct DocumentRow {
 }
 
 pub const PARTY_COLUMNS: &str = "id, document_id, role, name, email, phone, personal_number, company, sign_order, delivery, auth_to_view, auth_to_sign, \
-     status, link_version, link_expires_at, notified_at, viewed_at, signed_at, declined_at, decline_reason, signature, evidence";
+     status, link_version, link_expires_at, notified_at, viewed_at, signed_at, declined_at, decline_reason, signature, evidence, language";
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct PartyRow {
@@ -176,6 +176,7 @@ pub struct PartyRow {
     pub decline_reason: Option<String>,
     pub signature: Option<Value>,
     pub evidence: Option<Value>,
+    pub language: Option<String>,
 }
 
 impl PartyRow {
@@ -194,6 +195,10 @@ impl PartyRow {
     /// Signers and approvers; viewers only receive the result.
     pub fn must_act(&self) -> bool {
         self.role() != PartyRole::Viewer
+    }
+
+    pub fn lang(&self, document: &DocumentRow) -> crate::i18n::Lang {
+        crate::i18n::Lang::for_party(self.language.as_deref(), &document.language)
     }
 }
 
@@ -218,6 +223,8 @@ pub struct PartyView {
     pub signed_at: Option<DateTime<Utc>>,
     pub declined_at: Option<DateTime<Utc>>,
     pub decline_reason: Option<String>,
+    /// What this party reads, if not the document's language.
+    pub language: Option<String>,
 }
 
 pub fn personal_number_context(party_id: Uuid) -> String {
@@ -286,6 +293,7 @@ impl PartyView {
             signed_at: row.signed_at,
             declined_at: row.declined_at,
             decline_reason: row.decline_reason.clone(),
+            language: row.language.clone(),
         }
     }
 }

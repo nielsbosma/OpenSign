@@ -57,6 +57,7 @@ import {
   formatDate,
   formatDateTime,
   LANGUAGES,
+  languageName,
   PARTY_STATUS_LABELS,
   saveBytes,
 } from '@/lib/format';
@@ -186,6 +187,7 @@ function PartyCard({
             {party.role === 'viewer' ? 'Receives a copy' : party.role === 'approver' ? 'Approves' : 'Signs'} ·{' '}
             {DELIVERY_LABELS[party.delivery]?.replace(/ \(.*\)$/, '')} · {AUTH_LABELS[party.authToSign]}
             {party.authToView !== 'none' && ` · ${AUTH_LABELS[party.authToView]} to view`}
+            {party.language && ` · ${languageName(party.language)}`}
           </div>
           {party.declineReason && <div className="mt-1 text-xs text-destructive">“{party.declineReason}”</div>}
           {attachments.length > 0 && (
@@ -951,6 +953,7 @@ export function DocumentPage() {
         maskedNumber={partyDialog.party?.personalNumber}
         sequential={doc.sequential}
         available={authMethods.data?.available ?? ['none', 'standard']}
+        documentLanguage={doc.language}
         onSave={(p) => saveParties(partyDialog.party ? allParties().map((x) => (x.id === p.id ? p : x)) : [...allParties(), p])}
       />
       <SendDialog doc={doc} open={sending} onOpenChange={setSending} onSent={setLinks} />
