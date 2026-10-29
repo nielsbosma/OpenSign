@@ -16,6 +16,9 @@ use crate::error::{AppError, Result, bad_request};
 pub trait SettingsGroup: Serialize + DeserializeOwned + Default + JsonSchema + Send + Sync {
     const NAME: &'static str;
     const SECRETS: &'static [&'static str] = &[];
+    /// For each secret, the fields that decide where it is sent. Outside the app they cannot change
+    /// while the secret is kept, so an agent cannot point a saved secret at another server.
+    const SECRET_TARGETS: &'static [(&'static str, &'static [&'static str])] = &[];
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -87,6 +90,8 @@ impl Default for EmailSettings {
 impl SettingsGroup for EmailSettings {
     const NAME: &'static str = "email";
     const SECRETS: &'static [&'static str] = &["apiKey", "smtpPassword"];
+    const SECRET_TARGETS: &'static [(&'static str, &'static [&'static str])] =
+        &[("apiKey", &["provider"]), ("smtpPassword", &["provider", "smtpHost", "smtpPort", "smtpSecurity", "smtpUsername"])];
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -192,6 +197,7 @@ pub struct AiSettings {
 impl SettingsGroup for AiSettings {
     const NAME: &'static str = "ai";
     const SECRETS: &'static [&'static str] = &["apiKey"];
+    const SECRET_TARGETS: &'static [(&'static str, &'static [&'static str])] = &[("apiKey", &["provider", "baseUrl"])];
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
@@ -207,6 +213,7 @@ pub struct SmsSettings {
 impl SettingsGroup for SmsSettings {
     const NAME: &'static str = "sms";
     const SECRETS: &'static [&'static str] = &["password"];
+    const SECRET_TARGETS: &'static [(&'static str, &'static [&'static str])] = &[("password", &["provider", "username"])];
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
@@ -246,6 +253,12 @@ pub struct EidSettings {
 impl SettingsGroup for EidSettings {
     const NAME: &'static str = "eid";
     const SECRETS: &'static [&'static str] = &["bankidCertificate", "frejaCertificate", "brokerClientSecret", "ticClientSecret"];
+    const SECRET_TARGETS: &'static [(&'static str, &'static [&'static str])] = &[
+        ("bankidCertificate", &["bankidTest", "bankidCaCertificate"]),
+        ("frejaCertificate", &["frejaTest", "frejaCaCertificate", "frejaSigningCertificate"]),
+        ("brokerClientSecret", &["brokerIssuer", "brokerClientId"]),
+        ("ticClientSecret", &["ticTenant", "ticClientId"]),
+    ];
 }
 
 const TTL: Duration = Duration::from_secs(5);

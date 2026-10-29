@@ -20,6 +20,7 @@ use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{get, post};
 use opensign_core::context::App;
 use opensign_core::service::DynService;
+use opensign_core::services::transfers;
 use serde_json::json;
 use tower_http::services::{ServeDir, ServeFile};
 
@@ -115,6 +116,10 @@ pub fn router(state: AppState) -> Router {
         .route("/eid/callback", get(files::eid_callback))
         .route("/verify", post(files::verify))
         .route("/logo/{file}", get(files::logo))
+        .route(
+            "/transfers/{token}",
+            get(files::transfer_download).put(files::transfer_upload).layer(DefaultBodyLimit::max(transfers::MAX_UPLOAD_BYTES + 1024)),
+        )
         .nest("/v1", rest::router(&state))
         .nest("/v2", compat::scrive::router())
         .fallback(api_not_found)

@@ -191,7 +191,7 @@ impl Service for SetReviewLinks {
         "documents.set_review_links",
         "Allow or stop signers sharing a read-only copy of the document with their own AI agent. Turning it off also revokes links already shared.",
         Access::Permission(Permission::DocumentsCreate),
-    );
+    ).tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SetReviewLinksInput) -> Result<super::Ok_> {
         let document = load_document(ctx, conn, input.id, Need::Edit).await?;

@@ -234,7 +234,7 @@ fn tools(state: &AppState, ctx: &Ctx) -> Vec<Value> {
     let mut list: Vec<Value> = state
         .services
         .values()
-        .filter(|s| s.meta().tool && can_access(s.meta().access, ctx))
+        .filter(|s| s.meta().is_tool() && can_access(s.meta().access, ctx))
         .map(|s| {
             let meta = s.meta();
             let mut schema = serde_json::to_value(s.input_schema()).unwrap_or_else(|_| json!({ "type": "object" }));
@@ -250,8 +250,8 @@ fn tools(state: &AppState, ctx: &Ctx) -> Vec<Value> {
                 "inputSchema": schema,
                 "annotations": {
                     "readOnlyHint": meta.kind == Kind::Query,
-                    "destructiveHint": matches!(meta.name, "documents.delete" | "documents.cancel" | "webhooks.delete" | "api_keys.revoke" | "users.update"),
-                    "openWorldHint": matches!(meta.name, "documents.send" | "documents.remind" | "webhooks.test" | "webhooks.resend" | "webhooks.resend_failed"),
+                    "destructiveHint": meta.destructive,
+                    "openWorldHint": meta.open_world,
                 },
             })
         })
@@ -283,7 +283,7 @@ async fn handle_message(state: &AppState, ctx: &Ctx, message: &Value) -> Option<
         "tools/call" => {
             let name = message["params"]["name"].as_str().unwrap_or_default();
             let service =
-                state.services.values().find(|s| s.meta().tool && s.meta().tool_name() == name && can_access(s.meta().access, ctx));
+                state.services.values().find(|s| s.meta().is_tool() && s.meta().tool_name() == name && can_access(s.meta().access, ctx));
             let Some(service) = service else { return Some(rpc_error(&id, -32602, &format!("Unknown tool {name}"))) };
             let arguments = message["params"]["arguments"].clone();
             let arguments = if arguments.is_null() { json!({}) } else { arguments };

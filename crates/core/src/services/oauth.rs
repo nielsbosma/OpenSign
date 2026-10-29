@@ -44,7 +44,7 @@ impl Service for Describe {
     type Output = ConsentView;
     const META: Meta =
         Meta::query("oauth.describe", "Describe a pending MCP client connection for the consent screen.", Access::Authenticated)
-            .not_a_tool();
+            .not_a_tool("OAuth consent is given by the person in the browser, never by a client.");
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: RequestInput) -> Result<ConsentView> {
         session_only(ctx)?;
@@ -72,7 +72,7 @@ impl Service for Approve {
         "Allow an MCP client to act as you. Returns where to send the browser next.",
         Access::Authenticated,
     )
-    .not_a_tool();
+    .not_a_tool("OAuth consent is given by the person in the browser, never by a client.");
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: RequestInput) -> Result<RedirectOutput> {
         session_only(ctx)?;
@@ -97,7 +97,8 @@ pub struct Deny;
 impl Service for Deny {
     type Input = RequestInput;
     type Output = RedirectOutput;
-    const META: Meta = Meta::mutation("oauth.deny", "Refuse an MCP client connection.", Access::Authenticated).not_a_tool();
+    const META: Meta = Meta::mutation("oauth.deny", "Refuse an MCP client connection.", Access::Authenticated)
+        .not_a_tool("OAuth consent is given by the person in the browser, never by a client.");
 
     async fn run(ctx: &Ctx, _conn: &mut PgConnection, input: RequestInput) -> Result<RedirectOutput> {
         session_only(ctx)?;
@@ -123,8 +124,8 @@ pub struct ListConnections;
 impl Service for ListConnections {
     type Input = Empty;
     type Output = Vec<Connection>;
-    const META: Meta =
-        Meta::query("account.mcp_connections", "List the MCP clients connected to your account.", Access::Authenticated).not_a_tool();
+    const META: Meta = Meta::query("account.mcp_connections", "List the MCP clients connected to your account.", Access::Authenticated)
+        .not_a_tool("Connected AI apps are managed in the app, so an agent cannot see or change which clients hold access.");
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<Vec<Connection>> {
         Ok(sqlx::query_as(
@@ -150,7 +151,8 @@ impl Service for RevokeConnection {
     type Input = IdInput;
     type Output = Ok_;
     const META: Meta =
-        Meta::mutation("account.revoke_mcp_connection", "Disconnect an MCP client from your account.", Access::Authenticated).not_a_tool();
+        Meta::mutation("account.revoke_mcp_connection", "Disconnect an MCP client from your account.", Access::Authenticated)
+            .not_a_tool("Connected AI apps are managed in the app, so an agent cannot see or change which clients hold access.");
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<Ok_> {
         let done = sqlx::query("update oauth_grants set revoked_at = $3 where id = $1 and user_id = $2 and revoked_at is null")

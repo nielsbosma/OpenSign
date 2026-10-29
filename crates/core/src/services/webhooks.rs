@@ -51,7 +51,8 @@ impl Service for List {
         "webhooks.list",
         "List webhooks, their events, the result of the latest delivery and how many deliveries failed.",
         Access::Permission(Permission::WebhooksManage),
-    );
+    )
+    .tool();
 
     async fn run(_ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<Vec<WebhookView>> {
         Ok(sqlx::query_as(&format!(
@@ -92,7 +93,9 @@ impl Service for Create {
         "webhooks.create",
         "Add a webhook that receives signed JSON events when documents change. Returns its signing secret once.",
         Access::Permission(Permission::WebhooksManage),
-    );
+    )
+    .tool()
+    .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CreateInput) -> Result<CreatedWebhook> {
         let url = check_public_url(input.url.trim()).map_err(bad_request)?.to_string();
@@ -133,7 +136,9 @@ impl Service for Delete {
         "webhooks.delete",
         "Remove a webhook. Queued deliveries are dropped.",
         Access::Permission(Permission::WebhooksManage),
-    );
+    )
+    .tool()
+    .destructive();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<Ok_> {
         let url: Option<String> =
@@ -154,7 +159,9 @@ impl Service for Test {
         "webhooks.test",
         "Send a webhook.test event to one webhook, to check the receiving end.",
         Access::Permission(Permission::WebhooksManage),
-    );
+    )
+    .tool()
+    .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<Ok_> {
         let exists: Option<Uuid> =
@@ -229,7 +236,7 @@ impl Service for Deliveries {
         "webhooks.deliveries",
         "List a webhook's deliveries from the last 30 days, newest first: event, status, attempts, the latest status code or error, and the next retry. Use it to find out why an endpoint missed events.",
         Access::Permission(Permission::WebhooksManage),
-    );
+    ).tool();
 
     async fn run(_ctx: &Ctx, conn: &mut PgConnection, input: DeliveriesInput) -> Result<Vec<DeliveryView>> {
         let status = match input.status {
@@ -285,7 +292,7 @@ impl Service for GetDelivery {
         "webhooks.delivery",
         "One webhook delivery with its JSON payload and every attempt: time, status code, error, duration and the start of the endpoint's answer.",
         Access::Permission(Permission::WebhooksManage),
-    );
+    ).tool();
 
     async fn run(_ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<DeliveryDetail> {
         let delivery: DeliveryView = sqlx::query_as(&format!("select {DELIVERY_COLUMNS} from webhook_deliveries f where f.id = $1"))
@@ -336,7 +343,7 @@ impl Service for Resend {
         "webhooks.resend",
         "Send a webhook delivery again, as a new delivery with a new id and a fresh signature. The event's data and createdAt stay the same.",
         Access::Permission(Permission::WebhooksManage),
-    );
+    ).tool().open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<ResendOutput> {
         let id = resend(conn, input.id).await?.ok_or_else(|| not_found("Delivery"))?;
@@ -367,7 +374,7 @@ impl Service for ResendFailed {
         "webhooks.resend_failed",
         "Resend every delivery of a webhook that was given up after its last retry and not resent yet, up to 500 at a time. Use it after fixing the receiving end.",
         Access::Permission(Permission::WebhooksManage),
-    );
+    ).tool().open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ResendFailedInput) -> Result<ResendFailedOutput> {
         let exists: Option<Uuid> =

@@ -3,6 +3,7 @@ pub mod ai;
 pub mod auth;
 pub mod branding;
 pub mod bulk;
+pub mod docs;
 pub mod documents;
 pub mod eid;
 pub mod oauth;
@@ -12,6 +13,7 @@ pub mod review;
 pub mod setup;
 pub mod signing;
 pub mod system;
+pub mod transfers;
 pub mod users;
 pub mod webhooks;
 
@@ -100,6 +102,8 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<documents::Share>(),
         erase::<documents::Unshare>(),
         erase::<documents::Download>(),
+        erase::<transfers::CreateDownloadUrl>(),
+        erase::<transfers::CreateUploadUrl>(),
         erase::<documents::IssueSigningLink>(),
         erase::<documents::SigningPreview>(),
         erase::<documents::SignInPerson>(),
@@ -150,15 +154,45 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<ai::TestProvider>(),
         erase::<ai::ListModels>(),
         erase::<ai::GetUsage>(),
+        erase::<docs::Search>(),
+        erase::<docs::Read>(),
     ]
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::collections::{BTreeSet, HashSet};
 
     use super::*;
-    use crate::service::Access;
+    use crate::context::{Actor, Credential};
+    use crate::permissions::Role;
+    use crate::service::{Access, Exposure, Kind, allows};
+
+    /// Signed-in services agents never get. Changing this list is a security decision: say why in
+    /// the service's `not_a_tool` reason and in docs/mcp.md.
+    const HIDDEN: &[&str] = &[
+        "account.change_password",
+        "account.mcp_connections",
+        "account.passkey_add",
+        "account.passkey_begin",
+        "account.passkey_remove",
+        "account.passkeys",
+        "account.revoke_mcp_connection",
+        "account.two_factor_begin",
+        "account.two_factor_confirm",
+        "ai.chat",
+        "api_keys.create",
+        "auth.logout",
+        "documents.sign_in_person",
+        "oauth.approve",
+        "oauth.describe",
+        "oauth.deny",
+        "seal.regenerate",
+        "users.reset_two_factor",
+    ];
+
+    /// Calls that only change the caller's own preferences, allowed to read-only roles.
+    const PERSONAL: &[&str] = &["account.set_language"];
 
     #[test]
     fn names_are_unique_dotted_and_described() {
@@ -168,11 +202,71 @@ mod tests {
             assert!(seen.insert(meta.name), "duplicate {}", meta.name);
             assert!(meta.name.contains('.') && meta.name.chars().all(|c| c.is_ascii_lowercase() || c == '.' || c == '_'), "{}", meta.name);
             assert!(meta.description.ends_with('.'), "{} needs a full-sentence description", meta.name);
-            if meta.access == Access::Public {
-                assert!(!meta.tool, "public service {} must not be a tool", meta.name);
-            }
             let schema = serde_json::to_value(s.input_schema()).expect("schema");
             assert_eq!(schema["type"], "object", "{} input must be an object", meta.name);
         }
+    }
+
+    #[test]
+    fn every_service_decides_whether_it_is_a_tool() {
+        let mut hidden = BTreeSet::new();
+        for s in registry() {
+            let meta = s.meta();
+            match meta.exposure {
+                Exposure::Undecided => panic!("{} must call .tool() or .not_a_tool(reason)", meta.name),
+                Exposure::Hidden(reason) => {
+                    assert!(reason.ends_with('.'), "{} needs a full-sentence reason", meta.name);
+                    if meta.access != Access::Public {
+                        hidden.insert(meta.name);
+                    }
+                }
+                Exposure::Tool => assert_ne!(meta.access, Access::Public, "public service {} must not be a tool", meta.name),
+            }
+            if meta.kind == Kind::Query {
+                assert!(!meta.destructive, "{} is a query and cannot be destructive", meta.name);
+            }
+        }
+        assert_eq!(hidden, HIDDEN.iter().copied().collect(), "the hidden list changed; update HIDDEN and docs/mcp.md");
+    }
+
+    fn actor(role: Role) -> Actor {
+        Actor {
+            user_id: uuid::Uuid::nil(),
+            email: "a@example.com".into(),
+            name: "A".into(),
+            role,
+            permissions: role.permissions(),
+            must_enable_two_factor: false,
+            credential: Credential::OAuth,
+        }
+    }
+
+    fn tools(role: Role) -> BTreeSet<&'static str> {
+        let actor = actor(role);
+        registry().iter().map(|s| *s.meta()).filter(|m| m.is_tool() && allows(m.access, Some(&actor))).map(|m| m.name).collect()
+    }
+
+    #[test]
+    fn role_matrix() {
+        let all: BTreeSet<&str> = registry().iter().map(|s| *s.meta()).filter(|m| m.is_tool()).map(|m| m.name).collect();
+        assert_eq!(tools(Role::Admin), all, "an admin sees every tool");
+        assert!(all.is_disjoint(&HIDDEN.iter().copied().collect()));
+
+        let kinds: std::collections::HashMap<&str, Kind> = registry().iter().map(|s| (s.meta().name, s.meta().kind)).collect();
+        for role in [Role::Viewer, Role::Auditor] {
+            let writes: Vec<_> = tools(role).into_iter().filter(|n| kinds[n] == Kind::Mutation && !PERSONAL.contains(n)).collect();
+            assert!(writes.is_empty(), "{role:?} can change {writes:?}");
+        }
+
+        let sender = tools(Role::Sender);
+        for name in &sender {
+            let area = name.split('.').next().unwrap_or_default();
+            assert!(!matches!(area, "settings" | "webhooks" | "audit" | "system" | "retention" | "branding"), "a sender has {name}");
+            assert!(area != "users" || *name == "users.list", "a sender has {name}");
+        }
+        assert!(sender.contains("documents.send") && sender.contains("documents.upload_url"));
+
+        let manager = tools(Role::Manager);
+        assert!(manager.contains("webhooks.resend") && !manager.contains("settings.update") && !manager.contains("users.invite"));
     }
 }

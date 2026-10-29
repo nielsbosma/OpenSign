@@ -167,7 +167,8 @@ impl Service for GetVersion {
         "The running OpenSign version, the latest release on GitHub, and whether an update is available.",
         Access::Permission(Permission::SystemRead),
     )
-    .without_transaction();
+    .without_transaction()
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: VersionInput) -> Result<VersionView> {
         version_view(ctx, conn, input.refresh).await
@@ -213,7 +214,8 @@ impl Service for Status {
         "system.status",
         "The database version, which migrations are applied, and the background job queue with recent failures.",
         Access::Permission(Permission::SystemRead),
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _input: super::Empty) -> Result<SystemStatus> {
         let database: String = sqlx::query_scalar("select current_setting('server_version')").fetch_one(&mut *conn).await?;
@@ -247,8 +249,7 @@ impl Service for Update {
         "Redeploy OpenSign through the deploy hook in Settings, which pulls the newest image for the service's tag. Migrations run when the new version starts.",
         Access::Permission(Permission::SettingsManage),
     )
-    .not_a_tool()
-    .without_transaction();
+    .without_transaction().tool().destructive().open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _input: super::Empty) -> Result<Ok_> {
         let updates: UpdateSettings = settings(ctx, conn).await?;

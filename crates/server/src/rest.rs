@@ -282,7 +282,7 @@ async fn handle(
         Err(e) => return fail(e),
     };
     let Some(service) = state.services.get(route.service) else { return fail(AppError::new(ErrorKind::NotFound, "Not found")) };
-    if ctx.actor.as_ref().is_some_and(|a| a.credential != Credential::Session) && !service.meta().tool {
+    if ctx.actor.as_ref().is_some_and(|a| a.credential != Credential::Session) && !service.meta().is_tool() {
         return fail(AppError::new(ErrorKind::Forbidden, "This call is only available signed in to the app"));
     }
     let Ok(body) = to_bytes(body, BODY_LIMIT).await else {

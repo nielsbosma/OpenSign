@@ -62,7 +62,8 @@ impl Service for GetSettings {
         "settings.get",
         "Read one group of Admin settings. Secrets show only whether they are set.",
         Access::Permission(Permission::SettingsManage),
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: GroupInput) -> Result<GroupView> {
         match input.group {
@@ -99,6 +100,31 @@ fn merge(current: Value, patch: &Value, secrets: &[&str]) -> Value {
     merged
 }
 
+/// Secrets never pass through an agent or an API call: there they can be cleared, not set, and the
+/// fields that decide where a kept secret goes cannot change.
+fn guard_secrets<G: SettingsGroup>(current: &Value, patch: &Value) -> Result<()> {
+    let Value::Object(changes) = patch else { return Ok(()) };
+    let filled = |v: &Value| v.as_str().is_some_and(|s| !s.is_empty());
+    if let Some(field) =
+        changes.iter().find(|(k, v)| (G::SECRETS.contains(&k.as_str()) || k.ends_with("Password")) && filled(v)).map(|(k, _)| k)
+    {
+        return Err(bad_request(format!(
+            "{field} is a secret. Set it signed in to OpenSign; through MCP and API keys a secret can only be cleared with an empty string."
+        )));
+    }
+    for (secret, targets) in G::SECRET_TARGETS {
+        let kept = !current[*secret].is_null() && changes.get(*secret) != Some(&Value::String(String::new()));
+        if let Some(field) = targets.iter().find(|f| changes.get(**f).is_some_and(|v| !v.is_null() && *v != current[**f]))
+            && kept
+        {
+            return Err(bad_request(format!(
+                "Changing {field} would send the saved {secret} somewhere new. Change it signed in to OpenSign, or clear {secret} with an empty string in the same call."
+            )));
+        }
+    }
+    Ok(())
+}
+
 async fn update<G: SettingsGroup>(ctx: &Ctx, conn: &mut PgConnection, patch: &Value) -> Result<GroupView> {
     let pinned = ctx.app.settings.pinned::<G>();
     if let Value::Object(changes) = patch
@@ -107,6 +133,9 @@ async fn update<G: SettingsGroup>(ctx: &Ctx, conn: &mut PgConnection, patch: &Va
         return Err(bad_request(format!("{field} is fixed by an environment variable")));
     }
     let current: G = settings(ctx, conn).await?;
+    if !ctx.in_app() {
+        guard_secrets::<G>(&serde_json::to_value(&current).map_err(AppError::internal)?, patch)?;
+    }
     let before = public_view(&current);
     let mut base = serde_json::to_value(&current).map_err(AppError::internal)?;
     if let Value::Object(map) = &mut base {
@@ -264,7 +293,8 @@ impl Service for UpdateSettings {
         "Change Admin settings in one group. Every change is audited with secrets masked.",
         Access::Permission(Permission::SettingsManage),
     )
-    .not_a_tool();
+    .tool()
+    .destructive();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: UpdateInput) -> Result<GroupView> {
         if !input.values.is_object() {
@@ -314,7 +344,9 @@ impl Service for SendTestEmail {
         "settings.send_test_email",
         "Send a test email through the configured provider, Resend or SMTP. A successful test marks email as set up.",
         Access::Permission(Permission::SettingsManage),
-    );
+    )
+    .tool()
+    .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: TestEmailInput) -> Result<Ok_> {
         let to = match input.to {
@@ -393,7 +425,8 @@ impl Service for ListAudit {
         "audit.list",
         "Browse the audit log, newest first. Filter by entity, action or actor.",
         Access::Permission(Permission::AuditRead),
-    );
+    )
+    .tool();
 
     async fn run(_ctx: &Ctx, conn: &mut PgConnection, input: ListAuditInput) -> Result<Vec<AuditView>> {
         Ok(sqlx::query_as(
@@ -423,7 +456,8 @@ impl Service for VerifyAudit {
         "audit.verify",
         "Recompute the audit log's hash chain and report the first entry that was changed or removed, if any.",
         Access::Permission(Permission::AuditRead),
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<ChainReport> {
         verify_chain(conn, ctx.keys()).await

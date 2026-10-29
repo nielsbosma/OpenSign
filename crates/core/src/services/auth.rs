@@ -206,7 +206,9 @@ pub struct Logout;
 impl Service for Logout {
     type Input = Empty;
     type Output = Ok_;
-    const META: Meta = Meta::mutation("auth.logout", "Sign out of this browser.", Access::Authenticated).not_a_tool().before_two_factor();
+    const META: Meta = Meta::mutation("auth.logout", "Sign out of this browser.", Access::Authenticated)
+        .not_a_tool("Ends the caller's own browser session.")
+        .before_two_factor();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<Ok_> {
         if let Some(id) = &ctx.session_id {
@@ -239,8 +241,9 @@ pub struct WhoAmI;
 impl Service for WhoAmI {
     type Input = Empty;
     type Output = Me;
-    const META: Meta =
-        Meta::query("account.me", "Who the signed-in user is, their role and permissions.", Access::Authenticated).before_two_factor();
+    const META: Meta = Meta::query("account.me", "Who the signed-in user is, their role and permissions.", Access::Authenticated)
+        .before_two_factor()
+        .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<Me> {
         let actor = ctx.actor()?;
@@ -273,7 +276,8 @@ impl Service for SetLanguage {
     type Input = SetLanguageInput;
     type Output = Ok_;
     const META: Meta = Meta::mutation("account.set_language", "Choose the language the app is shown in for you.", Access::Authenticated)
-        .before_two_factor();
+        .before_two_factor()
+        .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SetLanguageInput) -> Result<Ok_> {
         let user_id = ctx.actor()?.user_id;
@@ -298,7 +302,7 @@ impl Service for BeginTwoFactor {
     type Input = Empty;
     type Output = TwoFactorSetup;
     const META: Meta = Meta::mutation("account.two_factor_begin", "Start setting up an authenticator app.", Access::Authenticated)
-        .not_a_tool()
+        .not_a_tool("Two-factor setup is a credential, so it stays in the app.")
         .before_two_factor();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<TwoFactorSetup> {
@@ -338,7 +342,7 @@ impl Service for ConfirmTwoFactor {
     type Output = RecoveryCodes;
     const META: Meta =
         Meta::mutation("account.two_factor_confirm", "Turn on two-factor with a code from the authenticator app.", Access::Authenticated)
-            .not_a_tool()
+            .not_a_tool("Two-factor setup is a credential, so it stays in the app.")
             .before_two_factor();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CodeInput) -> Result<RecoveryCodes> {
@@ -396,7 +400,7 @@ impl Service for ChangePassword {
     type Output = Ok_;
     const META: Meta =
         Meta::mutation("account.change_password", "Change your password. Signs out your other sessions.", Access::Authenticated)
-            .not_a_tool()
+            .not_a_tool("Passwords never pass through an agent.")
             .before_two_factor();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ChangePasswordInput) -> Result<Ok_> {

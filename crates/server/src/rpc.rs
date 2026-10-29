@@ -56,7 +56,7 @@ pub async fn call(State(state): State<AppState>, Path(name): Path<String>, reque
     };
     if let Some(actor) = &ctx.actor
         && actor.credential != Credential::Session
-        && !service.meta().tool
+        && !service.meta().is_tool()
     {
         return ApiError(AppError::new(ErrorKind::Forbidden, "This call is only available signed in to the app"), Some(request_id))
             .into_response();
