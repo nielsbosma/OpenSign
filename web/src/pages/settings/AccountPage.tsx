@@ -338,7 +338,11 @@ export function AccountPage() {
   const { user } = useSession();
   return (
     <div className="grid gap-6">
-      <SettingsCard title={user?.name ?? t('You')} description={`${user?.email} · ${user ? (ROLE_LABELS[user.role] ?? user.role) : ''}`}>
+      <SettingsCard
+        help="account-security"
+        title={user?.name ?? t('You')}
+        description={`${user?.email} · ${user ? (ROLE_LABELS[user.role] ?? user.role) : ''}`}
+      >
         <p className="text-muted-foreground">{t('Ask an Admin to change your name, email or role.')}</p>
       </SettingsCard>
       <LanguageCard />

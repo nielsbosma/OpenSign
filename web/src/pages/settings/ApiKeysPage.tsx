@@ -234,6 +234,7 @@ export function ApiKeysPage() {
   const [editing, setEditing] = useState<ApiKey | null>(null);
   return (
     <SettingsCard
+      help="api#api-keys"
       title={t('API Keys')}
       description={tx(
         'For your own integrations. OpenSign speaks its own REST API at {rest}, and drop-in compatible Scrive ({scrive}) and DocuSign ({docusign}) APIs.',
