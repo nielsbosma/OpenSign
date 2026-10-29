@@ -1,5 +1,19 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowUpCircle, Braces, FileStack, FileText, LogOut, Menu, Moon, Settings, ShieldCheck, Sparkles, Sun } from 'lucide-react';
+import {
+  ArrowUpCircle,
+  Braces,
+  FileStack,
+  FileText,
+  LogOut,
+  Menu,
+  Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Sun,
+} from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { AssistantPanel } from '@/components/AssistantPanel';
@@ -56,8 +70,8 @@ function UserMenu() {
         <DropdownMenuItem onSelect={toggle}>
           {theme === 'dark' ? <Sun /> : <Moon />} {theme === 'dark' ? 'Light Theme' : 'Dark Theme'}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => navigate('/settings/account')}>
-          <Settings /> Your Account
+        <DropdownMenuItem onSelect={() => navigate('/settings')}>
+          <Settings /> Settings
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={signOut}>
@@ -68,14 +82,28 @@ function UserMenu() {
   );
 }
 
-function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
-  const { can } = useSession();
+const SIDEBAR_KEY = 'opensign-sidebar';
+
+function storedCollapsed() {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === 'collapsed';
+  } catch {
+    return false;
+  }
+}
+
+function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onClose: () => void }) {
+  const { user, can } = useSession();
   const version = useApi('system.version', { refresh: false }, { enabled: can('settings.manage'), staleTime: 60 * 60_000 });
   return (
     <div className="flex h-full flex-col bg-sidebar">
       <div className="flex h-14 shrink-0 items-center gap-2.5 px-3">
         <Logo />
         <span className="text-sm font-semibold">OpenSign</span>
+        {user?.version && <span className="text-[11px] text-muted-foreground tabular-nums">{user.version}</span>}
+        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close Sidebar" className="ml-auto size-8 text-muted-foreground">
+          <PanelLeftClose />
+        </Button>
       </div>
       <nav className="flex flex-1 flex-col gap-0.5 px-2 py-1" aria-label="Main">
         <NavLink to="/documents" className={linkClass} onClick={onNavigate}>
@@ -94,9 +122,6 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </a>
       </nav>
       <div className="grid gap-0.5 border-t border-sidebar-border px-2 py-2">
-        <NavLink to="/settings" className={linkClass} onClick={onNavigate}>
-          <Settings className="size-4 opacity-80" /> Settings
-        </NavLink>
         {version.data?.updateAvailable && (
           <NavLink to="/settings/system" className={linkClass} onClick={onNavigate}>
             <ArrowUpCircle className="size-4 text-primary" /> Update to {version.data.latest?.version}
@@ -112,6 +137,14 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 export function AppShell() {
   const docked = useMediaQuery('(min-width: 1024px)');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(storedCollapsed);
+  const setSidebar = (value: boolean) => {
+    setCollapsed(value);
+    try {
+      localStorage.setItem(SIDEBAR_KEY, value ? 'collapsed' : 'open');
+    } catch {}
+  };
+  const showSidebar = docked && !collapsed;
   const [chatOpen, setChatOpen] = useState(false);
   const ai = useApi('ai.status', undefined, { staleTime: 5 * 60_000 });
   const assistant = !!ai.data?.configured && ai.data.canUse;
@@ -119,29 +152,31 @@ export function AppShell() {
   return (
     <div className="flex h-svh overflow-hidden">
       {docked ? (
-        <aside className="w-60 shrink-0 border-r border-sidebar-border">
-          <Sidebar />
-        </aside>
+        showSidebar && (
+          <aside className="w-60 shrink-0 border-r border-sidebar-border">
+            <Sidebar onClose={() => setSidebar(true)} />
+          </aside>
+        )
       ) : (
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
           <SheetContent side="left" className="w-72 p-0 [&>button]:hidden">
             <SheetTitle className="sr-only">Navigation</SheetTitle>
-            <Sidebar onNavigate={() => setDrawerOpen(false)} />
+            <Sidebar onNavigate={() => setDrawerOpen(false)} onClose={() => setDrawerOpen(false)} />
           </SheetContent>
         </Sheet>
       )}
 
       <main className="relative min-w-0 flex-1 overflow-y-auto">
-        {!docked && (
+        {!showSidebar && (
           <div className="absolute top-2.5 left-3 z-10">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setDrawerOpen(true)}
+              onClick={() => (docked ? setSidebar(false) : setDrawerOpen(true))}
               aria-label="Open Navigation"
               className="text-muted-foreground"
             >
-              <Menu />
+              {docked ? <PanelLeftOpen /> : <Menu />}
             </Button>
           </div>
         )}
@@ -163,7 +198,12 @@ export function AppShell() {
             </Tooltip>
           </div>
         )}
-        <div className={cn('mx-auto w-full max-w-6xl pt-3.5 pb-10 pr-14 sm:pr-16', docked ? 'pl-4 sm:pl-6 lg:pl-8' : 'pl-14 sm:pl-16')}>
+        <div
+          className={cn(
+            'mx-auto w-full max-w-6xl pt-6 pb-10 lg:pt-10 pr-14 sm:pr-16',
+            showSidebar ? 'pl-4 sm:pl-6 lg:pl-8' : 'pl-14 sm:pl-16',
+          )}
+        >
           <Outlet />
         </div>
       </main>

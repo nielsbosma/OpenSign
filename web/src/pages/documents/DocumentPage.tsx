@@ -4,6 +4,7 @@ import {
   ChevronUp,
   Download,
   HandHelping,
+  History,
   Link2,
   MoreHorizontal,
   Paperclip,
@@ -481,6 +482,7 @@ export function DocumentPage() {
   const [deleting, setDeleting] = useState(false);
   const [holding, setHolding] = useState(false);
   const [holdReason, setHoldReason] = useState('');
+  const [showActivity, setShowActivity] = useState(false);
 
   const setParties = useApiMutation('documents.set_parties', { invalidates: ['documents.'] });
   const setSequential = useApiMutation('documents.update', { invalidates: ['documents.'] });
@@ -524,6 +526,21 @@ export function DocumentPage() {
   useEffect(() => {
     if (doc && placingFor !== null && !doc.parties.some((p) => p.id === placingFor)) setPlacingFor(null);
   }, [doc, placingFor]);
+  useEffect(() => {
+    if (!draft || !selected) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return;
+      if (e.key === 'Escape') setSelected(null);
+      else if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        update(fields.filter((f) => f.key !== selected));
+        setSelected(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [draft, selected, fields, update]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: only when the parties change
   useEffect(() => {
     if (doc && placingFor === null) setPlacingFor(doc.parties.find((p) => p.role !== 'viewer')?.id ?? null);
@@ -654,6 +671,9 @@ export function DocumentPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setShowActivity(true)}>
+                <History /> Activity
+              </DropdownMenuItem>
               {doc.status !== 'draft' && (
                 <DropdownMenuItem onSelect={() => download('original')}>
                   <Download /> Original PDF
@@ -685,7 +705,7 @@ export function DocumentPage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">
           {draft && doc.files.length > 0 && (
-            <div className="sticky top-0 z-10 mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border bg-background/95 p-2 backdrop-blur">
+            <div className="sticky top-3 z-10 mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border bg-background/95 p-2 backdrop-blur">
               <select
                 aria-label="Fields for"
                 value={placingFor ?? ''}
@@ -780,12 +800,11 @@ export function DocumentPage() {
           )}
         </div>
 
-        <aside className="min-w-0">
+        <aside className="min-w-0 lg:sticky lg:top-3 lg:max-h-[calc(100svh-1.5rem)] lg:self-start lg:overflow-y-auto lg:pb-4 [scrollbar-width:thin]">
           <Tabs defaultValue="setup">
             <TabsList className="w-full">
               <TabsTrigger value="setup">{draft ? 'Setup' : 'Parties'}</TabsTrigger>
               <TabsTrigger value="review">Review</TabsTrigger>
-              <TabsTrigger value="activity">Activity</TabsTrigger>
             </TabsList>
             <TabsContent value="setup" className="mt-4 grid gap-6">
               <Section
@@ -877,9 +896,6 @@ export function DocumentPage() {
             <TabsContent value="review" className="mt-4">
               <ReviewPanel documentId={doc.id} draft={draft} />
             </TabsContent>
-            <TabsContent value="activity" className="mt-4">
-              <ActivityPanel document={doc} />
-            </TabsContent>
           </Tabs>
         </aside>
       </div>
@@ -896,6 +912,17 @@ export function DocumentPage() {
       <SendDialog doc={doc} open={sending} onOpenChange={setSending} onSent={setLinks} />
       {doc.isTemplate && <BulkSendDialog templateId={doc.id} templateTitle={doc.title} open={bulkSending} onOpenChange={setBulkSending} />}
       <LinksDialog links={links} onClose={() => setLinks([])} />
+      <Dialog open={showActivity} onOpenChange={setShowActivity}>
+        <DialogContent className="flex max-h-[85svh] flex-col sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Activity</DialogTitle>
+            <DialogDescription>What happened to this document, and the full audit trail.</DialogDescription>
+          </DialogHeader>
+          <div className="-mx-6 min-h-0 overflow-y-auto px-6">
+            <ActivityPanel document={doc} />
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog open={canceling} onOpenChange={setCanceling}>
         <DialogContent>
           <DialogHeader>

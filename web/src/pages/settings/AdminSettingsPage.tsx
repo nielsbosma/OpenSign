@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmButton, Field, Spinner } from '@/components/common';
+import { SearchSelect } from '@/components/SearchSelect';
 import { Button } from '@/components/ui/button';
 import { FilePicker } from '@/components/ui/file-picker';
 import { Input } from '@/components/ui/input';
@@ -9,13 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { type Group, useApi, useApiMutation } from '@/lib/api';
 import { formatDate, formatDateTime, LANGUAGES } from '@/lib/format';
+import { countryOptions, timeZoneOptions } from '@/lib/regions';
 import { SettingsCard } from './SettingsLayout';
 
 type Spec = {
   key: string;
   label: string;
   /** `file` is a secret PEM or PKCS#12 file, `pem` a public one such as a CA certificate. */
-  type?: 'text' | 'secret' | 'bool' | 'number' | 'select' | 'file' | 'pem' | 'color';
+  type?: 'text' | 'secret' | 'bool' | 'number' | 'select' | 'file' | 'pem' | 'color' | 'country' | 'timeZone';
   hint?: string;
   options?: [string, string][];
   placeholder?: string;
@@ -32,8 +34,8 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
     fields: [
       { key: 'name', label: 'Name' },
       { key: 'registrationNumber', label: 'Registration Number' },
-      { key: 'country', label: 'Country', placeholder: 'SE' },
-      { key: 'timeZone', label: 'Time Zone', placeholder: 'Europe/Stockholm' },
+      { key: 'country', label: 'Country', type: 'country' },
+      { key: 'timeZone', label: 'Time Zone', type: 'timeZone' },
       {
         key: 'locale',
         label: 'Language for Signers',
@@ -67,7 +69,7 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
   },
   updates: {
     title: 'Updates',
-    description: 'Check for new releases and update from the System page.',
+    description: 'How OpenSign finds and installs new releases.',
     fields: [
       {
         key: 'checkForUpdates',
@@ -338,8 +340,14 @@ function AiExtras() {
 
 export function AdminSettingsPage() {
   const { group = '' } = useParams();
-  const spec = GROUPS[group as Group];
-  const current = useApi('settings.get', { group: group as Group }, { enabled: !!spec });
+  if (group === 'updates') return <Navigate to="/settings/system" replace />;
+  if (!GROUPS[group as Group]) return <Navigate to="/settings" replace />;
+  return <SettingsGroup group={group as Group} />;
+}
+
+export function SettingsGroup({ group }: { group: Group }) {
+  const spec = GROUPS[group];
+  const current = useApi('settings.get', { group });
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [certFiles, setCertFiles] = useState<Record<string, File>>({});
   const save = useApiMutation('settings.update', {
@@ -356,7 +364,6 @@ export function AdminSettingsPage() {
     setCertFiles({});
   }, [group]);
 
-  if (!spec) return <Navigate to="/settings" replace />;
   if (current.isPending) return <Spinner />;
   const saved = (current.data?.values ?? {}) as Record<string, unknown>;
   const pinned = current.data?.pinned ?? [];
@@ -365,7 +372,7 @@ export function AdminSettingsPage() {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    save.mutate({ group: group as Group, values: draft });
+    save.mutate({ group, values: draft });
   };
 
   return (
@@ -405,6 +412,21 @@ export function AdminSettingsPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                  </Field>
+                );
+              }
+              if (f.type === 'country' || f.type === 'timeZone') {
+                const country = f.type === 'country';
+                return (
+                  <Field key={f.key} label={f.label} htmlFor={id} hint={hint}>
+                    <SearchSelect
+                      id={id}
+                      value={String(value(f.key) ?? '')}
+                      onChange={(v) => set(f.key, v)}
+                      options={country ? countryOptions() : timeZoneOptions()}
+                      searchPlaceholder={country ? 'Search countries…' : 'Search by city or offset…'}
+                      disabled={locked}
+                    />
                   </Field>
                 );
               }

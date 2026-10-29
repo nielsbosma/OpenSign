@@ -18,7 +18,6 @@ const SECTIONS: { title: string; items: { path: string; label: string; permissio
       { path: '/settings/admin/retention', label: 'Retention', permission: 'settings.manage' },
       { path: '/settings/audit', label: 'Audit Trail', permission: 'audit.read' },
       { path: '/settings/system', label: 'System', permission: 'system.read' },
-      { path: '/settings/admin/updates', label: 'Updates', permission: 'settings.manage' },
     ],
   },
   {

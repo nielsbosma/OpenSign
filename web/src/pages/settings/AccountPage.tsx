@@ -4,6 +4,7 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { CopyButton, Field, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { call, errorMessage, type TwoFactorSetup, useApi, useApiMutation } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
@@ -64,6 +65,13 @@ function PasskeysCard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
 
+  const close = () => {
+    setAdding(false);
+    setName('');
+    setPassword('');
+    setError(undefined);
+  };
+
   const add = async (e: FormEvent) => {
     e.preventDefault();
     setError(undefined);
@@ -74,9 +82,7 @@ function PasskeysCard() {
       await call('account.passkey_add', { state: begin.state, name: name.trim() || 'Passkey', ...response });
       await queryClient.invalidateQueries({ queryKey: ['account.passkeys'] });
       await queryClient.invalidateQueries({ queryKey: ['account.me'] });
-      setAdding(false);
-      setName('');
-      setPassword('');
+      close();
       toast.success('Passkey added. You can now sign in with it.');
     } catch (e) {
       setError(passkeyCanceled(e) ? 'The passkey was not created.' : errorMessage(e));
@@ -107,8 +113,19 @@ function PasskeysCard() {
         ))}
         {!passkeysSupported() ? (
           <p className="text-muted-foreground">This browser does not support passkeys.</p>
-        ) : adding ? (
-          <form onSubmit={add} className="grid max-w-md gap-4">
+        ) : (
+          <Button variant="outline" className="justify-self-start" onClick={() => setAdding(true)}>
+            Add a Passkey
+          </Button>
+        )}
+      </div>
+      <Dialog open={adding} onOpenChange={(open) => !open && !busy && close()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add a Passkey</DialogTitle>
+            <DialogDescription>Confirm your password, then follow your browser or device to create the passkey.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={add} className="grid gap-4">
             <FormError message={error} />
             <Field label="Name" htmlFor="passkey-name" hint="To tell your passkeys apart.">
               <Input id="passkey-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="MacBook" autoFocus />
@@ -123,21 +140,17 @@ function PasskeysCard() {
                 required
               />
             </Field>
-            <div className="flex gap-2">
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={close} disabled={busy}>
+                Cancel
+              </Button>
               <Button type="submit" disabled={busy}>
                 {busy && <Spinner className="text-primary-foreground" />} Create Passkey
               </Button>
-              <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
-                Cancel
-              </Button>
-            </div>
+            </DialogFooter>
           </form>
-        ) : (
-          <Button variant="outline" className="justify-self-start" onClick={() => setAdding(true)}>
-            Add a Passkey
-          </Button>
-        )}
-      </div>
+        </DialogContent>
+      </Dialog>
     </SettingsCard>
   );
 }
@@ -163,20 +176,13 @@ function TwoFactorCard() {
     if (setup) void QRCode.toDataURL(setup.otpauthUrl, { margin: 1, width: 180 }).then(setQr);
   }, [setup]);
 
-  if (codes) {
-    return (
-      <SettingsCard
-        title="Recovery Codes"
-        description="Each code signs you in once if you lose your phone. Store them somewhere safe; they are not shown again."
-      >
-        <pre className="mb-4 grid grid-cols-2 gap-1 rounded-md bg-muted p-4 font-mono text-sm">{codes.join('\n')}</pre>
-        <div className="flex gap-2">
-          <CopyButton value={codes.join('\n')} label="Copy Codes" />
-          <Button onClick={() => setCodes(null)}>I Saved Them</Button>
-        </div>
-      </SettingsCard>
-    );
-  }
+  const close = () => {
+    setSetup(null);
+    setCodes(null);
+    setCode('');
+    setError(undefined);
+  };
+
   return (
     <SettingsCard
       title="Two-Factor Authentication"
@@ -186,38 +192,71 @@ function TwoFactorCard() {
           : 'Protect your account with a code from an authenticator app.'
       }
     >
-      {setup ? (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            setError(undefined);
-            confirm.mutate({ code: code.trim() }, { onError: (e) => setError(e.message) });
-          }}
-          className="grid max-w-md gap-4"
-        >
-          <p>Scan the code with your authenticator app, then enter the 6 digits it shows.</p>
-          {qr && <img src={qr} alt="Authenticator QR code" className="size-44 rounded-md border bg-white p-1" />}
-          <code className="break-all text-xs text-muted-foreground">{setup.secret}</code>
-          <FormError message={error} />
-          <Input
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            className="font-mono"
-            aria-label="Code"
-          />
-          <Button type="submit" className="justify-self-start" disabled={confirm.isPending}>
-            Turn On
-          </Button>
-        </form>
-      ) : user?.twoFactorEnabled ? (
+      {user?.twoFactorEnabled ? (
         <p className="text-muted-foreground">Lost your phone? Sign in with a recovery code, or ask an Admin to reset it.</p>
       ) : (
-        <Button onClick={() => begin.mutate({})} disabled={begin.isPending}>
+        <Button variant="outline" onClick={() => begin.mutate({})} disabled={begin.isPending}>
           Set Up
         </Button>
       )}
+      <Dialog open={!!setup || !!codes} onOpenChange={(open) => !open && !codes && close()}>
+        <DialogContent onInteractOutside={(e) => codes && e.preventDefault()} onEscapeKeyDown={(e) => codes && e.preventDefault()}>
+          {codes ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Save Your Recovery Codes</DialogTitle>
+                <DialogDescription>
+                  Each code signs you in once if you lose your phone. Store them somewhere safe; they are not shown again.
+                </DialogDescription>
+              </DialogHeader>
+              <pre className="grid grid-cols-2 gap-1 rounded-md bg-muted p-4 font-mono text-sm">{codes.join('\n')}</pre>
+              <DialogFooter>
+                <CopyButton value={codes.join('\n')} label="Copy Codes" />
+                <Button onClick={close}>I Saved Them</Button>
+              </DialogFooter>
+            </>
+          ) : (
+            setup && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setError(undefined);
+                  confirm.mutate({ code: code.trim() }, { onError: (e) => setError(e.message) });
+                }}
+                className="grid gap-4"
+              >
+                <DialogHeader>
+                  <DialogTitle>Set Up Two-Factor Authentication</DialogTitle>
+                  <DialogDescription>Scan the code with your authenticator app, then enter the 6 digits it shows.</DialogDescription>
+                </DialogHeader>
+                <div className="grid justify-items-center gap-2">
+                  {qr && <img src={qr} alt="Authenticator QR code" className="size-44 rounded-md border bg-white p-1" />}
+                  <code className="break-all text-center text-xs text-muted-foreground">{setup.secret}</code>
+                </div>
+                <FormError message={error} />
+                <Input
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  className="font-mono"
+                  aria-label="Code"
+                  placeholder="123456"
+                  autoFocus
+                />
+                <DialogFooter>
+                  <Button type="button" variant="ghost" onClick={close}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={confirm.isPending}>
+                    Turn On
+                  </Button>
+                </DialogFooter>
+              </form>
+            )
+          )}
+        </DialogContent>
+      </Dialog>
     </SettingsCard>
   );
 }
