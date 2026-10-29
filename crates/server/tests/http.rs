@@ -376,6 +376,46 @@ async fn only_the_signing_page_may_use_the_camera() {
 }
 
 #[tokio::test]
+async fn only_listed_sites_may_frame_the_signing_page() {
+    let Some(app) = app().await else { return };
+    let client = Client { router: router(AppState::new(app.clone())), ip: "203.0.113.10" };
+    let ancestors = |response: &Response<Body>| {
+        let csp = response.headers().get(header::CONTENT_SECURITY_POLICY).unwrap().to_str().unwrap().to_string();
+        csp.split(';').map(str::trim).find(|d| d.starts_with("frame-ancestors")).unwrap().to_string()
+    };
+    let get = |path: &str| Request::get(path).body(Body::empty()).unwrap();
+
+    let (sign, _) = client.send(get("/sign")).await;
+    assert_eq!(ancestors(&sign), "frame-ancestors 'none'", "off by default");
+    assert_eq!(sign.headers().get(header::X_FRAME_OPTIONS).unwrap(), "DENY");
+
+    let mut conn = app.db.acquire().await.unwrap();
+    let security = opensign_core::settings::SecuritySettings {
+        embed_signing: true,
+        embed_origins: vec!["https://app.example.com".into()],
+        ..Default::default()
+    };
+    app.settings.save(&mut conn, &app.keys, &security, None).await.unwrap();
+
+    let (sign, _) = client.send(get("/sign")).await;
+    assert_eq!(ancestors(&sign), "frame-ancestors https://app.example.com");
+    assert!(sign.headers().get(header::X_FRAME_OPTIONS).is_none());
+    for path in ["/", "/documents", "/settings/admin/security", "/sign/x", "/api/health", "/verify"] {
+        let (other, _) = client.send(get(path)).await;
+        assert_eq!(ancestors(&other), "frame-ancestors 'none'", "{path}");
+        assert_eq!(other.headers().get(header::X_FRAME_OPTIONS).unwrap(), "DENY", "{path}");
+    }
+
+    let (script, _) = client.send(get("/embed.js")).await;
+    assert_eq!(script.headers().get("cross-origin-resource-policy").unwrap(), "cross-origin");
+
+    let off = opensign_core::settings::SecuritySettings { embed_signing: false, ..security };
+    app.settings.save(&mut conn, &app.keys, &off, None).await.unwrap();
+    let (sign, _) = client.send(get("/sign")).await;
+    assert_eq!(ancestors(&sign), "frame-ancestors 'none'", "turning it off stops framing at once");
+}
+
+#[tokio::test]
 async fn review_links_serve_text_without_indexing() {
     let Some(app) = app().await else { return };
     let client = Client { router: router(AppState::new(app.clone())), ip: "203.0.113.9" };

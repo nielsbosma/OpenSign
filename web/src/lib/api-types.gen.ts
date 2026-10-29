@@ -908,6 +908,8 @@ export type DocumentsSignInPersonOutput = SignerLink;
 export type DocumentsSigningLinkInput = {
   documentId: string;
   partyId: string;
+  /** For embedded signing: where the signing page sends the party after they sign or decline, with `event=signing_complete` or `event=decline` added. Must be on a site allowed to embed. */
+  redirectUrl?: string | null;
   /** Revoke the party's earlier links first, e.g. when one was forwarded by mistake. */
   rotate?: boolean;
 };
@@ -925,6 +927,13 @@ export type ActiveReviewLink = {
   lastUsedAt?: string | null;
   /** How many times an agent has fetched it. */
   uses: number;
+};
+
+export type EmbedView = {
+  /** The sites that may show this page in a frame; events go to these origins only. */
+  origins: Array<string>;
+  /** Where to send the signer after they sign or decline, already checked against `origins`. */
+  redirectUrl?: string | null;
 };
 
 export type ReviewLinkState = {
@@ -966,6 +975,8 @@ export type SignerView = {
   attachments: Array<AttachmentRequest>;
   canDownload: boolean;
   document: SignerDocument;
+  /** Set for a link the sender hands over while embedded signing is on. */
+  embed?: EmbedView | null;
   /** The party's own fields, and the sender's prefilled text for context. */
   fields: Array<FieldRow>;
   /** Set when the party must identify before seeing the document; nothing else is filled in. */
@@ -1225,6 +1236,8 @@ export type EidStatus = {
 };
 
 export type SigningOpenInput = {
+  /** From the link's `redirect` parameter. Followed only when its site is allowed to embed. */
+  redirectUrl?: string | null;
   session?: string | null;
   token: string;
 };

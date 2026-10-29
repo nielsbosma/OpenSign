@@ -8,6 +8,8 @@ use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 
+use opensign_core::settings::SecuritySettings;
+
 use crate::AppState;
 use crate::error::json_error;
 
@@ -17,19 +19,34 @@ const CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self' 'unsa
     connect-src 'self'; worker-src 'self' blob:; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'";
 
 pub async fn headers(State(state): State<AppState>, request: Request, next: Next) -> Response {
-    // Only the signing page may ask for the camera, for the webcam photo.
-    let camera = request.uri().path() == "/sign";
+    let path = request.uri().path();
+    // Only the signing page may ask for the camera, for the webcam photo, and only it may be framed.
+    let signing_page = path == "/sign";
+    let script = path == "/embed.js";
+    let framers = if signing_page { embed_origins(&state).await } else { Vec::new() };
     let mut response = next.run(request).await;
     let h = response.headers_mut();
-    h.entry(header::CONTENT_SECURITY_POLICY).or_insert(HeaderValue::from_static(CSP));
+    if framers.is_empty() {
+        h.entry(header::CONTENT_SECURITY_POLICY).or_insert(HeaderValue::from_static(CSP));
+        h.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
+    } else if let Ok(csp) = HeaderValue::from_str(&framed_by(&framers)) {
+        h.insert(header::CONTENT_SECURITY_POLICY, csp);
+    } else {
+        h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static(CSP));
+        h.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
+    }
     h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
-    h.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
     h.insert(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
     h.insert("cross-origin-opener-policy", HeaderValue::from_static("same-origin"));
+    if script {
+        // Customers load the embedding script from their own pages.
+        h.insert("cross-origin-resource-policy", HeaderValue::from_static("cross-origin"));
+        h.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, HeaderValue::from_static("*"));
+    }
     h.entry("cross-origin-resource-policy").or_insert(HeaderValue::from_static("same-origin"));
     h.insert(
         "permissions-policy",
-        HeaderValue::from_static(if camera {
+        HeaderValue::from_static(if signing_page {
             "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
         } else {
             "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
@@ -39,6 +56,20 @@ pub async fn headers(State(state): State<AppState>, request: Request, next: Next
         h.insert(header::STRICT_TRANSPORT_SECURITY, HeaderValue::from_static("max-age=63072000; includeSubDomains"));
     }
     response
+}
+
+/// The sites an admin allowed to embed the signing page. Any failure to read them means none.
+async fn embed_origins(state: &AppState) -> Vec<String> {
+    let Ok(mut conn) = state.app.db.acquire().await else { return Vec::new() };
+    match state.app.settings.get::<SecuritySettings>(&mut conn, &state.app.keys).await {
+        Ok(security) => security.embed_origins(),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// The app's policy with `frame-ancestors` naming the allowed sites instead of none.
+fn framed_by(origins: &[String]) -> String {
+    CSP.replace("frame-ancestors 'none'", &format!("frame-ancestors {}", origins.join(" ")))
 }
 
 /// The client's address. `X-Forwarded-For` is believed only from a proxy on a private network
@@ -180,6 +211,13 @@ mod tests {
         let allowed = (0..20).filter(|_| limiter.allow(AUTH, ip)).count();
         assert_eq!(allowed, 10);
         assert!(limiter.allow(AUTH, "203.0.113.2".parse().ok()), "other addresses are unaffected");
+    }
+
+    #[test]
+    fn framing_names_only_the_listed_sites() {
+        let csp = framed_by(&["https://app.example.com".into(), "https://crm.example.com".into()]);
+        assert!(csp.contains("frame-ancestors https://app.example.com https://crm.example.com;"), "{csp}");
+        assert!(csp.contains("frame-src 'none'"), "the page itself still frames nothing");
     }
 
     #[test]

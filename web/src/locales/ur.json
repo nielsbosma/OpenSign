@@ -507,7 +507,6 @@
   "Sent for signing": "دستخط کے لیے بھیج دی گئی",
   "Sent {date}": "{date} کو بھیجی گئی",
   "Session Length (Hours)": "سیشن کی مدت (گھنٹے)",
-  "Sessions, sign-in and uploads.": "سیشنز، سائن ان اور اپ لوڈز۔",
   "Set It Up Now": "ابھی ترتیب دیں",
   "Set Password": "پاس ورڈ مقرر کریں",
   "Set Up": "ترتیب دیں",
@@ -773,5 +772,10 @@
   "Phone": "فون",
   "Date Picker": "تاریخ منتخب کنندہ",
   "Image": "تصویر",
-  "File": "فائل"
+  "File": "فائل",
+  "Sessions, sign-in, uploads and embedded signing.": "سیشنز، سائن ان، اپ لوڈز اور ایمبیڈڈ دستخط۔",
+  "Allow Embedded Signing": "ایمبیڈڈ دستخط کی اجازت دیں",
+  "Lets the sites listed below show the signing page inside their own app. Off, no site can frame OpenSign.": "نیچے دی گئی سائٹس کو اپنی ایپ میں دستخط کا صفحہ دکھانے دیتا ہے۔ بند ہونے پر کوئی سائٹ OpenSign کو فریم میں نہیں دکھا سکتی۔",
+  "Sites Allowed to Embed": "ایمبیڈ کرنے کی اجازت والی سائٹس",
+  "One per line, with https and without a path. Only links you hand over yourself can be signed in a frame.": "ہر سطر میں ایک، https کے ساتھ اور پاتھ کے بغیر۔ فریم میں صرف وہی لنکس دستخط ہو سکتے ہیں جو آپ خود دیتے ہیں۔"
 }

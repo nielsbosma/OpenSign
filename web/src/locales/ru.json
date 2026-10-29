@@ -507,7 +507,6 @@
   "Sent for signing": "Отправлено на подпись",
   "Sent {date}": "Отправлен {date}",
   "Session Length (Hours)": "Длительность сеанса (часов)",
-  "Sessions, sign-in and uploads.": "Сеансы, вход и загрузки.",
   "Set It Up Now": "Настроить сейчас",
   "Set Password": "Задать пароль",
   "Set Up": "Настроить",
@@ -773,5 +772,10 @@
   "Phone": "Телефон",
   "Date Picker": "Выбор даты",
   "Image": "Изображение",
-  "File": "Файл"
+  "File": "Файл",
+  "Sessions, sign-in, uploads and embedded signing.": "Сеансы, вход, загрузки и встроенное подписание.",
+  "Allow Embedded Signing": "Разрешить встроенное подписание",
+  "Lets the sites listed below show the signing page inside their own app. Off, no site can frame OpenSign.": "Позволяет перечисленным ниже сайтам показывать страницу подписания внутри своего приложения. Если выключено, ни один сайт не может встроить OpenSign.",
+  "Sites Allowed to Embed": "Сайты, которым разрешено встраивание",
+  "One per line, with https and without a path. Only links you hand over yourself can be signed in a frame.": "По одному в строке, с https и без пути. Во фрейме можно подписать только ссылки, которые вы передаёте сами."
 }

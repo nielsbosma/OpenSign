@@ -25,7 +25,7 @@ All paths are under `/accounts/{accountId}`.
 | GET | `/envelopes/{id}/recipients` | Signers and carbon copies with status and times |
 | GET | `/envelopes/{id}/documents` | The envelope's documents |
 | GET | `/envelopes/{id}/documents/{documentId}` | The whole envelope as one PDF, sealed with evidence pages once complete. Any document id returns it |
-| POST | `/envelopes/{id}/views/recipient` | An embedded signing URL for a recipient added with `clientUserId`. Match by `recipientId`, or `email` plus `userName` |
+| POST | `/envelopes/{id}/views/recipient` | An embedded signing URL for a recipient added with `clientUserId`. Match by `recipientId`, or `email` plus `userName`. `returnUrl` is followed when its site is allowed to embed (see [Embedded signing](embedding.md)) |
 
 ## Recipients
 

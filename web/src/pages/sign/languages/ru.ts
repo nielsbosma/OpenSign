@@ -117,5 +117,12 @@ export const ru: Texts = {
   fillIn: (label) => `Заполните «${label}».`,
   chooseFor: (label) => `Выберите вариант для «${label}».`,
   uploadFor: (label) => `Загрузите «${label}».`,
+  securedBy: 'Защищено OpenSign',
+  embedRefused: 'Эту страницу нельзя показать здесь',
+  embedRefusedNote: 'Откройте ссылку для подписания прямо в браузере.',
+  eidPopup: (label) => `Завершите идентификацию через ${label} в открывшемся окне.`,
+  eidPopupBlocked: 'Разрешите всплывающие окна для этого сайта и попробуйте снова.',
+  eidWindowDone: 'Идентификация завершена',
+  eidWindowDoneNote: 'Вы можете закрыть это окно и вернуться на страницу подписания.',
   methods: { sms_pin: 'SMS-код', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-ID' },
 };

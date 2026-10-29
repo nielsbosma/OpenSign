@@ -127,6 +127,13 @@ const en = {
   fillIn: (label: string) => `Fill in “${label}”.`,
   chooseFor: (label: string) => `Choose an option for “${label}”.`,
   uploadFor: (label: string) => `Upload “${label}”.`,
+  securedBy: 'Secured by OpenSign',
+  embedRefused: 'This page cannot be shown here',
+  embedRefusedNote: 'Open your signing link directly in your browser instead.',
+  eidPopup: (label: string) => `Finish identifying with ${label} in the window that opened.`,
+  eidPopupBlocked: 'Allow pop-ups for this site, then try again.',
+  eidWindowDone: 'Identification finished',
+  eidWindowDoneNote: 'You can close this window and go back to the signing page.',
   methods: { sms_pin: 'SMS code', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-ID' } as Record<string, string>,
 };
 

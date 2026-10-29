@@ -117,5 +117,12 @@ export const ur: Texts = {
   fillIn: (label) => `“${label}” پُر کریں۔`,
   chooseFor: (label) => `“${label}” کے لیے ایک اختیار منتخب کریں۔`,
   uploadFor: (label) => `“${label}” اپ لوڈ کریں۔`,
+  securedBy: 'OpenSign کے ذریعے محفوظ',
+  embedRefused: 'یہ صفحہ یہاں نہیں دکھایا جا سکتا',
+  embedRefusedNote: 'اس کے بجائے اپنا دستخطی لنک براہِ راست اپنے براؤزر میں کھولیں۔',
+  eidPopup: (label) => `کھلنے والی ونڈو میں ${label} کے ساتھ شناخت مکمل کریں۔`,
+  eidPopupBlocked: 'اس سائٹ کے لیے پاپ اپ کی اجازت دیں، پھر دوبارہ کوشش کریں۔',
+  eidWindowDone: 'شناخت مکمل ہو گئی',
+  eidWindowDoneNote: 'آپ یہ ونڈو بند کر کے دستخط کے صفحے پر واپس جا سکتے ہیں۔',
   methods: { sms_pin: 'SMS کوڈ', se_bankid: 'BankID', freja: 'Freja eID', broker: 'ای-آئی ڈی' },
 };

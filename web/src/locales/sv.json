@@ -507,7 +507,6 @@
   "Sent for signing": "Skickat för signering",
   "Sent {date}": "Skickat {date}",
   "Session Length (Hours)": "Sessionslängd (timmar)",
-  "Sessions, sign-in and uploads.": "Sessioner, inloggning och uppladdningar.",
   "Set It Up Now": "Ställ in det nu",
   "Set Password": "Ange lösenord",
   "Set Up": "Ställ in",
@@ -773,5 +772,10 @@
   "Phone": "Telefon",
   "Date Picker": "Datumväljare",
   "Image": "Bild",
-  "File": "Fil"
+  "File": "Fil",
+  "Sessions, sign-in, uploads and embedded signing.": "Sessioner, inloggning, uppladdningar och inbäddad signering.",
+  "Allow Embedded Signing": "Tillåt inbäddad signering",
+  "Lets the sites listed below show the signing page inside their own app. Off, no site can frame OpenSign.": "Låter webbplatserna nedan visa signeringssidan i sin egen app. Avstängt kan ingen webbplats rama in OpenSign.",
+  "Sites Allowed to Embed": "Webbplatser som får bädda in",
+  "One per line, with https and without a path. Only links you hand over yourself can be signed in a frame.": "En per rad, med https och utan sökväg. Bara länkar som du själv lämnar över kan signeras i en ram."
 }

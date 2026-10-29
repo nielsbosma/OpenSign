@@ -312,9 +312,10 @@ async fn sends_signs_seals_and_verifies() {
 
     let signer = signer_ctx(&app);
     let forged = format!("{}.AAAA", anna.simple());
-    assert!(call::<signing::Open>(&signer, signing::TokenInput { token: forged, session: None }).await.is_err());
+    assert!(call::<signing::Open>(&signer, signing::OpenInput { token: forged, session: None, redirect_url: None }).await.is_err());
 
-    let anna_view = call::<signing::Open>(&signer, signing::TokenInput { token: anna_token.clone(), session: None }).await.unwrap();
+    let anna_view =
+        call::<signing::Open>(&signer, signing::OpenInput { token: anna_token.clone(), session: None, redirect_url: None }).await.unwrap();
     assert_eq!(anna_view.document.language, "en");
     assert!(anna_view.your_turn && anna_view.needs_authentication.is_none());
     assert_eq!(anna_view.fields.len(), 2);
@@ -370,7 +371,8 @@ async fn sends_signs_seals_and_verifies() {
     .await;
     assert_eq!(kind(again), ErrorKind::Conflict);
 
-    let bo_view = call::<signing::Open>(&signer, signing::TokenInput { token: bo_token.clone(), session: None }).await.unwrap();
+    let bo_view =
+        call::<signing::Open>(&signer, signing::OpenInput { token: bo_token.clone(), session: None, redirect_url: None }).await.unwrap();
     assert_eq!(bo_view.document.language, "ar", "a party's own language wins over the document's");
     assert_eq!(bo_view.sign_authentication, Some(AuthMethod::SmsPin));
     let without_code = call::<signing::Sign>(
@@ -409,10 +411,11 @@ async fn sends_signs_seals_and_verifies() {
         .unwrap()
         .session;
 
-    let bo_fields = call::<signing::Open>(&signer, signing::TokenInput { token: bo_token.clone(), session: Some(session.clone()) })
-        .await
-        .unwrap()
-        .fields;
+    let bo_fields =
+        call::<signing::Open>(&signer, signing::OpenInput { token: bo_token.clone(), session: Some(session.clone()), redirect_url: None })
+            .await
+            .unwrap()
+            .fields;
     let text_field = bo_fields.iter().find(|f| f.kind == "text").unwrap().id;
     let checkbox = bo_fields.iter().find(|f| f.kind == "checkbox").unwrap().id;
     let missing_checkbox = call::<signing::Sign>(
@@ -495,7 +498,7 @@ async fn sends_signs_seals_and_verifies() {
         assert!(result.signatures.iter().all(|s| !s.is_intact()));
     }
 
-    let after = call::<signing::Open>(&signer, signing::TokenInput { token: anna_token, session: None }).await.unwrap();
+    let after = call::<signing::Open>(&signer, signing::OpenInput { token: anna_token, session: None, redirect_url: None }).await.unwrap();
     assert!(after.can_download);
     let chain = verify_chain(&mut conn, &app.keys).await.unwrap();
     assert!(chain.valid, "{chain:?}");
@@ -552,9 +555,9 @@ async fn cancel_revokes_links_and_decline_stops_signing() {
     };
 
     let dan = token_for(ids[0], 0).await;
-    call::<signing::Open>(&signer, signing::TokenInput { token: dan.clone(), session: None }).await.unwrap();
+    call::<signing::Open>(&signer, signing::OpenInput { token: dan.clone(), session: None, redirect_url: None }).await.unwrap();
     call::<docs::Cancel>(&sender, docs::CancelInput { id: ids[0], reason: Some("Wrong version".into()) }).await.unwrap();
-    let revoked = call::<signing::Open>(&signer, signing::TokenInput { token: dan, session: None }).await;
+    let revoked = call::<signing::Open>(&signer, signing::OpenInput { token: dan, session: None, redirect_url: None }).await;
     assert_eq!(kind(revoked), ErrorKind::NotFound, "cancel bumps the link version");
 
     let eva = token_for(ids[1], 1).await;
@@ -607,9 +610,10 @@ async fn in_person_signing_issues_a_fresh_link_for_the_party_in_turn() {
     let again = call::<docs::SignInPerson>(&sender, docs::InPersonInput { document_id: id, party_id: fia }).await.unwrap();
     let token = |url: &str| url.split_once('#').unwrap().1.to_string();
     let signer = signer_ctx(&app);
-    let stale = call::<signing::Open>(&signer, signing::TokenInput { token: token(&first.url), session: None }).await;
+    let stale = call::<signing::Open>(&signer, signing::OpenInput { token: token(&first.url), session: None, redirect_url: None }).await;
     assert_eq!(kind(stale), ErrorKind::NotFound, "starting again retires the earlier link");
-    let view = call::<signing::Open>(&signer, signing::TokenInput { token: token(&again.url), session: None }).await.unwrap();
+    let view =
+        call::<signing::Open>(&signer, signing::OpenInput { token: token(&again.url), session: None, redirect_url: None }).await.unwrap();
     assert!(view.party.in_person && view.your_turn);
 
     let outsider = user(&app, "Val Viewer", Role::Viewer).await;
@@ -823,7 +827,8 @@ async fn webcam_photo_is_required_taken_and_sealed() {
         signer_token(&app.keys, &parties(&mut conn, id).await.unwrap()[0])
     };
     let signer = signer_ctx(&app);
-    let opened = call::<signing::Open>(&signer, signing::TokenInput { token: token.clone(), session: None }).await.unwrap();
+    let opened =
+        call::<signing::Open>(&signer, signing::OpenInput { token: token.clone(), session: None, redirect_url: None }).await.unwrap();
     let request = opened.attachments.iter().find(|a| a.kind == "photo").unwrap().id;
     let sign = || {
         call::<signing::Sign>(

@@ -113,5 +113,12 @@ export const bn: Texts = {
   fillIn: (label) => `“${label}” পূরণ করুন।`,
   chooseFor: (label) => `“${label}”-এর জন্য একটি বিকল্প বেছে নিন।`,
   uploadFor: (label) => `“${label}” আপলোড করুন।`,
+  securedBy: 'OpenSign দ্বারা সুরক্ষিত',
+  embedRefused: 'এই পৃষ্ঠাটি এখানে দেখানো যাবে না',
+  embedRefusedNote: 'এর বদলে আপনার স্বাক্ষর লিঙ্কটি সরাসরি ব্রাউজারে খুলুন।',
+  eidPopup: (label) => `খোলা উইন্ডোতে ${label} দিয়ে পরিচয় যাচাই শেষ করুন।`,
+  eidPopupBlocked: 'এই সাইটের জন্য পপ-আপ চালু করুন, তারপর আবার চেষ্টা করুন।',
+  eidWindowDone: 'পরিচয় যাচাই সম্পন্ন',
+  eidWindowDoneNote: 'আপনি এই উইন্ডোটি বন্ধ করে স্বাক্ষর পৃষ্ঠায় ফিরে যেতে পারেন।',
   methods: { sms_pin: 'SMS কোড', se_bankid: 'BankID', freja: 'Freja eID', broker: 'ই-আইডি' },
 };

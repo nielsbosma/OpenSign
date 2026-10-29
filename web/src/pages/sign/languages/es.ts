@@ -117,5 +117,12 @@ export const es: Texts = {
   fillIn: (label) => `Rellena «${label}».`,
   chooseFor: (label) => `Elige una opción para «${label}».`,
   uploadFor: (label) => `Sube «${label}».`,
+  securedBy: 'Protegido por OpenSign',
+  embedRefused: 'Esta página no se puede mostrar aquí',
+  embedRefusedNote: 'Abre tu enlace de firma directamente en el navegador.',
+  eidPopup: (label) => `Termina de identificarte con ${label} en la ventana que se abrió.`,
+  eidPopupBlocked: 'Permite las ventanas emergentes para este sitio e inténtalo de nuevo.',
+  eidWindowDone: 'Identificación completada',
+  eidWindowDoneNote: 'Puedes cerrar esta ventana y volver a la página de firma.',
   methods: { sms_pin: 'el código SMS', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-ID' },
 };

@@ -1464,6 +1464,9 @@ pub struct SigningLinkInput {
     /// Revoke the party's earlier links first, e.g. when one was forwarded by mistake.
     #[serde(default)]
     pub rotate: bool,
+    /// For embedded signing: where the signing page sends the party after they sign or decline,
+    /// with `event=signing_complete` or `event=decline` added. Must be on a site allowed to embed.
+    pub redirect_url: Option<String>,
 }
 
 pub struct IssueSigningLink;
@@ -1491,15 +1494,33 @@ impl Service for IssueSigningLink {
                 .await?;
         }
         let party = parties(conn, document.id).await?.into_iter().find(|p| p.id == input.party_id).ok_or_else(|| not_found("Party"))?;
+        let mut url = signer_url(ctx, ctx.keys(), &party);
+        if let Some(redirect) = input.redirect_url.as_deref().filter(|r| !r.is_empty()) {
+            let security: SecuritySettings = settings(ctx, conn).await?;
+            if !security.allows_redirect(redirect) {
+                return Err(bad_request(
+                    "The redirect URL must be on a site allowed to embed, under Security in Admin settings, with embedded signing turned on",
+                ));
+            }
+            url = with_redirect(&url, redirect);
+        }
         audit(
             ctx,
             conn,
             Entry::new("party.link_issued", "document", document.id)
-                .metadata(json!({ "party": party.id, "name": party.name, "rotated": input.rotate })),
+                .metadata(json!({ "party": party.id, "name": party.name, "rotated": input.rotate, "redirectUrl": input.redirect_url })),
         )
         .await?;
-        Ok(SignerLink { party_id: party.id, name: party.name.clone(), url: signer_url(ctx, ctx.keys(), &party) })
+        Ok(SignerLink { party_id: party.id, name: party.name.clone(), url })
     }
+}
+
+/// `…/sign?redirect=<url>#<token>`: the token stays in the fragment.
+fn with_redirect(url: &str, redirect: &str) -> String {
+    let (base, token) = url.split_once('#').unwrap_or((url, ""));
+    let Ok(mut parsed) = reqwest::Url::parse(base) else { return url.to_string() };
+    parsed.query_pairs_mut().append_pair("redirect", redirect);
+    format!("{parsed}#{token}")
 }
 
 #[derive(Deserialize, JsonSchema)]

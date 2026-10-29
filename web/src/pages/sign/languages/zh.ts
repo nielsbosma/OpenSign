@@ -112,5 +112,12 @@ export const zh: Texts = {
   fillIn: (label) => `请填写“${label}”。`,
   chooseFor: (label) => `请为“${label}”选择一项。`,
   uploadFor: (label) => `请上传“${label}”。`,
+  securedBy: '由 OpenSign 提供安全保护',
+  embedRefused: '此页面无法在此处显示',
+  embedRefusedNote: '请直接在浏览器中打开您的签署链接。',
+  eidPopup: (label) => `请在打开的窗口中完成 ${label} 身份验证。`,
+  eidPopupBlocked: '请允许此网站弹出窗口，然后重试。',
+  eidWindowDone: '身份验证已完成',
+  eidWindowDoneNote: '您可以关闭此窗口并返回签署页面。',
   methods: { sms_pin: '短信验证码', se_bankid: 'BankID', freja: 'Freja eID', broker: '电子身份' },
 };

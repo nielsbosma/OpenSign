@@ -5,9 +5,10 @@ import { Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { type AuthMethod, call, errorMessage } from '@/lib/api';
 import { FormError } from '../auth/AuthLayout';
+import { framed } from './embed';
 import { useTexts } from './texts';
 
-type Started = { id: string; qr?: string | null; autoStartToken?: string | null };
+type Started = { id: string; qr?: string | null; autoStartToken?: string | null; popupUrl?: string };
 
 const POLL_MS = 2000;
 
@@ -90,6 +91,12 @@ export function EidIdentify({
     setMessage(undefined);
     try {
       const out = await call('signing.eid_start', { token, session, purpose });
+      if (out.redirectUrl && framed) {
+        // Identity providers refuse to run in frames, so the broker gets its own window and we wait for it here.
+        window.open(out.redirectUrl, '_blank', 'noopener');
+        setStarted({ id: out.id, popupUrl: out.redirectUrl });
+        return;
+      }
       if (out.redirectUrl) {
         window.location.assign(out.redirectUrl);
         return;
@@ -112,6 +119,25 @@ export function EidIdentify({
     setMessage(undefined);
   };
 
+  if (started?.popupUrl) {
+    return (
+      <div className="grid gap-4 text-center">
+        <p>{t.eidPopup(label)}</p>
+        <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground" aria-live="polite">
+          <Spinner /> {t.waitingFor(label)}
+        </p>
+        <Button variant="outline" asChild>
+          <a href={started.popupUrl} target="_blank" rel="noopener noreferrer">
+            {t.identifyWith(label)}
+          </a>
+        </Button>
+        <p className="text-xs text-muted-foreground">{t.eidPopupBlocked}</p>
+        <Button variant="ghost" onClick={cancel}>
+          {t.cancel}
+        </Button>
+      </div>
+    );
+  }
   if (started) {
     return (
       <div className="grid gap-4 text-center">

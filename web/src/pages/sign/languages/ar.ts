@@ -112,5 +112,12 @@ export const ar: Texts = {
   fillIn: (label) => `املأ «${label}».`,
   chooseFor: (label) => `اختر خيارًا لـ «${label}».`,
   uploadFor: (label) => `ارفع «${label}».`,
+  securedBy: 'محمي بواسطة OpenSign',
+  embedRefused: 'لا يمكن عرض هذه الصفحة هنا',
+  embedRefusedNote: 'افتح رابط التوقيع مباشرةً في متصفحك بدلاً من ذلك.',
+  eidPopup: (label) => `أكمل التحقق من هويتك باستخدام ${label} في النافذة التي فُتحت.`,
+  eidPopupBlocked: 'اسمح بالنوافذ المنبثقة لهذا الموقع، ثم حاول مرة أخرى.',
+  eidWindowDone: 'اكتمل التحقق من الهوية',
+  eidWindowDoneNote: 'يمكنك إغلاق هذه النافذة والعودة إلى صفحة التوقيع.',
   methods: { sms_pin: 'رمز الرسائل النصية', se_bankid: 'BankID', freja: 'Freja eID', broker: 'الهوية الإلكترونية' },
 };
