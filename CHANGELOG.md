@@ -4,45 +4,71 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
-### Changed
+## [0.1.0] - 2026-10-29
 
-- The database migrations are squashed into one, `0001_initial.sql`, before the first release. A development database made with the old migrations must be recreated.
+The first release: electronic signatures you run yourself, in one Docker image with Postgres and an S3 bucket.
 
-### Added
+### Running It
 
-- MCP covers everything a role allows except credentials: `settings_update` (secrets can be cleared, never set, and a saved secret cannot be pointed at another server), `documents_review`, `ai_models`, `ai_test`, `users_change_email` and `system_update` are now tools, plus `docs_search` and `docs_read` over the documentation and one-time upload and short-lived download links for big files (`documents_upload_url`, `documents_download_url`). Every service states whether it is a tool and why not, and carries its own destructive and open-world hints.
-- Automations through Composio, off by default: under Settings → Automations an admin adds the install's own Composio API key (stored encrypted, only ever sent to Composio), connects apps such as Google Drive, Slack, HubSpot or Google Sheets, and adds rules that run a Composio tool when a document event happens, optionally only for some templates or folders. Inputs are built from the tool's real schema and filled from placeholders such as `{{document.title}}`, `{{fields.Total}}`, `{{parties.0.email}}` and `{{sealedPdf}}` (the sealed PDF as a file); personal numbers are never available. Recipes start common rules. Runs share the webhook delivery log, retries and 30-day history, and each run is audited with the data it sent. New `automations.*` services, REST routes and MCP tools, and an `automations.manage` permission for admins.
-- Export filled-in data: **Export Data** on the documents list (following its filters), selected rows, a template, a bulk send and a single document downloads Excel, CSV or JSON with one row per document, each party's name, email and signing time, and one column per field. Values are typed (numbers, true/false, lists, ISO dates); personal numbers and file contents are never included, CSV cells are guarded against formula injection, and every export is audited. New `documents.values` (`GET /documents/{id}/values`) and `documents.export` (`POST /exports`) services and MCP tools, a `documents.export` permission for admins, managers, senders and auditors, `valuesUrl` on the `document.completed` webhook, and DocuSign's `form_data` endpoint.
-- Text tags, PDF form import and field detection. `{{Name;role=Tenant;type=signature}}` tags in PDF and Word files (DocuSeal's syntax) become fields on upload, with their text taken out of the page content and the rest of the line left in place; a role the draft lacks is added as a party. The fields of a fillable PDF form become fields with their filled-in values before the form is removed. **Detect Fields** in the editor suggests fields from lines, underscores and boxes with their labels (English and Swedish, among others), optionally asking the AI model with the pages' text. `textTags` and `formFields` on upload turn the first two off; `documents.detect_fields` returns suggestions over the API and MCP.
-- Folders and archive for documents and templates: a folder column beside each list, nested up to three levels, drag rows onto a folder or use **Move to Folder** for several at once, and an **Archived** tab. Folders are shared but never grant access. Only finished documents can be archived; archived templates cannot be used until restored. New `folders.*`, `documents.move` and `documents.archive` services with REST routes, and `folderId` and `archived` on document lists.
-- Conditional fields and formulas: any field can be shown only when other fields hold given values (is, is not, filled, empty, contains, more or less than), and a formula field computes a number such as `round({Hours} * {Rate} * 1.25, 2)` with `if`, `min`, `max`, `sum` and comparisons. Fields refer to each other by label. Expressions are parsed by hand, never evaluated as code, and the same rules run in the browser and on the server from shared test cases: the server recomputes formulas, clears hidden fields and leaves them off the sealed PDF. The DocuSign API maps `formulaTabs` and `conditionalParentLabel`.
-- Field types: number, dropdown, multi-select, radio groups, phone, date picker, image and in-place file upload. Text fields take a pattern (presets or a regular expression), a length and an error text of your own; numbers a smallest and largest value; dates an earliest and latest. Numbers and dates have formats such as `1 234,00 kr` or DD/MM/YYYY, used when stamping. A party's field can have a default and be read-only. Every check runs on the signing page and again on the server, from shared test cases. The DocuSign API maps number, list, radio group, date, phone, zip and signer attachment tabs with their validation, and the Scrive API maps radio groups.
-- Embedded signing, off by default: under Settings → Security an admin lists the sites allowed to show the signing page in a frame (exact https origins, `frame-ancestors` on the signing page only). `embed.js` defines an `<opensign-signing>` element that fires loaded, signed, declined and error events; React and Vue wrappers are in `packages/`. Signing links take an optional `redirectUrl` on a listed site, and the DocuSign API follows `returnUrl` the same way.
-- Company logo in Settings → Organisation, shown in the app, on signing and verification pages, in emails and on the evidence page of sealed PDFs. PNG or JPEG only, re-encoded on upload and stored encrypted; SVG is refused. The brand color picker is a round swatch, and the color now tints the OpenSign mark when there is no logo.
-- Documentation at `/docs` on every install, public and searchable, rendered from the Markdown in `docs/`. The app links to it from the sidebar, settings pages, the document list and the party dialog.
-- SMTP as an alternative to Resend, in setup and Admin settings: host, port, STARTTLS or TLS (certificates verified, never plain text), optional sign-in with the password stored encrypted, and the same test email before anything is sent.
-- REST routes for bulk send (`/bulk-sends`, with `/bulk-sends/preview` for column mapping), legal hold (`PUT /documents/{id}/legal-hold`), the retention preview and system version and status, all in the OpenAPI document.
-- API Explorer: browse every REST endpoint with its schemas, send live requests as yourself or with an API key, and copy the call as curl, JavaScript or Python.
+- One distroless, non-root image (web app, API, MCP and job worker) at `ghcr.io/nielsbosma/opensign`, configured with Postgres, an S3 bucket, `APP_SECRET` and `APP_URL`. Every other setting lives in Admin settings and can be pinned with `OPENSIGN_<GROUP>_<FIELD>`. Migrations run on every start.
+- Deploy to Sliplane with one button (the Sliplane Deployer and `sliplane.yaml`), with `deploy/sliplane.sh` from a terminal, or with `deploy/release.ps1`, which releases and deploys step by step. The Deployer generates `APP_SECRET` and a `SETUP_CODE` and its finish page opens setup with the code already filled in.
+- Setup behind a one-time code: the first admin, then email through Resend or SMTP (STARTTLS or TLS, certificates verified) with a test message before anything can be sent.
+- Settings → System shows the running version against the latest GitHub release, migrations and the job queue, and tells admins about updates. **Update Now** calls a Sliplane deploy hook or opens the Deployer's update link with the new version; CI can call the deploy hook after each release.
+- Documentation at `/docs` on every install, public and searchable, linked from the sidebar, settings pages, the document list and the party dialog.
 
-- Settings → System: the running version against the latest GitHub release, migrations and the job queue; an update notice for admins; one-click update through a Sliplane deploy hook. Migrations run on every start.
+### Documents and Templates
 
-- One distroless Docker image (web app, API, MCP and job worker), configured with Postgres, an S3 bucket, `APP_SECRET` and `APP_URL`, and a Sliplane deploy script.
-- Setup behind a one-time code: first admin, then Resend email with a test message before anything can be sent.
-- Accounts and roles: admin, manager, sender, auditor and viewer; TOTP two-factor with recovery codes; invites and password reset; API keys.
-- Swedish BankID through TIC Identity (OpenID Connect) for installs without their own BankID agreement, with the same personal-number matching.
-- Documents: Word and PDF uploads (Word converted by Gotenberg), PDF sanitizing, drag-and-drop field placement for signatures, initials, text, dates, checkboxes and party details, templates, sharing, reminders and expiry.
-- Signing: signers, approvers and viewers in order or in parallel; email, SMS or link delivery; SMS codes, Swedish BankID, Freja eID and OpenID Connect eID brokers, with personal-number matching; drawn or typed signatures; decline with a reason.
-- Swedish for signers: emails, SMS, the signing page and BankID messages follow the document's language, which defaults to the organisation's.
-- Signer attachments: ask each party for files (PDF, JPEG or PNG, required or optional). Uploads are sanitized or re-encoded, stored encrypted, listed with their SHA-256 in the evidence and embedded in the sealed PDF.
-- In-person signing: a party can sign on the sender's device. Starting it retires earlier links, shows a hand-over screen, and records who hosted it in the evidence. Scrive's `pad` delivery maps to it.
-- Retention rules in Settings: delete signed, ended and draft documents after set periods, with their files (keys destroyed at once, bucket objects removed by a job). Legal holds, with a required reason, keep a document from every rule and from manual deletion. The document page shows how long it is kept.
-- Deleting a document now deletes its files too, unless another document still uses them.
-- Long-term validation: sealed PDFs are PAdES B-LTA, with the certificates and OCSP or CRL answers stored in the file and an archive time stamp over everything, so they validate offline after the certificates expire. The verifier checks time stamp signatures and rejects any later change other than validation data.
-- Passkeys: sign in with Face ID, Touch ID, Windows Hello, a phone or a security key. Passkeys require user verification, so they count as two-factor; adding one asks for the password, and each sign-in challenge works once.
-- Bulk send: a template to every row of a CSV, Excel or OpenDocument file (up to 1,000 rows), with automatic column matching, optional AI matching, row checks before sending, background sending and a progress page. Row data is stored encrypted and dropped once each row is sent.
-- eID setup: certificate files upload as they come from the bank (`.p12`/`.pfx` with their password), BankID's server roots are built in, and BankID test mode works with no setup.
-- Sealed PDFs: stamped values, evidence pages and a JSON evidence attachment, a PAdES seal over the whole file and an RFC 3161 time stamp; a verify page and API.
-- APIs: REST with OpenAPI, Scrive v2 (`/scrive/api/v2`) and DocuSign eSignature v2.1 (`/docusign/restapi/v2.1`) compatible endpoints, signed webhooks, idempotency keys.
-- MCP server with OAuth 2.1 (dynamic registration, PKCE, rotating refresh tokens).
-- Optional AI assistant and pre-send document review with a monthly token budget.
-- Tamper-evident audit trail, hash-chained and time-stamped hourly.
+- Word and PDF uploads (Word converted by Gotenberg on a private network), PDF sanitizing, templates, sharing, reminders and expiry. Deleting a document deletes its files too, unless another document still uses them.
+- Field placement by drag and drop: signatures, initials, text, dates, checkboxes, party details, number, dropdown, multi-select, radio groups, phone, date picker, image and in-place file upload. Text fields take a pattern, a length and your own error text; numbers and dates take limits and formats such as `1 234,00 kr` or DD/MM/YYYY. Fields can have defaults and be read-only. Every check runs on the signing page and again on the server.
+- Conditional fields and formulas such as `round({Hours} * {Rate} * 1.25, 2)`, parsed by hand and never evaluated as code; the server recomputes formulas and leaves hidden fields off the sealed PDF.
+- Text tags in PDF and Word files (`{{Name;role=Tenant;type=signature}}`, DocuSeal's syntax), fillable PDF forms imported as fields with their values, and **Detect Fields**, which suggests fields from lines, underscores and boxes, optionally with the AI model.
+- Template versions: every use of a changed template saves a version, so each document names the exact version it came from. History, compare, restore with a note, and replace a file while keeping its fields.
+- Folders (nested up to three levels) and an **Archived** tab for documents and templates. Folders never grant access.
+- Export filled-in data as Excel, CSV or JSON from the document list, a template, a bulk send or a single document. Personal numbers and file contents are never included, CSV cells are guarded against formula injection, and every export is audited.
+- Bulk send: a template to every row of a CSV, Excel or OpenDocument file (up to 1,000 rows), with automatic or AI column matching, row checks before sending, background sending and a progress page. Row data is stored encrypted and dropped once each row is sent.
+- Retention rules delete signed, ended and draft documents after set periods (keys destroyed at once, bucket objects removed by a job). Legal holds, with a required reason, keep a document from every rule and from manual deletion.
+- Company logo and brand color on signing and verification pages, in emails and on the evidence page of sealed PDFs. PNG or JPEG only, re-encoded on upload and stored encrypted.
+
+### Signing
+
+- Signers, approvers and viewers in order or in parallel; delivery by email, SMS (46elks or Twilio) or link; drawn or typed signatures; decline with a reason.
+- Identification by SMS code, Swedish BankID (own agreement or through TIC Identity, no bank agreement needed), Freja eID or an OpenID Connect eID broker such as Idura or Signicat, with personal-number matching. Certificate files upload as they come from the bank, and BankID test mode works with no setup.
+- Webcam photo identification: the signer takes a live photo before the Sign button unlocks. It is stored encrypted and sealed into the evidence with its SHA-256. It is not a liveness check.
+- Signer attachments (PDF, JPEG or PNG, required or optional), sanitized or re-encoded, stored encrypted and embedded in the sealed PDF.
+- In-person signing on the sender's device, with a hand-over screen and the host recorded in the evidence.
+- **Sign Myself** for documents only you sign, saved signatures and initials on your account, and public share links with QR codes for documents anyone can fill in and sign after confirming their email address.
+- **Preview** shows the real signing page as a chosen party will see it, with nothing audited or sent.
+- **Review with Your AI**: a signer can give their own AI assistant a separate, read-only, expiring link to the document. The signing link never goes into an AI.
+- Embedded signing, off by default: an `<opensign-signing>` element for the sites an admin lists, with React and Vue wrappers in `packages/`.
+- Eleven languages for signers and the whole app: English, Chinese (Simplified), Hindi, Spanish, French, Arabic, Bengali, Portuguese, Russian, Urdu and Swedish, with right-to-left layout for Arabic and Urdu. Each party and each user can have their own.
+
+### Sealed PDFs and Evidence
+
+- Stamped values, evidence pages and a JSON evidence attachment, a PAdES seal over the whole file and an RFC 3161 time stamp.
+- Long-term validation: sealed PDFs are PAdES B-LTA, with certificates, OCSP or CRL answers and an archive time stamp in the file, so they validate offline after the certificates expire.
+- A public `/verify` page and API that check a sealed PDF without storing it, and reject any later change other than validation data.
+- A tamper-evident audit trail: append-only, hash-chained and time-stamped hourly.
+
+### Accounts and Security
+
+- Roles: admin, manager, sender, auditor and viewer. Invites, password reset, TOTP two-factor with recovery codes, and passkeys (Face ID, Touch ID, Windows Hello, a phone or a security key) that count as two-factor.
+- Files are encrypted per file with AES-256-GCM before they reach the bucket; keys derive from `APP_SECRET` per purpose. Personal numbers and secrets are stored encrypted, tokens only as a MAC or hash.
+- A strict Content Security Policy with no inline script and no external origins, and outbound requests that refuse private addresses and redirects.
+- See `SECURITY.md` for the full model.
+
+### APIs and Integrations
+
+- REST with OpenAPI, idempotency keys and API keys with permissions and an IP allowlist, editable after creation (narrowing only, through an API key).
+- Drop-in compatible endpoints for Scrive Document API v2 (`/scrive/api/v2`) and DocuSign eSignature v2.1 (`/docusign/restapi/v2.1`).
+- API Explorer: every endpoint with its schemas, live requests as yourself or with an API key, and the call as curl, JavaScript or Python.
+- Signed webhooks with `document.created`, `document.viewed`, `document.completed` and more, retries, and a 30-day delivery log under Settings → Webhooks with **Resend**.
+- An MCP server over OAuth 2.1 (dynamic registration, PKCE, rotating refresh tokens) that can do everything a role allows except credentials: passwords, two-factor, passkeys, creating API keys and the seal key stay in the app.
+- Automations through Composio, off by default: connect apps such as Google Drive, Slack, HubSpot or Google Sheets and run a tool when a document event happens.
+- An optional AI assistant, pre-send document review and a model picked from the provider's own list, with a monthly token budget. Document text is treated as data, never as instructions.
+
+### Known Limits
+
+- Text stamped into PDFs uses WinAnsi, which covers Latin-1 including the Nordic letters: other scripts, such as names in Chinese or Arabic, print as `?`.
+- The evidence page of sealed PDFs is in English only, and server error messages are not translated yet.
+- The ten non-English languages have not been reviewed by native speakers.
+- BankID through TIC Identity, Freja eID, eID brokers, Composio and the AI providers are built to their documentation but not yet tested against the live services.
