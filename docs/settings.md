@@ -23,14 +23,18 @@ See [First-run setup and email](setup.md#step-2-email).
 
 | Field | Variable | |
 | --- | --- | --- |
+| Provider | `OPENSIGN_EMAIL_PROVIDER` | `resend` (default) or `smtp`. |
 | API Key | `OPENSIGN_EMAIL_API_KEY` | Secret. The Resend API key. |
+| SMTP Server | `OPENSIGN_EMAIL_SMTP_HOST` | For SMTP. A host name, no scheme or port. |
+| Port | `OPENSIGN_EMAIL_SMTP_PORT` | For SMTP. 587 by default. |
+| Security | `OPENSIGN_EMAIL_SMTP_SECURITY` | For SMTP. `starttls` (default) or `tls`. |
+| Username | `OPENSIGN_EMAIL_SMTP_USERNAME` | For SMTP. Empty: send without signing in. |
+| Password | `OPENSIGN_EMAIL_SMTP_PASSWORD` | For SMTP. Secret. |
 | From Address | `OPENSIGN_EMAIL_FROM_ADDRESS` | On a domain you verified with the provider. |
 | From Name | `OPENSIGN_EMAIL_FROM_NAME` | |
 | Reply-To | `OPENSIGN_EMAIL_REPLY_TO` | Empty: replies go to the sender of each document. |
 
-Changing the key or sender needs a new test email before documents can go out.
-
-> **Coming soon.** A Provider choice (Resend or SMTP) with SMTP host, port, security, username and password fields.
+Changing the provider, key, SMTP server or sender needs a new test email before documents can go out.
 
 ## Security
 
@@ -43,10 +47,11 @@ See [Sign-in, passkeys and two-factor](account-security.md).
 | Sign Out After Idle (Minutes) | `OPENSIGN_SECURITY_IDLE_MINUTES` | 60 |
 | Signing Links Expire After (Days) | `OPENSIGN_SECURITY_SIGNER_LINK_DAYS` | 30. Used when a document has no expiry date. |
 | Largest Upload (MB) | `OPENSIGN_SECURITY_MAX_UPLOAD_MB` | 25 |
+| AI Review Links Expire After (Days) | `OPENSIGN_SECURITY_REVIEW_LINK_DAYS` | 7. 0 turns signers' AI review links off; at most 30. See [The signing page](signing-page.md#review-with-your-ai). |
 
 ## Updates
 
-See [Updates](updates.md).
+On the **System** page, below the version and background jobs. See [Updates](updates.md).
 
 | Field | Variable | Default |
 | --- | --- | --- |

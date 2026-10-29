@@ -39,6 +39,7 @@ Roles are enforced in the service layer, which every entry point uses: the web a
 - Signer actions never use a signed-in user's session.
 - SMS codes are 6 digits, stored as a MAC, valid 10 minutes, with 5 attempts and at most 5 codes per hour.
 - Everything a signer can reach is rate-limited and bounded.
+- Signers' AI review links are separate read-only tokens, stored as a MAC, tied to the signing link's version, capped at 100 fetches, expiring within days, and audited on every use. See [The signing page](signing-page.md#review-with-your-ai).
 
 ## Identification
 
@@ -65,7 +66,7 @@ Append-only by database trigger, hash-chained with a secret key, and time-stampe
 
 ## Web and network
 
-- A strict Content Security Policy (`script-src 'self'`, no inline script, `frame-ancestors 'none'`), HSTS on https, `nosniff`, `no-referrer`, cross-origin isolation headers and a tight permissions policy. The web app loads nothing from other origins.
+- A strict Content Security Policy (`script-src 'self'`, no inline script, `frame-ancestors 'none'`), HSTS on https, `nosniff`, `no-referrer`, cross-origin isolation headers and a tight permissions policy (only the signing page may use the camera, for [webcam photos](identification.md#webcam-photo)). The web app loads nothing from other origins.
 - Rate limits per address on sign-in, codes, signing, uploads and verification, on top of the account lockouts.
 - Outbound requests to anything configurable (webhooks, AI endpoints, eID brokers, time stamp authorities) resolve DNS first, refuse private, loopback, link-local and metadata addresses, and follow no redirects. The one exception is a self-hosted AI proxy, which an admin may point at the private network.
 - Webhooks are signed per webhook. See [Webhooks](webhooks.md).

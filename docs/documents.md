@@ -34,7 +34,7 @@ Every PDF is checked by its content, not its name, and rewritten without JavaScr
 | --- | --- |
 | Title | Shown in the document list, the invitation and on the signing page. |
 | Message to Parties | Shown in the invitation and on the signing page. |
-| Language for Signers | The language of emails, SMS and the signing page. Empty uses the default from **Settings → Organisation**. See [The signing page](signing-page.md#languages). |
+| Language for Signers | The language of emails, SMS and the signing page, unless a party has its own. Empty uses the default from **Settings → Organisation**. See [The signing page](signing-page.md#languages). |
 | Expires | The date after which the document can no longer be signed. It then becomes **Expired**. |
 | Remind Every (Days) | Sends a reminder to parties who have not signed yet, every so many days (up to 60). 0 turns reminders off. |
 | Your Reference | An external id, such as a CRM or case number. You can search for it in the document list, and it is included in webhooks and the API. |
@@ -68,6 +68,14 @@ The **Review** panel checks the document's setup as you work and lists anything 
 - Warnings, worth a look: a signer without a signature field (their signature then appears on the evidence page only), an eID party without a personal number (so anyone with the link and an eID could sign), a party with neither email nor phone (so they will not get the signed copy).
 
 If an admin has set up AI, the same panel can also ask an AI to read the document. See [AI assistant and review](ai.md#document-review).
+
+## Preview
+
+**Preview**, next to **Send for Signing**, shows the signing page as a chosen party will see it, with their fields, language and identification steps. See [The signing page](signing-page.md#previewing-as-a-party).
+
+## AI review by signers
+
+By default, signers can give their own AI assistant a read-only copy of the document to explain it before they sign. Turn **Let Signers Share With Their AI** off under **AI Review by Signers** to prevent it. See [The signing page](signing-page.md#review-with-your-ai).
 
 ## Sending
 

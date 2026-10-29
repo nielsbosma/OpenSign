@@ -25,8 +25,7 @@ Bulk send sends a [template](templates.md) to every row of a spreadsheet. Each r
 | A field | Any template field with a label, filled in as the sender's value for that row. |
 | Title | The document title, instead of the pattern. |
 | Your Reference | The document's external id, such as a customer number. |
-
-> **Coming soon.** A Language column per party, so each signer can get the document in their own language.
+| A party's Language | The language of that signer's emails and signing page, as a code such as `sv` or `pt-BR`. See [The signing page](signing-page.md#languages). |
 
 ## Column matching
 

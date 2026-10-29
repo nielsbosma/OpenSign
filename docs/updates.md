@@ -12,7 +12,7 @@ Updating OpenSign is always the same thing: run a newer image. Database migratio
 
 Admins with an update waiting also see **Update to …** in the sidebar.
 
-OpenSign asks GitHub for the latest release at most every six hours, and sends nothing but its version in the request's user agent. Turn this off with **Check for Updates** in **Settings → Updates** (for example, for installs without internet access).
+OpenSign asks GitHub for the latest release at most every six hours, and sends nothing but its version in the request's user agent. Turn this off with **Check for Updates** under **Updates** on the same page (for example, for installs without internet access).
 
 The System page needs the **system.read** permission (admins and auditors). The same information is at `GET /api/v1/system/version` and `GET /api/v1/system/status`.
 
@@ -21,12 +21,18 @@ The System page needs the **system.read** permission (admins and auditors). The 
 ### From the app (Sliplane)
 
 1. In Sliplane, open the OpenSign service, then **Settings → Deploy hook**, and copy the hook URL.
-2. In OpenSign, paste it as **Deploy Hook** in **Settings → Updates**.
+2. In OpenSign, paste it as **Deploy Hook** under **Updates** on **Settings → System**.
 3. Press **Update Now** on the System page.
 
 OpenSign calls the hook, Sliplane pulls the image again and restarts the service, and OpenSign is back on the new version a minute or two later. The hook redeploys the service's configured tag, so run `:latest` or a release series such as `:1.2`, not an exact version.
 
 The deploy hook is stored encrypted, must be a public https address, and only an admin signed in to the app can trigger it. Every update is recorded in the audit trail.
+
+### Sliplane on every release
+
+If you build OpenSign from your own fork, CI can deploy each GitHub Release for you. Store the Sliplane deploy hook as the `SLIPLANE_DEPLOY_HOOK` repository secret (on Windows, `./deploy/Connect-Github.ps1` does this with the GitHub CLI). After CI pushes the release image, it calls the hook. Without the secret, nothing is deployed.
+
+On Windows, `./deploy/release.ps1` publishes a release step by step: it checks that `main` is green, publishes the release with its changelog notes, follows the image build, then deploys.
 
 ### Sliplane from a terminal
 

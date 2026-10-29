@@ -22,7 +22,7 @@ Once the first admin exists, the setup code stops working for good. Everyone els
 
 ## Step 2: email
 
-OpenSign sends signing invitations, reminders, notices when a document is stopped, the sealed documents, user invitations and password resets by email. Setup asks for a working email provider and sends you a test message. Setup only finishes once the provider accepts it, and documents cannot go out by email before that.
+OpenSign sends signing invitations, reminders, notices when a document is stopped, the sealed documents, user invitations and password resets by email. Setup asks for a working email provider, Resend or your own SMTP server, and sends you a test message. Setup only finishes once the provider accepts it, and documents cannot go out by email before that.
 
 ### Resend
 
@@ -32,11 +32,23 @@ OpenSign sends signing invitations, reminders, notices when a document is stoppe
 2. Create an API key under **API Keys**, with permission to send.
 3. In OpenSign, enter the API key, a **From Address** on the verified domain (such as `sign@example.com`) and a **From Name**.
 
-> **Coming soon.** SMTP as an alternative to Resend: a host, a port, STARTTLS or TLS, and an optional username and password. TLS is always required and certificates are always checked, so credentials never travel unencrypted. Hosts on private networks are refused.
+### SMTP
+
+Choose the **SMTP Server** tab during setup, or **SMTP** as the **Provider** in **Settings → Email**, to send through your own mail server or another provider's SMTP relay.
+
+| Field | |
+| --- | --- |
+| SMTP Server | The host name, such as `smtp.example.com`. No `smtp://` and no port. |
+| Port | Usually 587 for STARTTLS or 465 for TLS. |
+| Security | **STARTTLS** or **TLS**. |
+| Username, Password | Empty username sends without signing in. The password is stored encrypted. |
+| From Address, From Name | The sender. |
+
+TLS is always required and the certificate must be valid for the server name, so credentials never travel unencrypted. There is no plain-text option. Servers on private networks are refused, except in development.
 
 ### Changing email later
 
-Email settings live in **Settings → Email**. Changing the key or the sender clears the "verified" state, and OpenSign asks for a new test email before documents can go out again. **Reply-To** is optional: empty sends replies to the person who sent each document.
+Email settings live in **Settings → Email**. Changing the provider, key, SMTP server or sender clears the "verified" state, and OpenSign asks for a new test email before documents can go out again. **Reply-To** is optional: empty sends replies to the person who sent each document.
 
 ## What to set up next
 

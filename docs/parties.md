@@ -11,9 +11,11 @@ A party is anyone who takes part in a document: someone who signs, approves, or 
 | Email | Needed for email delivery and to receive the signed copy. |
 | Mobile | With country code, such as `+46 70 123 45 67`. Needed for SMS delivery and SMS codes. |
 | Company | Optional. Fills Company fields. |
+| Language | Their emails, SMS and signing page. **Same as Document** by default. See [The signing page](signing-page.md#languages). |
 | Send Link By | How the party gets their signing link. See [Delivery](#delivery). |
 | Identify to View | What the party must do before they can open the document. See [Identification](identification.md). |
 | Identify to Sign | What the party must do before they can sign. See [Identification](identification.md). |
+| Ask for Webcam Identification | The party takes a photo of themselves before signing. See [Webcam photo](identification.md#webcam-photo). |
 | Personal Number | For eID identification. When set, only the eID of that person can sign. Stored encrypted and shown masked. |
 | Signing Order | When the document signs in order, lower numbers go first. See [Signing order](#signing-order). |
 | Ask for Attachments | Files the party must or may upload. See [Signer attachments](attachments.md). |

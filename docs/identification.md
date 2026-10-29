@@ -15,7 +15,15 @@ For each party you choose how strongly they must prove who they are, separately 
 
 A method that is not set up on the install is shown disabled in the party dialog. Sending is refused if a party uses a method that is not ready, so a signer never gets stuck.
 
-> **Coming soon.** Webcam photo identification: the signer takes a photo with their camera before signing, and the photo is kept with the evidence.
+## Webcam photo
+
+Tick **Ask for Webcam Identification** on a signer or approver. Before they can sign, they take a live photo of themselves with their computer's camera or their phone: **Turn On Camera**, **Take Photo**, then **Use Photo** or **Retake**. There is no file picker.
+
+- The photo is cleaned of EXIF and location data, stored encrypted, and embedded in the sealed PDF with its SHA-256 hash. The audit trail records when it was taken.
+- On the document page, the party card shows the photo and when it was taken. Every view is recorded in the audit trail.
+- Only the signing page may use the camera. Every other page in OpenSign blocks it.
+
+A photo is evidence of who signed, not proof of liveness: a skilled signer could send a still image instead of a live one. For strong identification, use an eID.
 
 ## Personal numbers
 
