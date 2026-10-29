@@ -378,3 +378,36 @@ mod tests {
         assert_eq!(lines, vec!["Hello world", "Second"]);
     }
 }
+
+#[cfg(test)]
+mod hostile {
+    use crate::{Limits, sanitize, take_text_tags};
+
+    /// Damaged copies of real files must give an error or a result, never a panic or a hang.
+    #[test]
+    fn damaged_files_never_panic() {
+        let originals: [&[u8]; 3] = [
+            include_bytes!("../fixtures/word-tags.pdf"),
+            include_bytes!("../fixtures/acroform.pdf"),
+            include_bytes!("../fixtures/word-detect.pdf"),
+        ];
+        let mut seed = 0x9E37_79B9_7F4A_7C15_u64;
+        for original in originals {
+            for _ in 0..60 {
+                let mut pdf = original.to_vec();
+                for _ in 0..8 {
+                    seed ^= seed << 13;
+                    seed ^= seed >> 7;
+                    seed ^= seed << 17;
+                    let at = (seed as usize) % pdf.len();
+                    pdf[at] = (seed >> 32) as u8;
+                }
+                if let Ok(clean) = sanitize(&pdf, Limits::default()) {
+                    let _ = take_text_tags(&clean.pdf);
+                    let _ = super::detect_fields(&clean.pdf);
+                    let _ = super::page_text(&clean.pdf);
+                }
+            }
+        }
+    }
+}

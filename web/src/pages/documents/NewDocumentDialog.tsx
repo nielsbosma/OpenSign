@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { call, errorMessage, uploadFile, useApi } from '@/lib/api';
 import { t } from '@/lib/i18n';
 import { FormError } from '../auth/AuthLayout';
+import { announceUpload } from './SuggestedFields';
 
 export const ACCEPT = '.pdf,.docx,.doc,.odt,.rtf,application/pdf';
 
@@ -62,7 +63,7 @@ export function NewDocumentDialog({ open, onOpenChange }: { open: boolean; onOpe
         title: title.trim() || (files[0] ? titleFrom(files[0].name) : t('Untitled Document')),
         templateId: fromTemplate,
       });
-      for (const file of files) await uploadFile(doc.id, file);
+      for (const file of files) announceUpload(file.name, await uploadFile(doc.id, file));
       onOpenChange(false);
       navigate(`/documents/${doc.id}`);
     } catch (e) {

@@ -32,8 +32,8 @@ pub struct Found {
 /// Smallest size a field gets when its tag is short, in points.
 fn minimum_size(kind: FieldKind) -> (f64, f64) {
     match kind {
-        FieldKind::Signature => (120.0, 32.0),
-        FieldKind::Initials => (40.0, 24.0),
+        FieldKind::Signature => (100.0, 24.0),
+        FieldKind::Initials => (36.0, 20.0),
         FieldKind::Image => (100.0, 60.0),
         FieldKind::Checkbox | FieldKind::Radio => (10.0, 10.0),
         _ => (60.0, 12.0),
@@ -136,8 +136,17 @@ pub fn parse_tag(tag: &TextTag) -> Result<Found, String> {
     let points =
         |key: &str| get(key).and_then(|v| v.trim().trim_end_matches("px").parse::<f64>().ok()).filter(|v| v.is_finite() && *v > 0.0);
     let (min_w, min_h) = minimum_size(kind);
-    let width = points("width").map_or(tag.width.max(min_w / tag.page_width), |w| w / tag.page_width);
-    let height = points("height").map_or(tag.height.max(min_h / tag.page_height), |h| h / tag.page_height);
+    let line = tag.height * tag.page_height;
+    // Boxes to tick are square, the size of the tag's text, at its start.
+    let (width, height) = if matches!(kind, FieldKind::Checkbox | FieldKind::Radio) {
+        let side = points("width").or(points("height")).unwrap_or((line * 0.8).max(min_w));
+        (side / tag.page_width, side / tag.page_height)
+    } else {
+        (
+            points("width").map_or(tag.width.max(min_w / tag.page_width), |w| w / tag.page_width),
+            points("height").map_or(tag.height.max(min_h / tag.page_height), |h| h / tag.page_height),
+        )
+    };
     // A taller field grows upwards from the tag's baseline, so a signature sits on its line.
     let bottom = tag.y + tag.height;
     let y = (bottom - height).max(0.0);
@@ -225,7 +234,7 @@ mod tests {
     fn reads_docuseal_tags() {
         let f = parse_tag(&tag("Client Sign;type=signature;role=Client")).unwrap();
         assert_eq!((f.kind, f.label.as_str(), f.role.as_deref(), f.required), (FieldKind::Signature, "Client Sign", Some("Client"), true));
-        assert!((f.height - 32.0 / 800.0).abs() < 1e-9 && (f.y + f.height - 0.515).abs() < 1e-9, "grows upwards: {f:?}");
+        assert!((f.height - 24.0 / 800.0).abs() < 1e-9 && (f.y + f.height - 0.515).abs() < 1e-9, "grows upwards: {f:?}");
 
         let f = parse_tag(&tag("Start Date;type=date;format=dd/mm/yyyy;required=false")).unwrap();
         assert_eq!((f.kind, f.format.as_deref(), f.required), (FieldKind::DateInput, Some("DD/MM/YYYY"), false));
@@ -241,6 +250,7 @@ mod tests {
 
         let f = parse_tag(&tag("type=checkbox")).unwrap();
         assert_eq!((f.kind, f.label.as_str(), f.required), (FieldKind::Checkbox, "", false));
+        assert!((f.width * 600.0 - 10.0).abs() < 1e-9 && (f.height * 800.0 - 10.0).abs() < 1e-9, "a square: {f:?}");
 
         let f = parse_tag(&tag("Amount;type=number;format=usd;min=0;max=100;width=50;height=20")).unwrap();
         assert_eq!(
