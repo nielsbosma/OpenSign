@@ -113,6 +113,7 @@ pub const SIGNER: Limit = Limit { name: "signer", per_minute: 60, burst: 30 };
 pub const CODES: Limit = Limit { name: "codes", per_minute: 6, burst: 6 };
 pub const VERIFY: Limit = Limit { name: "verify", per_minute: 10, burst: 10 };
 pub const UPLOAD: Limit = Limit { name: "upload", per_minute: 30, burst: 10 };
+pub const REVIEW: Limit = Limit { name: "review", per_minute: 20, burst: 10 };
 
 /// Token buckets per address, in memory. Each replica limits on its own, which still caps an
 /// attacker at a small multiple; the database-backed lockouts are the real brake on guessing.

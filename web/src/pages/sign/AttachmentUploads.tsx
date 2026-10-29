@@ -12,11 +12,13 @@ export function AttachmentUploads({
   session,
   requests,
   onChange,
+  disabled,
 }: {
   token: string;
   session: string | null;
   requests: AttachmentRequest[];
   onChange: (requests: AttachmentRequest[]) => void;
+  disabled?: boolean;
 }) {
   const t = useTexts();
   const [busy, setBusy] = useState<string>();
@@ -82,11 +84,11 @@ export function AttachmentUploads({
             </div>
           </div>
           <div className="mt-2 flex gap-2">
-            <Button type="button" variant="outline" size="sm" disabled={!!busy} onClick={() => pick(r.id)}>
+            <Button type="button" variant="outline" size="sm" disabled={disabled || !!busy} onClick={() => pick(r.id)}>
               {busy === r.id ? <Spinner /> : <Upload />} {r.fileId ? t.replaceFile : t.uploadFile}
             </Button>
             {r.fileId && (
-              <Button type="button" variant="ghost" size="sm" disabled={!!busy} onClick={() => remove(r)}>
+              <Button type="button" variant="ghost" size="sm" disabled={disabled || !!busy} onClick={() => remove(r)}>
                 {t.removeFile}
               </Button>
             )}

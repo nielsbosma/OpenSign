@@ -33,6 +33,7 @@ const NOT_FOR_ASSISTANT: &[&str] = &[
     "documents.share",
     "settings.send_test_email",
     "ai.test",
+    "ai.models",
 ];
 const MAX_DOCUMENT_CHARS: usize = 180_000;
 
@@ -477,6 +478,56 @@ impl Service for TestProvider {
         )
         .await?;
         Ok(TestOutput { ok: true, reply: truncate(&reply.text(), 100), milliseconds: started.elapsed().as_millis() as i64 })
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelsInput {
+    /// Unsaved provider from the settings form; the saved one if left out.
+    pub provider: Option<String>,
+    /// Unsaved base URL from the settings form; the saved one if left out.
+    pub base_url: Option<String>,
+    /// A key typed but not saved yet. Empty means none.
+    pub api_key: Option<String>,
+}
+
+pub struct ListModels;
+
+#[async_trait]
+impl Service for ListModels {
+    type Input = ModelsInput;
+    type Output = Vec<ai::Model>;
+    const META: Meta = Meta::mutation(
+        "ai.models",
+        "List the chat models the AI provider offers, using the saved settings or unsaved ones from the form.",
+        Access::Permission(Permission::SettingsManage),
+    )
+    .not_a_tool()
+    .without_transaction();
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ModelsInput) -> Result<Vec<ai::Model>> {
+        let saved = settings(ctx, conn).await?;
+        let mut s = saved.clone();
+        if let Some(provider) = input.provider {
+            s.provider = provider;
+        }
+        if let Some(base_url) = input.base_url {
+            s.base_url = base_url;
+        }
+        // The saved key only ever goes to the saved endpoint, so a draft address cannot pull it out.
+        let same_endpoint = s.provider == saved.provider && s.base_url.trim() == saved.base_url.trim();
+        s.api_key = match input.api_key {
+            Some(key) if !key.trim().is_empty() => Some(key.trim().to_string()),
+            Some(_) => None,
+            None if same_endpoint => saved.api_key,
+            None => None,
+        };
+        if s.provider.is_empty() {
+            return Err(bad_request("Choose an AI provider first"));
+        }
+        super::admin::validate(&s)?;
+        ai::list_models(ctx, &s).await
     }
 }
 

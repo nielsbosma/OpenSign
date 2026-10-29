@@ -7,19 +7,27 @@ import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { App } from './App.tsx';
 import { createQueryClient } from './lib/api.ts';
+import { I18nProvider, isRtl, useLanguage } from './lib/i18n.tsx';
 import { ThemeProvider } from './lib/theme.tsx';
+
+function Toasts() {
+  const rtl = isRtl(useLanguage().language);
+  return <Toaster position={rtl ? 'bottom-left' : 'bottom-right'} dir={rtl ? 'rtl' : 'ltr'} />;
+}
 
 function Providers() {
   const [queryClient] = useState(createQueryClient);
   return (
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
-        <TooltipProvider delayDuration={300}>
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
-          <Toaster position="bottom-right" />
-        </TooltipProvider>
+        <I18nProvider>
+          <TooltipProvider delayDuration={300}>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+            <Toasts />
+          </TooltipProvider>
+        </I18nProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

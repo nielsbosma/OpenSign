@@ -2,6 +2,7 @@ import * as pdfjs from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Spinner } from '@/components/common';
+import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -46,7 +47,7 @@ export function usePdf(load: (() => Promise<ArrayBuffer>) | null, key: string) {
         }
         if (!cancelled) setPages(list);
       })
-      .catch((e) => !cancelled && setError(e instanceof Error ? e.message : 'The document could not be shown'));
+      .catch((e) => !cancelled && setError(e instanceof Error ? e.message : t('The document could not be shown')));
     return () => {
       cancelled = true;
       destroy?.();

@@ -91,6 +91,7 @@ fn party(name: &str, role: PartyRole, delivery: Delivery, auth_to_sign: AuthMeth
         auth_to_view: AuthMethod::None,
         auth_to_sign,
         attachments: None,
+        language: None,
         webcam_photo: None,
     }
 }
@@ -167,7 +168,7 @@ async fn sends_signs_seals_and_verifies() {
                     ]),
                     ..party("Anna", PartyRole::Signer, Delivery::Email, AuthMethod::Standard)
                 },
-                party("Bo", PartyRole::Signer, Delivery::Link, AuthMethod::SmsPin),
+                PartyInput { language: Some("ar-SA".into()), ..party("Bo", PartyRole::Signer, Delivery::Link, AuthMethod::SmsPin) },
                 party("Cecilia", PartyRole::Viewer, Delivery::Email, AuthMethod::Standard),
             ],
         },
@@ -175,6 +176,20 @@ async fn sends_signs_seals_and_verifies() {
     .await
     .unwrap();
     let (anna, bo, cecilia) = (set[0].id, set[1].id, set[2].id);
+    assert_eq!(set[1].language.as_deref(), Some("ar"));
+    assert_eq!(set[0].language, None);
+    let unknown = call::<docs::SetParties>(
+        &sender,
+        docs::SetPartiesInput {
+            document_id: id,
+            parties: vec![PartyInput {
+                language: Some("xx".into()),
+                ..party("Anna", PartyRole::Signer, Delivery::Email, AuthMethod::Standard)
+            }],
+        },
+    )
+    .await;
+    assert_eq!(kind(unknown), ErrorKind::BadRequest);
 
     let with_number = |id: Uuid, number: Option<&str>| PartyInput {
         id: Some(id),
@@ -185,7 +200,7 @@ async fn sends_signs_seals_and_verifies() {
         document_id: id,
         parties: vec![
             anna,
-            PartyInput { id: Some(bo), ..party("Bo", PartyRole::Signer, Delivery::Link, AuthMethod::SmsPin) },
+            PartyInput { id: Some(bo), language: Some("ar".into()), ..party("Bo", PartyRole::Signer, Delivery::Link, AuthMethod::SmsPin) },
             PartyInput { id: Some(cecilia), ..party("Cecilia", PartyRole::Viewer, Delivery::Email, AuthMethod::Standard) },
         ],
     };
@@ -220,6 +235,27 @@ async fn sends_signs_seals_and_verifies() {
     let not_found = call::<docs::Get>(&outsider, docs::IdInput { id }).await.unwrap_err();
     assert_eq!(not_found.kind, ErrorKind::NotFound, "other senders cannot see the document");
 
+    let audited = |id: Uuid| {
+        let db = app.db.clone();
+        async move {
+            sqlx::query_scalar::<_, i64>("select count(*) from audit_log where entity_id = $1")
+                .bind(id.to_string())
+                .fetch_one(&db)
+                .await
+                .unwrap()
+        }
+    };
+    let before = audited(id).await;
+    let preview = call::<docs::SigningPreview>(&sender, docs::SigningPreviewInput { document_id: id, party_id: bo }).await.unwrap();
+    assert_eq!(preview.party.name, "Bo");
+    assert_eq!(preview.sign_authentication, Some(AuthMethod::SmsPin));
+    assert!(preview.needs_authentication.is_none() && preview.your_turn);
+    assert_eq!(preview.fields.iter().filter(|f| f.party_id == Some(bo)).count(), 3);
+    assert!(preview.fields.iter().all(|f| f.party_id == Some(bo) || f.party_id.is_none()), "only the party's own fields");
+    assert_eq!(audited(id).await, before, "a preview is not recorded");
+    let hidden = call::<docs::SigningPreview>(&outsider, docs::SigningPreviewInput { document_id: id, party_id: bo }).await;
+    assert_eq!(kind(hidden), ErrorKind::NotFound);
+
     let sent = call::<docs::Send>(&sender, docs::SendInput { id, expires_at: None }).await.unwrap();
     assert_eq!(sent.document.document.status, "pending");
     assert_eq!(sent.links.len(), 1, "only Bo has link delivery");
@@ -245,6 +281,7 @@ async fn sends_signs_seals_and_verifies() {
     assert!(call::<signing::Open>(&signer, signing::TokenInput { token: forged, session: None }).await.is_err());
 
     let anna_view = call::<signing::Open>(&signer, signing::TokenInput { token: anna_token.clone(), session: None }).await.unwrap();
+    assert_eq!(anna_view.document.language, "en");
     assert!(anna_view.your_turn && anna_view.needs_authentication.is_none());
     assert_eq!(anna_view.fields.len(), 2);
     let unsigned = call::<signing::Sign>(
@@ -300,6 +337,7 @@ async fn sends_signs_seals_and_verifies() {
     assert_eq!(kind(again), ErrorKind::Conflict);
 
     let bo_view = call::<signing::Open>(&signer, signing::TokenInput { token: bo_token.clone(), session: None }).await.unwrap();
+    assert_eq!(bo_view.document.language, "ar", "a party's own language wins over the document's");
     assert_eq!(bo_view.sign_authentication, Some(AuthMethod::SmsPin));
     let without_code = call::<signing::Sign>(
         &signer,

@@ -4,6 +4,7 @@ import { Field, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useApiMutation } from '@/lib/api';
+import { t } from '@/lib/i18n';
 import { AuthLayout, FormError, PASSWORD_HINT, useHashToken } from './AuthLayout';
 
 export function ForgotPasswordPage() {
@@ -11,9 +12,9 @@ export function ForgotPasswordPage() {
   const request = useApiMutation('auth.request_password_reset');
   if (request.isSuccess) {
     return (
-      <AuthLayout title="Check Your Email" description="If the address belongs to an account, a reset link is on its way.">
+      <AuthLayout title={t('Check Your Email')} description={t('If the address belongs to an account, a reset link is on its way.')}>
         <Button asChild variant="outline" className="w-full">
-          <Link to="/login">Back to Sign In</Link>
+          <Link to="/login">{t('Back to Sign In')}</Link>
         </Button>
       </AuthLayout>
     );
@@ -23,9 +24,9 @@ export function ForgotPasswordPage() {
     request.mutate({ email: email.trim() });
   };
   return (
-    <AuthLayout title="Reset Your Password" description="We will email you a link to choose a new one.">
+    <AuthLayout title={t('Reset Your Password')} description={t('We will email you a link to choose a new one.')}>
       <form onSubmit={submit} className="grid gap-4">
-        <Field label="Email" htmlFor="email">
+        <Field label={t('Email')} htmlFor="email">
           <Input
             id="email"
             type="email"
@@ -37,10 +38,10 @@ export function ForgotPasswordPage() {
           />
         </Field>
         <Button type="submit" disabled={request.isPending}>
-          {request.isPending && <Spinner className="text-primary-foreground" />} Send Reset Link
+          {request.isPending && <Spinner className="text-primary-foreground" />} {t('Send Reset Link')}
         </Button>
         <Link to="/login" className="text-center text-muted-foreground hover:text-foreground">
-          Back to Sign In
+          {t('Back to Sign In')}
         </Link>
       </form>
     </AuthLayout>
@@ -56,15 +57,15 @@ export function ResetPasswordPage() {
   const reset = useApiMutation('auth.reset_password', { silent: true, onSuccess: () => navigate('/login', { replace: true }) });
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (password !== confirm) return setError('The passwords do not match');
+    if (password !== confirm) return setError(t('The passwords do not match'));
     setError(undefined);
     reset.mutate({ token, password }, { onError: (e) => setError(e.message) });
   };
   return (
-    <AuthLayout title="Choose a New Password" description="This also signs you out everywhere else.">
+    <AuthLayout title={t('Choose a New Password')} description={t('This also signs you out everywhere else.')}>
       <form onSubmit={submit} className="grid gap-4">
-        <FormError message={!token ? 'This link is incomplete. Open it from the email again.' : error} />
-        <Field label="New Password" htmlFor="password" hint={PASSWORD_HINT}>
+        <FormError message={!token ? t('This link is incomplete. Open it from the email again.') : error} />
+        <Field label={t('New Password')} htmlFor="password" hint={t(PASSWORD_HINT)}>
           <Input
             id="password"
             type="password"
@@ -74,7 +75,7 @@ export function ResetPasswordPage() {
             required
           />
         </Field>
-        <Field label="Repeat Password" htmlFor="confirm">
+        <Field label={t('Repeat Password')} htmlFor="confirm">
           <Input
             id="confirm"
             type="password"
@@ -85,7 +86,7 @@ export function ResetPasswordPage() {
           />
         </Field>
         <Button type="submit" disabled={reset.isPending || !token}>
-          {reset.isPending && <Spinner className="text-primary-foreground" />} Set Password
+          {reset.isPending && <Spinner className="text-primary-foreground" />} {t('Set Password')}
         </Button>
       </form>
     </AuthLayout>

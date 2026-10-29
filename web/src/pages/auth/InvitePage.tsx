@@ -4,6 +4,7 @@ import { Field, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useApiMutation } from '@/lib/api';
+import { t } from '@/lib/i18n';
 import { AuthLayout, FormError, PASSWORD_HINT, useHashToken } from './AuthLayout';
 
 export function InvitePage() {
@@ -19,13 +20,13 @@ export function InvitePage() {
     accept.mutate({ token, name: name.trim(), password }, { onError: (e) => setError(e.message) });
   };
   return (
-    <AuthLayout title="Join OpenSign" description="Choose your name and a password, then sign in.">
+    <AuthLayout title={t('Join OpenSign')} description={t('Choose your name and a password, then sign in.')}>
       <form onSubmit={submit} className="grid gap-4">
-        <FormError message={!token ? 'This link is incomplete. Open it from the email again.' : error} />
-        <Field label="Your Name" htmlFor="name">
+        <FormError message={!token ? t('This link is incomplete. Open it from the email again.') : error} />
+        <Field label={t('Your Name')} htmlFor="name">
           <Input id="name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
         </Field>
-        <Field label="Password" htmlFor="password" hint={PASSWORD_HINT}>
+        <Field label={t('Password')} htmlFor="password" hint={t(PASSWORD_HINT)}>
           <Input
             id="password"
             type="password"
@@ -36,7 +37,7 @@ export function InvitePage() {
           />
         </Field>
         <Button type="submit" disabled={accept.isPending || !token}>
-          {accept.isPending && <Spinner className="text-primary-foreground" />} Create Account
+          {accept.isPending && <Spinner className="text-primary-foreground" />} {t('Create Account')}
         </Button>
       </form>
     </AuthLayout>

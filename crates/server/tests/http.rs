@@ -114,6 +114,20 @@ async fn sessions_csrf_rate_limits_and_api_keys() {
     let (_, status) = client.call("setup.status", json!({}), auth).await;
     assert_eq!(status["emailConfigured"], false, "a new sender needs a new test");
 
+    let url = json!({ "group": "email", "values": { "provider": "smtp", "smtpHost": "smtp://mail.example.com" } });
+    let (response, _) = client.call("settings.update", url, auth).await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST, "a URL is not a host name");
+    let plain = json!({ "group": "email", "values": { "provider": "smtp", "smtpHost": "mail.example.com", "smtpSecurity": "none" } });
+    let (response, _) = client.call("settings.update", plain, auth).await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST, "unencrypted SMTP is refused");
+    let smtp = json!({ "group": "email", "values": {
+        "provider": "smtp", "smtpHost": "mail.example.com", "smtpPort": 465, "smtpSecurity": "tls", "smtpUsername": "opensign", "smtpPassword": "hunter2"
+    } });
+    let (response, saved) = client.call("settings.update", smtp, auth).await;
+    assert_eq!(response.status(), StatusCode::OK, "{saved}");
+    assert_eq!(saved["values"]["smtpPassword"], true, "the password is never returned");
+    assert_eq!(saved["values"]["smtpHost"], "mail.example.com");
+
     let (response, _) = client.call("auth.logout", json!({}), &[("cookie", &cookie), ("origin", ORIGIN)]).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert!(response.headers().get(header::SET_COOKIE).unwrap().to_str().unwrap().contains("Max-Age=0"));
@@ -333,4 +347,63 @@ async fn only_the_signing_page_may_use_the_camera() {
         let (other, _) = client.send(Request::get(path).body(Body::empty()).unwrap()).await;
         assert!(policy(&other).starts_with("camera=()"), "{path}: {}", policy(&other));
     }
+}
+
+#[tokio::test]
+async fn review_links_serve_text_without_indexing() {
+    let Some(app) = app().await else { return };
+    let client = Client { router: router(AppState::new(app.clone())), ip: "203.0.113.9" };
+    let setup = json!({ "setupCode": app.keys.setup_code(), "orgName": "Acme AB", "name": "Ada", "email": "ada@example.com", "password": PASSWORD });
+    client.call("setup.create_first_admin", setup, &[]).await;
+    let (response, _) = client.call("auth.login", json!({ "email": "ada@example.com", "password": PASSWORD }), &[]).await;
+    let cookie = cookie_of(&response);
+    let auth: [(&str, &str); 2] = [("cookie", &cookie), ("origin", ORIGIN)];
+
+    let (_, doc) = client.call("documents.create", json!({ "title": "Agreement" }), &auth).await;
+    let id = doc["id"].as_str().unwrap().to_string();
+    let upload = json!({ "documentId": id, "name": "agreement.pdf", "contentBase64": base64_of(&opensign_pdf_fixture()) });
+    let (response, body) = client.call("documents.upload", upload, &auth).await;
+    assert_eq!(response.status(), StatusCode::OK, "{body}");
+    let parties = json!({ "documentId": id, "parties": [{ "role": "signer", "name": "Anna", "delivery": "link" }] });
+    client.call("documents.set_parties", parties, &auth).await;
+    let (_, sent) = client.call("documents.send", json!({ "id": id }), &auth).await;
+    let token = sent["links"][0]["url"].as_str().unwrap().rsplit('#').next().unwrap().to_string();
+
+    let (response, created) = client.call("signing.create_review_link", json!({ "token": token }), &[]).await;
+    assert_eq!(response.status(), StatusCode::OK, "{created}");
+    let url = created["url"].as_str().unwrap();
+    let path = &url[url.find("/review/").unwrap()..];
+
+    let response = client
+        .router
+        .clone()
+        .oneshot(Request::get(path).header("x-forwarded-for", "203.0.113.9").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let h = response.headers();
+    assert_eq!(h.get(header::CONTENT_TYPE).unwrap(), "text/plain; charset=utf-8");
+    assert_eq!(h.get("x-robots-tag").unwrap(), "noindex, nofollow, noarchive");
+    assert_eq!(h.get(header::CACHE_CONTROL).unwrap(), "private, no-store");
+    assert!(h.get(header::CONTENT_SECURITY_POLICY).unwrap().to_str().unwrap().starts_with("sandbox"));
+    let text = String::from_utf8(response.into_body().collect().await.unwrap().to_bytes().to_vec()).unwrap();
+    assert!(text.starts_with("# Agreement") && text.contains("DOCUMENT>>>"), "{text}");
+
+    let pdf = Request::get(format!("{path}/document.pdf")).header("x-forwarded-for", "203.0.113.9").body(Body::empty()).unwrap();
+    let (response, _) = client.send(pdf).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers().get(header::CONTENT_TYPE).unwrap(), "application/pdf");
+
+    let bogus = Request::get("/review/0190f000-0000-7000-8000-000000000000.nope")
+        .header("x-forwarded-for", "203.0.113.9")
+        .body(Body::empty())
+        .unwrap();
+    let response = client.router.clone().oneshot(bogus).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(response.headers().get(header::CONTENT_TYPE).unwrap(), "text/plain; charset=utf-8");
+}
+
+fn base64_of(bytes: &[u8]) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.encode(bytes)
 }

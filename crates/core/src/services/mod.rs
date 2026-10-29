@@ -7,6 +7,7 @@ pub mod eid;
 pub mod oauth;
 pub mod passkeys;
 pub mod retention;
+pub mod review;
 pub mod setup;
 pub mod signing;
 pub mod system;
@@ -47,6 +48,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<auth::VerifyTwoFactor>(),
         erase::<auth::Logout>(),
         erase::<auth::WhoAmI>(),
+        erase::<auth::SetLanguage>(),
         erase::<auth::BeginTwoFactor>(),
         erase::<auth::ConfirmTwoFactor>(),
         erase::<auth::ChangePassword>(),
@@ -91,6 +93,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<documents::Unshare>(),
         erase::<documents::Download>(),
         erase::<documents::IssueSigningLink>(),
+        erase::<documents::SigningPreview>(),
         erase::<documents::SignInPerson>(),
         erase::<passkeys::BeginRegistration>(),
         erase::<passkeys::FinishRegistration>(),
@@ -115,6 +118,9 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<signing::Sign>(),
         erase::<signing::Decline>(),
         erase::<signing::RemoveAttachment>(),
+        erase::<review::CreateLink>(),
+        erase::<review::RevokeLink>(),
+        erase::<review::SetReviewLinks>(),
         erase::<webhooks::List>(),
         erase::<webhooks::Create>(),
         erase::<webhooks::Delete>(),
@@ -130,6 +136,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<ai::Review>(),
         erase::<ai::LatestReview>(),
         erase::<ai::TestProvider>(),
+        erase::<ai::ListModels>(),
         erase::<ai::GetUsage>(),
     ]
 }

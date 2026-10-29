@@ -310,3 +310,68 @@ pub async fn eid_callback(State(state): State<AppState>, Query(q): Query<EidCall
     response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
 }
+
+fn review_headers(response: &mut Response) {
+    let h = response.headers_mut();
+    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
+    h.insert("x-robots-tag", HeaderValue::from_static("noindex, nofollow, noarchive"));
+    h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("sandbox; default-src 'none'"));
+}
+
+/// Agents read errors as text too, so a refusal says in words what happened.
+fn review_error(error: opensign_core::AppError, request_id: String) -> Response {
+    let status = axum::http::StatusCode::from_u16(error.kind.status()).unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+    if error.kind == opensign_core::ErrorKind::Internal {
+        return ApiError(error, Some(request_id)).into_response();
+    }
+    let mut response = (status, [(header::CONTENT_TYPE, "text/plain; charset=utf-8")], error.message).into_response();
+    review_headers(&mut response);
+    response
+}
+
+/// `GET /review/<token>`: the document as Markdown for the signer's AI agent. Read-only; every
+/// fetch is counted and audited.
+pub async fn review_text(State(state): State<AppState>, Path(token): Path<String>, parts: Parts) -> Response {
+    let caller = match caller(&state, &parts, Surface::Signer, Some(security::REVIEW)).await {
+        Ok(c) => c,
+        Err(r) => return *r,
+    };
+    let result = async {
+        let mut tx = caller.ctx.db().begin().await?;
+        let text = opensign_core::services::review::markdown(&caller.ctx, &mut tx, &token).await?;
+        tx.commit().await?;
+        Ok::<_, opensign_core::AppError>(text)
+    }
+    .await;
+    match result {
+        Ok(text) => {
+            let mut response = ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], text).into_response();
+            review_headers(&mut response);
+            response
+        }
+        Err(e) => review_error(e, caller.request_id),
+    }
+}
+
+/// `GET /review/<token>/document.pdf`: the PDF as sent, for agents that read PDFs themselves.
+pub async fn review_pdf(State(state): State<AppState>, Path(token): Path<String>, parts: Parts) -> Response {
+    let caller = match caller(&state, &parts, Surface::Signer, Some(security::REVIEW)).await {
+        Ok(c) => c,
+        Err(r) => return *r,
+    };
+    let result = async {
+        let mut tx = caller.ctx.db().begin().await?;
+        let (record, body) = opensign_core::services::review::pdf(&caller.ctx, &mut tx, &token).await?;
+        tx.commit().await?;
+        Ok::<_, opensign_core::AppError>((record.name, body))
+    }
+    .await;
+    match result {
+        Ok((name, body)) => {
+            let mut response = pdf(&name, body);
+            response.headers_mut().insert("x-robots-tag", HeaderValue::from_static("noindex, nofollow, noarchive"));
+            response
+        }
+        Err(e) => review_error(e, caller.request_id),
+    }
+}

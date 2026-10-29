@@ -6,6 +6,8 @@
 use std::time::Duration;
 
 use chrono::{Datelike, TimeZone, Utc};
+use schemars::JsonSchema;
+use serde::Serialize;
 use serde_json::{Value, json};
 use sqlx::PgConnection;
 
@@ -90,6 +92,70 @@ fn describe(status: u16, body: &str) -> String {
     }
 }
 
+fn authorize(request: reqwest::RequestBuilder, settings: &AiSettings) -> reqwest::RequestBuilder {
+    let key = settings.api_key.as_deref().unwrap_or_default();
+    if settings.provider == "anthropic" {
+        request.header("x-api-key", key).header("anthropic-version", "2023-06-01")
+    } else if key.is_empty() {
+        request
+    } else {
+        request.bearer_auth(key)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
+pub struct Model {
+    pub id: String,
+    pub name: String,
+}
+
+/// The chat models the provider offers this key. A successful answer also proves the address and key work.
+pub async fn list_models(ctx: &Ctx, settings: &AiSettings) -> Result<Vec<Model>> {
+    let base = base_url(settings)?;
+    let mut request = client(ctx, settings).get(format!("{base}/models")).timeout(Duration::from_secs(20));
+    if settings.provider == "anthropic" {
+        request = request.query(&[("limit", "1000")]);
+    }
+    let response = authorize(request, settings)
+        .send()
+        .await
+        .map_err(|e| AppError::new(ErrorKind::Unavailable, "Could not reach the AI provider. Check the address.").with_cause(e))?;
+    let status = response.status().as_u16();
+    let text = response.text().await.unwrap_or_default();
+    if !(200..300).contains(&status) {
+        return Err(AppError::new(ErrorKind::Unavailable, describe(status, &text)));
+    }
+    let value: Value = serde_json::from_str(&text)
+        .map_err(|e| AppError::new(ErrorKind::Unavailable, "The AI provider sent an unreadable model list").with_cause(e))?;
+    Ok(parse_models(&value))
+}
+
+const NOT_CHAT: &[&str] =
+    &["embed", "tts", "whisper", "dall-e", "moderation", "transcribe", "audio", "realtime", "image", "rerank", "babbage", "davinci"];
+
+fn parse_models(value: &Value) -> Vec<Model> {
+    let mut models: Vec<(i64, Model)> = value["data"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|m| {
+            let id = m["id"].as_str()?.trim();
+            let lower = id.to_ascii_lowercase();
+            if id.is_empty() || id.len() > 200 || NOT_CHAT.iter().any(|n| lower.contains(n)) {
+                return None;
+            }
+            let name = m["display_name"].as_str().or(m["name"].as_str()).filter(|n| !n.trim().is_empty()).unwrap_or(id);
+            let created = m["created"]
+                .as_i64()
+                .or_else(|| m["created_at"].as_str().and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok()).map(|t| t.timestamp()));
+            Some((created.unwrap_or(0), Model { id: id.to_string(), name: name.chars().take(200).collect() }))
+        })
+        .collect();
+    models.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.id.cmp(&b.1.id)));
+    models.dedup_by(|a, b| a.1.id == b.1.id);
+    models.into_iter().take(1000).map(|(_, m)| m).collect()
+}
+
 fn anthropic_messages(messages: &[Message]) -> Vec<Value> {
     messages
         .iter()
@@ -161,7 +227,6 @@ pub async fn complete(ctx: &Ctx, conn: &mut PgConnection, settings: &AiSettings,
     }
     check_budget(conn, settings).await?;
     let base = base_url(settings)?;
-    let key = settings.api_key.clone().unwrap_or_default();
     let anthropic = settings.provider == "anthropic";
     let (url, body) = if anthropic {
         let tools: Vec<Value> =
@@ -183,14 +248,7 @@ pub async fn complete(ctx: &Ctx, conn: &mut PgConnection, settings: &AiSettings,
         }
         (format!("{base}/chat/completions"), body)
     };
-    let mut request = client(ctx, settings).post(&url).timeout(Duration::from_secs(180)).json(&body);
-    request = if anthropic {
-        request.header("x-api-key", &key).header("anthropic-version", "2023-06-01")
-    } else if key.is_empty() {
-        request
-    } else {
-        request.bearer_auth(&key)
-    };
+    let request = authorize(client(ctx, settings).post(&url).timeout(Duration::from_secs(180)).json(&body), settings);
     let response = request.send().await.map_err(|e| {
         AppError::new(ErrorKind::Unavailable, "Could not reach the AI provider. Check the address in Settings, AI.").with_cause(e)
     })?;
@@ -301,6 +359,21 @@ mod tests {
         assert_eq!(out[2]["tool_calls"][0]["function"]["name"], "documents_list");
         assert_eq!(out[3]["role"], "tool");
         assert_eq!(out[3]["tool_call_id"], "c1");
+    }
+
+    #[test]
+    fn lists_chat_models_newest_first() {
+        let models = parse_models(&json!({ "data": [
+            { "id": "gpt-4o", "created": 1 },
+            { "id": "text-embedding-3-small", "created": 3 },
+            { "id": "gpt-5", "created": 2 },
+            { "id": "claude-x", "display_name": "Claude X", "created_at": "2026-01-01T00:00:00Z" },
+            { "id": "gpt-4o", "created": 1 },
+        ] }));
+        let ids: Vec<&str> = models.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(ids, ["claude-x", "gpt-5", "gpt-4o"]);
+        assert_eq!(models[0].name, "Claude X");
+        assert!(parse_models(&json!({ "error": "nope" })).is_empty());
     }
 
     #[test]

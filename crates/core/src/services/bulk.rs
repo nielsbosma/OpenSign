@@ -26,13 +26,19 @@ use crate::settings::{AiSettings, SecuritySettings};
 use crate::sheet::{self, Sheet};
 
 const ROWS_PER_RUN: usize = 10;
-const PARTY_ATTRS: [(&str, &str); 5] =
-    [("name", "Name"), ("email", "Email"), ("phone", "Mobile"), ("company", "Company"), ("personalNumber", "Personal Number")];
+const PARTY_ATTRS: [(&str, &str); 6] = [
+    ("name", "Name"),
+    ("email", "Email"),
+    ("phone", "Mobile"),
+    ("company", "Company"),
+    ("personalNumber", "Personal Number"),
+    ("language", "Language"),
+];
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Target {
-    /// `party.<n>.<name|email|phone|company|personalNumber>`, `field.<label>`, `title` or `externalId`.
+    /// `party.<n>.<name|email|phone|company|personalNumber|language>`, `field.<label>`, `title` or `externalId`.
     pub key: String,
     pub label: String,
     /// The template party it belongs to, or "Document".
@@ -132,7 +138,8 @@ fn normalize(s: &str) -> String {
     s.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect()
 }
 
-const SYNONYMS: [(&str, &[&str]); 7] = [
+const SYNONYMS: [(&str, &[&str]); 8] = [
+    ("language", &["language", "lang", "sprak", "språk", "locale"]),
     ("email", &["email", "epost", "mail", "emailaddress", "epostadress", "mejl"]),
     ("phone", &["phone", "mobile", "mobil", "telefon", "tel", "cell", "mobilnummer", "telefonnummer", "phonenumber", "sms"]),
     ("personalNumber", &["personnummer", "personalnumber", "ssn", "pnr", "personnr", "nationalid", "idnumber"]),
@@ -319,6 +326,11 @@ fn problems(t: &Template, values: &Values) -> Vec<String> {
         }
         if !phone.is_empty() && crate::sms::normalize_phone(&phone).is_err() {
             out.push(format!("{}'s mobile number “{phone}” is not valid", p.name));
+        }
+        if let Some(lang) = party_value(values, i, "language").map(str::trim).filter(|l| !l.is_empty())
+            && crate::i18n::Lang::parse(lang).is_none()
+        {
+            out.push(format!("{}'s language “{lang}” is not one OpenSign speaks", p.name));
         }
     }
     out
@@ -647,6 +659,10 @@ async fn send_row(ctx: &Ctx, conn: &mut PgConnection, bulk: &BulkJob, values: &B
                 auth_to_view: p.auth_to_view(),
                 auth_to_sign: p.auth_to_sign(),
                 attachments: None,
+                language: party_value(&mapped, i, "language")
+                    .filter(|l| !l.trim().is_empty())
+                    .map(str::to_string)
+                    .or_else(|| p.language.clone()),
                 webcam_photo: None,
             }
         })

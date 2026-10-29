@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
+use super::signing::{SignerView, signer_view};
 use super::{Ok_, settings};
 use crate::audit::{Entry, audit};
 use crate::auth::normalize_email;
@@ -20,6 +21,7 @@ use crate::documents::{
     decrypt_personal_number, files, load_document, notify, parties, personal_number_context, signer_url, status, upload, view, visibility,
 };
 use crate::error::{AppError, ErrorKind, Result, bad_request, conflict, forbidden, not_found};
+use crate::i18n::{LANGUAGES, Lang};
 use crate::permissions::Permission;
 use crate::service::{Access, Meta, Service};
 use crate::settings::{EidSettings, EmailSettings, SecuritySettings, SmsSettings};
@@ -159,7 +161,8 @@ impl Service for Get {
 pub struct CreateInput {
     pub title: String,
     pub message: Option<String>,
-    /// What signers see and receive: `en` or `sv`. Defaults to the template's, then the organisation's.
+    /// What signers see and receive unless a party has its own: en, zh, hi, es, fr, ar, bn, pt, ru, ur or sv.
+    /// Defaults to the template's, then the organisation's.
     pub language: Option<String>,
     /// Copy files, parties and fields from this template.
     pub template_id: Option<Uuid>,
@@ -172,12 +175,14 @@ pub struct CreateInput {
     pub metadata: Option<Value>,
 }
 
-fn language(value: Option<&str>) -> Result<String> {
-    let lang = value.unwrap_or("en").trim().to_lowercase();
-    if lang.len() < 2 || lang.len() > 5 || !lang.chars().all(|c| c.is_ascii_lowercase() || c == '-') {
-        return Err(bad_request("Use a language code such as en or sv"));
+pub fn language(value: Option<&str>) -> Result<String> {
+    match Lang::parse(value.unwrap_or("en")) {
+        Some(lang) => Ok(lang.code().to_string()),
+        None => Err(bad_request(format!(
+            "Use one of these language codes: {}",
+            LANGUAGES.iter().map(|(code, _)| *code).collect::<Vec<_>>().join(", ")
+        ))),
     }
-    Ok(lang)
 }
 
 fn metadata(value: Option<Value>) -> Result<Value> {
@@ -222,8 +227,8 @@ impl Service for Create {
             (None, None) => String::new(),
         };
         sqlx::query(
-            "insert into documents (id, title, is_template, template_id, owner_id, message, language, sequential, reminder_days, external_id, metadata)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+            "insert into documents (id, title, is_template, template_id, owner_id, message, language, sequential, reminder_days, external_id, metadata, review_links)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
         )
         .bind(id)
         .bind(title(&input.title)?)
@@ -231,11 +236,15 @@ impl Service for Create {
         .bind(template.as_ref().map(|t| t.id))
         .bind(ctx.actor()?.user_id)
         .bind(message)
-        .bind(language(input.language.as_deref().or(template.as_ref().map(|t| t.language.as_str())).or(Some(org.locale.as_str())))?)
+        .bind(match input.language.as_deref() {
+            Some(l) => language(Some(l))?,
+            None => Lang::of(template.as_ref().map_or(org.locale.as_str(), |t| t.language.as_str())).code().to_string(),
+        })
         .bind(input.sequential.or(template.as_ref().map(|t| t.sequential)).unwrap_or(false))
         .bind(template.as_ref().and_then(|t| t.reminder_days))
         .bind(input.external_id.as_deref().map(|e| clean_text(e, "The external id", 200)).transpose()?.filter(|e| !e.is_empty()))
         .bind(metadata(input.metadata)?)
+        .bind(template.as_ref().is_none_or(|t| t.review_links))
         .execute(&mut *conn)
         .await?;
         if let Some(t) = &template {
@@ -265,8 +274,8 @@ async fn copy_template(ctx: &Ctx, conn: &mut PgConnection, from: Uuid, to: Uuid)
         let personal_number = decrypt_personal_number(ctx.keys(), &p)
             .map(|n| ctx.keys().encrypt_str(KeyPurpose::Settings, &personal_number_context(new_id), &n));
         sqlx::query(
-            "insert into parties (id, document_id, role, name, email, phone, personal_number, company, sign_order, delivery, auth_to_view, auth_to_sign)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+            "insert into parties (id, document_id, role, name, email, phone, personal_number, company, sign_order, delivery, auth_to_view, auth_to_sign, language)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
         )
         .bind(new_id)
         .bind(to)
@@ -280,6 +289,7 @@ async fn copy_template(ctx: &Ctx, conn: &mut PgConnection, from: Uuid, to: Uuid)
         .bind(&p.delivery)
         .bind(&p.auth_to_view)
         .bind(&p.auth_to_sign)
+        .bind(&p.language)
         .execute(&mut *conn)
         .await?;
     }
@@ -524,6 +534,9 @@ pub struct PartyInput {
     pub auth_to_sign: AuthMethod,
     /// Files the party must or may upload while signing, such as a copy of an ID. Leave out to keep the current ones.
     pub attachments: Option<Vec<AttachmentRequestInput>>,
+    /// The language of this party's emails, SMS and signing page, if not the document's: en, zh, hi, es, fr, ar, bn, pt, ru,
+    /// ur or sv. Leave out to use the document's.
+    pub language: Option<String>,
     /// Ask the party to take a live photo of themselves with their webcam or phone camera before they can sign. The photo is
     /// stored encrypted, shown to the sender and sealed into the evidence. Leave out to keep the current setting.
     pub webcam_photo: Option<bool>,
@@ -564,6 +577,7 @@ struct CleanParty {
     auth_to_view: AuthMethod,
     auth_to_sign: AuthMethod,
     attachments: Option<Vec<AttachmentRequestInput>>,
+    language: Option<String>,
     webcam_photo: Option<bool>,
 }
 
@@ -601,6 +615,7 @@ fn clean_party(input: PartyInput, existing: &[PartyRow]) -> Result<CleanParty> {
         auth_to_view: input.auth_to_view,
         auth_to_sign: input.auth_to_sign,
         attachments: input.attachments,
+        language: input.language.as_deref().map(str::trim).filter(|l| !l.is_empty()).map(|l| language(Some(l))).transpose()?,
         webcam_photo: if input.role == PartyRole::Viewer { Some(false) } else { input.webcam_photo },
     })
 }
@@ -643,11 +658,11 @@ impl Service for SetParties {
             let personal =
                 p.personal_number.as_deref().map(|n| ctx.keys().encrypt_str(KeyPurpose::Settings, &personal_number_context(p.id), n));
             sqlx::query(
-                "insert into parties (id, document_id, role, name, email, phone, personal_number, company, sign_order, delivery, auth_to_view, auth_to_sign)
-                 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                "insert into parties (id, document_id, role, name, email, phone, personal_number, company, sign_order, delivery, auth_to_view, auth_to_sign, language)
+                 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $14)
                  on conflict (id) do update set role = excluded.role, name = excluded.name, email = excluded.email, phone = excluded.phone,
                    personal_number = case when $13 then parties.personal_number else excluded.personal_number end, company = excluded.company, sign_order = excluded.sign_order,
-                   delivery = excluded.delivery, auth_to_view = excluded.auth_to_view, auth_to_sign = excluded.auth_to_sign, updated_at = now()",
+                   delivery = excluded.delivery, auth_to_view = excluded.auth_to_view, auth_to_sign = excluded.auth_to_sign, language = excluded.language, updated_at = now()",
             )
             .bind(p.id)
             .bind(document.id)
@@ -662,6 +677,7 @@ impl Service for SetParties {
             .bind(p.auth_to_view.as_str())
             .bind(p.auth_to_sign.as_str())
             .bind(p.keep_personal_number)
+            .bind(&p.language)
             .execute(&mut *conn)
             .await?;
             if let Some(requests) = &p.attachments {
@@ -684,7 +700,7 @@ impl Service for SetParties {
                     .iter()
                     .map(|p| {
                         json!({
-                            "id": p.id, "name": p.name, "email": p.email, "role": p.role, "authToSign": p.auth_to_sign,
+                            "id": p.id, "name": p.name, "email": p.email, "role": p.role, "authToSign": p.auth_to_sign, "language": p.language,
                             "attachments": p.attachments.as_ref().map(|a| a.iter().map(|r| r.name.clone()).collect::<Vec<_>>()),
                             "webcamPhoto": p.webcam_photo,
                         })
@@ -827,7 +843,7 @@ pub struct SendOutput {
 }
 
 fn email_ready(ctx: &Ctx, settings: &EmailSettings) -> bool {
-    ctx.app.env.development || (settings.api_key.as_deref().is_some_and(|k| !k.is_empty()) && !settings.from_address.is_empty())
+    ctx.app.env.development || crate::email::is_configured(settings)
 }
 
 async fn check_auth_available(ctx: &Ctx, conn: &mut PgConnection, method: AuthMethod, party: &PartyRow) -> Result<()> {
@@ -919,7 +935,7 @@ impl Service for Send {
             match Delivery::parse(&p.delivery) {
                 Some(Delivery::Email) if p.email.is_none() => return Err(bad_request(format!("{} needs an email address", p.name))),
                 Some(Delivery::Email) if !email_ready(ctx, &email_settings) => {
-                    return Err(bad_request("Email is not set up. An admin adds a Resend API key in Admin settings."));
+                    return Err(bad_request("Email is not set up. An admin connects Resend or an SMTP server in Admin settings."));
                 }
                 Some(Delivery::Sms) if p.phone.is_none() => return Err(bad_request(format!("{} needs a phone number", p.name))),
                 Some(Delivery::Sms) if !sms_ready => {
@@ -1377,6 +1393,37 @@ impl Service for SignInPerson {
         )
         .await?;
         Ok(SignerLink { party_id: party.id, name: party.name.clone(), url: signer_url(ctx, ctx.keys(), &party) })
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SigningPreviewInput {
+    pub document_id: Uuid,
+    pub party_id: Uuid,
+}
+
+pub struct SigningPreview;
+
+#[async_trait]
+impl Service for SigningPreview {
+    type Input = SigningPreviewInput;
+    type Output = SignerView;
+    const META: Meta = Meta::query(
+        "documents.signing_preview",
+        "Show what a party will see on their signing page: branding, message, language and their fields, with the identification they will be asked for. Read-only: nothing is sent, signed or recorded as the party's.",
+        Access::Authenticated,
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SigningPreviewInput) -> Result<SignerView> {
+        let document = load_document(ctx, conn, input.document_id, Need::Read).await?;
+        let party = parties(conn, document.id).await?.into_iter().find(|p| p.id == input.party_id).ok_or_else(|| not_found("Party"))?;
+        let mut view = signer_view(ctx, conn, &document, &party, false).await?;
+        let required = |method: AuthMethod| (!matches!(method, AuthMethod::None | AuthMethod::Standard)).then_some(method);
+        view.needs_authentication = required(party.auth_to_view());
+        view.sign_authentication = required(party.auth_to_sign());
+        view.your_turn = true;
+        Ok(view)
     }
 }
 
