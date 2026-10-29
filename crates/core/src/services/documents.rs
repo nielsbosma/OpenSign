@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
+use super::signing::{SignerView, signer_view};
 use super::{Ok_, settings};
 use crate::audit::{Entry, audit};
 use crate::auth::normalize_email;
@@ -1369,6 +1370,37 @@ impl Service for SignInPerson {
         )
         .await?;
         Ok(SignerLink { party_id: party.id, name: party.name.clone(), url: signer_url(ctx, ctx.keys(), &party) })
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SigningPreviewInput {
+    pub document_id: Uuid,
+    pub party_id: Uuid,
+}
+
+pub struct SigningPreview;
+
+#[async_trait]
+impl Service for SigningPreview {
+    type Input = SigningPreviewInput;
+    type Output = SignerView;
+    const META: Meta = Meta::query(
+        "documents.signing_preview",
+        "Show what a party will see on their signing page: branding, message, language and their fields, with the identification they will be asked for. Read-only: nothing is sent, signed or recorded as the party's.",
+        Access::Authenticated,
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SigningPreviewInput) -> Result<SignerView> {
+        let document = load_document(ctx, conn, input.document_id, Need::Read).await?;
+        let party = parties(conn, document.id).await?.into_iter().find(|p| p.id == input.party_id).ok_or_else(|| not_found("Party"))?;
+        let mut view = signer_view(ctx, conn, &document, &party, false).await?;
+        let required = |method: AuthMethod| (!matches!(method, AuthMethod::None | AuthMethod::Standard)).then_some(method);
+        view.needs_authentication = required(party.auth_to_view());
+        view.sign_authentication = required(party.auth_to_sign());
+        view.your_turn = true;
+        Ok(view)
     }
 }
 

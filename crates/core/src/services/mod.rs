@@ -92,6 +92,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<documents::Unshare>(),
         erase::<documents::Download>(),
         erase::<documents::IssueSigningLink>(),
+        erase::<documents::SigningPreview>(),
         erase::<documents::SignInPerson>(),
         erase::<passkeys::BeginRegistration>(),
         erase::<passkeys::FinishRegistration>(),
