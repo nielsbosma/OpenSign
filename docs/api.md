@@ -146,8 +146,8 @@ Send answers `{ "document": {…}, "links": [{ "partyId", "name", "url" }] }`. T
 
 | Method | Path | |
 | --- | --- | --- |
-| GET | `/documents` | List. Query: `status`, `search` (title or exact external id), `templates`, `limit`, `offset` |
-| POST | `/documents` | Create a draft or template. Body: `title`, `message`, `language`, `templateId`, `isTemplate`, `sequential`, `externalId`, `metadata` |
+| GET | `/documents` | List. Query: `status`, `search` (title or exact external id), `templates`, `folderId`, `archived`, `limit`, `offset`. Archived ones are listed only with `archived=true` |
+| POST | `/documents` | Create a draft or template. Body: `title`, `message`, `language`, `templateId`, `isTemplate`, `sequential`, `externalId`, `metadata`, `folderId` |
 | GET | `/templates` | List templates |
 | GET | `/documents/{id}` | One document with files, parties and fields |
 | PATCH | `/documents/{id}` | Change `title`, `message`, `language`, `sequential`, `expiresAt`, `reminderDays` (0 turns reminders off), `externalId`, `metadata` |
@@ -164,8 +164,14 @@ Send answers `{ "document": {…}, "links": [{ "partyId", "name", "url" }] }`. T
 | POST | `/documents/{documentId}/parties/{partyId}/signing-link` | Issue a signing link to hand over. `rotate: true` revokes earlier links first; `redirectUrl` sends the party to your site afterwards (see [Embedded signing](embedding.md#redirect-after-signing)) |
 | PUT | `/documents/{id}/legal-hold` | Body `hold`, `reason`. See [Retention and legal hold](retention.md) |
 | GET | `/documents/{id}/file` | The PDF. `version=signed` (sealed, completed only) or `original` (as sent) |
+| POST | `/documents/move` | Move documents or templates to a folder. Body: `ids`, `folderId` (`null` for none) |
+| POST | `/documents/archive` | Archive finished documents or templates, or restore them. Body: `ids`, `archived` |
+| GET | `/folders` | List folders. Query: `scope` (`documents` or `templates`) |
+| POST | `/folders` | Create a folder. Body: `scope`, `name`, `parentId` |
+| PUT | `/folders/{id}` | Rename or move a folder. Body: `name`, `parentId` |
+| DELETE | `/folders/{id}` | Delete a folder; what was in it moves up a level |
 
-Editing calls work on drafts and templates. Once a document is sent they answer `409`.
+Editing calls work on drafts and templates. Once a document is sent they answer `409`. Moving to a folder and archiving work at any status.
 
 ### Bulk send
 

@@ -47,7 +47,7 @@ Hosted e-signature services charge per user or per envelope, keep your contracts
 <td width="50%" valign="top">
 
 ### Prepare and send
-Upload PDF or Word files, drag fields onto the page and pick who fills what. Signers, approvers and viewers, in order or all at once. Delivery by email, SMS, a link you hand over, or in person on your own device. Reminders, expiry, templates and [bulk send](docs/bulk-send.md) from CSV or Excel.
+Upload PDF or Word files, drag fields onto the page and pick who fills what. Signers, approvers and viewers, in order or all at once. Delivery by email, SMS, a link you hand over, or in person on your own device. Reminders, expiry, templates and [bulk send](docs/bulk-send.md) from CSV or Excel. [Folders and an archive](docs/folders.md) keep long lists in order.
 
 </td>
 <td width="50%" valign="top">

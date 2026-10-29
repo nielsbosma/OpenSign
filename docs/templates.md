@@ -24,6 +24,10 @@ A template stays a template; there is no "send" step.
 
 A document made from a template is independent of it: changing the template later does not change documents already made from it. The template's files are shared, not copied, so they take no extra storage.
 
+## Folders and archive
+
+Template folders keep a long list of templates in order, such as *HR* and *Sales*. Archive a template you no longer use: it disappears from **New Document** and bulk send until you restore it. See [Folders and archive](folders.md).
+
 ## Templates and retention
 
 Retention rules never delete templates. See [Retention and legal hold](retention.md).
