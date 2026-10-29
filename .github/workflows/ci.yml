@@ -3,7 +3,8 @@ name: CI
 # Pull requests: lint, tests, supply-chain checks, independent validation of a sealed PDF, and an
 # image smoke test (not pushed).
 # main: the same, then a multi-arch image is pushed as ghcr.io/<owner>/opensign:edge.
-# Releases: publishing a GitHub Release named vX.Y.Z pushes :X.Y.Z, :X.Y and :latest.
+# Releases: publishing a GitHub Release named vX.Y.Z pushes :X.Y.Z, :X.Y and :latest, then calls the
+# SLIPLANE_DEPLOY_HOOK secret if set (deploy/Connect-Github.ps1 sets it).
 
 on:
   pull_request:
@@ -178,3 +179,11 @@ jobs:
           provenance: true
           sbom: true
           cache-from: type=gha
+      - name: Deploy to Sliplane
+        if: github.event_name == 'release'
+        env:
+          DEPLOY_HOOK: ${{ secrets.SLIPLANE_DEPLOY_HOOK }}
+        run: |
+          if [[ -z "$DEPLOY_HOOK" ]]; then echo "No SLIPLANE_DEPLOY_HOOK secret, skipping the deploy."; exit 0; fi
+          curl -fsS -o /dev/null --retry 3 "$DEPLOY_HOOK"
+          echo "Sliplane is redeploying the service's tag."
