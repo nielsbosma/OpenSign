@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Check, ShieldCheck } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { Field, Spinner } from '@/components/common';
@@ -227,12 +227,9 @@ function EmailStep() {
   if (done) {
     return (
       <AuthLayout title={t('Email Works')} description={t('A test email is on its way to you. OpenSign is ready.')} wide>
-        <div className="flex flex-col items-center gap-4 py-2">
-          <CheckCircle2 className="size-10 text-success" />
-          <Button className="w-full" onClick={() => navigate('/documents', { replace: true })}>
-            {t('Go to Documents')}
-          </Button>
-        </div>
+        <Button className="w-full" onClick={() => navigate('/documents', { replace: true })}>
+          {t('Go to Documents')}
+        </Button>
       </AuthLayout>
     );
   }
