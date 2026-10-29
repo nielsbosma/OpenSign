@@ -820,7 +820,7 @@ pub struct SendOutput {
 }
 
 fn email_ready(ctx: &Ctx, settings: &EmailSettings) -> bool {
-    ctx.app.env.development || (settings.api_key.as_deref().is_some_and(|k| !k.is_empty()) && !settings.from_address.is_empty())
+    ctx.app.env.development || crate::email::is_configured(settings)
 }
 
 async fn check_auth_available(ctx: &Ctx, conn: &mut PgConnection, method: AuthMethod, party: &PartyRow) -> Result<()> {
@@ -912,7 +912,7 @@ impl Service for Send {
             match Delivery::parse(&p.delivery) {
                 Some(Delivery::Email) if p.email.is_none() => return Err(bad_request(format!("{} needs an email address", p.name))),
                 Some(Delivery::Email) if !email_ready(ctx, &email_settings) => {
-                    return Err(bad_request("Email is not set up. An admin adds a Resend API key in Admin settings."));
+                    return Err(bad_request("Email is not set up. An admin connects Resend or an SMTP server in Admin settings."));
                 }
                 Some(Delivery::Sms) if p.phone.is_none() => return Err(bad_request(format!("{} needs a phone number", p.name))),
                 Some(Delivery::Sms) if !sms_ready => {

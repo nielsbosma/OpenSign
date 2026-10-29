@@ -23,7 +23,7 @@ const SECTIONS: { title: string; items: { path: string; label: string; permissio
   {
     title: 'Integrations',
     items: [
-      { path: '/settings/admin/email', label: 'Email (Resend)', permission: 'settings.manage' },
+      { path: '/settings/admin/email', label: 'Email', permission: 'settings.manage' },
       { path: '/settings/admin/sms', label: 'SMS', permission: 'settings.manage' },
       { path: '/settings/admin/eid', label: 'BankID and eID', permission: 'settings.manage' },
       { path: '/settings/admin/ai', label: 'AI', permission: 'settings.manage' },

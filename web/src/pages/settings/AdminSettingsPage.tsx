@@ -21,8 +21,9 @@ type Spec = {
   hint?: string;
   options?: [string, string][];
   placeholder?: string;
-  /** Shown only when this other boolean or text field is set. */
+  /** Shown only when this other boolean or text field is set, or equals `is` when given. */
   when?: string;
+  is?: string;
   /** For a `file`: where the password of an uploaded .p12/.pfx goes. The server keeps only the PEM it unlocks. */
   passwordKey?: string;
 };
@@ -47,10 +48,36 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
     ],
   },
   email: {
-    title: 'Email (Resend)',
-    description: 'Invitations, codes and signed documents go out through Resend. Changing the key or sender needs a new test email.',
+    title: 'Email',
+    description:
+      'Invitations, codes and signed documents go out through Resend or your own SMTP server. Changing the provider, server, key or sender needs a new test email.',
     fields: [
-      { key: 'apiKey', label: 'API Key', type: 'secret' },
+      {
+        key: 'provider',
+        label: 'Provider',
+        type: 'select',
+        options: [
+          ['resend', 'Resend'],
+          ['smtp', 'SMTP'],
+        ],
+      },
+      { key: 'apiKey', label: 'API Key', type: 'secret', when: 'provider', is: 'resend' },
+      { key: 'smtpHost', label: 'SMTP Server', placeholder: 'smtp.example.com', when: 'provider', is: 'smtp' },
+      { key: 'smtpPort', label: 'Port', type: 'number', hint: 'Usually 587 for STARTTLS or 465 for TLS.', when: 'provider', is: 'smtp' },
+      {
+        key: 'smtpSecurity',
+        label: 'Security',
+        type: 'select',
+        options: [
+          ['starttls', 'STARTTLS'],
+          ['tls', 'TLS'],
+        ],
+        hint: 'The certificate must be valid for the server name. Unencrypted SMTP is not supported.',
+        when: 'provider',
+        is: 'smtp',
+      },
+      { key: 'smtpUsername', label: 'Username', hint: 'Empty: send without signing in.', when: 'provider', is: 'smtp' },
+      { key: 'smtpPassword', label: 'Password', type: 'secret', when: 'provider', is: 'smtp' },
       { key: 'fromAddress', label: 'From Address', placeholder: 'sign@example.com' },
       { key: 'fromName', label: 'From Name' },
       { key: 'replyTo', label: 'Reply-To', hint: 'Empty: replies go to the sender of each document.' },
@@ -457,7 +484,7 @@ export function SettingsGroup({ group }: { group: Group }) {
       <SettingsCard title={spec.title} description={spec.description}>
         <form onSubmit={submit} className="grid max-w-xl gap-5">
           {spec.fields
-            .filter((f) => !f.when || !!value(f.when))
+            .filter((f) => !f.when || (f.is === undefined ? !!value(f.when) : value(f.when) === f.is))
             .map((f) => {
               const locked = pinned.includes(f.key);
               const hint = locked ? 'Set by an environment variable.' : f.hint;
