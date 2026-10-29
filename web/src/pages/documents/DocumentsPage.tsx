@@ -34,6 +34,7 @@ export function DocumentsPage({ templates }: { templates: boolean }) {
     search: search.trim() || null,
     limit,
   });
+  const counts = useApi('documents.counts', { search: search.trim() || null }, { enabled: !templates });
   const createTemplate = useApiMutation('documents.create', { onSuccess: (doc) => navigate(`/documents/${doc.id}`) });
 
   return (
@@ -60,6 +61,11 @@ export function DocumentsPage({ templates }: { templates: boolean }) {
               {FILTERS.map((f) => (
                 <TabsTrigger key={f} value={f}>
                   {f === 'all' ? t('All') : STATUS_LABELS[f]}
+                  {counts.data && (
+                    <span className="text-xs font-normal text-muted-foreground tabular-nums">
+                      {f === 'all' ? counts.data.all : (counts.data.byStatus[f] ?? 0)}
+                    </span>
+                  )}
                 </TabsTrigger>
               ))}
             </TabsList>
