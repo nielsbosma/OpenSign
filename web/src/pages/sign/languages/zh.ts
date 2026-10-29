@@ -81,8 +81,7 @@ export const zh: Texts = {
   copied: '已复制',
   openIn: (app) => `在 ${app} 中打开`,
   reviewActive: (date, uses) => `审阅链接在 ${date} 之前有效。已打开 ${uses} 次。`,
-  reviewSafety: (date) =>
-    `该链接无法签署任何内容。它将于 ${date} 失效，每次使用都会被记录，你可以随时撤销。`,
+  reviewSafety: (date) => `该链接无法签署任何内容。它将于 ${date} 失效，每次使用都会被记录，你可以随时撤销。`,
   revokeLink: '撤销链接',
   methods: { sms_pin: '短信验证码', se_bankid: 'BankID', freja: 'Freja eID', broker: '电子身份' },
 };

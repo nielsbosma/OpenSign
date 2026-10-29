@@ -73,7 +73,8 @@ export const sv: Texts = {
   backToDocument: 'Tillbaka till dokumentet',
   language: 'Språk',
   reviewWithAi: 'Granska med din AI',
-  reviewIntro: 'Ge din egen AI-assistent, till exempel ChatGPT, Claude eller Copilot, en skrivskyddad kopia så att den kan förklara dokumentet innan du signerar.',
+  reviewIntro:
+    'Ge din egen AI-assistent, till exempel ChatGPT, Claude eller Copilot, en skrivskyddad kopia så att den kan förklara dokumentet innan du signerar.',
   createReviewLink: 'Skapa granskningslänk',
   newReviewLink: 'Skapa en ny länk',
   reviewPrompt: (url) =>

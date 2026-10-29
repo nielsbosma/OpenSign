@@ -74,7 +74,8 @@ export const pt: Texts = {
   backToDocument: 'Voltar ao documento',
   language: 'Idioma',
   reviewWithAi: 'Revisar com sua IA',
-  reviewIntro: 'Dê ao seu próprio assistente de IA, como ChatGPT, Claude ou Copilot, uma cópia somente leitura para que ele explique o documento antes de você assinar.',
+  reviewIntro:
+    'Dê ao seu próprio assistente de IA, como ChatGPT, Claude ou Copilot, uma cópia somente leitura para que ele explique o documento antes de você assinar.',
   createReviewLink: 'Criar link de revisão',
   newReviewLink: 'Criar um novo link',
   reviewPrompt: (url) =>

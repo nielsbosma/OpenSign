@@ -81,8 +81,7 @@ export const ar: Texts = {
   copied: 'تم النسخ',
   openIn: (app) => `فتح في ${app}`,
   reviewActive: (date, uses) => `يعمل رابط المراجعة حتى ${date}. فُتح ${uses} مرة.`,
-  reviewSafety: (date) =>
-    `لا يمكن للرابط توقيع أي شيء. يتوقف عن العمل في ${date}، ويُسجَّل كل استخدام، ويمكنك إلغاؤه في أي وقت.`,
+  reviewSafety: (date) => `لا يمكن للرابط توقيع أي شيء. يتوقف عن العمل في ${date}، ويُسجَّل كل استخدام، ويمكنك إلغاؤه في أي وقت.`,
   revokeLink: 'إلغاء الرابط',
   methods: { sms_pin: 'رمز الرسائل النصية', se_bankid: 'BankID', freja: 'Freja eID', broker: 'الهوية الإلكترونية' },
 };

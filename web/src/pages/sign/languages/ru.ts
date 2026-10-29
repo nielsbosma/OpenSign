@@ -74,7 +74,8 @@ export const ru: Texts = {
   backToDocument: 'Вернуться к документу',
   language: 'Язык',
   reviewWithAi: 'Проверить с помощью вашего ИИ',
-  reviewIntro: 'Дайте своему ИИ-ассистенту, например ChatGPT, Claude или Copilot, копию только для чтения, чтобы он объяснил документ до подписания.',
+  reviewIntro:
+    'Дайте своему ИИ-ассистенту, например ChatGPT, Claude или Copilot, копию только для чтения, чтобы он объяснил документ до подписания.',
   createReviewLink: 'Создать ссылку для проверки',
   newReviewLink: 'Создать новую ссылку',
   reviewPrompt: (url) =>

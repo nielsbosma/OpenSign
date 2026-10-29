@@ -97,6 +97,7 @@ async fn sent_document(app: &Arc<App>, sender: &Ctx) -> (Uuid, String) {
                 auth_to_view: AuthMethod::None,
                 auth_to_sign: AuthMethod::Standard,
                 attachments: None,
+                language: None,
             }],
         },
     )
