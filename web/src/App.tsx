@@ -61,6 +61,14 @@ export function App() {
       <Route path="/sign" element={<SignPage />} />
       <Route path="/verify" element={<VerifyPage />} />
       <Route
+        path="/api-explorer"
+        element={
+          <RequireSession>
+            <ApiExplorerPage />
+          </RequireSession>
+        }
+      />
+      <Route
         path="/oauth/consent"
         element={
           <RequireSession>
@@ -80,7 +88,6 @@ export function App() {
         <Route path="/templates" element={<DocumentsPage templates />} />
         <Route path="/documents/:id" element={<DocumentPage />} />
         <Route path="/bulk/:id" element={<BulkSendPage />} />
-        <Route path="/api-explorer" element={<ApiExplorerPage />} />
         <Route path="/settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="/settings/account" replace />} />
           <Route path="account" element={<AccountPage />} />

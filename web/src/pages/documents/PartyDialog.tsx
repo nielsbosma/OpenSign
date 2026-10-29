@@ -86,7 +86,19 @@ function AttachmentRequests({ value, onChange }: { value: AttachmentRequestInput
   );
 }
 
-function Choice<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: [T, string][] }) {
+const NOT_SET_UP = 'Not set up yet. An admin adds it in Settings.';
+
+function Choice<T extends string>({
+  value,
+  onChange,
+  options,
+  unavailable = [],
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: [T, string][];
+  unavailable?: T[];
+}) {
   return (
     <Select value={value} onValueChange={(v) => onChange(v as T)}>
       <SelectTrigger className="w-full">
@@ -94,7 +106,7 @@ function Choice<T extends string>({ value, onChange, options }: { value: T; onCh
       </SelectTrigger>
       <SelectContent>
         {options.map(([v, label]) => (
-          <SelectItem key={v} value={v}>
+          <SelectItem key={v} value={v} disabled={unavailable.includes(v)} description={unavailable.includes(v) ? NOT_SET_UP : undefined}>
             {label}
           </SelectItem>
         ))}
@@ -132,10 +144,9 @@ export function PartyDialog({
   }, [open, party]);
   const set = (patch: Partial<PartyInput>) => setP({ ...p, ...patch });
   const needsNumber = EID.includes(p.authToSign ?? 'standard') || EID.includes(p.authToView ?? 'none');
-  const authOptions = (list: AuthMethod[]) =>
-    list
-      .filter((m) => available.includes(m) || m === p.authToSign || m === p.authToView)
-      .map((m) => [m, AUTH_LABELS[m]!] as [AuthMethod, string]);
+  const authOptions = (list: AuthMethod[]) => list.map((m) => [m, AUTH_LABELS[m]!] as [AuthMethod, string]);
+  const unavailableAuth = [...VIEW_AUTH, ...SIGN_AUTH].filter((m) => !available.includes(m) && m !== p.authToSign && m !== p.authToView);
+  const unavailableDelivery: Delivery[] = available.includes('sms_pin') || p.delivery === 'sms' ? [] : ['sms'];
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -176,13 +187,24 @@ export function PartyDialog({
                 value={p.delivery ?? 'email'}
                 onChange={(delivery) => set({ delivery })}
                 options={Object.entries(DELIVERY_LABELS) as [Delivery, string][]}
+                unavailable={unavailableDelivery}
               />
             </Field>
             <Field label="Identify to View">
-              <Choice value={p.authToView ?? 'none'} onChange={(authToView) => set({ authToView })} options={authOptions(VIEW_AUTH)} />
+              <Choice
+                value={p.authToView ?? 'none'}
+                onChange={(authToView) => set({ authToView })}
+                options={authOptions(VIEW_AUTH)}
+                unavailable={unavailableAuth}
+              />
             </Field>
             <Field label="Identify to Sign">
-              <Choice value={p.authToSign ?? 'standard'} onChange={(authToSign) => set({ authToSign })} options={authOptions(SIGN_AUTH)} />
+              <Choice
+                value={p.authToSign ?? 'standard'}
+                onChange={(authToSign) => set({ authToSign })}
+                options={authOptions(SIGN_AUTH)}
+                unavailable={unavailableAuth}
+              />
             </Field>
             <Field label="Language" hint="Their emails, SMS and signing page.">
               <Choice

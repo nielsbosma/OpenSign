@@ -234,6 +234,27 @@ async fn sends_signs_seals_and_verifies() {
     let not_found = call::<docs::Get>(&outsider, docs::IdInput { id }).await.unwrap_err();
     assert_eq!(not_found.kind, ErrorKind::NotFound, "other senders cannot see the document");
 
+    let audited = |id: Uuid| {
+        let db = app.db.clone();
+        async move {
+            sqlx::query_scalar::<_, i64>("select count(*) from audit_log where entity_id = $1")
+                .bind(id.to_string())
+                .fetch_one(&db)
+                .await
+                .unwrap()
+        }
+    };
+    let before = audited(id).await;
+    let preview = call::<docs::SigningPreview>(&sender, docs::SigningPreviewInput { document_id: id, party_id: bo }).await.unwrap();
+    assert_eq!(preview.party.name, "Bo");
+    assert_eq!(preview.sign_authentication, Some(AuthMethod::SmsPin));
+    assert!(preview.needs_authentication.is_none() && preview.your_turn);
+    assert_eq!(preview.fields.iter().filter(|f| f.party_id == Some(bo)).count(), 3);
+    assert!(preview.fields.iter().all(|f| f.party_id == Some(bo) || f.party_id.is_none()), "only the party's own fields");
+    assert_eq!(audited(id).await, before, "a preview is not recorded");
+    let hidden = call::<docs::SigningPreview>(&outsider, docs::SigningPreviewInput { document_id: id, party_id: bo }).await;
+    assert_eq!(kind(hidden), ErrorKind::NotFound);
+
     let sent = call::<docs::Send>(&sender, docs::SendInput { id, expires_at: None }).await.unwrap();
     assert_eq!(sent.document.document.status, "pending");
     assert_eq!(sent.links.len(), 1, "only Bo has link delivery");
