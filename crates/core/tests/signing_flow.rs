@@ -1096,9 +1096,12 @@ async fn conditions_and_formulas_are_worked_out_by_the_server() {
     let sender = user(&app, "Cora Conditions", Role::Sender).await;
     let create = serde_json::from_value::<docs::CreateInput>(serde_json::json!({ "title": "Quote" })).unwrap();
     let id = call::<docs::Create>(&sender, create).await.unwrap().document.id;
-    call::<docs::Upload>(&sender, docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)), ..Default::default() })
-        .await
-        .unwrap();
+    call::<docs::Upload>(
+        &sender,
+        docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)), ..Default::default() },
+    )
+    .await
+    .unwrap();
     let saved = call::<docs::SetParties>(
         &sender,
         docs::SetPartiesInput { document_id: id, parties: vec![party("Anna", PartyRole::Signer, Delivery::Link, AuthMethod::Standard)] },
