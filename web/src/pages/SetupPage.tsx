@@ -22,11 +22,7 @@ function Steps({ step }: { step: 1 | 2 }) {
         const n = i + 1;
         const state = n < step ? 'done' : n === step ? 'current' : 'upcoming';
         return (
-          <li
-            key={t(label)}
-            className={cn('flex items-center', n < STEPS.length && 'flex-1')}
-            aria-current={state === 'current' ? 'step' : undefined}
-          >
+          <li key={t(label)} className="flex items-center" aria-current={state === 'current' ? 'step' : undefined}>
             <span
               className={cn(
                 'flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors',
@@ -45,7 +41,7 @@ function Steps({ step }: { step: 1 | 2 }) {
             >
               {t(label)}
             </span>
-            {n < STEPS.length && <span className={cn('mx-3 h-px flex-1', n < step ? 'bg-primary' : 'bg-border')} aria-hidden />}
+            {n < STEPS.length && <span className={cn('mx-3 h-px w-10', n < step ? 'bg-primary' : 'bg-border')} aria-hidden />}
           </li>
         );
       })}
