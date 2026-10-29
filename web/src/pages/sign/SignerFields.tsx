@@ -4,6 +4,7 @@ import { Spinner } from '@/components/common';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { call, errorMessage, type FieldKind, type FieldRow, uploadFieldFile } from '@/lib/api';
+import { evaluate, type Outcome } from '@/lib/field-logic';
 import { display, type Invalid, normalize, picked } from '@/lib/field-values';
 import { cn } from '@/lib/utils';
 import { type Texts, useTexts } from './texts';
@@ -93,11 +94,52 @@ function invalidText(f: FieldRow, error: Invalid, t: Texts) {
   }
 }
 
+/**
+ * Which fields are shown and what each formula comes to, from what the party has entered so far.
+ * The server works it out again when they sign.
+ */
+export function outcomes(
+  fields: FieldRow[],
+  party: { id: string; name: string; email?: string | null },
+  values: Record<string, string>,
+  uploads: Record<string, Upload>,
+): Map<string, Outcome> {
+  const today = new Date().toISOString().slice(0, 10);
+  const items = fields.map((f) => {
+    let value = f.value ?? null;
+    if (f.partyId === party.id) {
+      if (f.kind === 'name') value = party.name;
+      else if (f.kind === 'email') value = party.email ?? null;
+      else if (f.kind === 'date') value = today;
+      else if (f.kind === 'signature') value = 'signed';
+      else if (f.kind === 'image' || f.kind === 'file') value = uploads[f.id]?.name ?? null;
+      else if (f.id in values) {
+        const raw = values[f.id]!;
+        if (f.kind === 'checkbox') value = raw === 'true' ? 'true' : 'false';
+        else if (f.kind === 'radio') value = raw || null;
+        else {
+          const checked = normalize(f.kind as FieldKind, f, raw);
+          value = checked.ok ? checked.value : null;
+        }
+      }
+    }
+    return { label: f.label, kind: f.kind, value, conditions: f.conditions, formula: f.formula, format: f.format };
+  });
+  const out = evaluate(items);
+  return new Map(fields.map((f, i) => [f.id, out[i]!]));
+}
+
 /** What is wrong with each of the party's fields, in their language. The server checks the same again. */
-export function problems(own: FieldRow[], values: Record<string, string>, uploads: Record<string, Upload>, t: Texts) {
+export function problems(
+  own: FieldRow[],
+  values: Record<string, string>,
+  uploads: Record<string, Upload>,
+  t: Texts,
+  shown: (f: FieldRow) => boolean = () => true,
+) {
   const out: Record<string, string> = {};
   for (const f of own) {
-    if (f.readOnly || !INPUT_KINDS.includes(f.kind) || f.kind === 'radio') continue;
+    if (f.readOnly || !INPUT_KINDS.includes(f.kind) || f.kind === 'radio' || !shown(f)) continue;
     const value = values[f.id] ?? '';
     if (f.kind === 'image' || f.kind === 'file') {
       if (f.required && !uploads[f.id]) out[f.id] = t.uploadFor(fieldName(f, t));
@@ -109,9 +151,9 @@ export function problems(own: FieldRow[], values: Record<string, string>, upload
       else if (f.required && checked.value === null) out[f.id] = t.fillIn(fieldName(f, t));
     }
   }
-  const groups = new Set(own.filter((f) => f.kind === 'radio' && f.groupKey).map((f) => f.groupKey!));
+  const groups = new Set(own.filter((f) => f.kind === 'radio' && f.groupKey && shown(f)).map((f) => f.groupKey!));
   for (const group of groups) {
-    const buttons = own.filter((f) => f.groupKey === group);
+    const buttons = own.filter((f) => f.groupKey === group && shown(f));
     const chosen = buttons.some((b) => (b.readOnly ? b.value : values[b.id]));
     if (!chosen && buttons.some((b) => b.required)) out[buttons[0]!.id] = t.chooseFor(fieldName(buttons[0]!, t));
   }

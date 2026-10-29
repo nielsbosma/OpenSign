@@ -638,7 +638,8 @@ export function DocumentPage() {
       kind,
       page,
       partyId: placingFor,
-      required: kind !== 'checkbox',
+      required: kind !== 'checkbox' && kind !== 'formula',
+      formula: kind === 'formula' ? '0' : null,
       options:
         kind === 'select' || kind === 'multiselect'
           ? [t('Option {n}', { n: 1 }), t('Option {n}', { n: 2 })]

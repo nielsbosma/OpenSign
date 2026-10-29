@@ -16,6 +16,7 @@ use crate::audit::{Entry, audit};
 use crate::auth::normalize_email;
 use crate::context::Ctx;
 use crate::documents::attachments::{self, AttachmentRequestInput};
+use crate::documents::logic::{self, Condition, Owner};
 use crate::documents::values::{self, Spec, Validation};
 use crate::documents::{
     AuthMethod, Delivery, DocumentRow, DocumentView, FieldKind, Need, PartyRole, PartyRow, PartyView, VISIBLE, current_turn,
@@ -386,8 +387,8 @@ async fn copy_template(ctx: &Ctx, conn: &mut PgConnection, from: Uuid, to: Uuid)
     attachments::copy(conn, to, &ids, from).await?;
     for f in crate::documents::fields(conn, from).await? {
         sqlx::query(
-            "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)",
+            "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only, conditions, formula)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)",
         )
         .bind(Uuid::now_v7())
         .bind(to)
@@ -406,6 +407,8 @@ async fn copy_template(ctx: &Ctx, conn: &mut PgConnection, from: Uuid, to: Uuid)
         .bind(&f.format)
         .bind(&f.group_key)
         .bind(f.read_only)
+        .bind(&f.conditions)
+        .bind(&f.formula)
         .execute(&mut *conn)
         .await?;
     }
@@ -838,6 +841,16 @@ pub struct FieldInput {
     pub group_key: Option<String>,
     /// The party sees the prefilled value but cannot change it.
     pub read_only: Option<bool>,
+    /// Show the field only when all of these hold. Each looks at another field by its label. A
+    /// party's field may look at their own fields, the sender's, and fields of parties who sign
+    /// earlier in order; a hidden field is never required and is left empty.
+    #[serde(default)]
+    pub conditions: Vec<Condition>,
+    /// For a `formula` field: the number it computes from other fields, which are named by label in
+    /// braces. `+ - * /`, brackets, comparisons (`= != < <= > >=`) and the functions round(x, decimals),
+    /// floor, ceil, abs, min, max, sum, if(condition, then, else), and, or, not and contains. Example:
+    /// `round({Hours} * {Rate} * 1.25, 2)`. The signer cannot change it; the server computes it when they sign.
+    pub formula: Option<String>,
 }
 
 impl FieldInput {
@@ -861,6 +874,8 @@ impl FieldInput {
             format: spec.format,
             group_key: f.group_key.clone(),
             read_only: Some(f.read_only),
+            conditions: f.conditions(),
+            formula: f.formula.clone(),
         })
     }
 }
@@ -902,7 +917,7 @@ impl Service for SetFields {
     type Output = DocumentView;
     const META: Meta = Meta::mutation(
         "documents.set_fields",
-        "Place the fields of a draft, each assigned to a party: signatures, initials, text, numbers, dropdowns, multi-select lists, radio groups, checkboxes, phone numbers, date pickers, image and file uploads, and the automatic name, email, company and date of signing. Text fields take a pattern and length limits, numbers and dates a smallest and largest value and a format, each with an optional error text of your own.",
+        "Place the fields of a draft, each assigned to a party: signatures, initials, text, numbers, dropdowns, multi-select lists, radio groups, checkboxes, phone numbers, date pickers, image and file uploads, formulas, and the automatic name, email, company and date of signing. Text fields take a pattern and length limits, numbers and dates a smallest and largest value and a format, each with an optional error text of your own. Any field can be shown only when other fields hold given values, and a formula field computes a number from other fields.",
         Access::Permission(Permission::DocumentsCreate),
     );
 
@@ -913,8 +928,8 @@ impl Service for SetFields {
             return Err(bad_request(format!("A document can have at most {MAX_FIELDS} fields")));
         }
         let all = parties(conn, document.id).await?;
-        sqlx::query("delete from fields where document_id = $1").bind(document.id).execute(&mut *conn).await?;
         let mut groups: std::collections::HashMap<String, (Option<Uuid>, Vec<String>, bool)> = Default::default();
+        let mut prepared = Vec::with_capacity(input.fields.len());
         for f in &input.fields {
             check_box(f)?;
             let party = match f.party_id {
@@ -926,6 +941,9 @@ impl Service for SetFields {
             }
             if (f.kind.is_upload() || f.kind == FieldKind::Radio) && !party.is_some_and(|p| p.must_act()) {
                 return Err(bad_request("Image, file and radio fields belong to a party who signs or approves"));
+            }
+            if f.kind == FieldKind::Formula && party.is_some_and(|p| !p.must_act()) {
+                return Err(bad_request("A formula belongs to you or to a party who signs or approves"));
             }
             let label = f.label.as_deref().map(|l| clean_text(l, "A field label", 200)).transpose()?.unwrap_or_default();
             let spec = Spec {
@@ -942,6 +960,7 @@ impl Service for SetFields {
                     return Err(bad_request("A checkbox value is true or false"));
                 }
                 _ if f.kind.is_upload() && value.is_some() => return Err(bad_request("Image and file fields are filled by the party")),
+                FieldKind::Formula => None,
                 FieldKind::Checkbox | FieldKind::Signature => value,
                 kind => match value {
                     Some(v) => values::normalize(kind, &spec, &v).map_err(|e| {
@@ -955,7 +974,7 @@ impl Service for SetFields {
                 && (f.party_id.is_none()
                     || f.kind.is_upload()
                     || f.kind.is_automatic()
-                    || matches!(f.kind, FieldKind::Signature | FieldKind::Initials))
+                    || matches!(f.kind, FieldKind::Signature | FieldKind::Initials | FieldKind::Formula))
             {
                 return Err(bad_request("Only a party's fields that take a value can be read-only"));
             }
@@ -975,9 +994,59 @@ impl Service for SetFields {
                     group.2 = true;
                 }
             }
+            let conditions: Vec<Condition> = f
+                .conditions
+                .iter()
+                .map(|c| Condition {
+                    field: c.field.trim().to_string(),
+                    op: c.op,
+                    value: c.value.as_deref().map(str::trim).filter(|v| c.op.takes_value() && !v.is_empty()).map(str::to_string),
+                })
+                .collect();
+            let formula = f.formula.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
+            let owner = match party {
+                Some(p) => Owner::Party(p.id, document.sequential.then_some(p.sign_order)),
+                None => Owner::Sender,
+            };
+            prepared.push(Prepared {
+                input: f,
+                owner,
+                label,
+                value,
+                spec,
+                group_key: group_key.map(str::to_string),
+                read_only,
+                required: f.kind != FieldKind::Formula && f.required.unwrap_or(f.kind != FieldKind::Checkbox),
+                conditions,
+                formula,
+            });
+        }
+        let items: Vec<logic::Item> = prepared
+            .iter()
+            .map(|p| logic::Item {
+                label: &p.label,
+                kind: p.input.kind,
+                value: p.value.as_deref(),
+                conditions: &p.conditions,
+                formula: p.formula.as_deref(),
+                format: p.spec.format.as_deref(),
+            })
+            .collect();
+        let owners: Vec<Owner> = prepared.iter().map(|p| p.owner).collect();
+        logic::check(&items, &owners)?;
+        // Formulas the sender fills in only use the sender's own fields, so they are known now.
+        let outcomes = logic::evaluate(&items);
+
+        sqlx::query("delete from fields where document_id = $1").bind(document.id).execute(&mut *conn).await?;
+        for (p, outcome) in prepared.iter().zip(outcomes) {
+            let f = p.input;
+            let value = match (f.kind, p.owner) {
+                (FieldKind::Formula, Owner::Sender) => outcome.value,
+                _ => p.value.clone(),
+            };
             sqlx::query(
-                "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only)
-                 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)",
+                "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only, conditions, formula)
+                 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)",
             )
             .bind(Uuid::now_v7())
             .bind(document.id)
@@ -988,14 +1057,16 @@ impl Service for SetFields {
             .bind(f.y)
             .bind(f.width)
             .bind(f.height)
-            .bind(f.required.unwrap_or(f.kind != FieldKind::Checkbox))
-            .bind(label)
+            .bind(p.required)
+            .bind(&p.label)
             .bind(value)
-            .bind(json!(spec.options))
-            .bind(serde_json::to_value(&spec.validation).map_err(AppError::internal)?)
-            .bind(&spec.format)
-            .bind(group_key)
-            .bind(read_only)
+            .bind(json!(p.spec.options))
+            .bind(serde_json::to_value(&p.spec.validation).map_err(AppError::internal)?)
+            .bind(&p.spec.format)
+            .bind(&p.group_key)
+            .bind(p.read_only)
+            .bind(serde_json::to_value(&p.conditions).map_err(AppError::internal)?)
+            .bind(&p.formula)
             .execute(&mut *conn)
             .await?;
         }
@@ -1003,6 +1074,19 @@ impl Service for SetFields {
             .await?;
         reload(ctx, conn, document.id).await
     }
+}
+
+struct Prepared<'a> {
+    input: &'a FieldInput,
+    owner: Owner,
+    label: String,
+    value: Option<String>,
+    spec: Spec,
+    group_key: Option<String>,
+    read_only: bool,
+    required: bool,
+    conditions: Vec<Condition>,
+    formula: Option<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]

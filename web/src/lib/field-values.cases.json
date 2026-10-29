@@ -65,6 +65,7 @@
     { "kind": "number", "format": "1234,0", "input": "0.05", "shown": "0,1" },
     { "kind": "number", "format": "1'234.00", "input": "-0.001", "shown": "0.00" },
     { "kind": "number", "input": "1234.5", "shown": "1234.5" },
+    { "kind": "formula", "format": "1,234.00", "input": "1234.5", "shown": "1,234.50" },
     { "kind": "date", "format": "DD/MM/YYYY", "input": "2026-10-29", "shown": "29/10/2026" },
     { "kind": "date_input", "format": "MM/DD/YYYY", "input": "2026-02-01", "shown": "02/01/2026" },
     { "kind": "date_input", "format": "D MMM YYYY", "input": "2026-02-01", "shown": "1 Feb 2026" },

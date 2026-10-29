@@ -66,11 +66,15 @@ export function FieldLayer({
               key={f.key}
               role={editable ? 'button' : undefined}
               tabIndex={editable ? 0 : undefined}
-              title={
+              title={[
                 party
                   ? t('{field} for {name}', { field: kindLabel(f.kind), name: party.name })
-                  : t('{field} for the sender', { field: kindLabel(f.kind) })
-              }
+                  : t('{field} for the sender', { field: kindLabel(f.kind) }),
+                f.formula && `= ${f.formula}`,
+                f.conditions?.length && t('Shown only when its conditions hold'),
+              ]
+                .filter(Boolean)
+                .join('\n')}
               onPointerDown={(e) => start(e, f, 'move')}
               onPointerMove={(e) => move(e)}
               onPointerUp={(e) => move(e, true)}
@@ -85,6 +89,7 @@ export function FieldLayer({
                 width: `${f.width * 100}%`,
                 height: `${f.height * 100}%`,
                 borderColor: color,
+                borderStyle: f.conditions?.length ? 'dashed' : undefined,
                 backgroundColor: `${color}1f`,
                 color,
                 ['--tw-ring-color' as string]: color,
@@ -101,7 +106,7 @@ export function FieldLayer({
                     ? display(f.kind, f.format, f.value)
                     : f.kind === 'checkbox'
                       ? ''
-                      : `${f.label || kindLabel(f.kind)}${f.required === false ? '' : ' *'}`}
+                      : `${f.kind === 'formula' ? 'ƒ ' : ''}${f.label || kindLabel(f.kind)}${f.required === false || f.kind === 'formula' ? '' : ' *'}`}
                 </span>
               )}
               {editable && active && (

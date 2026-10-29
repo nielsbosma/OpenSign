@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiError, type AttachmentRequest, type AuthMethod, call, errorMessage, fetchPdf, type SignerView } from '@/lib/api';
+import { display } from '@/lib/field-values';
 import { saveBytes } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { FormError } from '../auth/AuthLayout';
@@ -19,7 +20,7 @@ import { AttachmentUploads } from './AttachmentUploads';
 import { EidIdentify } from './EidIdentify';
 import { framed, notifyHost, redirectAfter } from './embed';
 import { type Signature, SignaturePad } from './SignaturePad';
-import { INPUT_KINDS, initialValues, problems, SignerField, type Upload } from './SignerFields';
+import { INPUT_KINDS, initialValues, outcomes, problems, SignerField, type Upload } from './SignerFields';
 import { isRtl, LanguageContext, languageFor, SIGNER_LANGUAGES, TextsContext, textsFor, useTexts } from './texts';
 import { WebcamPhoto } from './WebcamPhoto';
 
@@ -467,8 +468,10 @@ function SignerScreen({
 
   const done = view.party.status === 'signed' || view.party.status === 'declined';
   const canAct = view.party.role !== 'viewer' && (preview || (view.yourTurn && !done && view.document.status === 'pending'));
-  const inputs = own.filter((f) => INPUT_KINDS.includes(f.kind) && !f.readOnly);
-  const issues = problems(own, values, uploads, t);
+  const logic = useMemo(() => outcomes(view.fields, view.party, values, uploads), [view.fields, view.party, values, uploads]);
+  const shown = (f: { id: string }) => logic.get(f.id)?.visible !== false;
+  const inputs = own.filter((f) => INPUT_KINDS.includes(f.kind) && !f.readOnly && shown(f));
+  const issues = problems(own, values, uploads, t, shown);
   const touch = (id: string) => setTouched((s) => (s.has(id) ? s : new Set(s).add(id)));
   const isSigner = view.party.role === 'signer';
 
@@ -548,7 +551,24 @@ function SignerScreen({
                           width: `${f.width * 100}%`,
                           height: `${f.height * 100}%`,
                         };
-                        if (!mine) return null;
+                        if (!mine || !shown(f)) return null;
+                        if (f.kind === 'formula') {
+                          const value = logic.get(f.id)?.value;
+                          return (
+                            <div
+                              key={f.id}
+                              id={`field-${f.id}`}
+                              role="status"
+                              aria-label={f.label || undefined}
+                              className="absolute flex items-center rounded-[3px] border border-dashed border-zinc-400 px-1 text-[11px] text-zinc-800"
+                              style={style}
+                            >
+                              <span dir="ltr" className="truncate">
+                                {value != null ? display('formula', f.format, value) : '—'}
+                              </span>
+                            </div>
+                          );
+                        }
                         if (canAct && INPUT_KINDS.includes(f.kind)) {
                           return (
                             <SignerField
