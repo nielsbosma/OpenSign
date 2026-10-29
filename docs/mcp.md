@@ -42,7 +42,7 @@ Each tool is a service the connected user's role allows, named with underscores 
 | --- | --- |
 | Documents | `documents_list`, `documents_get`, `documents_create`, `documents_upload`, `documents_remove_file`, `documents_update`, `documents_set_parties`, `documents_set_fields`, `documents_check`, `documents_auth_methods`, `documents_send`, `documents_remind`, `documents_cancel`, `documents_delete`, `documents_share`, `documents_unshare`, `documents_signing_link`, `documents_download`, `documents_verify`, `documents_legal_hold` |
 | Bulk send | `bulk_preview`, `bulk_start`, `bulk_list`, `bulk_get`, `bulk_cancel` |
-| Webhooks | `webhooks_list`, `webhooks_create`, `webhooks_delete`, `webhooks_test` |
+| Webhooks | `webhooks_list`, `webhooks_create`, `webhooks_delete`, `webhooks_test`, `webhooks_deliveries`, `webhooks_delivery`, `webhooks_resend`, `webhooks_resend_failed` |
 | Users | `users_list`, `users_invite`, `users_list_invites`, `users_revoke_invite`, `users_update` |
 | Audit | `audit_list`, `audit_verify` |
 | Account and keys | `account_me`, `api_keys_list`, `api_keys_update`, `api_keys_revoke` |
