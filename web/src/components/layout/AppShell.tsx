@@ -78,6 +78,11 @@ function UserMenu() {
         <DropdownMenuItem onSelect={() => navigate('/settings')}>
           <Settings /> {t('Settings')}
         </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a href="/api-explorer" target="_blank" rel="noreferrer">
+            <Braces /> {t('API Explorer')}
+          </a>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={signOut}>
           <LogOut /> {t('Sign Out')}
@@ -125,9 +130,6 @@ function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onClose: ()
             <FileStack className="size-4 opacity-80" /> {t('Templates')}
           </NavLink>
         )}
-        <a href="/api-explorer" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
-          <Braces className="size-4 opacity-80" /> {t('API Explorer')}
-        </a>
         <a href="/verify" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
           <ShieldCheck className="size-4 opacity-80" /> {t('Verify a Document')}
         </a>

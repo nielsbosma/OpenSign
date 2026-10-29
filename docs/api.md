@@ -8,7 +8,7 @@ Everything the web app does runs through one set of services, and the REST API s
 | Format | JSON, camelCase field names |
 | Authentication | `Authorization: Bearer osk_…` |
 | OpenAPI | `GET /api/v1/openapi.json` (OpenAPI 3.1, generated from the service schemas) |
-| Try it | **API Explorer** in the app's sidebar |
+| Try it | **API Explorer** in the user menu at the bottom of the sidebar |
 
 Besides the native API, OpenSign offers drop-in [Scrive](scrive.md) and [DocuSign](docusign.md) endpoints, [webhooks](webhooks.md), and an [MCP server](mcp.md).
 
