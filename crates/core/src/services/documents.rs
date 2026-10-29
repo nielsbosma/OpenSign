@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
+use super::signing::{SignerView, signer_view};
 use super::{Ok_, settings};
 use crate::audit::{Entry, audit};
 use crate::auth::normalize_email;
@@ -226,8 +227,8 @@ impl Service for Create {
             (None, None) => String::new(),
         };
         sqlx::query(
-            "insert into documents (id, title, is_template, template_id, owner_id, message, language, sequential, reminder_days, external_id, metadata)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+            "insert into documents (id, title, is_template, template_id, owner_id, message, language, sequential, reminder_days, external_id, metadata, review_links)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
         )
         .bind(id)
         .bind(title(&input.title)?)
@@ -243,6 +244,7 @@ impl Service for Create {
         .bind(template.as_ref().and_then(|t| t.reminder_days))
         .bind(input.external_id.as_deref().map(|e| clean_text(e, "The external id", 200)).transpose()?.filter(|e| !e.is_empty()))
         .bind(metadata(input.metadata)?)
+        .bind(template.as_ref().is_none_or(|t| t.review_links))
         .execute(&mut *conn)
         .await?;
         if let Some(t) = &template {
@@ -1382,6 +1384,37 @@ impl Service for SignInPerson {
         )
         .await?;
         Ok(SignerLink { party_id: party.id, name: party.name.clone(), url: signer_url(ctx, ctx.keys(), &party) })
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SigningPreviewInput {
+    pub document_id: Uuid,
+    pub party_id: Uuid,
+}
+
+pub struct SigningPreview;
+
+#[async_trait]
+impl Service for SigningPreview {
+    type Input = SigningPreviewInput;
+    type Output = SignerView;
+    const META: Meta = Meta::query(
+        "documents.signing_preview",
+        "Show what a party will see on their signing page: branding, message, language and their fields, with the identification they will be asked for. Read-only: nothing is sent, signed or recorded as the party's.",
+        Access::Authenticated,
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SigningPreviewInput) -> Result<SignerView> {
+        let document = load_document(ctx, conn, input.document_id, Need::Read).await?;
+        let party = parties(conn, document.id).await?.into_iter().find(|p| p.id == input.party_id).ok_or_else(|| not_found("Party"))?;
+        let mut view = signer_view(ctx, conn, &document, &party, false).await?;
+        let required = |method: AuthMethod| (!matches!(method, AuthMethod::None | AuthMethod::Standard)).then_some(method);
+        view.needs_authentication = required(party.auth_to_view());
+        view.sign_authentication = required(party.auth_to_sign());
+        view.your_turn = true;
+        Ok(view)
     }
 }
 

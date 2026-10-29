@@ -1,5 +1,19 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowUpCircle, Braces, FileStack, FileText, LogOut, Menu, Moon, Settings, ShieldCheck, Sparkles, Sun } from 'lucide-react';
+import {
+  ArrowUpCircle,
+  Braces,
+  FileStack,
+  FileText,
+  LogOut,
+  Menu,
+  Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Sun,
+} from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { AssistantPanel } from '@/components/AssistantPanel';
@@ -60,8 +74,8 @@ function UserMenu() {
         <DropdownMenuItem onSelect={toggle}>
           {theme === 'dark' ? <Sun /> : <Moon />} {theme === 'dark' ? t('Light Theme') : t('Dark Theme')}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => navigate('/settings/account')}>
-          <Settings /> {t('Your Account')}
+        <DropdownMenuItem onSelect={() => navigate('/settings')}>
+          <Settings /> {t('Settings')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={signOut}>
@@ -72,14 +86,34 @@ function UserMenu() {
   );
 }
 
-function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
-  const { can } = useSession();
+const SIDEBAR_KEY = 'opensign-sidebar';
+
+function storedCollapsed() {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === 'collapsed';
+  } catch {
+    return false;
+  }
+}
+
+function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onClose: () => void }) {
+  const { user, can } = useSession();
   const version = useApi('system.version', { refresh: false }, { enabled: can('settings.manage'), staleTime: 60 * 60_000 });
   return (
     <div className="flex h-full flex-col bg-sidebar">
       <div className="flex h-14 shrink-0 items-center gap-2.5 px-3">
         <Logo />
         <span className="text-sm font-semibold">OpenSign</span>
+        {user?.version && <span className="text-[11px] text-muted-foreground tabular-nums">{user.version}</span>}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          aria-label={t('Close Sidebar')}
+          className="ms-auto size-8 text-muted-foreground"
+        >
+          <PanelLeftClose />
+        </Button>
       </div>
       <nav className="flex flex-1 flex-col gap-0.5 px-2 py-1" aria-label={t('Main')}>
         <NavLink to="/documents" className={linkClass} onClick={onNavigate}>
@@ -90,17 +124,14 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             <FileStack className="size-4 opacity-80" /> {t('Templates')}
           </NavLink>
         )}
-        <NavLink to="/api-explorer" className={linkClass} onClick={onNavigate}>
+        <a href="/api-explorer" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
           <Braces className="size-4 opacity-80" /> {t('API Explorer')}
-        </NavLink>
+        </a>
         <a href="/verify" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
           <ShieldCheck className="size-4 opacity-80" /> {t('Verify a Document')}
         </a>
       </nav>
       <div className="grid gap-0.5 border-t border-sidebar-border px-2 py-2">
-        <NavLink to="/settings" className={linkClass} onClick={onNavigate}>
-          <Settings className="size-4 opacity-80" /> {t('Settings')}
-        </NavLink>
         {version.data?.updateAvailable && (
           <NavLink to="/settings/system" className={linkClass} onClick={onNavigate}>
             <ArrowUpCircle className="size-4 text-primary" /> {t('Update to {version}', { version: version.data.latest?.version ?? '' })}
@@ -116,6 +147,14 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 export function AppShell() {
   const docked = useMediaQuery('(min-width: 1024px)');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(storedCollapsed);
+  const setSidebar = (value: boolean) => {
+    setCollapsed(value);
+    try {
+      localStorage.setItem(SIDEBAR_KEY, value ? 'collapsed' : 'open');
+    } catch {}
+  };
+  const showSidebar = docked && !collapsed;
   const [chatOpen, setChatOpen] = useState(false);
   const ai = useApi('ai.status', undefined, { staleTime: 5 * 60_000 });
   const assistant = !!ai.data?.configured && ai.data.canUse;
@@ -124,29 +163,31 @@ export function AppShell() {
   return (
     <div className="flex h-svh overflow-hidden">
       {docked ? (
-        <aside className="w-60 shrink-0 border-e border-sidebar-border">
-          <Sidebar />
-        </aside>
+        showSidebar && (
+          <aside className="w-60 shrink-0 border-e border-sidebar-border">
+            <Sidebar onClose={() => setSidebar(true)} />
+          </aside>
+        )
       ) : (
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
           <SheetContent side={rtl ? 'right' : 'left'} className="w-72 p-0 [&>button]:hidden">
             <SheetTitle className="sr-only">{t('Navigation')}</SheetTitle>
-            <Sidebar onNavigate={() => setDrawerOpen(false)} />
+            <Sidebar onNavigate={() => setDrawerOpen(false)} onClose={() => setDrawerOpen(false)} />
           </SheetContent>
         </Sheet>
       )}
 
       <main className="relative min-w-0 flex-1 overflow-y-auto">
-        {!docked && (
+        {!showSidebar && (
           <div className="absolute start-3 top-2.5 z-10">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setDrawerOpen(true)}
+              onClick={() => (docked ? setSidebar(false) : setDrawerOpen(true))}
               aria-label={t('Open Navigation')}
               className="text-muted-foreground"
             >
-              <Menu />
+              {docked ? <PanelLeftOpen className="rtl:rotate-180" /> : <Menu />}
             </Button>
           </div>
         )}
@@ -168,7 +209,12 @@ export function AppShell() {
             </Tooltip>
           </div>
         )}
-        <div className={cn('mx-auto w-full max-w-6xl pt-3.5 pe-14 pb-10 sm:pe-16', docked ? 'ps-4 sm:ps-6 lg:ps-8' : 'ps-14 sm:ps-16')}>
+        <div
+          className={cn(
+            'mx-auto w-full max-w-6xl pt-6 pb-10 lg:pt-10 pe-14 sm:pe-16',
+            showSidebar ? 'ps-4 sm:ps-6 lg:ps-8' : 'ps-14 sm:ps-16',
+          )}
+        >
           <Outlet />
         </div>
       </main>

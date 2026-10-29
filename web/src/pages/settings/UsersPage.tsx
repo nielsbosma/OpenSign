@@ -18,17 +18,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { type Role, useApi, useApiMutation } from '@/lib/api';
 import { formatDate, formatDateTime } from '@/lib/format';
-import { labels, msg, t } from '@/lib/i18n';
+import { msg, t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { SettingsCard } from './SettingsLayout';
 
-export const ROLES = labels({
-  admin: msg('Admin: everything, including settings and users'),
-  manager: msg('Manager: all documents, templates and users'),
-  sender: msg('Sender: their own documents and templates'),
-  auditor: msg('Auditor: reads every document and the audit trail'),
-  viewer: msg('Viewer: documents shared with them'),
-}) as Record<Role, string>;
+const role = (label: string, description: string) => ({
+  get label() {
+    return t(label);
+  },
+  get description() {
+    return t(description);
+  },
+});
+
+export const ROLES: Record<Role, { label: string; description: string }> = {
+  admin: role(msg('Admin'), msg('Everything, including settings and users')),
+  manager: role(msg('Manager'), msg('All documents, templates and users')),
+  sender: role(msg('Sender'), msg('Their own documents and templates')),
+  auditor: role(msg('Auditor'), msg('Reads every document and the audit trail')),
+  viewer: role(msg('Viewer'), msg('Documents shared with them')),
+};
 
 function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [email, setEmail] = useState('');
@@ -67,8 +76,8 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(ROLES).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
+                {Object.entries(ROLES).map(([value, { label, description }]) => (
+                  <SelectItem key={value} value={value} description={description}>
                     {label}
                   </SelectItem>
                 ))}
@@ -155,9 +164,10 @@ export function UsersPage() {
                                 key={role}
                                 disabled={role === u.role}
                                 onSelect={() => update.mutate({ id: u.id, role })}
-                                className="capitalize"
+                                className="grid gap-0.5"
                               >
-                                {role}
+                                <span className="font-medium">{ROLES[role].label}</span>
+                                <span className="text-xs text-muted-foreground">{ROLES[role].description}</span>
                               </DropdownMenuItem>
                             ))}
                             <DropdownMenuSeparator />

@@ -227,6 +227,8 @@ pub struct Me {
     pub permissions: Vec<crate::permissions::Permission>,
     pub two_factor_enabled: bool,
     pub must_enable_two_factor: bool,
+    /// The running OpenSign version.
+    pub version: String,
     /// The language the app is shown in, if the user chose one.
     pub language: Option<String>,
 }
@@ -251,6 +253,7 @@ impl Service for WhoAmI {
             permissions: actor.permissions.iter().copied().collect(),
             two_factor_enabled: user.totp_enabled_at.is_some(),
             must_enable_two_factor: actor.must_enable_two_factor,
+            version: crate::env::app_version().to_string(),
             language: user.language,
         })
     }

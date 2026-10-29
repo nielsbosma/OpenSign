@@ -2,25 +2,29 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmButton, Field, Spinner } from '@/components/common';
+import { SearchSelect } from '@/components/SearchSelect';
 import { Button } from '@/components/ui/button';
+import { FilePicker } from '@/components/ui/file-picker';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { type Group, useApi, useApiMutation } from '@/lib/api';
+import { errorMessage, type Group, useApi, useApiMutation } from '@/lib/api';
 import { formatDate, formatDateTime, languages } from '@/lib/format';
 import { msg, t } from '@/lib/i18n';
+import { countryOptions, timeZoneOptions } from '@/lib/regions';
 import { SettingsCard } from './SettingsLayout';
 
 type Spec = {
   key: string;
   label: string;
   /** `file` is a secret PEM or PKCS#12 file, `pem` a public one such as a CA certificate. */
-  type?: 'text' | 'secret' | 'bool' | 'number' | 'select' | 'file' | 'pem' | 'color';
+  type?: 'text' | 'secret' | 'bool' | 'number' | 'select' | 'file' | 'pem' | 'color' | 'country' | 'timeZone' | 'aiModel';
   hint?: string;
   options?: [string, string][] | (() => [string, string][]);
   placeholder?: string;
-  /** Shown only when this other boolean or text field is set. */
+  /** Shown only when this other boolean or text field is set, or equals `is` when given. */
   when?: string;
+  is?: string;
   /** For a `file`: where the password of an uploaded .p12/.pfx goes. The server keeps only the PEM it unlocks. */
   passwordKey?: string;
 };
@@ -32,8 +36,8 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
     fields: [
       { key: 'name', label: msg('Name') },
       { key: 'registrationNumber', label: msg('Registration Number') },
-      { key: 'country', label: msg('Country'), placeholder: 'SE' },
-      { key: 'timeZone', label: msg('Time Zone'), placeholder: 'Europe/Stockholm' },
+      { key: 'country', label: msg('Country'), type: 'country' },
+      { key: 'timeZone', label: msg('Time Zone'), type: 'timeZone' },
       {
         key: 'locale',
         label: msg('Language for Signers'),
@@ -45,10 +49,44 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
     ],
   },
   email: {
-    title: msg('Email (Resend)'),
-    description: msg('Invitations, codes and signed documents go out through Resend. Changing the key or sender needs a new test email.'),
+    title: msg('Email'),
+    description: msg(
+      'Invitations, codes and signed documents go out through Resend or your own SMTP server. Changing the provider, server, key or sender needs a new test email.',
+    ),
     fields: [
-      { key: 'apiKey', label: msg('API Key'), type: 'secret' },
+      {
+        key: 'provider',
+        label: msg('Provider'),
+        type: 'select',
+        options: [
+          ['resend', 'Resend'],
+          ['smtp', 'SMTP'],
+        ],
+      },
+      { key: 'apiKey', label: msg('API Key'), type: 'secret', when: 'provider', is: 'resend' },
+      { key: 'smtpHost', label: msg('SMTP Server'), placeholder: 'smtp.example.com', when: 'provider', is: 'smtp' },
+      {
+        key: 'smtpPort',
+        label: msg('Port'),
+        type: 'number',
+        hint: msg('Usually 587 for STARTTLS or 465 for TLS.'),
+        when: 'provider',
+        is: 'smtp',
+      },
+      {
+        key: 'smtpSecurity',
+        label: msg('Security'),
+        type: 'select',
+        options: [
+          ['starttls', 'STARTTLS'],
+          ['tls', 'TLS'],
+        ],
+        hint: msg('The certificate must be valid for the server name. Unencrypted SMTP is not supported.'),
+        when: 'provider',
+        is: 'smtp',
+      },
+      { key: 'smtpUsername', label: msg('Username'), hint: msg('Empty: send without signing in.'), when: 'provider', is: 'smtp' },
+      { key: 'smtpPassword', label: msg('Password'), type: 'secret', when: 'provider', is: 'smtp' },
       { key: 'fromAddress', label: msg('From Address'), placeholder: 'sign@example.com' },
       { key: 'fromName', label: msg('From Name') },
       { key: 'replyTo', label: msg('Reply-To'), hint: msg('Empty: replies go to the sender of each document.') },
@@ -63,11 +101,17 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
       { key: 'idleMinutes', label: msg('Sign Out After Idle (Minutes)'), type: 'number' },
       { key: 'signerLinkDays', label: msg('Signing Links Expire After (Days)'), type: 'number' },
       { key: 'maxUploadMb', label: msg('Largest Upload (MB)'), type: 'number' },
+      {
+        key: 'reviewLinkDays',
+        label: msg('AI Review Links Expire After (Days)'),
+        type: 'number',
+        hint: msg('Signers can give their own AI a read-only copy of a document. 0 turns this off; at most 30.'),
+      },
     ],
   },
   updates: {
     title: msg('Updates'),
-    description: msg('Check for new releases and update from the System page.'),
+    description: msg('How OpenSign finds and installs new releases.'),
     fields: [
       {
         key: 'checkForUpdates',
@@ -129,11 +173,11 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
           ['openai-compatible', msg('Other OpenAI-compatible')],
         ],
       },
-      { key: 'model', label: msg('Model'), placeholder: 'claude-sonnet-5-5', when: 'provider' },
       { key: 'apiKey', label: msg('API Key'), type: 'secret', when: 'provider' },
       { key: 'baseUrl', label: msg('Base URL'), hint: msg('Only for LiteLLM and other compatible servers.'), when: 'provider' },
       { key: 'allowDocumentText', label: msg('Allow document text to be sent for reviews'), type: 'bool', when: 'provider' },
       { key: 'monthlyTokenBudget', label: msg('Monthly Token Budget'), type: 'number', hint: msg('0 means no limit.'), when: 'provider' },
+      { key: 'model', label: msg('Model'), type: 'aiModel', when: 'provider' },
     ],
   },
   sms: {
@@ -367,22 +411,111 @@ function AiExtras() {
   );
 }
 
+const MODEL_PLACEHOLDERS: Record<string, string> = {
+  anthropic: 'claude-sonnet-5-5',
+  openai: 'gpt-5',
+};
+
+/** Asks the provider for its models with the form's current values; the server keeps the saved key. */
+function AiModelField({
+  id,
+  value,
+  onChange,
+  provider,
+  baseUrl,
+  apiKey,
+  locked,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  provider: string;
+  baseUrl: string;
+  apiKey: string | undefined;
+  locked: boolean;
+}) {
+  const models = useApiMutation('ai.models', { silent: true });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: list again only when the connection details change
+  useEffect(() => {
+    if (!provider) return;
+    const timer = setTimeout(() => models.mutate({ provider, baseUrl, apiKey }), 600);
+    return () => clearTimeout(timer);
+  }, [provider, baseUrl, apiKey]);
+
+  if (models.data && models.data.length > 0) {
+    const options = models.data.map((m) => ({ value: m.id, label: m.name, detail: m.name !== m.id ? m.id : undefined }));
+    if (value && !options.some((o) => o.value === value)) {
+      options.unshift({ value, label: value, detail: t('Not offered by this provider') });
+    }
+    const count = models.data.length;
+    return (
+      <Field
+        label={t('Model')}
+        htmlFor={id}
+        hint={
+          count === 1
+            ? t('Connected. 1 model is available with this key.')
+            : t('Connected. {count} models are available with this key.', { count })
+        }
+      >
+        <SearchSelect
+          id={id}
+          value={value}
+          onChange={onChange}
+          options={options}
+          placeholder={t('Choose a model…')}
+          searchPlaceholder={t('Search models…')}
+          disabled={locked}
+        />
+      </Field>
+    );
+  }
+  const hint = locked
+    ? t('Set by an environment variable.')
+    : models.isPending || models.isIdle
+      ? t('Checking the connection…')
+      : models.error
+        ? t('Could not list models: {error}. Enter the model name instead.', { error: errorMessage(models.error).replace(/\.$/, '') })
+        : t('The provider listed no models. Enter the model name.');
+  return (
+    <Field label={t('Model')} htmlFor={id} hint={hint}>
+      <Input
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={MODEL_PLACEHOLDERS[provider]}
+        disabled={locked}
+      />
+    </Field>
+  );
+}
+
 export function AdminSettingsPage() {
   const { group = '' } = useParams();
-  const spec = GROUPS[group as Group];
-  const current = useApi('settings.get', { group: group as Group }, { enabled: !!spec });
+  if (group === 'updates') return <Navigate to="/settings/system" replace />;
+  if (!GROUPS[group as Group]) return <Navigate to="/settings" replace />;
+  return <SettingsGroup group={group as Group} />;
+}
+
+export function SettingsGroup({ group }: { group: Group }) {
+  const spec = GROUPS[group];
+  const current = useApi('settings.get', { group });
   const [draft, setDraft] = useState<Record<string, unknown>>({});
+  const [certFiles, setCertFiles] = useState<Record<string, File>>({});
   const save = useApiMutation('settings.update', {
     invalidates: ['settings.', 'ai.', 'setup.'],
     onSuccess: () => {
       setDraft({});
+      setCertFiles({});
       toast.success(t('Saved'));
     },
   });
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new group starts with no unsaved changes
-  useEffect(() => setDraft({}), [group]);
+  useEffect(() => {
+    setDraft({});
+    setCertFiles({});
+  }, [group]);
 
-  if (!spec) return <Navigate to="/settings" replace />;
   if (current.isPending) return <Spinner />;
   const saved = (current.data?.values ?? {}) as Record<string, unknown>;
   const pinned = current.data?.pinned ?? [];
@@ -391,7 +524,7 @@ export function AdminSettingsPage() {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    save.mutate({ group: group as Group, values: draft });
+    save.mutate({ group, values: draft });
   };
 
   return (
@@ -399,7 +532,7 @@ export function AdminSettingsPage() {
       <SettingsCard title={t(spec.title)} description={t(spec.description)}>
         <form onSubmit={submit} className="grid max-w-xl gap-5">
           {spec.fields
-            .filter((f) => !f.when || !!value(f.when))
+            .filter((f) => !f.when || (f.is === undefined ? !!value(f.when) : value(f.when) === f.is))
             .map((f) => {
               const locked = pinned.includes(f.key);
               const hint = locked ? t('Set by an environment variable.') : f.hint && t(f.hint);
@@ -435,20 +568,54 @@ export function AdminSettingsPage() {
                   </Field>
                 );
               }
+              if (f.type === 'aiModel') {
+                return (
+                  <AiModelField
+                    key={f.key}
+                    id={id}
+                    value={String(value(f.key) ?? '')}
+                    onChange={(v) => set(f.key, v)}
+                    provider={String(value('provider') ?? '')}
+                    baseUrl={String(value('baseUrl') ?? '')}
+                    apiKey={typeof draft.apiKey === 'string' ? draft.apiKey : undefined}
+                    locked={locked}
+                  />
+                );
+              }
+              if (f.type === 'country' || f.type === 'timeZone') {
+                const country = f.type === 'country';
+                return (
+                  <Field key={f.key} label={f.label} htmlFor={id} hint={hint}>
+                    <SearchSelect
+                      id={id}
+                      value={String(value(f.key) ?? '')}
+                      onChange={(v) => set(f.key, v)}
+                      options={country ? countryOptions() : timeZoneOptions()}
+                      searchPlaceholder={country ? t('Search countries…') : t('Search by city or offset…')}
+                      disabled={locked}
+                    />
+                  </Field>
+                );
+              }
               if (f.type === 'secret' || f.type === 'file') {
                 const isSet = saved[f.key] === true;
                 return (
                   <Field key={f.key} label={label} htmlFor={id} hint={hint ?? (isSet ? t('Saved. Leave empty to keep it.') : undefined)}>
                     <div className="flex gap-2">
                       {f.type === 'file' ? (
-                        <Input
+                        <FilePicker
                           id={id}
-                          type="file"
+                          className="flex-1"
                           accept=".pem,.crt,.cer,.key,.p12,.pfx"
                           disabled={locked}
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (file) set(f.key, await readCertificate(file));
+                          hint={t('.pem, .crt, .cer, .key, .p12 or .pfx')}
+                          files={certFiles[f.key] ? [certFiles[f.key]!] : []}
+                          onChange={async ([file]) => {
+                            setCertFiles((c) => {
+                              const { [f.key]: _, ...rest } = c;
+                              return file ? { ...rest, [f.key]: file } : rest;
+                            });
+                            set(f.key, file ? await readCertificate(file) : undefined);
                           }}
                         />
                       ) : (
@@ -527,7 +694,14 @@ export function AdminSettingsPage() {
               {t('Save')}
             </Button>
             {Object.keys(draft).length > 0 && (
-              <Button type="button" variant="ghost" onClick={() => setDraft({})}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setDraft({});
+                  setCertFiles({});
+                }}
+              >
                 {t('Discard')}
               </Button>
             )}

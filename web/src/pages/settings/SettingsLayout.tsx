@@ -19,13 +19,12 @@ const SECTIONS: { title: string; items: { path: string; label: string; permissio
       { path: '/settings/admin/retention', label: msg('Retention'), permission: 'settings.manage' },
       { path: '/settings/audit', label: msg('Audit Trail'), permission: 'audit.read' },
       { path: '/settings/system', label: msg('System'), permission: 'system.read' },
-      { path: '/settings/admin/updates', label: msg('Updates'), permission: 'settings.manage' },
     ],
   },
   {
     title: msg('Integrations'),
     items: [
-      { path: '/settings/admin/email', label: msg('Email (Resend)'), permission: 'settings.manage' },
+      { path: '/settings/admin/email', label: msg('Email'), permission: 'settings.manage' },
       { path: '/settings/admin/sms', label: msg('SMS'), permission: 'settings.manage' },
       { path: '/settings/admin/eid', label: msg('BankID and eID'), permission: 'settings.manage' },
       { path: '/settings/admin/ai', label: msg('AI'), permission: 'settings.manage' },

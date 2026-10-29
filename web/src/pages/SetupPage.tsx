@@ -1,24 +1,63 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2 } from 'lucide-react';
+import { Check, CheckCircle2 } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { Field, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { call, useApi } from '@/lib/api';
-import { t } from '@/lib/i18n';
+import { msg, t, tx } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
+import { cn } from '@/lib/utils';
 import { AuthLayout, FormError, PASSWORD_HINT } from './auth/AuthLayout';
+
+const STEPS = [msg('Administrator'), msg('Email')];
 
 function Steps({ step }: { step: 1 | 2 }) {
   return (
-    <ol className="mb-5 flex gap-4 text-xs text-muted-foreground">
-      {[t('Administrator'), t('Email')].map((label, i) => (
-        <li key={label} className={i + 1 === step ? 'font-medium text-foreground' : undefined}>
-          {i + 1}. {label}
-        </li>
-      ))}
+    <ol className="mb-6 flex items-center" aria-label={t('Setup progress')}>
+      {STEPS.map((label, i) => {
+        const n = i + 1;
+        const state = n < step ? 'done' : n === step ? 'current' : 'upcoming';
+        return (
+          <li
+            key={t(label)}
+            className={cn('flex items-center', n < STEPS.length && 'flex-1')}
+            aria-current={state === 'current' ? 'step' : undefined}
+          >
+            <span
+              className={cn(
+                'flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors',
+                state === 'done' && 'border-primary bg-primary text-primary-foreground',
+                state === 'current' && 'border-primary bg-primary/10 text-primary ring-4 ring-primary/10',
+                state === 'upcoming' && 'border-border bg-background text-muted-foreground',
+              )}
+            >
+              {state === 'done' ? <Check className="size-3.5" strokeWidth={3} /> : n}
+            </span>
+            <span
+              className={cn(
+                'ms-2 text-sm whitespace-nowrap',
+                state === 'upcoming' ? 'text-muted-foreground' : 'font-medium text-foreground',
+              )}
+            >
+              {t(label)}
+            </span>
+            {n < STEPS.length && <span className={cn('mx-3 h-px flex-1', n < step ? 'bg-primary' : 'bg-border')} aria-hidden />}
+          </li>
+        );
+      })}
     </ol>
+  );
+}
+
+function ExternalLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noreferrer" className="font-medium text-primary underline-offset-2 hover:underline">
+      {children}
+    </a>
   );
 }
 
@@ -78,17 +117,39 @@ function AdminStep() {
   );
 }
 
+type EmailValues = {
+  provider?: string;
+  apiKey?: boolean;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpSecurity?: string;
+  smtpUsername?: string;
+  smtpPassword?: boolean;
+  fromAddress?: string;
+  fromName?: string;
+};
+
 function EmailStep() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const current = useApi('settings.get', { group: 'email' });
-  const values = (current.data?.values ?? {}) as { fromAddress?: string; fromName?: string; apiKey?: boolean };
+  const values = (current.data?.values ?? {}) as EmailValues;
+  const [provider, setProvider] = useState<string>();
   const [apiKey, setApiKey] = useState('');
+  const [smtpHost, setSmtpHost] = useState<string>();
+  const [smtpPort, setSmtpPort] = useState<string>();
+  const [smtpSecurity, setSmtpSecurity] = useState<string>();
+  const [smtpUsername, setSmtpUsername] = useState<string>();
+  const [smtpPassword, setSmtpPassword] = useState('');
   const [fromAddress, setFromAddress] = useState<string>();
   const [fromName, setFromName] = useState<string>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+
+  const chosen = provider ?? values.provider ?? 'resend';
+  const smtp = chosen === 'smtp';
+  const security = smtpSecurity ?? values.smtpSecurity ?? 'starttls';
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -98,7 +159,16 @@ function EmailStep() {
       await call('settings.update', {
         group: 'email',
         values: {
-          apiKey: apiKey.trim() || null,
+          provider: chosen,
+          ...(smtp
+            ? {
+                smtpHost: (smtpHost ?? values.smtpHost ?? '').trim(),
+                smtpPort: Number(smtpPort ?? values.smtpPort ?? 587),
+                smtpSecurity: security,
+                smtpUsername: (smtpUsername ?? values.smtpUsername ?? '').trim(),
+                smtpPassword: smtpPassword || null,
+              }
+            : { apiKey: apiKey.trim() || null }),
           fromAddress: (fromAddress ?? values.fromAddress ?? '').trim(),
           fromName: fromName ?? values.fromName ?? '',
         },
@@ -128,32 +198,130 @@ function EmailStep() {
 
   return (
     <AuthLayout
-      title={t('Connect Resend')}
+      title={t('Set Up Email')}
       description={t(
-        'OpenSign sends signing invitations, codes and signed documents through Resend. It needs a working setup before anyone can sign.',
+        'OpenSign sends signing invitations, codes and signed documents by email. It needs a working setup before anyone can sign.',
       )}
       wide
     >
       <Steps step={2} />
       <form onSubmit={submit} className="grid gap-4">
         <FormError message={error} />
-        <Field
-          label={t('Resend API Key')}
-          htmlFor="apiKey"
-          hint={values.apiKey ? t('A key is saved. Leave empty to keep it.') : t('Create one at resend.com with permission to send email.')}
-        >
-          <Input
-            id="apiKey"
-            type="password"
-            autoComplete="off"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="re_..."
-            className="font-mono"
-          />
-        </Field>
+        <Tabs value={chosen} onValueChange={setProvider}>
+          <TabsList className="w-full">
+            <TabsTrigger value="resend">Resend</TabsTrigger>
+            <TabsTrigger value="smtp">{t('SMTP Server')}</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {smtp ? (
+          <>
+            <div className="grid gap-4 sm:grid-cols-[1fr_7rem]">
+              <Field label={t('SMTP Server')} htmlFor="smtpHost">
+                <Input
+                  id="smtpHost"
+                  value={smtpHost ?? values.smtpHost ?? ''}
+                  onChange={(e) => setSmtpHost(e.target.value)}
+                  placeholder="smtp.example.com"
+                  autoComplete="off"
+                  required
+                />
+              </Field>
+              <Field label={t('Port')} htmlFor="smtpPort">
+                <Input
+                  id="smtpPort"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={smtpPort ?? String(values.smtpPort ?? 587)}
+                  onChange={(e) => setSmtpPort(e.target.value)}
+                  required
+                />
+              </Field>
+            </div>
+            <Field
+              label={t('Security')}
+              hint={
+                security === 'tls'
+                  ? t('TLS from the first byte, usually port 465.')
+                  : t('Upgrades to TLS before signing in, usually port 587.')
+              }
+            >
+              <Select
+                value={security}
+                onValueChange={(v) => {
+                  setSmtpSecurity(v);
+                  const port = smtpPort ?? String(values.smtpPort ?? 587);
+                  if (port === '587' || port === '465') setSmtpPort(v === 'tls' ? '465' : '587');
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="starttls">STARTTLS</SelectItem>
+                  <SelectItem value="tls">TLS</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label={t('Username')} htmlFor="smtpUsername" hint={t('Leave empty if the server needs no sign-in.')}>
+                <Input
+                  id="smtpUsername"
+                  autoComplete="off"
+                  value={smtpUsername ?? values.smtpUsername ?? ''}
+                  onChange={(e) => setSmtpUsername(e.target.value)}
+                />
+              </Field>
+              <Field
+                label={t('Password')}
+                htmlFor="smtpPassword"
+                hint={values.smtpPassword ? t('A password is saved. Leave empty to keep it.') : undefined}
+              >
+                <Input
+                  id="smtpPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  value={smtpPassword}
+                  onChange={(e) => setSmtpPassword(e.target.value)}
+                />
+              </Field>
+            </div>
+          </>
+        ) : (
+          <Field
+            label={t('Resend API Key')}
+            htmlFor="apiKey"
+            hint={
+              values.apiKey
+                ? t('A key is saved. Leave empty to keep it.')
+                : tx('Create one in {link} with permission to send email.', {
+                    link: <ExternalLink href="https://resend.com/api-keys">Resend API Keys</ExternalLink>,
+                  })
+            }
+          >
+            <Input
+              id="apiKey"
+              type="password"
+              autoComplete="off"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="re_..."
+              className="font-mono"
+            />
+          </Field>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={t('From Address')} htmlFor="fromAddress" hint={t('On a domain you verified in Resend.')}>
+          <Field
+            label={t('From Address')}
+            htmlFor="fromAddress"
+            hint={
+              smtp
+                ? t('An address the server may send from.')
+                : tx('On a domain you {link}.', {
+                    link: <ExternalLink href="https://resend.com/domains">{t('verified in Resend')}</ExternalLink>,
+                  })
+            }
+          >
             <Input
               id="fromAddress"
               type="email"
