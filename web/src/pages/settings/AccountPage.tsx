@@ -295,7 +295,7 @@ function McpCard() {
                   {c.lastUsedAt ? ` · ${t('last used {date}', { date: formatDateTime(c.lastUsedAt) })}` : ''}
                 </div>
               </div>
-              <Button variant="ghost" className="text-destructive" onClick={() => revoke.mutate({ id: c.id })}>
+              <Button variant="danger" onClick={() => revoke.mutate({ id: c.id })}>
                 {t('Disconnect')}
               </Button>
             </li>

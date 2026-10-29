@@ -178,13 +178,7 @@ export function ConfirmButton({
           {icon}
         </IconButton>
       ) : (
-        <Button
-          type="button"
-          variant="ghost"
-          className="text-destructive hover:text-destructive"
-          onClick={() => setOpen(true)}
-          disabled={disabled}
-        >
+        <Button type="button" variant="danger" onClick={() => setOpen(true)} disabled={disabled}>
           {label}
         </Button>
       )}

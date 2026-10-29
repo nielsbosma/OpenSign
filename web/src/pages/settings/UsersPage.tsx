@@ -202,7 +202,7 @@ export function UsersPage() {
                     {i.role} · expires {formatDate(i.expiresAt)}
                   </div>
                 </div>
-                <Button variant="ghost" className="text-destructive" onClick={() => revoke.mutate({ id: i.id })}>
+                <Button variant="danger" onClick={() => revoke.mutate({ id: i.id })}>
                   {t('Revoke')}
                 </Button>
               </li>

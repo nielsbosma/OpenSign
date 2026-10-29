@@ -638,7 +638,7 @@ export function SettingsGroup({ group }: { group: Group }) {
                         />
                       )}
                       {isSet && !locked && (
-                        <Button type="button" variant="ghost" className="text-destructive" onClick={() => set(f.key, '')}>
+                        <Button type="button" variant="danger" onClick={() => set(f.key, '')}>
                           {t('Clear')}
                         </Button>
                       )}
@@ -674,7 +674,7 @@ export function SettingsGroup({ group }: { group: Group }) {
                         }}
                       />
                       {!!current && !locked && (
-                        <Button type="button" variant="ghost" className="text-destructive" onClick={() => set(f.key, '')}>
+                        <Button type="button" variant="danger" onClick={() => set(f.key, '')}>
                           {t('Clear')}
                         </Button>
                       )}
