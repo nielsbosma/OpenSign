@@ -46,7 +46,8 @@ Tools carry the standard hints, so clients can ask before running them:
 
 | Area | Tools |
 | --- | --- |
-| Documents | `documents_list`, `documents_counts`, `documents_get`, `documents_create`, `documents_upload`, `documents_upload_url`, `documents_remove_file` ◆, `documents_update`, `documents_set_parties`, `documents_set_fields`, `documents_detect_fields` ↗, `documents_set_review_links`, `documents_check`, `documents_auth_methods`, `documents_signing_preview`, `documents_send` ↗, `documents_remind` ↗, `documents_cancel` ◆, `documents_delete` ◆, `documents_share`, `documents_unshare` ◆, `documents_signing_link`, `documents_download`, `documents_download_url`, `documents_verify`, `documents_legal_hold` ◆, `documents_move`, `documents_archive` |
+| Documents | `documents_list`, `documents_counts`, `documents_get`, `documents_create`, `documents_upload`, `documents_upload_url`, `documents_replace_file`, `documents_remove_file` ◆, `documents_update`, `documents_set_parties`, `documents_set_fields`, `documents_detect_fields` ↗, `documents_set_review_links`, `documents_check`, `documents_auth_methods`, `documents_signing_preview`, `documents_send` ↗, `documents_remind` ↗, `documents_cancel` ◆, `documents_delete` ◆, `documents_share`, `documents_unshare` ◆, `documents_signing_link`, `documents_download`, `documents_download_url`, `documents_verify`, `documents_legal_hold` ◆, `documents_move`, `documents_archive`, `documents_values`, `documents_export` |
+| Templates | `templates_versions`, `templates_version`, `templates_compare`, `templates_save_version`, `templates_restore` |
 | Folders | `folders_list`, `folders_create`, `folders_update`, `folders_delete` ◆ |
 | AI review | `documents_review` ↗, `documents_latest_review`, `ai_status`, `ai_usage`, `ai_models` ↗, `ai_test` ↗ |
 | Bulk send | `bulk_preview`, `bulk_start` ↗, `bulk_list`, `bulk_get`, `bulk_cancel` ◆ |

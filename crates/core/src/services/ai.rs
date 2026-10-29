@@ -369,7 +369,7 @@ impl Service for Review {
             ));
         }
         let setup = setup_checks(conn, document.id).await?;
-        let (_, pdf) = super::documents::preview_pdf(ctx, document.id).await?;
+        let (_, pdf) = super::documents::preview_pdf(ctx, document.id, None).await?;
         let pages = tokio::task::spawn_blocking(move || opensign_pdf::extract_text(&pdf))
             .await
             .map_err(AppError::internal)?

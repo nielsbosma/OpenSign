@@ -15,6 +15,7 @@ import { formatDate, STATUS_LABELS, STATUS_TONES } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { RecentBulkSends } from './BulkSendPage';
+import { ExportDataButton, ExportDataSubmenu } from './ExportData';
 import { dragDocuments, FolderSelect, FolderTree, folderPath, MoveToSubmenu } from './Folders';
 import { NewDocumentDialog } from './NewDocumentDialog';
 
@@ -96,16 +97,23 @@ export function DocumentsPage({ templates }: { templates: boolean }) {
         description={templates ? t('Reusable documents with parties and fields set up in advance.') : undefined}
         help={templates ? 'templates' : 'documents'}
         actions={
-          canChange && (
-            <Button
-              onClick={() =>
-                templates ? createTemplate.mutate({ title: t('Untitled Template'), isTemplate: true, folderId }) : setCreating(true)
-              }
-              disabled={createTemplate.isPending}
-            >
-              <Plus /> {templates ? t('New Template') : t('New Document')}
-            </Button>
-          )
+          <>
+            {!templates && can('documents.export') && (
+              <ExportDataButton
+                filter={{ status: filter === 'all' || archived ? null : filter, search: search.trim() || null, folderId, archived }}
+              />
+            )}
+            {canChange && (
+              <Button
+                onClick={() =>
+                  templates ? createTemplate.mutate({ title: t('Untitled Template'), isTemplate: true, folderId }) : setCreating(true)
+                }
+                disabled={createTemplate.isPending}
+              >
+                <Plus /> {templates ? t('New Template') : t('New Document')}
+              </Button>
+            )}
+          </>
         }
       />
       <div className="grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)]">
@@ -171,6 +179,7 @@ export function DocumentsPage({ templates }: { templates: boolean }) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
                   <MoveToSubmenu folders={allFolders} onMove={(target) => moveTo([...selected], target)} />
+                  {!templates && can('documents.export') && <ExportDataSubmenu filter={{ ids: [...selected] }} />}
                   {archived ? (
                     <DropdownMenuItem onSelect={() => archive.mutate({ ids: [...selected], archived: false })}>
                       <ArchiveRestore /> {t('Restore')}

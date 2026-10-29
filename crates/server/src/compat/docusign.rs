@@ -311,7 +311,7 @@ async fn fill(api: &Api, id: Uuid, body: &Value) -> Result<(), AppError> {
         first_page.insert(key, page);
         page += uploaded["pages"].as_u64().unwrap_or(1) as usize;
     }
-    let (_, combined) = opensign_core::services::documents::preview_pdf(&api.ctx, id).await?;
+    let (_, combined) = opensign_core::services::documents::preview_pdf(&api.ctx, id, None).await?;
     let sizes = super::page_sizes(&combined)?;
 
     let recipients = &body["recipients"];
@@ -535,6 +535,58 @@ async fn recipients(State(state): State<AppState>, Path((_account, id)): Path<(S
     reply(&api, result, StatusCode::OK)
 }
 
+fn form_value(value: &Value) -> String {
+    match value {
+        Value::Null => String::new(),
+        Value::String(s) => s.clone(),
+        Value::Array(items) => items.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(", "),
+        other => other.to_string(),
+    }
+}
+
+/// `GET .../envelopes/{id}/form_data`: what the recipients filled in, from `documents.values`.
+async fn form_data(State(state): State<AppState>, Path((_account, id)): Path<(String, String)>, request: Request) -> Response {
+    let (api, _) = match start(&state, request).await {
+        Ok(v) => v,
+        Err(r) => return *r,
+    };
+    let result = async {
+        let id = uuid(&id, "Envelope")?;
+        let doc = api.document(id).await?;
+        let data = api.call("documents.values", json!({ "id": id })).await?;
+        let ids = recipient_ids(&doc);
+        let fields = data["fields"].as_array().cloned().unwrap_or_default();
+        let entry = |f: &Value| json!({ "name": f["key"], "value": form_value(&f["value"]) });
+        let recipients: Vec<Value> = data["parties"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .enumerate()
+            .map(|(n, p)| {
+                let party_id = p["id"].as_str().unwrap_or_default();
+                json!({
+                    "recipientId": ids.get(party_id).cloned().unwrap_or_else(|| (n + 1).to_string()),
+                    "recipientIdGuid": party_id,
+                    "name": p["name"],
+                    "email": p["email"],
+                    "SignedTime": p["signedAt"],
+                    "DeclinedTime": p["declinedAt"],
+                    "formData": fields.iter().filter(|f| f["partyId"] == p["id"]).map(entry).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        Ok(json!({
+            "envelopeId": doc["id"],
+            "status": envelope_status(&doc),
+            "sentDateTime": doc["sentAt"],
+            "formData": fields.iter().map(entry).collect::<Vec<_>>(),
+            "recipientFormData": recipients,
+        }))
+    }
+    .await;
+    reply(&api, result, StatusCode::OK)
+}
+
 async fn documents(State(state): State<AppState>, Path((_account, id)): Path<(String, String)>, request: Request) -> Response {
     let (api, _) = match start(&state, request).await {
         Ok(v) => v,
@@ -632,6 +684,7 @@ pub fn router() -> Router<AppState> {
         .route("/accounts/{account}/envelopes", post(create).get(list_envelopes).layer(limit))
         .route("/accounts/{account}/envelopes/{id}", get(get_envelope).put(update_envelope))
         .route("/accounts/{account}/envelopes/{id}/recipients", get(recipients))
+        .route("/accounts/{account}/envelopes/{id}/form_data", get(form_data))
         .route("/accounts/{account}/envelopes/{id}/documents", get(documents))
         .route("/accounts/{account}/envelopes/{id}/documents/{document}", get(document_pdf))
         .route("/accounts/{account}/envelopes/{id}/views/recipient", post(recipient_view))

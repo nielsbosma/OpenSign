@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ChevronDown,
   ChevronUp,
+  Copy,
   Download,
   Eye,
   Folder,
@@ -14,6 +15,7 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  RefreshCw,
   Scale,
   Send,
   Trash2,
@@ -48,6 +50,7 @@ import {
   fetchPdf,
   type PartyInput,
   type PartyView,
+  replaceFile,
   type SignerLink,
   type SuggestedField,
   uploadFile,
@@ -71,16 +74,18 @@ import { cn } from '@/lib/utils';
 import { ActivityPanel } from './ActivityPanel';
 import { BulkSendDialog } from './BulkSendDialog';
 import { StatusBadge } from './DocumentsPage';
+import { ExportDataSubmenu } from './ExportData';
 import { FieldLayer } from './FieldLayer';
 import { FieldSettings } from './FieldSettings';
 import { folderPath, MoveToSubmenu } from './Folders';
-import { clamp, type EditableField, FIELD_KINDS, newGroupKey, partyColor, SENDER_KINDS, toEditable, toInput } from './fields';
+import { clamp, type EditableField, FIELD_KINDS, kindLabel, newGroupKey, partyColor, SENDER_KINDS, toEditable, toInput } from './fields';
 import { FileDrop } from './NewDocumentDialog';
 import { PartyDialog, partyToInput } from './PartyDialog';
 import { PartyPhoto } from './PartyPhoto';
 import { Checks, ReviewPanel } from './ReviewPanel';
 import { SigningPreviewDialog } from './SigningPreviewDialog';
 import { announceUpload, DetectButton, SuggestionBar, SuggestionLayer } from './SuggestedFields';
+import { TemplateHistoryDialog } from './TemplateHistory';
 
 function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -98,7 +103,7 @@ function useFields(doc: DocumentView | undefined, editable: boolean) {
   const [fields, setFields] = useState<EditableField[]>([]);
   const loaded = useRef<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const save = useApiMutation('documents.set_fields', { invalidates: ['documents.check'] });
+  const save = useApiMutation('documents.set_fields', { invalidates: ['documents.check', 'templates.versions'] });
 
   useEffect(() => {
     if (doc && loaded.current !== doc.id) {
@@ -413,7 +418,7 @@ function LinksDialog({ links, onClose }: { links: SignerLink[]; onClose: () => v
 }
 
 function DetailsSection({ doc }: { doc: DocumentView }) {
-  const update = useApiMutation('documents.update', { invalidates: ['documents.'] });
+  const update = useApiMutation('documents.update', { invalidates: ['documents.', 'templates.versions'] });
   const [message, setMessage] = useState(doc.message);
   const [externalId, setExternalId] = useState(doc.externalId ?? '');
   const [reminder, setReminder] = useState(String(doc.reminderDays ?? 0));
@@ -475,7 +480,7 @@ function DetailsSection({ doc }: { doc: DocumentView }) {
 
 function EditableTitle({ doc, editable }: { doc: DocumentView; editable: boolean }) {
   const [title, setTitle] = useState(doc.title);
-  const update = useApiMutation('documents.update', { invalidates: ['documents.'] });
+  const update = useApiMutation('documents.update', { invalidates: ['documents.', 'templates.versions'] });
   useEffect(() => setTitle(doc.title), [doc.title]);
   if (!editable) return <h1 className="truncate text-xl font-semibold tracking-tight">{doc.title}</h1>;
   return (
@@ -492,8 +497,37 @@ function EditableTitle({ doc, editable }: { doc: DocumentView; editable: boolean
 
 const FIELD_DRAG_TYPE = 'application/x-opensign-field';
 
+function ReplaceFileButton({ name, busy, onFile }: { name: string; busy: boolean; onFile: (file: File) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <input
+        ref={input}
+        type="file"
+        hidden
+        accept=".pdf,.docx,.doc,.odt,.rtf,application/pdf"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (file) onFile(file);
+        }}
+      />
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={t('Replace {name}', { name })}
+        title={t('Replace with a new version of the file. Fields stay where they are.')}
+        disabled={busy}
+        onClick={() => input.current?.click()}
+      >
+        <RefreshCw />
+      </Button>
+    </>
+  );
+}
+
 function AiReviewSection({ doc }: { doc: DocumentView }) {
-  const set = useApiMutation('documents.set_review_links', { invalidates: ['documents.'] });
+  const set = useApiMutation('documents.set_review_links', { invalidates: ['documents.', 'templates.versions'] });
   return (
     <Section title={t('AI Review by Signers')}>
       <label className="flex items-center justify-between gap-3 rounded-md bg-muted/50 px-3 py-2">
@@ -540,10 +574,12 @@ export function DocumentPage() {
   const [holdReason, setHoldReason] = useState('');
   const [showActivity, setShowActivity] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const versions = useApi('templates.versions', { templateId: id }, { enabled: !!doc?.isTemplate });
 
-  const setParties = useApiMutation('documents.set_parties', { invalidates: ['documents.'] });
-  const setSequential = useApiMutation('documents.update', { invalidates: ['documents.'] });
-  const removeFile = useApiMutation('documents.remove_file', { invalidates: ['documents.'] });
+  const setParties = useApiMutation('documents.set_parties', { invalidates: ['documents.', 'templates.versions'] });
+  const setSequential = useApiMutation('documents.update', { invalidates: ['documents.', 'templates.versions'] });
+  const removeFile = useApiMutation('documents.remove_file', { invalidates: ['documents.', 'templates.versions'] });
   const detect = useApiMutation('documents.detect_fields', {
     onSuccess: (out) => {
       setSuggestions(out.suggestions);
@@ -557,7 +593,17 @@ export function DocumentPage() {
     invalidates: ['documents.list'],
     onSuccess: () => navigate(doc?.isTemplate ? '/templates' : '/documents'),
   });
-  const fromTemplate = useApiMutation('documents.create', { onSuccess: (d) => navigate(`/documents/${d.id}`) });
+  const fromTemplate = useApiMutation('documents.create', {
+    invalidates: ['templates.'],
+    onSuccess: (d) => navigate(`/documents/${d.id}`),
+  });
+  const duplicate = useApiMutation('documents.create', {
+    invalidates: ['documents.list', 'templates.'],
+    onSuccess: (d) => {
+      toast.success(t('Template duplicated'));
+      navigate(`/documents/${d.id}`);
+    },
+  });
   const move = useApiMutation('documents.move', { invalidates: ['documents.', 'folders.'], onSuccess: () => toast.success(t('Moved')) });
   const archive = useApiMutation('documents.archive', {
     invalidates: ['documents.', 'folders.'],
@@ -683,6 +729,31 @@ export function DocumentPage() {
     }
   };
 
+  const replace = async (fileId: string, file: File) => {
+    setUploading(true);
+    try {
+      await flush();
+      const out = await replaceFile(doc.id, fileId, file);
+      announceUpload(file.name, out);
+      if (out.moved.length)
+        toast.warning(
+          t('{count} fields were on pages the new file does not have and are now on its last page: {fields}', {
+            count: out.moved.length,
+            fields: out.moved.map((m) => m.label || kindLabel(m.kind)).join(', '),
+          }),
+          { duration: 15000 },
+        );
+      else if (!out.fields.textTags) toast.success(t('File replaced'));
+      const next = await query.refetch();
+      if (next.data) reload(next.data);
+      void versions.refetch();
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const download = async (version: 'signed' | 'original') => {
     try {
       const bytes = await fetchPdf(`/api/documents/${doc.id}/file?version=${version}`);
@@ -747,6 +818,26 @@ export function DocumentPage() {
                 : t('Created {date}', { date: formatDateTime(doc.createdAt) })}
             </span>
             {doc.expiresAt && pending && <span>· Expires {formatDateTime(doc.expiresAt)}</span>}
+            {doc.isTemplate && versions.data && (
+              <button type="button" className="hover:text-foreground hover:underline" onClick={() => setShowHistory(true)}>
+                ·{' '}
+                {versions.data.versions.length === 0
+                  ? t('No versions yet')
+                  : versions.data.changed
+                    ? t('Changed since version {number}', { number: versions.data.versions[0]!.number })
+                    : t('Version {number}', { number: versions.data.versions[0]!.number })}
+              </button>
+            )}
+            {doc.templateId && doc.templateTitle && (
+              <span className="inline-flex min-w-0 items-center gap-1">
+                ·{' '}
+                <Link to={`/documents/${doc.templateId}`} className="truncate hover:text-foreground hover:underline">
+                  {doc.templateVersion
+                    ? t('From {template}, version {number}', { template: doc.templateTitle, number: doc.templateVersion })
+                    : t('From {template}', { template: doc.templateTitle })}
+                </Link>
+              </span>
+            )}
             {doc.legalHold && (
               <span className="inline-flex items-center gap-1 font-medium text-warning" title={doc.legalHoldReason ?? undefined}>
                 · <Scale className="size-3.5" /> {t('Legal Hold')}
@@ -815,10 +906,39 @@ export function DocumentPage() {
               <DropdownMenuItem onSelect={() => setShowActivity(true)}>
                 <History /> {t('Activity')}
               </DropdownMenuItem>
+              {doc.isTemplate && (
+                <DropdownMenuItem
+                  onSelect={() => {
+                    flush();
+                    setShowHistory(true);
+                  }}
+                >
+                  <History /> {t('Version History')}
+                </DropdownMenuItem>
+              )}
+              {doc.isTemplate && can('templates.manage') && (
+                <DropdownMenuItem
+                  disabled={duplicate.isPending}
+                  onSelect={() => {
+                    flush();
+                    duplicate.mutate({
+                      title: t('{title} (copy)', { title: doc.title }),
+                      templateId: doc.id,
+                      isTemplate: true,
+                      folderId: doc.folderId ?? null,
+                    });
+                  }}
+                >
+                  <Copy /> {t('Duplicate')}
+                </DropdownMenuItem>
+              )}
               {doc.status !== 'draft' && (
                 <DropdownMenuItem onSelect={() => download('original')}>
                   <Download /> {t('Original PDF')}
                 </DropdownMenuItem>
+              )}
+              {can('documents.export') && (
+                <ExportDataSubmenu filter={doc.isTemplate ? { templateId: doc.id, archived: null } : { ids: [doc.id], archived: null }} />
               )}
               {pending && doc.canEdit && (
                 <DropdownMenuItem onSelect={() => setCanceling(true)} className="text-destructive">
@@ -1049,6 +1169,7 @@ export function DocumentPage() {
                       <li key={f.id} className="flex items-center gap-2">
                         <span className="min-w-0 flex-1 truncate">{f.name}</span>
                         <span className="text-xs text-muted-foreground">{formatBytes(f.sizeBytes)}</span>
+                        <ReplaceFileButton name={f.name} busy={uploading} onFile={(file) => replace(f.id, file)} />
                         <Button
                           variant="ghost"
                           size="icon-sm"
@@ -1099,6 +1220,17 @@ export function DocumentPage() {
       />
       <SendDialog doc={doc} open={sending} onOpenChange={setSending} onSent={setLinks} />
       <SigningPreviewDialog doc={doc} open={previewing} onOpenChange={setPreviewing} />
+      {doc.isTemplate && (
+        <TemplateHistoryDialog
+          doc={doc}
+          open={showHistory}
+          onOpenChange={setShowHistory}
+          onRestored={(restored) => {
+            reload(restored);
+            setShowHistory(false);
+          }}
+        />
+      )}
       {doc.isTemplate && <BulkSendDialog templateId={doc.id} templateTitle={doc.title} open={bulkSending} onOpenChange={setBulkSending} />}
       <LinksDialog links={links} onClose={() => setLinks([])} />
       <Dialog open={showActivity} onOpenChange={setShowActivity}>

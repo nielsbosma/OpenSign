@@ -43,6 +43,8 @@ The bulk send page shows each row with its recipient, its status and a link to t
 
 **Stop** skips the rows that are not sent yet. Documents already sent stay out for signing; cancel those one by one if needed.
 
+**Export Data** downloads what every recipient filled in, one row per document, as Excel, CSV or JSON. See [Exporting filled-in data](data-export.md).
+
 ## Privacy
 
 Row data is stored encrypted while the bulk send runs, and dropped from each row once its document is sent.

@@ -41,6 +41,7 @@ At each request a key gets the **intersection** of its scopes and its owner's cu
 | `documents.create` | Upload documents and send them for signing |
 | `documents.read_all` | See every document |
 | `documents.manage_all` | Change, cancel and delete any document |
+| `documents.export` | Export filled-in values of many documents |
 | `documents.legal_hold` | Place and release legal holds |
 | `templates.manage` | Create and change shared templates |
 | `webhooks.manage` | Add and remove webhooks |
@@ -147,13 +148,14 @@ Send answers `{ "document": {…}, "links": [{ "partyId", "name", "url" }] }`. T
 | Method | Path | |
 | --- | --- | --- |
 | GET | `/documents` | List. Query: `status`, `search` (title or exact external id), `templates`, `folderId`, `archived`, `limit`, `offset`. Archived ones are listed only with `archived=true` |
-| POST | `/documents` | Create a draft or template. Body: `title`, `message`, `language`, `templateId`, `isTemplate`, `sequential`, `externalId`, `metadata`, `folderId` |
+| POST | `/documents` | Create a draft or template. Body: `title`, `message`, `language`, `templateId`, `isTemplate`, `sequential`, `externalId`, `metadata`, `folderId`. A document made from a template has `templateId` and `templateVersion`; `isTemplate` with `templateId` duplicates a template |
 | GET | `/templates` | List templates |
 | GET | `/documents/{id}` | One document with files, parties and fields |
 | PATCH | `/documents/{id}` | Change `title`, `message`, `language`, `sequential`, `expiresAt`, `reminderDays` (0 turns reminders off), `externalId`, `metadata` |
 | DELETE | `/documents/{id}` | Delete a document or template that is not pending, with its files |
 | POST | `/documents/{id}/files` | Upload one file as multipart `file`: PDF, .docx, .doc, .odt or .rtf. [Text tags and form fields](text-tags.md) become fields unless `textTags` or `formFields` is `false` |
 | DELETE | `/documents/{documentId}/files/{fileId}` | Remove a file from a draft |
+| POST | `/documents/{id}/files/{fileId}/replace` | Replace a file with a new one (multipart `file`) without redoing its fields. Returns `moved`: fields that were on pages the new file lacks, now on its last page |
 | PUT | `/documents/{documentId}/parties` | Replace the party list. Parties left out are removed with their fields; pass `id` to keep one |
 | PUT | `/documents/{documentId}/fields` | Replace the fields |
 | POST | `/documents/{id}/send` | Send for signing. Optional `expiresAt` |
@@ -163,7 +165,14 @@ Send answers `{ "document": {…}, "links": [{ "partyId", "name", "url" }] }`. T
 | DELETE | `/documents/{id}/shares/{userId}` | Stop sharing |
 | POST | `/documents/{documentId}/parties/{partyId}/signing-link` | Issue a signing link to hand over. `rotate: true` revokes earlier links first; `redirectUrl` sends the party to your site afterwards (see [Embedded signing](embedding.md#redirect-after-signing)) |
 | PUT | `/documents/{id}/legal-hold` | Body `hold`, `reason`. See [Retention and legal hold](retention.md) |
+| GET | `/documents/{id}/values` | What the parties filled in, typed and keyed by field label. See [Exporting filled-in data](data-export.md#from-the-api) |
+| POST | `/exports` | Export many documents' values. Body: `format` (`csv`, `xlsx`, `json`), `ids`, `templateId`, `bulkId`, `status`, `search`, `folderId`, `archived`. Needs `documents.export` |
 | GET | `/documents/{id}/file` | The PDF. `version=signed` (sealed, completed only) or `original` (as sent) |
+| GET | `/templates/{templateId}/versions` | A template's versions, newest first, and `changed`: whether it changed since the newest |
+| POST | `/templates/{templateId}/versions` | Save the template as a new version. Body: `note` |
+| GET | `/templates/{templateId}/versions/{number}` | One version: its settings, files, parties and fields, and the documents made from it |
+| GET | `/templates/{templateId}/compare` | What changed between two versions. Query: `from`, `to` (leave one out for the template as it is now) |
+| POST | `/templates/{templateId}/versions/{number}/restore` | Put the template back to a version; the restore is saved as a new version |
 | POST | `/documents/move` | Move documents or templates to a folder. Body: `ids`, `folderId` (`null` for none) |
 | POST | `/documents/archive` | Archive finished documents or templates, or restore them. Body: `ids`, `archived` |
 | GET | `/folders` | List folders. Query: `scope` (`documents` or `templates`) |

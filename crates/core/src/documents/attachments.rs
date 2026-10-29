@@ -5,7 +5,6 @@ use opensign_pdf::Limits;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sqlx::PgConnection;
-use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::error::{AppError, Result, bad_request};
@@ -130,24 +129,6 @@ pub async fn photo_parties(conn: &mut PgConnection, document_id: Uuid) -> Result
         .bind(document_id)
         .fetch_all(&mut *conn)
         .await?)
-}
-
-/// Copies a template's requests to a new document, without any uploads.
-pub async fn copy(conn: &mut PgConnection, to: Uuid, parties: &HashMap<Uuid, Uuid>, from: Uuid) -> Result<()> {
-    for r in for_document(conn, from).await? {
-        let Some(party) = parties.get(&r.party_id) else { continue };
-        sqlx::query(
-            "insert into attachment_requests (id, document_id, party_id, position, kind, name, description, required)
-             select $1, $2, $3, position, kind, name, description, required from attachment_requests where id = $4",
-        )
-        .bind(Uuid::now_v7())
-        .bind(to)
-        .bind(party)
-        .bind(r.id)
-        .execute(&mut *conn)
-        .await?;
-    }
-    Ok(())
 }
 
 /// A clean copy of an upload: PDFs are rewritten without active content, images are decoded and

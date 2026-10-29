@@ -32,6 +32,7 @@ Roles are sets of permissions. Every check happens on the server, whichever way 
 | `ai.use` | Use the AI assistant and document review | ✓ | ✓ | ✓ | | |
 | `documents.read_all` | See every document | ✓ | ✓ | | ✓ | |
 | `documents.manage_all` | Change, cancel and delete any document | ✓ | ✓ | | | |
+| `documents.export` | Export filled-in values as CSV, Excel or JSON. See [Exporting filled-in data](data-export.md) | ✓ | ✓ | ✓ | ✓ | |
 | `documents.legal_hold` | Place and release legal holds | ✓ | ✓ | | | |
 | `templates.manage` | Create and change shared templates | ✓ | ✓ | | | |
 | `webhooks.manage` | Add and remove webhooks | ✓ | ✓ | | | |

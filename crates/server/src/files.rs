@@ -94,21 +94,40 @@ pub async fn document_file(State(state): State<AppState>, Path(id): Path<Uuid>, 
     }
 }
 
-/// `GET /api/documents/<id>/preview`: the combined PDF the editor places fields on.
-pub async fn preview(State(state): State<AppState>, Path(id): Path<Uuid>, parts: Parts) -> Response {
+#[derive(Deserialize)]
+pub struct PreviewQuery {
+    version: Option<i32>,
+}
+
+/// `GET /api/documents/<id>/preview[?version=<template version>]`: the combined PDF the editor places fields on.
+pub async fn preview(State(state): State<AppState>, Path(id): Path<Uuid>, Query(q): Query<PreviewQuery>, parts: Parts) -> Response {
     let caller = match caller(&state, &parts, Surface::Web, None).await {
         Ok(c) => c,
         Err(r) => return *r,
     };
     let result = async {
         caller.ctx.actor()?;
-        docs::preview_pdf(&caller.ctx, id).await
+        docs::preview_pdf(&caller.ctx, id, q.version).await
     }
     .await;
     match result {
         Ok((name, body)) => pdf(&name, body),
         Err(e) => ApiError(e, Some(caller.request_id)).into_response(),
     }
+}
+
+async fn multipart_file(state: &AppState, parts: Parts, body: Body) -> Result<(String, Vec<u8>), opensign_core::AppError> {
+    let mut multipart = Multipart::from_request(Request::from_parts(parts, body), state)
+        .await
+        .map_err(|_| bad_request("Send the file as multipart/form-data"))?;
+    while let Ok(Some(field)) = multipart.next_field().await {
+        if field.name() == Some("file") {
+            let name = field.file_name().unwrap_or("document.pdf").to_string();
+            let bytes = field.bytes().await.map_err(|_| bad_request("The upload was interrupted or is too large"))?;
+            return Ok((name, bytes.to_vec()));
+        }
+    }
+    Err(bad_request("Attach the document as the `file` field"))
 }
 
 /// `POST /api/documents/<id>/files`, multipart with one `file` part.
@@ -153,6 +172,28 @@ pub async fn upload(State(state): State<AppState>, Path(id): Path<Uuid>, request
     match docs::add_file(&caller.ctx, id, &name, bytes, options).await {
         Ok(output) => Json(output).into_response(),
         Err(e) => fail(e),
+    }
+}
+
+/// `POST /api/documents/<id>/files/<file id>/replace`, multipart with one `file` part.
+pub async fn replace(State(state): State<AppState>, Path((id, file_id)): Path<(Uuid, Uuid)>, request: Request) -> Response {
+    let (parts, body) = request.into_parts();
+    let caller = match caller(&state, &parts, Surface::Web, Some(security::UPLOAD)).await {
+        Ok(c) => c,
+        Err(r) => return *r,
+    };
+    let result = async {
+        let (name, bytes) = multipart_file(&state, parts, body).await?;
+        caller.ctx.actor()?;
+        if !caller.ctx.can(opensign_core::Permission::DocumentsCreate) {
+            return Err(opensign_core::error::forbidden());
+        }
+        docs::replace_file(&caller.ctx, id, file_id, &name, bytes).await
+    }
+    .await;
+    match result {
+        Ok(output) => Json(output).into_response(),
+        Err(e) => ApiError(e, Some(caller.request_id)).into_response(),
     }
 }
 
