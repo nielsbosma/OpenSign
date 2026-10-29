@@ -9,7 +9,8 @@ import { Textarea } from '@/components/ui/textarea';
 import type { PartyView, Validation } from '@/lib/api';
 import { DATE_FORMATS, display, NUMBER_FORMATS, picked, takesPattern } from '@/lib/field-values';
 import { msg, t } from '@/lib/i18n';
-import { type EditableField, kindLabel, SENDER_KINDS, VALUE_KINDS } from './fields';
+import { ConditionsEditor, FormulaEditor } from './FieldLogic';
+import { type EditableField, kindLabel, renameReferences, SENDER_KINDS, VALUE_KINDS } from './fields';
 
 /** Patterns offered in the editor. They work the same in the browser and on the server. */
 const PRESETS: { key: string; label: string; pattern: string }[] = [
@@ -84,11 +85,28 @@ export function FieldSettings({
         <Input
           id="field-label"
           value={field.label ?? ''}
-          onChange={(e) => (kind === 'radio' ? patchAll : patch)({ label: e.target.value })}
+          onChange={(e) => {
+            const label = e.target.value;
+            const renamed = renameReferences(fields, field.label ?? '', label);
+            onChange(renamed.map((f) => (group.some((g) => g.key === f.key) ? { ...f, label } : f)));
+          }}
         />
       </Row>
 
       {(kind === 'select' || kind === 'multiselect') && <OptionsEditor field={field} onChange={patch} />}
+
+      {kind === 'formula' && (
+        <>
+          <FormulaEditor field={field} fields={fields} onChange={(formula) => patch({ formula })} />
+          <FormatPicker
+            value={field.format}
+            formats={NUMBER_FORMATS}
+            none={t('As Computed')}
+            sample={(f) => display('number', f, '1234.5')}
+            onChange={(format) => patch({ format })}
+          />
+        </>
+      )}
 
       {kind === 'radio' && (
         <>
@@ -139,7 +157,7 @@ export function FieldSettings({
         <DefaultValue field={field} label={forSender ? t('Value') : t('Default Value')} onChange={(value) => patch({ value })} />
       )}
 
-      {!automatic && !forSender && (
+      {!automatic && !forSender && kind !== 'formula' && (
         <ToggleRow
           label={kind === 'radio' ? t('Answer Required') : t('Required')}
           checked={field.required !== false}
@@ -229,6 +247,7 @@ export function FieldSettings({
           />
         </Row>
       )}
+      <ConditionsEditor field={field} fields={fields} onChange={(conditions) => patchAll({ conditions })} />
     </section>
   );
 }

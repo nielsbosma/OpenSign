@@ -16,6 +16,7 @@ use crate::audit::{Entry, audit};
 use crate::auth::normalize_email;
 use crate::context::Ctx;
 use crate::documents::attachments::{self, AttachmentRequestInput};
+use crate::documents::logic::{self, Condition, Owner};
 use crate::documents::values::{self, Spec, Validation};
 use crate::documents::{
     AuthMethod, Delivery, DocumentRow, DocumentView, FieldKind, Need, PartyRole, PartyRow, PartyView, VISIBLE, current_turn,
@@ -387,8 +388,8 @@ async fn copy_template(ctx: &Ctx, conn: &mut PgConnection, from: Uuid, to: Uuid)
     attachments::copy(conn, to, &ids, from).await?;
     for f in crate::documents::fields(conn, from).await? {
         sqlx::query(
-            "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)",
+            "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only, conditions, formula)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)",
         )
         .bind(Uuid::now_v7())
         .bind(to)
@@ -407,6 +408,8 @@ async fn copy_template(ctx: &Ctx, conn: &mut PgConnection, from: Uuid, to: Uuid)
         .bind(&f.format)
         .bind(&f.group_key)
         .bind(f.read_only)
+        .bind(&f.conditions)
+        .bind(&f.formula)
         .execute(&mut *conn)
         .await?;
     }
@@ -481,7 +484,7 @@ async fn add_found_fields(
     let mut groups = Groups::new();
     for f in &existing {
         if let Ok(input) = FieldInput::from_row(f) {
-            let _ = clean_field(&input, &all, &mut groups);
+            let _ = clean_field(&input, &all, false, &mut groups);
         }
     }
     let mut count = existing.len();
@@ -544,8 +547,10 @@ async fn add_found_fields(
             format: found.format.clone(),
             group_key: found.group_key.clone(),
             read_only: Some(found.read_only && found.value.is_some()),
+            conditions: Vec::new(),
+            formula: None,
         };
-        match clean_field(&input, &all, &mut groups) {
+        match clean_field(&input, &all, false, &mut groups) {
             Ok(field) => {
                 insert_field(conn, document_id, &field).await?;
                 count += 1;
@@ -1020,6 +1025,16 @@ pub struct FieldInput {
     pub group_key: Option<String>,
     /// The party sees the prefilled value but cannot change it.
     pub read_only: Option<bool>,
+    /// Show the field only when all of these hold. Each looks at another field by its label. A
+    /// party's field may look at their own fields, the sender's, and fields of parties who sign
+    /// earlier in order; a hidden field is never required and is left empty.
+    #[serde(default)]
+    pub conditions: Vec<Condition>,
+    /// For a `formula` field: the number it computes from other fields, which are named by label in
+    /// braces. `+ - * /`, brackets, comparisons (`= != < <= > >=`) and the functions round(x, decimals),
+    /// floor, ceil, abs, min, max, sum, if(condition, then, else), and, or, not and contains. Example:
+    /// `round({Hours} * {Rate} * 1.25, 2)`. The signer cannot change it; the server computes it when they sign.
+    pub formula: Option<String>,
 }
 
 impl FieldInput {
@@ -1043,6 +1058,8 @@ impl FieldInput {
             format: spec.format,
             group_key: f.group_key.clone(),
             read_only: Some(f.read_only),
+            conditions: f.conditions(),
+            formula: f.formula.clone(),
         })
     }
 }
@@ -1093,10 +1110,26 @@ pub(crate) struct CleanField {
     spec: Spec,
     group_key: Option<String>,
     read_only: bool,
+    owner: Owner,
+    conditions: Vec<Condition>,
+    formula: Option<String>,
+}
+
+impl CleanField {
+    fn item(&self) -> logic::Item<'_> {
+        logic::Item {
+            label: &self.label,
+            kind: self.kind,
+            value: self.value.as_deref(),
+            conditions: &self.conditions,
+            formula: self.formula.as_deref(),
+            format: self.spec.format.as_deref(),
+        }
+    }
 }
 
 /// Checks one field as `documents.set_fields` saves it, adding radio buttons to `groups`.
-pub(crate) fn clean_field(f: &FieldInput, all: &[PartyRow], groups: &mut Groups) -> Result<CleanField> {
+pub(crate) fn clean_field(f: &FieldInput, all: &[PartyRow], sequential: bool, groups: &mut Groups) -> Result<CleanField> {
     check_box(f)?;
     let party = match f.party_id {
         Some(id) => Some(all.iter().find(|p| p.id == id).ok_or_else(|| not_found("Party"))?),
@@ -1107,6 +1140,9 @@ pub(crate) fn clean_field(f: &FieldInput, all: &[PartyRow], groups: &mut Groups)
     }
     if (f.kind.is_upload() || f.kind == FieldKind::Radio) && !party.is_some_and(|p| p.must_act()) {
         return Err(bad_request("Image, file and radio fields belong to a party who signs or approves"));
+    }
+    if f.kind == FieldKind::Formula && party.is_some_and(|p| !p.must_act()) {
+        return Err(bad_request("A formula belongs to you or to a party who signs or approves"));
     }
     let label = f.label.as_deref().map(|l| clean_text(l, "A field label", 200)).transpose()?.unwrap_or_default();
     let spec = Spec {
@@ -1123,6 +1159,7 @@ pub(crate) fn clean_field(f: &FieldInput, all: &[PartyRow], groups: &mut Groups)
             return Err(bad_request("A checkbox value is true or false"));
         }
         _ if f.kind.is_upload() && value.is_some() => return Err(bad_request("Image and file fields are filled by the party")),
+        FieldKind::Formula => None,
         FieldKind::Checkbox | FieldKind::Signature => value,
         kind => match value {
             Some(v) => values::normalize(kind, &spec, &v)
@@ -1135,7 +1172,7 @@ pub(crate) fn clean_field(f: &FieldInput, all: &[PartyRow], groups: &mut Groups)
         && (f.party_id.is_none()
             || f.kind.is_upload()
             || f.kind.is_automatic()
-            || matches!(f.kind, FieldKind::Signature | FieldKind::Initials))
+            || matches!(f.kind, FieldKind::Signature | FieldKind::Initials | FieldKind::Formula))
     {
         return Err(bad_request("Only a party's fields that take a value can be read-only"));
     }
@@ -1163,19 +1200,33 @@ pub(crate) fn clean_field(f: &FieldInput, all: &[PartyRow], groups: &mut Groups)
         y: f.y,
         width: f.width,
         height: f.height,
-        required: f.required.unwrap_or(f.kind != FieldKind::Checkbox),
+        required: f.kind != FieldKind::Formula && f.required.unwrap_or(f.kind != FieldKind::Checkbox),
         label,
         value,
         spec,
         group_key: group_key.map(str::to_string),
         read_only,
+        owner: match party {
+            Some(p) => Owner::Party(p.id, sequential.then_some(p.sign_order)),
+            None => Owner::Sender,
+        },
+        conditions: f
+            .conditions
+            .iter()
+            .map(|c| Condition {
+                field: c.field.trim().to_string(),
+                op: c.op,
+                value: c.value.as_deref().map(str::trim).filter(|v| c.op.takes_value() && !v.is_empty()).map(str::to_string),
+            })
+            .collect(),
+        formula: f.formula.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string),
     })
 }
 
 pub(crate) async fn insert_field(conn: &mut PgConnection, document_id: Uuid, f: &CleanField) -> Result<()> {
     sqlx::query(
-        "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)",
+        "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only, conditions, formula)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)",
     )
     .bind(Uuid::now_v7())
     .bind(document_id)
@@ -1194,6 +1245,8 @@ pub(crate) async fn insert_field(conn: &mut PgConnection, document_id: Uuid, f: 
     .bind(&f.spec.format)
     .bind(&f.group_key)
     .bind(f.read_only)
+    .bind(serde_json::to_value(&f.conditions).map_err(AppError::internal)?)
+    .bind(&f.formula)
     .execute(&mut *conn)
     .await?;
     Ok(())
@@ -1207,7 +1260,7 @@ impl Service for SetFields {
     type Output = DocumentView;
     const META: Meta = Meta::mutation(
         "documents.set_fields",
-        "Place the fields of a draft, each assigned to a party: signatures, initials, text, numbers, dropdowns, multi-select lists, radio groups, checkboxes, phone numbers, date pickers, image and file uploads, and the automatic name, email, company and date of signing. Text fields take a pattern and length limits, numbers and dates a smallest and largest value and a format, each with an optional error text of your own.",
+        "Place the fields of a draft, each assigned to a party: signatures, initials, text, numbers, dropdowns, multi-select lists, radio groups, checkboxes, phone numbers, date pickers, image and file uploads, formulas, and the automatic name, email, company and date of signing. Text fields take a pattern and length limits, numbers and dates a smallest and largest value and a format, each with an optional error text of your own. Any field can be shown only when other fields hold given values, and a formula field computes a number from other fields.",
         Access::Permission(Permission::DocumentsCreate),
     );
 
@@ -1218,10 +1271,23 @@ impl Service for SetFields {
             return Err(bad_request(format!("A document can have at most {MAX_FIELDS} fields")));
         }
         let all = parties(conn, document.id).await?;
-        sqlx::query("delete from fields where document_id = $1").bind(document.id).execute(&mut *conn).await?;
         let mut groups = Groups::new();
+        let mut clean = Vec::with_capacity(input.fields.len());
         for f in &input.fields {
-            let field = clean_field(f, &all, &mut groups)?;
+            clean.push(clean_field(f, &all, document.sequential, &mut groups)?);
+        }
+        let items: Vec<logic::Item> = clean.iter().map(CleanField::item).collect();
+        let owners: Vec<Owner> = clean.iter().map(|f| f.owner).collect();
+        logic::check(&items, &owners)?;
+        // Formulas the sender fills in only use the sender's own fields, so they are known now.
+        let outcomes = logic::evaluate(&items);
+        drop(items);
+
+        sqlx::query("delete from fields where document_id = $1").bind(document.id).execute(&mut *conn).await?;
+        for (mut field, outcome) in clean.into_iter().zip(outcomes) {
+            if field.kind == FieldKind::Formula && field.owner == Owner::Sender {
+                field.value = outcome.value;
+            }
             insert_field(conn, document.id, &field).await?;
         }
         audit(ctx, conn, Entry::new("document.fields_set", "document", document.id).metadata(json!({ "count": input.fields.len() })))

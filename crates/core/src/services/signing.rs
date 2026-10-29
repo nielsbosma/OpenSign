@@ -16,6 +16,7 @@ use super::settings;
 use crate::audit::{Entry, audit};
 use crate::context::Ctx;
 use crate::documents::attachments::{self, AttachmentRequest};
+use crate::documents::logic;
 use crate::documents::values::{self, Spec};
 use crate::documents::{
     AuthMethod, DOCUMENT_COLUMNS, Delivery, DocumentRow, FIELD_COLUMNS, FieldKind, FieldRow, PartyRole, PartyRow, current_turn, fields,
@@ -151,7 +152,8 @@ pub struct SignerView {
     pub needs_authentication: Option<AuthMethod>,
     /// Set when the party must identify before signing.
     pub sign_authentication: Option<AuthMethod>,
-    /// The party's own fields, and the sender's prefilled text for context.
+    /// The party's own fields, the sender's prefilled text for context, and the fields of earlier
+    /// parties that the conditions and formulas of these look at.
     pub fields: Vec<FieldRow>,
     pub your_turn: bool,
     pub can_download: bool,
@@ -222,7 +224,10 @@ pub(crate) async fn signer_view(
         fields: if locked {
             Vec::new()
         } else {
-            fields(conn, document.id).await?.into_iter().filter(|f| f.party_id == Some(party.id) || f.party_id.is_none()).collect()
+            let every = fields(conn, document.id).await?;
+            let wanted: Vec<bool> = every.iter().map(|f| f.party_id == Some(party.id) || f.party_id.is_none()).collect();
+            let needed = logic::needed(&every, &wanted);
+            every.into_iter().zip(needed).filter_map(|(f, keep)| keep.then_some(f)).collect()
         },
         your_turn: false,
         can_download: false,
@@ -500,9 +505,10 @@ impl Service for Sign {
             return Err(bad_request(format!("Upload \u{201c}{}\u{201d} first", missing.name)));
         }
 
-        let own: Vec<FieldRow> = fields(conn, document.id).await?.into_iter().filter(|f| f.party_id == Some(party.id)).collect();
+        let every = fields(conn, document.id).await?;
+        let own: Vec<usize> = (0..every.len()).filter(|i| every[*i].party_id == Some(party.id)).collect();
         for v in &input.values {
-            if !own.iter().any(|f| f.id == v.field_id) {
+            if !own.iter().any(|i| every[*i].id == v.field_id) {
                 return Err(bad_request("A value was given for a field that is not yours"));
             }
         }
@@ -517,8 +523,12 @@ impl Service for Sign {
             return Err(bad_request("Draw or type your signature"));
         }
         let today = ctx.now.format("%Y-%m-%d").to_string();
-        let mut filled = Vec::with_capacity(own.len());
-        for field in &own {
+        // Values are checked before conditions are applied, but a refused value only counts if
+        // its field turns out to be shown.
+        let mut candidates: Vec<Option<String>> = every.iter().map(|f| f.value.clone()).collect();
+        let mut refused: Vec<Option<AppError>> = (0..every.len()).map(|_| None).collect();
+        for &i in &own {
+            let field = &every[i];
             let kind = FieldKind::parse(&field.kind).unwrap_or(FieldKind::Text);
             let spec = Spec::of(field);
             let label = if field.label.is_empty() { kind.as_str() } else { field.label.as_str() };
@@ -529,36 +539,59 @@ impl Service for Sign {
             };
             let checked = |raw: &str| values::normalize(kind, &spec, raw).map_err(|e| bad_request(values::error_message(&spec, label, &e)));
             let value = match kind {
-                FieldKind::Name => Some(party.name.clone()),
-                FieldKind::Email => party.email.clone(),
-                FieldKind::Date => Some(today.clone()),
-                FieldKind::Signature => Some("signed".into()),
+                FieldKind::Name => Ok(Some(party.name.clone())),
+                FieldKind::Email => Ok(party.email.clone()),
+                FieldKind::Date => Ok(Some(today.clone())),
+                FieldKind::Signature => Ok(Some("signed".into())),
+                FieldKind::Formula => Ok(None),
                 FieldKind::Checkbox => match given.as_deref() {
-                    None if field.read_only => field.value.clone(),
-                    None | Some("") | Some("false") => Some("false".into()),
-                    Some("true") => Some("true".into()),
-                    Some(_) => return Err(bad_request("A checkbox value is true or false")),
+                    None if field.read_only => Ok(field.value.clone()),
+                    None | Some("") | Some("false") => Ok(Some("false".into())),
+                    Some("true") => Ok(Some("true".into())),
+                    Some(_) => Err(bad_request("A checkbox value is true or false")),
                 },
                 FieldKind::Radio => match given.as_deref() {
-                    None => field.value.clone(),
-                    Some("" | "false") => None,
-                    Some("true") => spec.options.first().cloned(),
-                    Some(v) => checked(v)?,
+                    None => Ok(field.value.clone()),
+                    Some("" | "false") => Ok(None),
+                    Some("true") => Ok(spec.options.first().cloned()),
+                    Some(v) => checked(v),
                 },
-                FieldKind::Image | FieldKind::File => field.file_id.and(field.value.clone()),
+                FieldKind::Image | FieldKind::File => Ok(field.file_id.and(field.value.clone())),
                 FieldKind::Company => match given {
-                    Some(v) => checked(&v)?,
-                    None => field.value.clone(),
+                    Some(v) => checked(&v),
+                    None => Ok(field.value.clone()),
                 }
-                .or_else(|| party.company.clone()),
+                .map(|v| v.or_else(|| party.company.clone())),
                 _ => match given {
-                    Some(v) => checked(&v)?,
-                    None => field.value.clone(),
+                    Some(v) => checked(&v),
+                    None => Ok(field.value.clone()),
                 },
             };
+            match value {
+                Ok(v) => candidates[i] = v,
+                Err(e) => {
+                    candidates[i] = None;
+                    refused[i] = Some(e);
+                }
+            }
+        }
+        let outcomes = logic::evaluate_rows(&every, Some(&candidates));
+        let mut filled: Vec<(&FieldRow, Option<String>)> = Vec::with_capacity(own.len());
+        for &i in &own {
+            let field = &every[i];
+            let kind = FieldKind::parse(&field.kind).unwrap_or(FieldKind::Text);
+            let label = if field.label.is_empty() { kind.as_str() } else { field.label.as_str() };
+            if !outcomes[i].visible {
+                filled.push((field, None));
+                continue;
+            }
+            if let Some(e) = refused[i].take() {
+                return Err(e);
+            }
+            let value = outcomes[i].value.clone();
             let missing = match kind {
                 FieldKind::Checkbox => field.required && value.as_deref() != Some("true"),
-                FieldKind::Radio => false,
+                FieldKind::Radio | FieldKind::Formula => false,
                 _ => field.required && value.as_deref().is_none_or(str::is_empty),
             };
             if missing {
@@ -576,15 +609,24 @@ impl Service for Sign {
             let boxes: Vec<&(&FieldRow, Option<String>)> = filled.iter().filter(|(f, _)| f.group_key.as_deref() == Some(group)).collect();
             let chosen = boxes.iter().filter(|(_, v)| v.is_some()).count();
             let label = boxes.iter().map(|(f, _)| f.label.as_str()).find(|l| !l.is_empty()).unwrap_or("radio");
+            let shown = boxes.iter().any(|(f, _)| own.iter().any(|i| every[*i].id == f.id && outcomes[*i].visible));
             if chosen > 1 {
                 return Err(bad_request(format!("Choose only one option for \u{201c}{label}\u{201d}")));
             }
-            if chosen == 0 && boxes.iter().any(|(f, _)| f.required) {
+            if shown && chosen == 0 && boxes.iter().any(|(f, _)| f.required) {
                 return Err(bad_request(format!("Choose an option for \u{201c}{label}\u{201d}")));
             }
         }
         for (field, value) in &filled {
-            sqlx::query("update fields set value = $2 where id = $1").bind(field.id).bind(value).execute(&mut *conn).await?;
+            // An upload in a field that a condition hid is dropped, so it is neither stamped nor embedded.
+            let dropped = value.is_none().then_some(field.file_id).flatten();
+            sqlx::query("update fields set value = $2, file_id = case when $3 then null else file_id end where id = $1")
+                .bind(field.id)
+                .bind(value)
+                .bind(dropped.is_some())
+                .execute(&mut *conn)
+                .await?;
+            retire_file(conn, dropped).await?;
         }
 
         let method = session.as_ref().map_or(party.auth_to_sign(), |s| s.a);

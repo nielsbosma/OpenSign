@@ -217,7 +217,10 @@ async fn docusign_compatible_api() {
             { "pageNumber": "1", "xPosition": "160", "yPosition": "180", "value": "Yearly", "selected": "true" }
         ] }],
         "textTabs": [{ "documentId": "1", "pageNumber": "1", "xPosition": "100", "yPosition": "220", "tabLabel": "Org",
-            "validationPattern": "[0-9]{6}-[0-9]{4}", "validationMessage": "Write it as 556677-8899" }],
+            "validationPattern": "[0-9]{6}-[0-9]{4}", "validationMessage": "Write it as 556677-8899",
+            "conditionalParentLabel": "Plan", "conditionalParentValue": "Pro" }],
+        "formulaTabs": [{ "documentId": "1", "pageNumber": "1", "xPosition": "300", "yPosition": "100", "tabLabel": "Price",
+            "formula": "[Seats] * 10" }],
         "signerAttachmentTabs": [{ "documentId": "1", "pageNumber": "1", "xPosition": "100", "yPosition": "260", "tabLabel": "ID" }]
     });
     let (response, created) =
@@ -239,6 +242,8 @@ async fn docusign_compatible_api() {
     assert_eq!(radios.iter().filter_map(|r| r["value"].as_str()).collect::<Vec<_>>(), ["Yearly"]);
     assert_eq!(of("text")[0]["validation"]["pattern"], "[0-9]{6}-[0-9]{4}");
     assert_eq!(of("file").len(), 1);
+    assert_eq!(of("text")[0]["conditions"], json!([{ "field": "Plan", "op": "equals", "value": "Pro" }]));
+    assert_eq!(of("formula")[0]["formula"], "{Seats} * 10");
 
     let (response, envelope) = send(&router, with("GET", &format!("{base}/envelopes/{id}"), &bearer, None, vec![])).await;
     assert_eq!(response.status(), StatusCode::OK);

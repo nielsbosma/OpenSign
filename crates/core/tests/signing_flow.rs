@@ -8,6 +8,7 @@ use lopdf::{Document, Object, Stream, dictionary};
 use opensign_core::audit::verify_chain;
 use opensign_core::context::{Actor, App, Credential, Ctx, Surface};
 use opensign_core::documents::attachments::AttachmentRequestInput;
+use opensign_core::documents::logic::Condition;
 use opensign_core::documents::{AuthMethod, Delivery, FieldKind, PartyRole, parties, signer_token};
 use opensign_core::error::ErrorKind;
 use opensign_core::services::documents::{self as docs, FieldInput, PartyInput, Version};
@@ -124,6 +125,8 @@ fn field(party_id: Option<Uuid>, kind: FieldKind, page: i32, y: f64) -> FieldInp
         format: None,
         group_key: None,
         read_only: None,
+        conditions: vec![],
+        formula: None,
     }
 }
 
@@ -1080,4 +1083,115 @@ async fn field_types_are_validated_and_stamped() {
     let names = sealed.catalog().unwrap().get(b"Names").unwrap().as_dict().unwrap();
     let tree = names.get(b"EmbeddedFiles").unwrap().as_dict().unwrap().get(b"Names").unwrap().as_array().unwrap();
     assert!(tree.iter().any(|n| n.as_str().is_ok_and(|n| n.ends_with(b"cert.pdf"))), "the file is sealed into the PDF");
+}
+
+#[tokio::test]
+async fn conditions_and_formulas_are_worked_out_by_the_server() {
+    let Some(app) = app().await else { return };
+    {
+        let mut conn = app.db.acquire().await.unwrap();
+        let no_tsa = SigningSettings { tsa_url: String::new(), ..SigningSettings::default() };
+        app.settings.save(&mut conn, &app.keys, &no_tsa, None).await.unwrap();
+    }
+    let sender = user(&app, "Cora Conditions", Role::Sender).await;
+    let create = serde_json::from_value::<docs::CreateInput>(serde_json::json!({ "title": "Quote" })).unwrap();
+    let id = call::<docs::Create>(&sender, create).await.unwrap().document.id;
+    call::<docs::Upload>(&sender, docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)), ..Default::default() })
+        .await
+        .unwrap();
+    let saved = call::<docs::SetParties>(
+        &sender,
+        docs::SetPartiesInput { document_id: id, parties: vec![party("Anna", PartyRole::Signer, Delivery::Link, AuthMethod::Standard)] },
+    )
+    .await
+    .unwrap();
+    let anna = Some(saved[0].id);
+    let at = |party: Option<Uuid>, kind: FieldKind, n: i32, label: &str| FieldInput {
+        label: Some(label.into()),
+        width: 0.2,
+        height: 0.04,
+        ..field(party, kind, 0, 0.05 + f64::from(n) * 0.06)
+    };
+    let when = |field: &str, op: &str, value: Option<&str>| -> Vec<Condition> {
+        vec![serde_json::from_value(serde_json::json!({ "field": field, "op": op, "value": value })).unwrap()]
+    };
+    let fields = vec![
+        FieldInput { value: Some("100".into()), ..at(None, FieldKind::Number, 0, "Rate") },
+        FieldInput { formula: Some("{Rate} * 0.25".into()), ..at(None, FieldKind::Formula, 1, "VAT") },
+        FieldInput { options: vec!["Private".into(), "Company".into()], ..at(anna, FieldKind::Select, 2, "Type") },
+        FieldInput { conditions: when("Type", "equals", Some("Company")), ..at(anna, FieldKind::Text, 3, "Org Number") },
+        at(anna, FieldKind::Number, 4, "Hours"),
+        FieldInput {
+            formula: Some("{Hours} * {Rate} * 1.25".into()),
+            format: Some("1 234,00 kr".into()),
+            ..at(anna, FieldKind::Formula, 5, "Total")
+        },
+        FieldInput { required: Some(false), ..at(anna, FieldKind::Checkbox, 6, "Extra") },
+        FieldInput { conditions: when("Extra", "filled", None), ..at(anna, FieldKind::Text, 7, "Note") },
+        at(anna, FieldKind::Signature, 8, "Signature"),
+    ];
+    let set = |fields: Vec<FieldInput>| call::<docs::SetFields>(&sender, docs::SetFieldsInput { document_id: id, fields });
+    let unknown = FieldInput { formula: Some("{Nope} + 1".into()), ..at(anna, FieldKind::Formula, 0, "F") };
+    assert!(message(set(vec![unknown]).await).contains("Nope"), "a formula names a field that does not exist");
+    let looped = vec![
+        FieldInput { conditions: when("B", "filled", None), ..at(anna, FieldKind::Text, 0, "A") },
+        FieldInput { conditions: when("A", "filled", None), ..at(anna, FieldKind::Text, 1, "B") },
+    ];
+    assert_eq!(kind(set(looped).await), ErrorKind::BadRequest, "fields that depend on each other");
+    let peeking = vec![
+        at(anna, FieldKind::Number, 0, "Hours"),
+        FieldInput { formula: Some("{Hours} * 2".into()), ..at(None, FieldKind::Formula, 1, "F") },
+    ];
+    assert_eq!(kind(set(peeking).await), ErrorKind::BadRequest, "a sender formula cannot wait for a party");
+    let broken = FieldInput { formula: Some("{Rate} *".into()), ..at(None, FieldKind::Formula, 0, "F") };
+    assert_eq!(kind(set(vec![broken]).await), ErrorKind::BadRequest, "a formula that cannot be read");
+
+    let view = set(fields).await.unwrap();
+    let id_of = |label: &str| view.fields.iter().find(|f| f.label == label).unwrap().id;
+    assert_eq!(view.fields.iter().find(|f| f.label == "VAT").unwrap().value.as_deref(), Some("25"), "the sender's formula is known now");
+    assert!(!view.fields.iter().find(|f| f.label == "Total").unwrap().required);
+    let (kind_of, org, hours, total, extra, note) =
+        (id_of("Type"), id_of("Org Number"), id_of("Hours"), id_of("Total"), id_of("Extra"), id_of("Note"));
+    call::<docs::Send>(&sender, docs::SendInput { id, expires_at: None }).await.unwrap();
+
+    let token = {
+        let mut conn = app.db.acquire().await.unwrap();
+        signer_token(&app.keys, &parties(&mut conn, id).await.unwrap()[0])
+    };
+    let signer = signer_ctx(&app);
+    let sign = |values: Vec<(Uuid, &str)>| {
+        call::<signing::Sign>(
+            &signer,
+            signing::SignInput {
+                token: token.clone(),
+                session: None,
+                values: values.into_iter().map(|(field_id, value)| FieldValue { field_id, value: value.into() }).collect(),
+                signature: Some(SignatureInput { typed_name: Some("Anna".into()), image_png_base64: None }),
+                consent: true,
+            },
+        )
+    };
+    let company = vec![(kind_of, "Company"), (org, ""), (hours, "8"), (extra, "false"), (note, "")];
+    assert_eq!(message(sign(company).await), "Fill in \u{201c}Org Number\u{201d}", "a shown field is required");
+    let ticked = vec![(kind_of, "Private"), (org, ""), (hours, "8"), (extra, "true"), (note, "")];
+    assert_eq!(message(sign(ticked).await), "Fill in \u{201c}Note\u{201d}");
+    let private = vec![(kind_of, "Private"), (org, "should vanish"), (hours, "8"), (total, "1"), (extra, "false"), (note, "abc")];
+    assert!(sign(private).await.unwrap().completed, "hidden fields are neither required nor checked");
+
+    let stored: Vec<(String, Option<String>)> =
+        sqlx::query_as("select label, value from fields where document_id = $1").bind(id).fetch_all(&app.db).await.unwrap();
+    let value = |label: &str| stored.iter().find(|(l, _)| l == label).unwrap().1.clone();
+    assert_eq!(value("Org Number"), None, "a hidden field is cleared");
+    assert_eq!(value("Note"), None);
+    assert_eq!(value("Total").as_deref(), Some("1000"), "the server computes the formula, whatever the signer sent");
+
+    worker::drain(&app).await.unwrap();
+    let download = call::<docs::Download>(&sender, docs::DownloadInput { id, version: Some(Version::Signed) }).await.unwrap();
+    let sealed = Document::load_mem(&B64.decode(download.content_base64).unwrap()).unwrap();
+    let page = *sealed.get_pages().get(&1).unwrap();
+    let content = sealed.get_page_content(page);
+    let has = |text: &[u8]| content.windows(text.len()).any(|w| w == text);
+    assert!(has(b"(1 000,00 kr)"), "the formula is written in its format");
+    assert!(has(b"(25)"));
+    assert!(!has(b"(should vanish)") && !has(b"(abc)"), "hidden fields are not stamped");
 }

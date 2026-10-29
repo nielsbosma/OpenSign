@@ -155,7 +155,7 @@ function parseDate(raw: string, format?: string | null): string | null {
   }
 }
 
-function numberValue(canonical: string): number | null {
+export function numberValue(canonical: string): number | null {
   const clean = canonical.trim();
   const unsigned = clean.replace(/^-+/, '');
   if (!clean || !/^[0-9.]+$/.test(unsigned) || unsigned.split('.').length > 2) return null;
@@ -233,7 +233,7 @@ function canonicalNumber(raw: string, format: NumberFormat | null): string | nul
 }
 
 /** Half away from zero on the digits themselves, so 0.125 rounds the same here and on the server. */
-function roundHalfUp(int: string, frac: string, decimals: number): [string, string] {
+export function roundHalfUp(int: string, frac: string, decimals: number): [string, string] {
   if (frac.length <= decimals) return [int, frac];
   const digits = `${int}${frac.slice(0, decimals)}`.split('').map(Number);
   if (Number(frac[decimals]) >= 5) {
@@ -291,7 +291,8 @@ function writeDate(format: string, iso: string) {
 /** A stored value as it is written on the page. */
 export function display(kind: string, format: string | null | undefined, value: string): string {
   switch (kind) {
-    case 'number': {
+    case 'number':
+    case 'formula': {
       const f = format ? parseNumberFormat(format) : null;
       return (f && writeNumber(f, value)) ?? value;
     }
