@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
-use super::documents::{DownloadInput, UploadOutput, Version, add_file, document_file, require_draft};
+use super::documents::{DownloadInput, FileOptions, UploadOutput, Version, add_file, document_file, require_draft};
 use super::settings;
 use crate::auth::{actor_for, user_by_id};
 use crate::context::{App, Credential, Ctx, Surface};
@@ -46,6 +46,8 @@ struct UploadClaim {
     permissions: BTreeSet<Permission>,
     credential: Credential,
     surface: Surface,
+    text_tags: bool,
+    form_fields: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -59,6 +61,10 @@ pub struct UploadUrlInput {
     pub document_id: Uuid,
     /// The file name, e.g. "Agreement.docx".
     pub name: String,
+    /// As in documents.upload: turn DocuSeal-style text tags into fields. On unless false.
+    pub text_tags: Option<bool>,
+    /// As in documents.upload: turn a fillable PDF form's fields into fields. On unless false.
+    pub form_fields: Option<bool>,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -100,6 +106,8 @@ impl Service for CreateUploadUrl {
             permissions: actor.permissions.clone(),
             credential: actor.credential,
             surface: ctx.surface,
+            text_tags: input.text_tags.unwrap_or(FileOptions::default().text_tags),
+            form_fields: input.form_fields.unwrap_or(FileOptions::default().form_fields),
         };
         let token = ctx.keys().sign_token(UPLOAD, &claim, UPLOAD_MINUTES * 60, ctx.now.timestamp());
         Ok(UploadUrl {
@@ -150,7 +158,7 @@ pub async fn upload(app: std::sync::Arc<App>, token: &str, ip: Option<String>, r
     ctx.ip = ip;
     ctx.request_id = Some(request_id);
     let ctx = ctx.with_actor(actor);
-    add_file(&ctx, claim.document, &claim.name, bytes).await
+    add_file(&ctx, claim.document, &claim.name, bytes, FileOptions { text_tags: claim.text_tags, form_fields: claim.form_fields }).await
 }
 
 #[derive(Serialize, JsonSchema)]

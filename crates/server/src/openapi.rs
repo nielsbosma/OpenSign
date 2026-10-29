@@ -116,10 +116,13 @@ pub fn document(state: &AppState, server: &str) -> Value {
         "/documents/{id}/files".into(),
         json!({ "post": {
             "operationId": "documents_upload_file", "tags": ["documents"],
-            "summary": "Add a PDF or Word file to a draft. Word, ODT and RTF are converted to PDF; active content is removed.",
+            "summary": "Add a PDF or Word file to a draft. Word, ODT and RTF are converted to PDF; active content is removed. Text tags and fillable form fields in the file become fields unless `textTags` or `formFields` is false.",
             "parameters": id,
             "requestBody": { "required": true, "content": { "multipart/form-data": { "schema": {
-                "type": "object", "required": ["file"], "properties": { "file": { "type": "string", "format": "binary" } } } } } },
+                "type": "object", "required": ["file"], "properties": {
+                    "file": { "type": "string", "format": "binary" },
+                    "textTags": { "type": "boolean", "default": true, "description": "Turn {{Name;role=…;type=…}} text tags into fields and take their text out of the page" },
+                    "formFields": { "type": "boolean", "default": true, "description": "Turn a fillable PDF form's fields into fields" } } } } } },
             "responses": { "200": { "description": "The stored file" }, "4XX": error_response("Refused") }
         } }),
     );

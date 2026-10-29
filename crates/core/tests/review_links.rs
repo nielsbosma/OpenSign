@@ -76,7 +76,12 @@ async fn sent_document(app: &Arc<App>, sender: &Ctx) -> (Uuid, String) {
     assert!(document.document.review_links, "on by default");
     call::<docs::Upload>(
         sender,
-        docs::UploadInput { document_id: id, name: "agreement.pdf".into(), content_base64: B64.encode(pdf_with_hidden_text()) },
+        docs::UploadInput {
+            document_id: id,
+            name: "agreement.pdf".into(),
+            content_base64: B64.encode(pdf_with_hidden_text()),
+            ..Default::default()
+        },
     )
     .await
     .unwrap();

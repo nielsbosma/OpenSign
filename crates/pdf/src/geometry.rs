@@ -34,6 +34,18 @@ impl PageBox {
             _ => ([1.0, 0.0, 0.0, 1.0, self.x + left, self.y + bottom], w, h),
         }
     }
+
+    /// The inverse of `place` for one point: page space to points from the displayed page's
+    /// top-left corner, y growing downwards.
+    pub fn to_display(&self, px: f64, py: f64) -> (f64, f64) {
+        let (left, bottom) = match self.rotate.rem_euclid(360) {
+            90 => (py - self.y, self.x + self.width - px),
+            180 => (self.x + self.width - px, self.y + self.height - py),
+            270 => (self.y + self.height - py, px - self.x),
+            _ => (px - self.x, py - self.y),
+        };
+        (left, self.displayed().1 - bottom)
+    }
 }
 
 fn number(object: &Object) -> Option<f64> {
@@ -116,5 +128,16 @@ mod tests {
         assert_eq!(page.displayed(), (800.0, 600.0));
         let (_, w, h) = page.place(0.0, 0.0, 0.5, 0.5);
         assert_eq!((w, h), (400.0, 300.0));
+    }
+
+    #[test]
+    fn to_display_inverts_place() {
+        for rotate in [0, 90, 180, 270] {
+            let page = PageBox { x: 10.0, y: 20.0, width: 600.0, height: 800.0, rotate };
+            let (dw, dh) = page.displayed();
+            let (m, _, h) = page.place(0.25, 0.5, 0.2, 0.1);
+            let (dx, dy) = page.to_display(m[4], m[5]);
+            assert!((dx - 0.25 * dw).abs() < 1e-9 && (dy - (0.5 * dh + h)).abs() < 1e-9, "rotate {rotate}: {dx} {dy}");
+        }
     }
 }

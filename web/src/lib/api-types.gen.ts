@@ -758,6 +758,41 @@ export type DocumentsDeleteInput = {
 
 export type DocumentsDeleteOutput = Ok_;
 
+export type DocumentsDetectFieldsInput = {
+  /** Also ask the configured AI model, sending it the pages' text and positions (never images). Needs the AI features and "Allow document text" in Settings, AI. Counted against the AI budget. */
+  ai?: boolean;
+  documentId: string;
+};
+
+/** `date` is the date of signing, filled in automatically; `date_input` is a date the signer picks. `select` is a dropdown, `multiselect` a list to tick several from, and each `radio` is one button of a group (`groupKey`) holding one option. `image` and `file` take an upload. `formula` is a number computed from other fields. */
+export type FieldKind = "signature" | "initials" | "text" | "date" | "checkbox" | "name" | "email" | "company" | "number" | "select" | "multiselect" | "radio" | "phone" | "date_input" | "image" | "file" | "formula";
+
+export type SuggestedField = {
+  height: number;
+  kind: FieldKind;
+  /** The words next to it, such as "Name" or "I accept the terms". */
+  label: string;
+  /** Zero-based page index in the combined document. */
+  page: number;
+  /** `layout` when found from lines and boxes on the page, `ai` when the model suggested it. */
+  source: string;
+  width: number;
+  /** Position and size as fractions of the page (0 to 1), origin top-left. */
+  x: number;
+  y: number;
+};
+
+export type DocumentsDetectFieldsOutput = DetectOutput;
+
+export type DetectOutput = {
+  /** Why the AI model was not asked, or what went wrong when it was. */
+  aiNote?: string | null;
+  /** The AI model was asked too. */
+  aiUsed: boolean;
+  /** Places that look like they want a field and have none yet. Nothing is saved. */
+  suggestions: Array<SuggestedField>;
+};
+
 export type Version = "signed" | "original";
 
 export type DocumentsDownloadInput = {
@@ -945,9 +980,6 @@ export type FieldInput = {
   x: number;
   y: number;
 };
-
-/** `date` is the date of signing, filled in automatically; `date_input` is a date the signer picks. `select` is a dropdown, `multiselect` a list to tick several from, and each `radio` is one button of a group (`groupKey`) holding one option. `image` and `file` take an upload. `formula` is a number computed from other fields. */
-export type FieldKind = "signature" | "initials" | "text" | "date" | "checkbox" | "name" | "email" | "company" | "number" | "select" | "multiselect" | "radio" | "phone" | "date_input" | "image" | "file" | "formula";
 
 export type DocumentsSetFieldsInput = {
   documentId: string;
@@ -1140,13 +1172,30 @@ export type DocumentsUploadInput = {
   /** The file's bytes, base64. PDF, .docx, .doc, .odt or .rtf. */
   contentBase64: string;
   documentId: string;
+  /** Turn the fields of a fillable PDF form into fields, with the values it was filled in with. On unless false. */
+  formFields?: boolean | null;
   /** The file name, e.g. "Agreement.docx". */
   name: string;
+  /** Turn `{{Name;role=Tenant;type=signature}}` text tags in the file into fields and take their text out of the page. The syntax is DocuSeal's. On unless false. */
+  textTags?: boolean | null;
+};
+
+/** Fields added from the file itself. */
+export type FieldsFromFile = {
+  /** Fields made from the PDF's own fillable form. */
+  formFields: number;
+  /** Parties added because a tag named a role the draft did not have yet. */
+  partiesAdded: Array<string>;
+  /** Tags and form fields that could not be used, each with the reason. */
+  problems: Array<string>;
+  /** Fields made from text tags. */
+  textTags: number;
 };
 
 export type DocumentsUploadOutput = UploadOutput;
 
 export type UploadOutput = {
+  fields: FieldsFromFile;
   file: FileRecord;
   pages: number;
   /** Active content taken out of the file, e.g. "JavaScript". */
@@ -1155,8 +1204,12 @@ export type UploadOutput = {
 
 export type DocumentsUploadUrlInput = {
   documentId: string;
+  /** As in documents.upload: turn a fillable PDF form's fields into fields. On unless false. */
+  formFields?: boolean | null;
   /** The file name, e.g. "Agreement.docx". */
   name: string;
+  /** As in documents.upload: turn DocuSeal-style text tags into fields. On unless false. */
+  textTags?: boolean | null;
 };
 
 export type DocumentsUploadUrlOutput = UploadUrl;
@@ -1824,6 +1877,7 @@ export interface Services {
   "documents.counts": { kind: "query"; input: DocumentsCountsInput; output: DocumentsCountsOutput };
   "documents.create": { kind: "mutation"; input: DocumentsCreateInput; output: DocumentsCreateOutput };
   "documents.delete": { kind: "mutation"; input: DocumentsDeleteInput; output: DocumentsDeleteOutput };
+  "documents.detect_fields": { kind: "mutation"; input: DocumentsDetectFieldsInput; output: DocumentsDetectFieldsOutput };
   "documents.download": { kind: "query"; input: DocumentsDownloadInput; output: DocumentsDownloadOutput };
   "documents.download_url": { kind: "query"; input: DocumentsDownloadUrlInput; output: DocumentsDownloadUrlOutput };
   "documents.get": { kind: "query"; input: DocumentsGetInput; output: DocumentsGetOutput };

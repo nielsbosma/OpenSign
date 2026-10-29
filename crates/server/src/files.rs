@@ -124,14 +124,23 @@ pub async fn upload(State(state): State<AppState>, Path(id): Path<Uuid>, request
         Err(_) => return fail(bad_request("Send the file as multipart/form-data")),
     };
     let mut file = None;
+    let mut options = docs::FileOptions::default();
     while let Ok(Some(field)) = multipart.next_field().await {
-        if field.name() == Some("file") {
-            let name = field.file_name().unwrap_or("document.pdf").to_string();
-            match field.bytes().await {
-                Ok(bytes) => file = Some((name, bytes.to_vec())),
-                Err(_) => return fail(bad_request("The upload was interrupted or is too large")),
+        match field.name() {
+            Some("file") if file.is_none() => {
+                let name = field.file_name().unwrap_or("document.pdf").to_string();
+                match field.bytes().await {
+                    Ok(bytes) => file = Some((name, bytes.to_vec())),
+                    Err(_) => return fail(bad_request("The upload was interrupted or is too large")),
+                }
             }
-            break;
+            Some(key @ ("textTags" | "formFields")) => {
+                let on = key == "textTags";
+                let value = field.text().await.unwrap_or_default();
+                let enabled = !matches!(value.trim(), "false" | "0" | "no");
+                if on { options.text_tags = enabled } else { options.form_fields = enabled }
+            }
+            _ => {}
         }
     }
     let Some((name, bytes)) = file else { return fail(bad_request("Attach the document as the `file` field")) };
@@ -141,7 +150,7 @@ pub async fn upload(State(state): State<AppState>, Path(id): Path<Uuid>, request
     if !caller.ctx.can(opensign_core::Permission::DocumentsCreate) {
         return fail(opensign_core::error::forbidden());
     }
-    match docs::add_file(&caller.ctx, id, &name, bytes).await {
+    match docs::add_file(&caller.ctx, id, &name, bytes, options).await {
         Ok(output) => Json(output).into_response(),
         Err(e) => fail(e),
     }
