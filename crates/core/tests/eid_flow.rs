@@ -110,9 +110,12 @@ fn signer_ctx(app: &Arc<App>) -> Ctx {
 async fn sent_document(app: &Arc<App>, sender: &Ctx, personal_number: &str) -> String {
     let document = call::<docs::Create>(sender, serde_json::from_value(json!({ "title": "Lease" })).unwrap()).await.unwrap();
     let id = document.document.id;
-    call::<docs::Upload>(sender, docs::UploadInput { document_id: id, name: "lease.pdf".into(), content_base64: B64.encode(sample_pdf()) })
-        .await
-        .unwrap();
+    call::<docs::Upload>(
+        sender,
+        docs::UploadInput { document_id: id, name: "lease.pdf".into(), content_base64: B64.encode(sample_pdf()), ..Default::default() },
+    )
+    .await
+    .unwrap();
     let anna = PartyInput {
         id: None,
         role: PartyRole::Signer,

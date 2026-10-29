@@ -4,6 +4,7 @@ pub mod attachments;
 pub mod ltv;
 pub mod notify;
 pub mod seal;
+pub mod tags;
 pub mod upload;
 pub mod values;
 

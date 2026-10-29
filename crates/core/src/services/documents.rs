@@ -19,7 +19,8 @@ use crate::documents::attachments::{self, AttachmentRequestInput};
 use crate::documents::values::{self, Spec, Validation};
 use crate::documents::{
     AuthMethod, Delivery, DocumentRow, DocumentView, FieldKind, Need, PartyRole, PartyRow, PartyView, VISIBLE, current_turn,
-    decrypt_personal_number, files, load_document, notify, parties, personal_number_context, signer_url, status, upload, view, visibility,
+    decrypt_personal_number, files, load_document, notify, parties, personal_number_context, signer_url, status, tags, upload, view,
+    visibility,
 };
 use crate::error::{AppError, ErrorKind, Result, bad_request, conflict, forbidden, not_found};
 use crate::i18n::{LANGUAGES, Lang};
@@ -380,7 +381,7 @@ async fn copy_template(ctx: &Ctx, conn: &mut PgConnection, from: Uuid, to: Uuid)
     Ok(())
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UploadInput {
     pub document_id: Uuid,
@@ -388,6 +389,25 @@ pub struct UploadInput {
     pub name: String,
     /// The file's bytes, base64. PDF, .docx, .doc, .odt or .rtf.
     pub content_base64: String,
+    /// Turn `{{Name;role=Tenant;type=signature}}` text tags in the file into fields and take their text out of the
+    /// page. The syntax is DocuSeal's. On unless false.
+    pub text_tags: Option<bool>,
+    /// Turn the fields of a fillable PDF form into fields, with the values it was filled in with. On unless false.
+    pub form_fields: Option<bool>,
+}
+
+/// Fields added from the file itself.
+#[derive(Serialize, JsonSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FieldsFromFile {
+    /// Fields made from text tags.
+    pub text_tags: usize,
+    /// Fields made from the PDF's own fillable form.
+    pub form_fields: usize,
+    /// Parties added because a tag named a role the draft did not have yet.
+    pub parties_added: Vec<String>,
+    /// Tags and form fields that could not be used, each with the reason.
+    pub problems: Vec<String>,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -397,6 +417,119 @@ pub struct UploadOutput {
     pub pages: usize,
     /// Active content taken out of the file, e.g. "JavaScript".
     pub removed: Vec<String>,
+    pub fields: FieldsFromFile,
+}
+
+/// What to read from an upload besides its pages.
+#[derive(Debug, Clone, Copy)]
+pub struct FileOptions {
+    pub text_tags: bool,
+    pub form_fields: bool,
+}
+
+impl Default for FileOptions {
+    fn default() -> Self {
+        Self { text_tags: true, form_fields: true }
+    }
+}
+
+const FIRST_PARTY: &str = "First Party";
+
+/// Gives each found field a party (by role, by a form field's name, or the first who acts, adding
+/// parties for unknown roles), then checks and stores it like `documents.set_fields` would.
+async fn add_found_fields(
+    conn: &mut PgConnection,
+    document_id: Uuid,
+    page_offset: i32,
+    found: Vec<(tags::Found, bool)>,
+    out: &mut FieldsFromFile,
+) -> Result<()> {
+    let mut all = parties(conn, document_id).await?;
+    let existing = crate::documents::fields(conn, document_id).await?;
+    let mut groups = Groups::new();
+    for f in &existing {
+        if let Ok(input) = FieldInput::from_row(f) {
+            let _ = clean_field(&input, &all, &mut groups);
+        }
+    }
+    let mut count = existing.len();
+    for (found, from_tag) in found {
+        let what = if from_tag { "tag" } else { "form field" };
+        let shown = if found.label.is_empty() { found.kind.as_str().to_string() } else { found.label.clone() };
+        if count >= MAX_FIELDS {
+            out.problems.push(format!("A document can have at most {MAX_FIELDS} fields, so the rest were left out"));
+            break;
+        }
+        let role = match (&found.role, from_tag) {
+            (Some(role), _) => Some(role.clone()),
+            (None, false) => tags::party_by_prefix(&found.label, all.iter().map(|p| p.name.as_str())).map(str::to_string),
+            (None, true) => None,
+        };
+        let party = match role {
+            Some(role) => all.iter().find(|p| p.name.trim().eq_ignore_ascii_case(role.trim())).map(|p| p.id).or_else(|| {
+                (all.len() < MAX_PARTIES && role.chars().count() <= 200 && !role.chars().any(char::is_control)).then(|| {
+                    out.parties_added.push(role.clone());
+                    Uuid::nil()
+                })
+            }),
+            None => all.iter().filter(|p| p.must_act()).min_by_key(|p| p.sign_order).map(|p| p.id).or_else(|| {
+                (all.len() < MAX_PARTIES).then(|| {
+                    out.parties_added.push(FIRST_PARTY.to_string());
+                    Uuid::nil()
+                })
+            }),
+        };
+        let party = match party {
+            Some(id) if id.is_nil() => {
+                let name = out.parties_added.last().cloned().unwrap_or_else(|| FIRST_PARTY.to_string());
+                let id = Uuid::now_v7();
+                let order = all.iter().map(|p| p.sign_order).max().unwrap_or(0) + 1;
+                sqlx::query("insert into parties (id, document_id, role, name, sign_order) values ($1, $2, 'signer', $3, $4)")
+                    .bind(id)
+                    .bind(document_id)
+                    .bind(&name)
+                    .bind(order.min(100))
+                    .execute(&mut *conn)
+                    .await?;
+                all = parties(conn, document_id).await?;
+                Some(id)
+            }
+            other => other,
+        };
+        let input = FieldInput {
+            party_id: party,
+            kind: found.kind,
+            page: page_offset + found.page as i32,
+            x: found.x,
+            y: found.y,
+            width: found.width,
+            height: found.height,
+            required: Some(found.required),
+            label: Some(found.label.clone()),
+            value: found.value.clone(),
+            options: found.options.clone(),
+            validation: (!found.validation.is_empty()).then(|| found.validation.clone()),
+            format: found.format.clone(),
+            group_key: found.group_key.clone(),
+            read_only: Some(found.read_only && found.value.is_some()),
+        };
+        match clean_field(&input, &all, &mut groups) {
+            Ok(field) => {
+                insert_field(conn, document_id, &field).await?;
+                count += 1;
+                if from_tag {
+                    out.text_tags += 1;
+                } else {
+                    out.form_fields += 1;
+                }
+            }
+            Err(e) if e.kind == ErrorKind::BadRequest => {
+                out.problems.push(format!("The {what} \u{201c}{shown}\u{201d} on page {} was left out: {}", found.page + 1, e.message));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(())
 }
 
 fn pdf_name(name: &str) -> String {
@@ -407,14 +540,54 @@ fn pdf_name(name: &str) -> String {
 
 /// Converts and sanitizes an upload, then attaches it to a draft. Conversion happens before the
 /// transaction so a slow converter holds no locks.
-pub async fn add_file(ctx: &Ctx, document_id: Uuid, name: &str, bytes: Vec<u8>) -> Result<UploadOutput> {
+pub async fn add_file(ctx: &Ctx, document_id: Uuid, name: &str, bytes: Vec<u8>, options: FileOptions) -> Result<UploadOutput> {
     let mut conn = ctx.db().acquire().await?;
     let document = load_document(ctx, &mut conn, document_id, Need::Edit).await?;
     require_draft(&document)?;
     let security: SecuritySettings = settings(ctx, &mut conn).await?;
+    let earlier = files(&mut conn, document_id).await?;
     drop(conn);
     let original_sha256 = sha256_hex(&bytes);
-    let clean = upload::prepare(&ctx.app, bytes, security.max_upload_mb).await?;
+    let mut clean = upload::prepare(&ctx.app, bytes, security.max_upload_mb).await?;
+    let mut fields_out = FieldsFromFile::default();
+    let mut found: Vec<(tags::Found, bool)> = Vec::new();
+    if options.text_tags {
+        let pdf = std::mem::take(&mut clean.pdf);
+        let scan = tokio::task::spawn_blocking(move || opensign_pdf::take_text_tags(&pdf).map_err(|e| (e, pdf)))
+            .await
+            .map_err(AppError::internal)?;
+        match scan {
+            Ok(scan) => {
+                clean.pdf = scan.pdf;
+                fields_out.problems.extend(scan.problems);
+                for tag in &scan.tags {
+                    match tags::parse_tag(tag) {
+                        Ok(f) => found.push((f, true)),
+                        Err(problem) => fields_out.problems.push(problem),
+                    }
+                }
+            }
+            Err((error, pdf)) => {
+                tracing::warn!(%error, "text tags could not be read");
+                clean.pdf = pdf;
+                fields_out.problems.push("The text tags in this file could not be read".into());
+            }
+        }
+    }
+    if options.form_fields {
+        found.extend(clean.form.iter().map(|f| (tags::from_form(f), false)));
+    }
+    let mut page_offset = 0;
+    if !found.is_empty() {
+        for record in &earlier {
+            let body = read_file(&ctx.app.storage, ctx.keys(), record).await?;
+            let pages = tokio::task::spawn_blocking(move || opensign_pdf::page_sizes(&body).map(|p| p.len()))
+                .await
+                .map_err(AppError::internal)?
+                .map_err(upload::pdf_failure)?;
+            page_offset += pages as i32;
+        }
+    }
 
     let mut tx = ctx.db().begin().await?;
     let state: Option<String> =
@@ -441,17 +614,21 @@ pub async fn add_file(ctx: &Ctx, document_id: Uuid, name: &str, bytes: Vec<u8>) 
         .bind(file.id)
         .execute(&mut *tx)
         .await?;
+    if !found.is_empty() {
+        add_found_fields(&mut tx, document_id, page_offset, found, &mut fields_out).await?;
+    }
     sqlx::query("update documents set updated_at = now() where id = $1").bind(document_id).execute(&mut *tx).await?;
     audit(
         ctx,
         &mut tx,
-        Entry::new("document.file_added", "document", document_id).metadata(
-            json!({ "file": file.id, "name": name, "uploadSha256": original_sha256, "sha256": file.sha256, "removed": clean.removed }),
-        ),
+        Entry::new("document.file_added", "document", document_id).metadata(json!({
+            "file": file.id, "name": name, "uploadSha256": original_sha256, "sha256": file.sha256, "removed": clean.removed,
+            "textTags": fields_out.text_tags, "formFields": fields_out.form_fields, "partiesAdded": fields_out.parties_added,
+        })),
     )
     .await?;
     tx.commit().await?;
-    Ok(UploadOutput { file, pages: clean.pages.len(), removed: clean.removed })
+    Ok(UploadOutput { file, pages: clean.pages.len(), removed: clean.removed, fields: fields_out })
 }
 
 pub struct Upload;
@@ -462,7 +639,7 @@ impl Service for Upload {
     type Output = UploadOutput;
     const META: Meta = Meta::mutation(
         "documents.upload",
-        "Add a file (PDF or Word, base64) to a draft. Word files are converted to PDF; scripts, attachments and forms are removed.",
+        "Add a file (PDF or Word, base64) to a draft. Word files are converted to PDF; scripts, attachments and forms are removed. Text tags such as {{Tenant Sign;role=Tenant;type=signature}} (DocuSeal's syntax) become fields, as do the fields of a fillable PDF form; parties named by a tag's role are added. The result lists what was added and any tag that could not be used.",
         Access::Permission(Permission::DocumentsCreate),
     )
     .without_transaction();
@@ -472,7 +649,12 @@ impl Service for Upload {
             return Err(bad_request("The file is too large"));
         }
         let bytes = B64.decode(input.content_base64.trim()).map_err(|_| bad_request("contentBase64 is not valid base64"))?;
-        add_file(ctx, input.document_id, &input.name, bytes).await
+        let defaults = FileOptions::default();
+        let options = FileOptions {
+            text_tags: input.text_tags.unwrap_or(defaults.text_tags),
+            form_fields: input.form_fields.unwrap_or(defaults.form_fields),
+        };
+        add_file(ctx, input.document_id, &input.name, bytes, options).await
     }
 }
 
@@ -862,6 +1044,129 @@ fn check_box(f: &FieldInput) -> Result<()> {
     Ok(())
 }
 
+/// Radio groups seen so far: their party, options, and whether one is chosen.
+pub(crate) type Groups = std::collections::HashMap<String, (Option<Uuid>, Vec<String>, bool)>;
+
+pub(crate) struct CleanField {
+    party_id: Option<Uuid>,
+    kind: FieldKind,
+    page: i32,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    required: bool,
+    label: String,
+    value: Option<String>,
+    spec: Spec,
+    group_key: Option<String>,
+    read_only: bool,
+}
+
+/// Checks one field as `documents.set_fields` saves it, adding radio buttons to `groups`.
+pub(crate) fn clean_field(f: &FieldInput, all: &[PartyRow], groups: &mut Groups) -> Result<CleanField> {
+    check_box(f)?;
+    let party = match f.party_id {
+        Some(id) => Some(all.iter().find(|p| p.id == id).ok_or_else(|| not_found("Party"))?),
+        None => None,
+    };
+    if matches!(f.kind, FieldKind::Signature | FieldKind::Initials) && !party.is_some_and(|p| p.role() == PartyRole::Signer) {
+        return Err(bad_request("Signature and initials fields belong to a signer"));
+    }
+    if (f.kind.is_upload() || f.kind == FieldKind::Radio) && !party.is_some_and(|p| p.must_act()) {
+        return Err(bad_request("Image, file and radio fields belong to a party who signs or approves"));
+    }
+    let label = f.label.as_deref().map(|l| clean_text(l, "A field label", 200)).transpose()?.unwrap_or_default();
+    let spec = Spec {
+        options: f.options.clone(),
+        validation: f.validation.clone().unwrap_or_default(),
+        format: f.format.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string),
+    };
+    let group_key = f.group_key.as_deref().map(str::trim).filter(|g| !g.is_empty());
+    let options = values::check_spec(f.kind, &spec, group_key)?;
+    let spec = Spec { options, ..spec };
+    let value = f.value.as_deref().map(|v| clean_text(v, "A field value", 2000)).transpose()?.filter(|v| !v.is_empty());
+    let value = match f.kind {
+        FieldKind::Checkbox if value.as_deref().is_some_and(|v| v != "true" && v != "false") => {
+            return Err(bad_request("A checkbox value is true or false"));
+        }
+        _ if f.kind.is_upload() && value.is_some() => return Err(bad_request("Image and file fields are filled by the party")),
+        FieldKind::Checkbox | FieldKind::Signature => value,
+        kind => match value {
+            Some(v) => values::normalize(kind, &spec, &v)
+                .map_err(|e| bad_request(values::error_message(&spec, if label.is_empty() { kind.as_str() } else { &label }, &e)))?,
+            None => None,
+        },
+    };
+    let read_only = f.read_only.unwrap_or(false);
+    if read_only
+        && (f.party_id.is_none()
+            || f.kind.is_upload()
+            || f.kind.is_automatic()
+            || matches!(f.kind, FieldKind::Signature | FieldKind::Initials))
+    {
+        return Err(bad_request("Only a party's fields that take a value can be read-only"));
+    }
+    if let Some(key) = group_key {
+        if let Some(group) = groups.get(key) {
+            if group.0 != f.party_id {
+                return Err(bad_request("All radio buttons of a group belong to the same party"));
+            }
+            if group.1.contains(&spec.options[0]) {
+                return Err(bad_request(format!("The option \u{201c}{}\u{201d} is in its radio group twice", spec.options[0])));
+            }
+            if value.is_some() && group.2 {
+                return Err(bad_request("Only one radio button of a group can be chosen"));
+            }
+        }
+        let group = groups.entry(key.to_string()).or_insert((f.party_id, Vec::new(), false));
+        group.1.push(spec.options[0].clone());
+        group.2 |= value.is_some();
+    }
+    Ok(CleanField {
+        party_id: f.party_id,
+        kind: f.kind,
+        page: f.page,
+        x: f.x,
+        y: f.y,
+        width: f.width,
+        height: f.height,
+        required: f.required.unwrap_or(f.kind != FieldKind::Checkbox),
+        label,
+        value,
+        spec,
+        group_key: group_key.map(str::to_string),
+        read_only,
+    })
+}
+
+pub(crate) async fn insert_field(conn: &mut PgConnection, document_id: Uuid, f: &CleanField) -> Result<()> {
+    sqlx::query(
+        "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(document_id)
+    .bind(f.party_id)
+    .bind(f.kind.as_str())
+    .bind(f.page)
+    .bind(f.x)
+    .bind(f.y)
+    .bind(f.width)
+    .bind(f.height)
+    .bind(f.required)
+    .bind(&f.label)
+    .bind(&f.value)
+    .bind(json!(f.spec.options))
+    .bind(serde_json::to_value(&f.spec.validation).map_err(AppError::internal)?)
+    .bind(&f.spec.format)
+    .bind(&f.group_key)
+    .bind(f.read_only)
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
 pub struct SetFields;
 
 #[async_trait]
@@ -882,90 +1187,10 @@ impl Service for SetFields {
         }
         let all = parties(conn, document.id).await?;
         sqlx::query("delete from fields where document_id = $1").bind(document.id).execute(&mut *conn).await?;
-        let mut groups: std::collections::HashMap<String, (Option<Uuid>, Vec<String>, bool)> = Default::default();
+        let mut groups = Groups::new();
         for f in &input.fields {
-            check_box(f)?;
-            let party = match f.party_id {
-                Some(id) => Some(all.iter().find(|p| p.id == id).ok_or_else(|| not_found("Party"))?),
-                None => None,
-            };
-            if matches!(f.kind, FieldKind::Signature | FieldKind::Initials) && !party.is_some_and(|p| p.role() == PartyRole::Signer) {
-                return Err(bad_request("Signature and initials fields belong to a signer"));
-            }
-            if (f.kind.is_upload() || f.kind == FieldKind::Radio) && !party.is_some_and(|p| p.must_act()) {
-                return Err(bad_request("Image, file and radio fields belong to a party who signs or approves"));
-            }
-            let label = f.label.as_deref().map(|l| clean_text(l, "A field label", 200)).transpose()?.unwrap_or_default();
-            let spec = Spec {
-                options: f.options.clone(),
-                validation: f.validation.clone().unwrap_or_default(),
-                format: f.format.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string),
-            };
-            let group_key = f.group_key.as_deref().map(str::trim).filter(|g| !g.is_empty());
-            let options = values::check_spec(f.kind, &spec, group_key)?;
-            let spec = Spec { options, ..spec };
-            let value = f.value.as_deref().map(|v| clean_text(v, "A field value", 2000)).transpose()?.filter(|v| !v.is_empty());
-            let value = match f.kind {
-                FieldKind::Checkbox if value.as_deref().is_some_and(|v| v != "true" && v != "false") => {
-                    return Err(bad_request("A checkbox value is true or false"));
-                }
-                _ if f.kind.is_upload() && value.is_some() => return Err(bad_request("Image and file fields are filled by the party")),
-                FieldKind::Checkbox | FieldKind::Signature => value,
-                kind => match value {
-                    Some(v) => values::normalize(kind, &spec, &v).map_err(|e| {
-                        bad_request(values::error_message(&spec, if label.is_empty() { kind.as_str() } else { &label }, &e))
-                    })?,
-                    None => None,
-                },
-            };
-            let read_only = f.read_only.unwrap_or(false);
-            if read_only
-                && (f.party_id.is_none()
-                    || f.kind.is_upload()
-                    || f.kind.is_automatic()
-                    || matches!(f.kind, FieldKind::Signature | FieldKind::Initials))
-            {
-                return Err(bad_request("Only a party's fields that take a value can be read-only"));
-            }
-            if let Some(key) = group_key {
-                let group = groups.entry(key.to_string()).or_insert((f.party_id, Vec::new(), false));
-                if group.0 != f.party_id {
-                    return Err(bad_request("All radio buttons of a group belong to the same party"));
-                }
-                if group.1.contains(&spec.options[0]) {
-                    return Err(bad_request(format!("The option \u{201c}{}\u{201d} is in its radio group twice", spec.options[0])));
-                }
-                group.1.push(spec.options[0].clone());
-                if value.is_some() {
-                    if group.2 {
-                        return Err(bad_request("Only one radio button of a group can be chosen"));
-                    }
-                    group.2 = true;
-                }
-            }
-            sqlx::query(
-                "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only)
-                 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)",
-            )
-            .bind(Uuid::now_v7())
-            .bind(document.id)
-            .bind(f.party_id)
-            .bind(f.kind.as_str())
-            .bind(f.page)
-            .bind(f.x)
-            .bind(f.y)
-            .bind(f.width)
-            .bind(f.height)
-            .bind(f.required.unwrap_or(f.kind != FieldKind::Checkbox))
-            .bind(label)
-            .bind(value)
-            .bind(json!(spec.options))
-            .bind(serde_json::to_value(&spec.validation).map_err(AppError::internal)?)
-            .bind(&spec.format)
-            .bind(group_key)
-            .bind(read_only)
-            .execute(&mut *conn)
-            .await?;
+            let field = clean_field(f, &all, &mut groups)?;
+            insert_field(conn, document.id, &field).await?;
         }
         audit(ctx, conn, Entry::new("document.fields_set", "document", document.id).metadata(json!({ "count": input.fields.len() })))
             .await?;
