@@ -22,6 +22,8 @@ fn limit_for(name: &str) -> Option<Limit> {
         | "auth.request_password_reset"
         | "auth.reset_password"
         | "users.accept_invite"
+        | "users.change_email"
+        | "auth.confirm_email_change"
         | "account.change_password"
         | "account.two_factor_confirm"
         | "setup.create_first_admin" => Some(security::AUTH),

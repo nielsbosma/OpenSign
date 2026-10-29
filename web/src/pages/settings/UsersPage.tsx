@@ -16,10 +16,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { type Role, useApi, useApiMutation } from '@/lib/api';
+import { errorMessage, type Role, useApi, useApiMutation } from '@/lib/api';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { msg, t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
+import { FormError } from '../auth/AuthLayout';
 import { SettingsCard } from './SettingsLayout';
 
 const role = (label: string, description: string) => ({
@@ -98,6 +99,67 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
   );
 }
 
+export type EditableUser = { id: string; name: string; email: string };
+
+export function EditUserDialog({ user, onOpenChange }: { user: EditableUser | null; onOpenChange: (open: boolean) => void }) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState<string>();
+  const [prev, setPrev] = useState<EditableUser | null>(null);
+  if (user !== prev) {
+    setPrev(user);
+    setName(user?.name ?? '');
+    setEmail(user?.email ?? '');
+    setError(undefined);
+  }
+  const update = useApiMutation('users.update', { invalidates: ['users.', 'account.me'], silent: true });
+  const changeEmail = useApiMutation('users.change_email', { invalidates: ['users.'], silent: true });
+  const busy = update.isPending || changeEmail.isPending;
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setError(undefined);
+    const newEmail = email.trim();
+    try {
+      if (name.trim() && name.trim() !== user.name) await update.mutateAsync({ id: user.id, name: name.trim() });
+      if (newEmail.toLowerCase() !== user.email.toLowerCase()) {
+        await changeEmail.mutateAsync({ id: user.id, email: newEmail });
+        toast.success(t('We sent a confirmation link to {email}. The email changes once it is opened.', { email: newEmail }));
+      }
+      onOpenChange(false);
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+  return (
+    <Dialog open={!!user} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <form onSubmit={submit} className="grid gap-4">
+          <DialogHeader>
+            <DialogTitle>{t('Edit Details')}</DialogTitle>
+            <DialogDescription>{t('A new email is confirmed by a link sent to it before it is used to sign in.')}</DialogDescription>
+          </DialogHeader>
+          <FormError message={error} />
+          <Field label={t('Name')} htmlFor="edit-name">
+            <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+          </Field>
+          <Field label={t('Email')} htmlFor="edit-email">
+            <Input id="edit-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </Field>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              {t('Cancel')}
+            </Button>
+            <Button type="submit" disabled={busy}>
+              {t('Save')}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function UsersPage() {
   const { can, user: me } = useSession();
   const manage = can('users.manage');
@@ -110,6 +172,7 @@ export function UsersPage() {
   });
   const revoke = useApiMutation('users.revoke_invite', { invalidates: ['users.'] });
   const [inviting, setInviting] = useState(false);
+  const [editing, setEditing] = useState<EditableUser | null>(null);
 
   return (
     <div className="grid gap-6">
@@ -150,6 +213,11 @@ export function UsersPage() {
                       {formatDateTime(u.lastLoginAt) || t('Never')}
                     </TableCell>
                     <TableCell className="text-end">
+                      {manage && u.id === me?.id && (
+                        <Button variant="ghost" size="sm" onClick={() => setEditing(u)}>
+                          {t('Edit Details')}
+                        </Button>
+                      )}
                       {manage && u.id !== me?.id && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -158,6 +226,8 @@ export function UsersPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem onSelect={() => setEditing(u)}>{t('Edit Details')}</DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuLabel>{t('Role')}</DropdownMenuLabel>
                             {(Object.keys(ROLES) as Role[]).map((role) => (
                               <DropdownMenuItem
@@ -211,6 +281,7 @@ export function UsersPage() {
         </SettingsCard>
       )}
       <InviteDialog open={inviting} onOpenChange={setInviting} />
+      <EditUserDialog user={editing} onOpenChange={(open) => !open && setEditing(null)} />
     </div>
   );
 }

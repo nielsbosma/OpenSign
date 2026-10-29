@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { Pencil } from 'lucide-react';
 import QRCode from 'qrcode';
 import { type FormEvent, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -14,6 +15,7 @@ import { createPasskey, passkeyCanceled, passkeysSupported } from '@/lib/passkey
 import { useSession } from '@/lib/session';
 import { FormError, PASSWORD_HINT } from '../auth/AuthLayout';
 import { SettingsCard } from './SettingsLayout';
+import { EditUserDialog } from './UsersPage';
 
 function PasswordCard() {
   const [current, setCurrent] = useState('');
@@ -335,12 +337,20 @@ function LanguageCard() {
 }
 
 export function AccountPage() {
-  const { user } = useSession();
+  const { user, can } = useSession();
+  const [editing, setEditing] = useState(false);
   return (
     <div className="grid gap-6">
       <SettingsCard title={user?.name ?? t('You')} description={`${user?.email} · ${user ? (ROLE_LABELS[user.role] ?? user.role) : ''}`}>
-        <p className="text-muted-foreground">{t('Ask an Admin to change your name, email or role.')}</p>
+        {can('users.manage') ? (
+          <Button variant="outline" onClick={() => setEditing(true)}>
+            <Pencil /> {t('Edit Details')}
+          </Button>
+        ) : (
+          <p className="text-muted-foreground">{t('Ask an Admin to change your name, email or role.')}</p>
+        )}
       </SettingsCard>
+      <EditUserDialog user={editing && user ? user : null} onOpenChange={setEditing} />
       <LanguageCard />
       <PasskeysCard />
       <TwoFactorCard />

@@ -60,6 +60,8 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<users::Invite>(),
         erase::<users::AcceptInvite>(),
         erase::<users::Update>(),
+        erase::<users::ChangeEmail>(),
+        erase::<users::ConfirmEmailChange>(),
         erase::<users::ResetTwoFactor>(),
         erase::<users::ListInvites>(),
         erase::<users::RevokeInvite>(),

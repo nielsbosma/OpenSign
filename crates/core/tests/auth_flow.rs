@@ -253,6 +253,28 @@ async fn setup_login_lockout_two_factor_and_api_keys() {
     let locked = call::<auth::Login>(&anon, login("sven@example.com", PASSWORD)).await;
     assert_eq!(kind(locked), ErrorKind::TooManyRequests, "the right password is refused while locked");
 
+    let sven_id = sven.actor.as_ref().unwrap().user_id;
+    let change = |email: &str| users::ChangeEmailInput { id: sven_id, email: email.into() };
+    assert_eq!(kind(call::<users::ChangeEmail>(&sven, change("sven2@example.com")).await), ErrorKind::Forbidden);
+    assert_eq!(kind(call::<users::ChangeEmail>(&admin, change("ADA@example.com")).await), ErrorKind::Conflict);
+    call::<users::ChangeEmail>(&admin, change("Sven2@Example.com")).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, String>("select email from users where id = $1").bind(sven_id).fetch_one(&mut *conn).await.unwrap(),
+        "sven@example.com",
+        "the email changes only once the new address confirms"
+    );
+    let token = "y".repeat(43);
+    sqlx::query("update email_change_tokens set id = $2 where user_id = $1 and used_at is null")
+        .bind(sven_id)
+        .bind(sha256_hex(&token))
+        .execute(&mut *conn)
+        .await
+        .unwrap();
+    assert!(call::<users::ConfirmEmailChange>(&anon, users::TokenInput { token: "z".repeat(43) }).await.is_err());
+    let changed = call::<users::ConfirmEmailChange>(&anon, users::TokenInput { token: token.clone() }).await.unwrap();
+    assert_eq!(changed.email, "sven2@example.com");
+    assert!(call::<users::ConfirmEmailChange>(&anon, users::TokenInput { token }).await.is_err(), "a confirmation link works once");
+
     call::<auth::RequestPasswordReset>(&anon, auth::EmailInput { email: "nobody@example.com".into() }).await.unwrap();
     let chain = opensign_core::audit::verify_chain(&mut conn, &app.keys).await.unwrap();
     assert!(chain.valid, "{chain:?}");

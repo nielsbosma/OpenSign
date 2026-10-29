@@ -687,5 +687,16 @@
   "A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.": "একটি পেজ যা ref হিসেবে দেওয়া রিলিজ ইনস্টল করে, যেমন Sliplane Deployer-এর সেট করা লিংক। deploy hook না থাকলে ব্যবহৃত হয়।",
   "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "\"এখনই আপডেট করুন\" Sliplane Deployer খোলে। Sliplane-এ সাইন ইন করে নিশ্চিত করুন; নতুন সংস্করণ চালু হলে মাইগ্রেশন চলে।",
   "Generate Password": "পাসওয়ার্ড তৈরি করুন",
-  "To secure your account, turn on two-factor authentication or add a passkey under Settings once you are signed in.": "আপনার অ্যাকাউন্ট সুরক্ষিত রাখতে, সাইন ইন করার পর সেটিংসে টু-ফ্যাক্টর অথেন্টিকেশন চালু করুন বা একটি পাসকি যোগ করুন।"
+  "To secure your account, turn on two-factor authentication or add a passkey under Settings once you are signed in.": "আপনার অ্যাকাউন্ট সুরক্ষিত রাখতে, সাইন ইন করার পর সেটিংসে টু-ফ্যাক্টর অথেন্টিকেশন চালু করুন বা একটি পাসকি যোগ করুন।",
+  "Try calls in the {explorer} or read the {docs}.": "{explorer}-এ কল চেষ্টা করুন বা {docs} পড়ুন।",
+  "API guide": "API গাইড",
+  "We sent a confirmation link to {email}. The email changes once it is opened.": "আমরা {email}-এ একটি নিশ্চিতকরণ লিংক পাঠিয়েছি। লিংকটি খোলা হলে ইমেল বদলাবে।",
+  "Edit Details": "বিবরণ সম্পাদনা",
+  "A new email is confirmed by a link sent to it before it is used to sign in.": "নতুন ইমেল সাইন ইনে ব্যবহারের আগে তাতে পাঠানো লিংক দিয়ে নিশ্চিত করা হয়।",
+  "Email Changed": "ইমেল বদলানো হয়েছে",
+  "You now sign in with {email}.": "এখন আপনি {email} দিয়ে সাইন ইন করেন।",
+  "Continue": "চালিয়ে যান",
+  "Confirm Your New Email": "আপনার নতুন ইমেল নিশ্চিত করুন",
+  "Confirm to start signing in with this address.": "এই ঠিকানা দিয়ে সাইন ইন শুরু করতে নিশ্চিত করুন।",
+  "Confirm Email": "ইমেল নিশ্চিত করুন"
 }

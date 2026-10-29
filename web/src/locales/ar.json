@@ -687,5 +687,16 @@
   "A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.": "صفحة تثبّت إصدارًا محددًا في ref، مثل الرابط الذي يضبطه Sliplane Deployer. يُستخدم عند عدم وجود deploy hook.",
   "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "يفتح «التحديث الآن» Sliplane Deployer. سجّل الدخول إلى Sliplane وأكّد؛ تُشغَّل عمليات الترحيل عند بدء الإصدار الجديد.",
   "Generate Password": "إنشاء كلمة مرور",
-  "To secure your account, turn on two-factor authentication or add a passkey under Settings once you are signed in.": "لتأمين حسابك، فعّل المصادقة الثنائية أو أضف مفتاح مرور من الإعدادات بعد تسجيل الدخول."
+  "To secure your account, turn on two-factor authentication or add a passkey under Settings once you are signed in.": "لتأمين حسابك، فعّل المصادقة الثنائية أو أضف مفتاح مرور من الإعدادات بعد تسجيل الدخول.",
+  "Try calls in the {explorer} or read the {docs}.": "جرّب الطلبات في {explorer} أو اقرأ {docs}.",
+  "API guide": "دليل واجهة البرمجة",
+  "We sent a confirmation link to {email}. The email changes once it is opened.": "أرسلنا رابط تأكيد إلى {email}. يتغير البريد بعد فتح الرابط.",
+  "Edit Details": "تعديل البيانات",
+  "A new email is confirmed by a link sent to it before it is used to sign in.": "يُؤكَّد البريد الجديد برابط يُرسل إليه قبل استخدامه لتسجيل الدخول.",
+  "Email Changed": "تم تغيير البريد",
+  "You now sign in with {email}.": "أصبحت تسجّل الدخول باستخدام {email}.",
+  "Continue": "متابعة",
+  "Confirm Your New Email": "أكّد بريدك الجديد",
+  "Confirm to start signing in with this address.": "أكّد لتبدأ تسجيل الدخول بهذا العنوان.",
+  "Confirm Email": "تأكيد البريد"
 }

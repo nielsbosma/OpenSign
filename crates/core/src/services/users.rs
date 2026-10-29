@@ -5,6 +5,7 @@ use chrono::{DateTime, Duration, Utc};
 use opensign_crypto::{hash_password, random_token, sha256_hex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sqlx::PgConnection;
 use uuid::Uuid;
 
@@ -19,6 +20,7 @@ use crate::service::{Access, Meta, Service};
 use crate::settings::{EmailSettings, OrgSettings};
 
 const INVITE_DAYS: i64 = 7;
+const EMAIL_CHANGE_HOURS: i64 = 24;
 
 #[derive(Serialize, JsonSchema, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -256,7 +258,7 @@ impl Service for Update {
     type Output = UserView;
     const META: Meta = Meta::mutation(
         "users.update",
-        "Change someone's name or role, or deactivate or reactivate their account.",
+        "Change someone's name or role, or deactivate or reactivate their account. Use users.change_email for their email.",
         Access::Permission(Permission::UsersManage),
     );
 
@@ -305,6 +307,166 @@ impl Service for Update {
             last_login_at: user.last_login_at,
             created_at: user.created_at,
         })
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct ChangeEmailInput {
+    pub id: Uuid,
+    /// The new address. It only takes effect once someone opens the link sent to it.
+    pub email: String,
+}
+
+pub struct ChangeEmail;
+
+#[async_trait]
+impl Service for ChangeEmail {
+    type Input = ChangeEmailInput;
+    type Output = Ok_;
+    const META: Meta = Meta::mutation(
+        "users.change_email",
+        "Change someone's sign-in email. A confirmation link goes to the new address, and the change applies once it is opened.",
+        Access::Permission(Permission::UsersManage),
+    )
+    .not_a_tool();
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ChangeEmailInput) -> Result<Ok_> {
+        let actor = ctx.actor()?;
+        if actor.credential != Credential::Session {
+            return Err(AppError::new(ErrorKind::Forbidden, "Change email addresses in the app, signed in"));
+        }
+        let user = user_by_id(conn, input.id).await?.ok_or_else(|| not_found("User"))?;
+        let email = normalize_email(&input.email)?;
+        if email.eq_ignore_ascii_case(&user.email) {
+            return Err(bad_request("That is already their email"));
+        }
+        if user_by_email(conn, &email).await?.is_some() {
+            return Err(conflict("Someone with that email already has an account"));
+        }
+        let recent: i64 =
+            sqlx::query_scalar("select count(*) from email_change_tokens where user_id = $1 and created_at > now() - interval '1 hour'")
+                .bind(user.id)
+                .fetch_one(&mut *conn)
+                .await?;
+        if recent >= 5 {
+            return Err(AppError::new(ErrorKind::TooManyRequests, "Too many email changes for this person. Try again in an hour."));
+        }
+        sqlx::query("update email_change_tokens set used_at = now() where user_id = $1 and used_at is null")
+            .bind(user.id)
+            .execute(&mut *conn)
+            .await?;
+        let token = random_token();
+        sqlx::query("insert into email_change_tokens (id, user_id, new_email, requested_by, expires_at) values ($1, $2, $3, $4, $5)")
+            .bind(sha256_hex(&token))
+            .bind(user.id)
+            .bind(&email)
+            .bind(actor.user_id)
+            .bind(ctx.now + Duration::hours(EMAIL_CHANGE_HOURS))
+            .execute(&mut *conn)
+            .await?;
+        audit(
+            ctx,
+            conn,
+            Entry::new("users.email_change_requested", "user", user.id)
+                .before(json!({ "email": user.email }))
+                .after(json!({ "email": email })),
+        )
+        .await?;
+        let email_settings: EmailSettings = settings(ctx, conn).await?;
+        let org: OrgSettings = settings(ctx, conn).await?;
+        email::send(
+            &ctx.app,
+            &email_settings,
+            &org,
+            &Message {
+                to: email.clone(),
+                to_name: Some(user.name.clone()),
+                subject: "Confirm your new OpenSign email".into(),
+                paragraphs: vec![
+                    format!("Hi {},", user.name),
+                    format!(
+                        "Your OpenSign sign-in email is being changed to this address. Confirm it within {EMAIL_CHANGE_HOURS} hours to finish the change."
+                    ),
+                ],
+                button: Some(("Confirm Email".into(), format!("{}/confirm-email#{token}", ctx.app.public_url()))),
+                footer: Some("If you did not expect this, ignore this email; nothing changes.".into()),
+                attachments: vec![],
+                lang: crate::i18n::Lang::En,
+            },
+        )
+        .await?;
+        Ok(Ok_::default())
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct TokenInput {
+    pub token: String,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct EmailView {
+    pub email: String,
+}
+
+pub struct ConfirmEmailChange;
+
+#[async_trait]
+impl Service for ConfirmEmailChange {
+    type Input = TokenInput;
+    type Output = EmailView;
+    const META: Meta = Meta::mutation(
+        "auth.confirm_email_change",
+        "Finish changing a sign-in email with the link sent to the new address.",
+        Access::Public,
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: TokenInput) -> Result<EmailView> {
+        let row: Option<(Uuid, String)> = sqlx::query_as(
+            "update email_change_tokens set used_at = now() where id = $1 and used_at is null and expires_at > $2 returning user_id, new_email",
+        )
+        .bind(sha256_hex(&input.token))
+        .bind(ctx.now)
+        .fetch_optional(&mut *conn)
+        .await?;
+        let expired = || bad_request("This link has expired or was already used. Ask for a new one.");
+        let (user_id, email) = row.ok_or_else(expired)?;
+        let user = user_by_id(conn, user_id).await?.filter(|u| u.active).ok_or_else(expired)?;
+        if user_by_email(conn, &email).await?.is_some_and(|u| u.id != user.id) {
+            return Err(conflict("Someone with that email already has an account"));
+        }
+        sqlx::query("update users set email = $2, updated_at = now() where id = $1").bind(user.id).bind(&email).execute(&mut *conn).await?;
+        audit(
+            ctx,
+            conn,
+            Entry::new("users.email_changed", "user", user.id).before(json!({ "email": user.email })).after(json!({ "email": email })),
+        )
+        .await?;
+        let email_settings: EmailSettings = settings(ctx, conn).await?;
+        let org: OrgSettings = settings(ctx, conn).await?;
+        let notice = email::send(
+            &ctx.app,
+            &email_settings,
+            &org,
+            &Message {
+                to: user.email.clone(),
+                to_name: Some(user.name.clone()),
+                subject: "Your OpenSign email was changed".into(),
+                paragraphs: vec![
+                    format!("Hi {},", user.name),
+                    format!("Your OpenSign sign-in email is now {email}. This address no longer signs in."),
+                ],
+                button: None,
+                footer: Some("If you did not expect this, contact your OpenSign admin right away.".into()),
+                attachments: vec![],
+                lang: crate::i18n::Lang::En,
+            },
+        )
+        .await;
+        if let Err(error) = notice {
+            tracing::warn!(error = %error, "email change notice failed");
+        }
+        Ok(EmailView { email })
     }
 }
 
