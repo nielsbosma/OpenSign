@@ -12,7 +12,7 @@ const NAV: { group: string; slugs: string[] }[] = [
   },
   { group: 'Signing', slugs: ['signing-page', 'sealed-pdfs', 'verification'] },
   { group: 'Administration', slugs: ['users-and-roles', 'account-security', 'settings', 'retention', 'audit-log', 'ai'] },
-  { group: 'Developers', slugs: ['api', 'webhooks', 'scrive', 'docusign', 'mcp'] },
+  { group: 'Developers', slugs: ['api', 'webhooks', 'embedding', 'scrive', 'docusign', 'mcp'] },
   { group: 'Operations', slugs: ['deployment', 'updates', 'security'] },
 ];
 

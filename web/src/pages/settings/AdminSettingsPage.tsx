@@ -8,6 +8,7 @@ import { FilePicker } from '@/components/ui/file-picker';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { errorMessage, type Group, useApi, useApiMutation } from '@/lib/api';
 import { formatDate, formatDateTime, languages } from '@/lib/format';
 import { msg, t } from '@/lib/i18n';
@@ -18,7 +19,8 @@ type Spec = {
   key: string;
   label: string;
   /** `file` is a secret PEM or PKCS#12 file, `pem` a public one such as a CA certificate. */
-  type?: 'text' | 'secret' | 'bool' | 'number' | 'select' | 'file' | 'pem' | 'color' | 'country' | 'timeZone' | 'aiModel';
+  /** `lines` is a list of strings, edited one per line. */
+  type?: 'text' | 'secret' | 'bool' | 'number' | 'select' | 'file' | 'pem' | 'color' | 'country' | 'timeZone' | 'aiModel' | 'lines';
   hint?: string;
   options?: [string, string][] | (() => [string, string][]);
   placeholder?: string;
@@ -102,7 +104,7 @@ const GROUPS: Record<Group, { title: string; description: string; help?: string;
   security: {
     help: 'settings#security',
     title: msg('Security'),
-    description: msg('Sessions, sign-in and uploads.'),
+    description: msg('Sessions, sign-in, uploads and embedded signing.'),
     fields: [
       { key: 'enforceTwoFactor', label: msg('Require two-factor authentication for everyone'), type: 'bool' },
       { key: 'sessionHours', label: msg('Session Length (Hours)'), type: 'number' },
@@ -114,6 +116,20 @@ const GROUPS: Record<Group, { title: string; description: string; help?: string;
         label: msg('AI Review Links Expire After (Days)'),
         type: 'number',
         hint: msg('Signers can give their own AI a read-only copy of a document. 0 turns this off; at most 30.'),
+      },
+      {
+        key: 'embedSigning',
+        label: msg('Allow Embedded Signing'),
+        type: 'bool',
+        hint: msg('Lets the sites listed below show the signing page inside their own app. Off, no site can frame OpenSign.'),
+      },
+      {
+        key: 'embedOrigins',
+        label: msg('Sites Allowed to Embed'),
+        type: 'lines',
+        placeholder: 'https://app.example.com',
+        hint: msg('One per line, with https and without a path. Only links you hand over yourself can be signed in a frame.'),
+        when: 'embedSigning',
       },
     ],
   },
@@ -596,7 +612,11 @@ export function SettingsGroup({ group }: { group: Group }) {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    save.mutate({ group, values: draft });
+    const lines = (key: string) => spec.fields.some((f) => f.key === key && f.type === 'lines');
+    const values = Object.fromEntries(
+      Object.entries(draft).map(([k, v]) => [k, lines(k) && typeof v === 'string' ? v.split(/[\s,]+/).filter(Boolean) : v]),
+    );
+    save.mutate({ group, values });
   };
 
   return (
@@ -613,9 +633,28 @@ export function SettingsGroup({ group }: { group: Group }) {
               if (f.type === 'bool') {
                 return (
                   <label key={f.key} className="flex items-center justify-between gap-4">
-                    <span>{label}</span>
+                    <span className="grid gap-1">
+                      <span>{label}</span>
+                      {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
+                    </span>
                     <Switch checked={!!value(f.key)} onCheckedChange={(c) => set(f.key, c)} disabled={locked} />
                   </label>
+                );
+              }
+              if (f.type === 'lines') {
+                const current = value(f.key);
+                return (
+                  <Field key={f.key} label={label} htmlFor={id} hint={hint}>
+                    <Textarea
+                      id={id}
+                      rows={3}
+                      className="font-mono"
+                      value={Array.isArray(current) ? current.join('\n') : String(current ?? '')}
+                      onChange={(e) => set(f.key, e.target.value)}
+                      placeholder={f.placeholder}
+                      disabled={locked}
+                    />
+                  </Field>
                 );
               }
               if (f.type === 'select') {

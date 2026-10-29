@@ -23,7 +23,7 @@ use crate::documents::{
 use crate::error::{AppError, ErrorKind, Result, bad_request, conflict, too_many};
 use crate::jobs::enqueue;
 use crate::service::{Access, Meta, Service};
-use crate::settings::{OrgSettings, SmsSettings};
+use crate::settings::{OrgSettings, SecuritySettings, SmsSettings};
 use crate::storage::{FileRecord, NewFile, file_record, store_file};
 
 pub(crate) const SESSION_MINUTES: i64 = 30;
@@ -158,6 +158,26 @@ pub struct SignerView {
     pub attachments: Vec<AttachmentRequest>,
     /// Sharing a read-only copy with the party's own AI agent; unset until they have identified.
     pub review: Option<super::review::ReviewLinkState>,
+    /// Set for a link the sender hands over while embedded signing is on.
+    pub embed: Option<EmbedView>,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbedView {
+    /// The sites that may show this page in a frame; events go to these origins only.
+    pub origins: Vec<String>,
+    /// Where to send the signer after they sign or decline, already checked against `origins`.
+    pub redirect_url: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenInput {
+    pub token: String,
+    pub session: Option<String>,
+    /// From the link's `redirect` parameter. Followed only when its site is allowed to embed.
+    pub redirect_url: Option<String>,
 }
 
 /// What a party sees, without the parts that depend on their link and session.
@@ -207,6 +227,7 @@ pub(crate) async fn signer_view(
         can_download: false,
         attachments: if locked { Vec::new() } else { attachments::for_party(conn, party.id).await? },
         review: None,
+        embed: None,
     })
 }
 
@@ -214,11 +235,11 @@ pub struct Open;
 
 #[async_trait]
 impl Service for Open {
-    type Input = TokenInput;
+    type Input = OpenInput;
     type Output = SignerView;
     const META: Meta = Meta::mutation("signing.open", "Open a signing link: the document, the party and their fields.", Access::Public);
 
-    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: TokenInput) -> Result<SignerView> {
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: OpenInput) -> Result<SignerView> {
         let Resolved { party, document, session } = resolve(ctx, conn, &input.token, input.session.as_deref()).await?;
         let locked = !satisfied(party.auth_to_view(), session.as_ref());
         let all = parties(conn, document.id).await?;
@@ -229,6 +250,12 @@ impl Service for Open {
         view.your_turn = your_turn;
         view.can_download = !locked && document.status == status::COMPLETED;
         view.review = if locked { None } else { Some(super::review::state(ctx, conn, &document, &party).await?) };
+        let security: SecuritySettings = settings(ctx, conn).await?;
+        let origins = security.embed_origins();
+        if party.delivery == Delivery::Link.as_str() && !origins.is_empty() {
+            let redirect_url = input.redirect_url.filter(|u| security.allows_redirect(u));
+            view.embed = Some(EmbedView { origins, redirect_url });
+        }
         if !locked && party.viewed_at.is_none() && document.status == status::PENDING {
             sqlx::query("update parties set viewed_at = $2, status = case when status in ('waiting', 'notified') then 'viewed' else status end, updated_at = now() where id = $1")
                 .bind(party.id)
@@ -239,6 +266,12 @@ impl Service for Open {
                 ctx,
                 conn,
                 Entry::new("party.viewed", "document", document.id).metadata(json!({ "party": party.id, "name": party.name })),
+            )
+            .await?;
+            notify::emit(
+                conn,
+                "document.viewed",
+                json!({ "documentId": document.id, "externalId": document.external_id, "partyId": party.id, "name": party.name }),
             )
             .await?;
         }

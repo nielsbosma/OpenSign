@@ -96,5 +96,12 @@ export const pt: Texts = {
   reviewSafety: (date) =>
     `O link não pode assinar nada. Ele deixa de funcionar em ${date}, cada uso é registrado e você pode revogá-lo a qualquer momento.`,
   revokeLink: 'Revogar link',
+  securedBy: 'Protegido pelo OpenSign',
+  embedRefused: 'Esta página não pode ser mostrada aqui',
+  embedRefusedNote: 'Abra o seu link de assinatura diretamente no navegador.',
+  eidPopup: (label) => `Conclua a identificação com ${label} na janela que foi aberta.`,
+  eidPopupBlocked: 'Permita pop-ups para este site e tente novamente.',
+  eidWindowDone: 'Identificação concluída',
+  eidWindowDoneNote: 'Você pode fechar esta janela e voltar à página de assinatura.',
   methods: { sms_pin: 'o código SMS', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-ID' },
 };

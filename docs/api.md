@@ -161,7 +161,7 @@ Send answers `{ "document": {…}, "links": [{ "partyId", "name", "url" }] }`. T
 | POST | `/documents/{id}/remind` | Remind parties whose turn it is |
 | POST | `/documents/{id}/shares` | Share with a colleague. Body: `userId`, `canEdit` |
 | DELETE | `/documents/{id}/shares/{userId}` | Stop sharing |
-| POST | `/documents/{documentId}/parties/{partyId}/signing-link` | Issue a signing link to hand over. `rotate: true` revokes earlier links first |
+| POST | `/documents/{documentId}/parties/{partyId}/signing-link` | Issue a signing link to hand over. `rotate: true` revokes earlier links first; `redirectUrl` sends the party to your site afterwards (see [Embedded signing](embedding.md#redirect-after-signing)) |
 | PUT | `/documents/{id}/legal-hold` | Body `hold`, `reason`. See [Retention and legal hold](retention.md) |
 | GET | `/documents/{id}/file` | The PDF. `version=signed` (sealed, completed only) or `original` (as sent) |
 | POST | `/documents/move` | Move documents or templates to a folder. Body: `ids`, `folderId` (`null` for none) |
@@ -193,6 +193,10 @@ See [Bulk send](bulk-send.md).
 | POST | `/webhooks` | Add one. Body: `url`, `events`. Returns the signing secret once |
 | DELETE | `/webhooks/{id}` | Remove one; queued deliveries are dropped |
 | POST | `/webhooks/{id}/test` | Send a `webhook.test` event |
+| GET | `/webhooks/{webhookId}/deliveries` | The delivery log, newest first. Query: `status` (`pending`, `delivered`, `failed`), `event`, `before`, `limit` |
+| GET | `/webhook-deliveries/{id}` | One delivery with its payload and every attempt |
+| POST | `/webhook-deliveries/{id}/resend` | Send a delivery again, as a new delivery |
+| POST | `/webhooks/{webhookId}/resend-failed` | Resend every delivery that was given up |
 
 See [Webhooks](webhooks.md).
 

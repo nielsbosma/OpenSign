@@ -915,6 +915,8 @@ export type DocumentsSignInPersonOutput = SignerLink;
 export type DocumentsSigningLinkInput = {
   documentId: string;
   partyId: string;
+  /** For embedded signing: where the signing page sends the party after they sign or decline, with `event=signing_complete` or `event=decline` added. Must be on a site allowed to embed. */
+  redirectUrl?: string | null;
   /** Revoke the party's earlier links first, e.g. when one was forwarded by mistake. */
   rotate?: boolean;
 };
@@ -932,6 +934,13 @@ export type ActiveReviewLink = {
   lastUsedAt?: string | null;
   /** How many times an agent has fetched it. */
   uses: number;
+};
+
+export type EmbedView = {
+  /** The sites that may show this page in a frame; events go to these origins only. */
+  origins: Array<string>;
+  /** Where to send the signer after they sign or decline, already checked against `origins`. */
+  redirectUrl?: string | null;
 };
 
 export type ReviewLinkState = {
@@ -973,6 +982,8 @@ export type SignerView = {
   attachments: Array<AttachmentRequest>;
   canDownload: boolean;
   document: SignerDocument;
+  /** Set for a link the sender hands over while embedded signing is on. */
+  embed?: EmbedView | null;
   /** The party's own fields, and the sender's prefilled text for context. */
   fields: Array<FieldRow>;
   /** Set when the party must identify before seeing the document; nothing else is filled in. */
@@ -1278,6 +1289,8 @@ export type EidStatus = {
 };
 
 export type SigningOpenInput = {
+  /** From the link's `redirect` parameter. Followed only when its site is allowed to embed. */
+  redirectUrl?: string | null;
   session?: string | null;
   token: string;
 };
@@ -1486,7 +1499,7 @@ export type UsersUpdateInput = {
 export type UsersUpdateOutput = UserView;
 
 export type WebhooksCreateInput = {
-  /** Event names, or "*" for all: document.sent, document.signed, document.completed, document.declined, document.canceled, document.expired. */
+  /** Event names, or "*" for all: document.created, document.sent, document.viewed, document.signed, document.completed, document.declined, document.canceled, document.expired. */
   events: Array<string>;
   /** A public https URL. */
   url: string;
@@ -1496,6 +1509,8 @@ export type WebhookView = {
   active: boolean;
   createdAt: string;
   events: Array<string>;
+  /** Deliveries in the log that were given up and not resent. */
+  failed: number;
   id: string;
   lastError?: string | null;
   lastStatus?: number | null;
@@ -1516,9 +1531,105 @@ export type WebhooksDeleteInput = {
 
 export type WebhooksDeleteOutput = Ok_;
 
+export type DeliveryStatus = "delivered" | "pending" | "failed";
+
+export type WebhooksDeliveriesInput = {
+  /** For the next page: the id of the last delivery of the previous page. */
+  before?: string | null;
+  /** Only this event. */
+  event?: string | null;
+  /** At most 200; 50 when left out. */
+  limit?: number | null;
+  /** Only deliveries with this status. "failed" also includes deliveries waiting for a retry after a failed attempt. */
+  status?: DeliveryStatus | null;
+  webhookId: string;
+};
+
+export type DeliveryView = {
+  attempts: number;
+  createdAt: string;
+  deliveredAt?: string | null;
+  /** Why the latest attempt failed. */
+  error?: string | null;
+  event: string;
+  id: string;
+  lastAttemptAt?: string | null;
+  nextAttemptAt?: string | null;
+  /** The delivery this one resends. */
+  resentFrom?: string | null;
+  /** pending (queued or waiting for a retry), delivered, or failed (given up after the last retry). */
+  status: string;
+  /** The status code of the latest attempt, if the endpoint answered. */
+  statusCode?: number | null;
+  webhookId: string;
+};
+
+export type WebhooksDeliveriesOutput = Array<DeliveryView>;
+
+export type WebhooksDeliveryInput = {
+  id: string;
+};
+
+export type AttemptView = {
+  createdAt: string;
+  durationMs: number;
+  error?: string | null;
+  /** The first 2 KB of the endpoint's answer. */
+  responseExcerpt?: string | null;
+  statusCode?: number | null;
+};
+
+export type WebhooksDeliveryOutput = DeliveryDetail;
+
+export type DeliveryDetail = {
+  attempts: number;
+  attemptsLog: Array<AttemptView>;
+  createdAt: string;
+  deliveredAt?: string | null;
+  /** Why the latest attempt failed. */
+  error?: string | null;
+  event: string;
+  id: string;
+  lastAttemptAt?: string | null;
+  nextAttemptAt?: string | null;
+  /** The JSON body that was posted. The signature is made fresh on every attempt and is not kept. */
+  payload: unknown;
+  /** Later deliveries that resent this one. */
+  resentAs: Array<string>;
+  /** The delivery this one resends. */
+  resentFrom?: string | null;
+  /** pending (queued or waiting for a retry), delivered, or failed (given up after the last retry). */
+  status: string;
+  /** The status code of the latest attempt, if the endpoint answered. */
+  statusCode?: number | null;
+  webhookId: string;
+};
+
 export type WebhooksListInput = Record<string, unknown>;
 
 export type WebhooksListOutput = Array<WebhookView>;
+
+export type WebhooksResendInput = {
+  id: string;
+};
+
+export type WebhooksResendOutput = ResendOutput;
+
+export type ResendOutput = {
+  /** The new delivery's id. */
+  id: string;
+};
+
+export type WebhooksResendFailedInput = {
+  webhookId: string;
+};
+
+export type WebhooksResendFailedOutput = ResendFailedOutput;
+
+export type ResendFailedOutput = {
+  /** How many deliveries were queued again. */
+  count: number;
+};
 
 export type WebhooksTestInput = {
   id: string;
@@ -1632,6 +1743,10 @@ export interface Services {
   "users.update": { kind: "mutation"; input: UsersUpdateInput; output: UsersUpdateOutput };
   "webhooks.create": { kind: "mutation"; input: WebhooksCreateInput; output: WebhooksCreateOutput };
   "webhooks.delete": { kind: "mutation"; input: WebhooksDeleteInput; output: WebhooksDeleteOutput };
+  "webhooks.deliveries": { kind: "query"; input: WebhooksDeliveriesInput; output: WebhooksDeliveriesOutput };
+  "webhooks.delivery": { kind: "query"; input: WebhooksDeliveryInput; output: WebhooksDeliveryOutput };
   "webhooks.list": { kind: "query"; input: WebhooksListInput; output: WebhooksListOutput };
+  "webhooks.resend": { kind: "mutation"; input: WebhooksResendInput; output: WebhooksResendOutput };
+  "webhooks.resend_failed": { kind: "mutation"; input: WebhooksResendFailedInput; output: WebhooksResendFailedOutput };
   "webhooks.test": { kind: "mutation"; input: WebhooksTestInput; output: WebhooksTestOutput };
 }

@@ -43,7 +43,7 @@ async fn run(ctx: &Ctx, job: &Job) -> Result<()> {
         "webhook" => {
             drop(tx);
             let mut conn = ctx.db().acquire().await?;
-            return notify::deliver_webhook(ctx, &mut conn, id(job, "delivery")?).await;
+            return notify::deliver_webhook(ctx, &mut conn, id(job, "delivery")?, job).await;
         }
         "bulk_send" => {
             drop(tx);
@@ -100,6 +100,7 @@ async fn sweep(ctx: &Ctx, conn: &mut sqlx::PgConnection) -> Result<()> {
         enqueue(conn, "notify_party", json!({ "party": party, "reminder": true }), None, Some(&format!("notify:{party}"))).await?;
     }
     sqlx::query("delete from idempotency_keys where created_at < $1 - interval '1 day'").bind(ctx.now).execute(&mut *conn).await?;
+    sqlx::query("delete from webhook_deliveries where created_at < $1 - interval '30 days'").bind(ctx.now).execute(&mut *conn).await?;
     enqueue(conn, "retention", json!({}), None, Some("retention")).await?;
     enqueue(conn, "anchor_audit", json!({}), None, Some("anchor_audit")).await
 }

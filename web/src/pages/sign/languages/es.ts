@@ -96,5 +96,12 @@ export const es: Texts = {
   reviewSafety: (date) =>
     `El enlace no puede firmar nada. Deja de funcionar el ${date}, cada uso queda registrado y puedes revocarlo en cualquier momento.`,
   revokeLink: 'Revocar enlace',
+  securedBy: 'Protegido por OpenSign',
+  embedRefused: 'Esta página no se puede mostrar aquí',
+  embedRefusedNote: 'Abre tu enlace de firma directamente en el navegador.',
+  eidPopup: (label) => `Termina de identificarte con ${label} en la ventana que se abrió.`,
+  eidPopupBlocked: 'Permite las ventanas emergentes para este sitio e inténtalo de nuevo.',
+  eidWindowDone: 'Identificación completada',
+  eidWindowDoneNote: 'Puedes cerrar esta ventana y volver a la página de firma.',
   methods: { sms_pin: 'el código SMS', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-ID' },
 };

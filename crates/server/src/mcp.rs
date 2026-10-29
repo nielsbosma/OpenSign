@@ -251,7 +251,7 @@ fn tools(state: &AppState, ctx: &Ctx) -> Vec<Value> {
                 "annotations": {
                     "readOnlyHint": meta.kind == Kind::Query,
                     "destructiveHint": matches!(meta.name, "documents.delete" | "documents.cancel" | "webhooks.delete" | "api_keys.revoke" | "users.update"),
-                    "openWorldHint": matches!(meta.name, "documents.send" | "documents.remind" | "webhooks.test"),
+                    "openWorldHint": matches!(meta.name, "documents.send" | "documents.remind" | "webhooks.test" | "webhooks.resend" | "webhooks.resend_failed"),
                 },
             })
         })

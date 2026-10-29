@@ -1,4 +1,4 @@
-use chrono::Duration;
+use chrono::{DateTime, Duration, Utc};
 use hmac::{Hmac, Mac};
 use opensign_crypto::KeyPurpose;
 use serde_json::{Value, json};
@@ -12,7 +12,7 @@ use crate::context::Ctx;
 use crate::email::{self, Attachment, Message};
 use crate::error::{AppError, Result};
 use crate::i18n::{Lang, Stopped};
-use crate::jobs::enqueue;
+use crate::jobs::{Job, enqueue, retry_delay};
 use crate::services::settings;
 use crate::settings::{EmailSettings, OrgSettings, SecuritySettings, SmsSettings};
 use crate::storage::{file_record, read_file};
@@ -307,17 +307,33 @@ pub async fn emit(conn: &mut PgConnection, event: &str, data: Value) -> Result<(
     Ok(())
 }
 
-pub async fn emit_to(conn: &mut PgConnection, hook: Uuid, event: &str, data: &Value) -> Result<()> {
+pub async fn emit_to(conn: &mut PgConnection, hook: Uuid, event: &str, data: &Value) -> Result<Uuid> {
+    queue_delivery(conn, hook, event, data, crate::context::now(), None).await
+}
+
+/// Queues one delivery with a new id. A resend keeps the event's original `createdAt`.
+pub async fn queue_delivery(
+    conn: &mut PgConnection,
+    hook: Uuid,
+    event: &str,
+    data: &Value,
+    created_at: DateTime<Utc>,
+    resent_from: Option<Uuid>,
+) -> Result<Uuid> {
     let id = Uuid::now_v7();
-    let payload = json!({ "id": id, "event": event, "createdAt": crate::context::now(), "data": data });
-    sqlx::query("insert into webhook_deliveries (id, webhook_id, event, payload) values ($1, $2, $3, $4)")
-        .bind(id)
-        .bind(hook)
-        .bind(event)
-        .bind(&payload)
-        .execute(&mut *conn)
-        .await?;
-    enqueue(conn, "webhook", json!({ "delivery": id }), None, None).await
+    let payload = json!({ "id": id, "event": event, "createdAt": created_at, "data": data });
+    sqlx::query(
+        "insert into webhook_deliveries (id, webhook_id, event, payload, resent_from, next_attempt_at) values ($1, $2, $3, $4, $5, now())",
+    )
+    .bind(id)
+    .bind(hook)
+    .bind(event)
+    .bind(&payload)
+    .bind(resent_from)
+    .execute(&mut *conn)
+    .await?;
+    enqueue(conn, "webhook", json!({ "delivery": id }), None, None).await?;
+    Ok(id)
 }
 
 pub fn webhook_secret_context(id: Uuid) -> String {
@@ -343,7 +359,9 @@ struct PendingDelivery {
     active: bool,
 }
 
-pub async fn deliver_webhook(ctx: &Ctx, conn: &mut PgConnection, delivery_id: Uuid) -> Result<()> {
+const EXCERPT_BYTES: usize = 2048;
+
+pub async fn deliver_webhook(ctx: &Ctx, conn: &mut PgConnection, delivery_id: Uuid, job: &Job) -> Result<()> {
     let Some(d): Option<PendingDelivery> = sqlx::query_as(
         "select d.webhook_id, d.payload, w.url, w.secret, w.active from webhook_deliveries d join webhooks w on w.id = d.webhook_id where d.id = $1 and d.delivered_at is null",
     )
@@ -359,9 +377,10 @@ pub async fn deliver_webhook(ctx: &Ctx, conn: &mut PgConnection, delivery_id: Uu
     let secret = ctx.keys().decrypt(KeyPurpose::Settings, &webhook_secret_context(d.webhook_id), &d.secret).map_err(AppError::internal)?;
     let body = serde_json::to_vec(&d.payload).map_err(AppError::internal)?;
     let signature = webhook_signature(&secret, ctx.now.timestamp(), &body);
+    let started = std::time::Instant::now();
     let result = async {
         crate::net::check_public_url(&d.url).map_err(|e| anyhow::anyhow!(e))?;
-        let response = ctx
+        let mut response = ctx
             .app
             .http
             .public
@@ -372,27 +391,78 @@ pub async fn deliver_webhook(ctx: &Ctx, conn: &mut PgConnection, delivery_id: Uu
             .timeout(std::time::Duration::from_secs(10))
             .body(body)
             .send()
-            .await?;
-        anyhow::Ok(response.status().as_u16())
+            .await
+            .map_err(describe)?;
+        let code = response.status().as_u16();
+        anyhow::Ok((code, excerpt(&mut response).await))
     }
     .await;
-    let (code, error) = match &result {
-        Ok(code) if (200..300).contains(code) => (Some(*code as i32), None),
-        Ok(code) => (Some(*code as i32), Some(format!("The endpoint answered {code}"))),
-        Err(e) => (None, Some(e.to_string())),
+    let duration_ms = i32::try_from(started.elapsed().as_millis()).unwrap_or(i32::MAX);
+    let (code, error, response) = match result {
+        Ok((code, body)) if (200..300).contains(&code) => (Some(code as i32), None, body),
+        Ok((code, body)) => (Some(code as i32), Some(format!("The endpoint answered {code}")), body),
+        Err(e) => (None, Some(e.to_string()), None),
     };
+    let next_attempt = (error.is_some() && job.attempts < job.max_attempts).then(|| ctx.now + retry_delay(job.attempts));
     sqlx::query(
-        "update webhook_deliveries set attempts = attempts + 1, status_code = $2, error = $3, delivered_at = case when $3 is null then now() else null end where id = $1",
+        "insert into webhook_attempts (id, delivery_id, status_code, error, response_excerpt, duration_ms, created_at) values ($1, $2, $3, $4, $5, $6, $7)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(delivery_id)
+    .bind(code)
+    .bind(&error)
+    .bind(&response)
+    .bind(duration_ms)
+    .bind(ctx.now)
+    .execute(&mut *conn)
+    .await?;
+    sqlx::query(
+        "update webhook_deliveries set attempts = attempts + 1, status_code = $2, error = $3, last_attempt_at = $4, next_attempt_at = $5,
+           delivered_at = case when $3 is null then $4 else null end where id = $1",
     )
     .bind(delivery_id)
     .bind(code)
     .bind(&error)
+    .bind(ctx.now)
+    .bind(next_attempt)
     .execute(&mut *conn)
     .await?;
     match error {
         Some(e) => Err(AppError::internal(anyhow::anyhow!("webhook delivery failed: {e}"))),
         None => Ok(()),
     }
+}
+
+/// The error and its causes, without the URL, which can carry a token in its path.
+fn describe(e: reqwest::Error) -> anyhow::Error {
+    if e.is_timeout() {
+        return anyhow::anyhow!("The endpoint did not answer within 10 seconds");
+    }
+    let e = e.without_url();
+    let mut text = e.to_string();
+    let mut source = std::error::Error::source(&e);
+    while let Some(cause) = source {
+        text.push_str(": ");
+        text.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    anyhow::anyhow!(text)
+}
+
+async fn excerpt(response: &mut reqwest::Response) -> Option<String> {
+    let mut bytes = Vec::new();
+    while bytes.len() < EXCERPT_BYTES {
+        match response.chunk().await {
+            Ok(Some(chunk)) => bytes.extend_from_slice(&chunk),
+            _ => break,
+        }
+    }
+    excerpt_text(&bytes)
+}
+
+fn excerpt_text(bytes: &[u8]) -> Option<String> {
+    let text = String::from_utf8_lossy(&bytes[..bytes.len().min(EXCERPT_BYTES)]).replace('\0', "");
+    (!text.trim().is_empty()).then_some(text)
 }
 
 #[cfg(test)]
@@ -404,6 +474,14 @@ mod tests {
         let sig = webhook_signature(b"secret", 1_700_000_000, b"{}");
         assert!(sig.starts_with("t=1700000000,v1="));
         assert_eq!(sig.len(), "t=1700000000,v1=".len() + 64);
+    }
+
+    #[test]
+    fn response_excerpts_are_short_text() {
+        assert_eq!(excerpt_text(b"  \n"), None);
+        assert_eq!(excerpt_text(b"ok\0"), Some("ok".into()));
+        assert_eq!(excerpt_text(&[b'a'; 5000]).map(|t| t.len()), Some(EXCERPT_BYTES));
+        assert!(excerpt_text(&[0xff, b'x']).is_some_and(|t| t.ends_with('x')));
     }
 
     #[test]

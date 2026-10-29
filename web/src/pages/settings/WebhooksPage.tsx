@@ -1,5 +1,6 @@
-import { Plus, Webhook } from 'lucide-react';
+import { History, Plus, Webhook } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
+import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmButton, CopyButton, EmptyState, Field, Loading, StatusDot } from '@/components/common';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,16 @@ import { t, tx } from '@/lib/i18n';
 import { FormError } from '../auth/AuthLayout';
 import { SettingsCard } from './SettingsLayout';
 
-const EVENTS = ['document.sent', 'document.signed', 'document.completed', 'document.declined', 'document.canceled', 'document.expired'];
+const EVENTS = [
+  'document.created',
+  'document.sent',
+  'document.viewed',
+  'document.signed',
+  'document.completed',
+  'document.declined',
+  'document.canceled',
+  'document.expired',
+];
 
 function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [url, setUrl] = useState('');
@@ -133,6 +143,16 @@ export function WebhooksPage() {
                   {h.lastError ? ` · ${h.lastError}` : h.lastStatus ? ` · ${t('last {status}', { status: h.lastStatus })}` : ''}
                 </div>
               </div>
+              {h.failed > 0 && (
+                <Link to={`/settings/webhooks/${h.id}`} className="shrink-0 text-destructive text-xs hover:underline">
+                  {t('Failed: {count}', { count: h.failed })}
+                </Link>
+              )}
+              <Button variant="ghost" size="sm" asChild>
+                <Link to={`/settings/webhooks/${h.id}`}>
+                  <History /> {t('Deliveries')}
+                </Link>
+              </Button>
               <Button variant="ghost" size="sm" onClick={() => test.mutate({ id: h.id })}>
                 {t('Test')}
               </Button>

@@ -96,5 +96,12 @@ export const ur: Texts = {
   reviewSafety: (date) =>
     `یہ لنک کچھ بھی دستخط نہیں کر سکتا۔ یہ ${date} کو کام کرنا بند کر دے گا، ہر استعمال ریکارڈ ہوتا ہے اور آپ اسے کسی بھی وقت منسوخ کر سکتے ہیں۔`,
   revokeLink: 'لنک منسوخ کریں',
+  securedBy: 'OpenSign کے ذریعے محفوظ',
+  embedRefused: 'یہ صفحہ یہاں نہیں دکھایا جا سکتا',
+  embedRefusedNote: 'اس کے بجائے اپنا دستخطی لنک براہِ راست اپنے براؤزر میں کھولیں۔',
+  eidPopup: (label) => `کھلنے والی ونڈو میں ${label} کے ساتھ شناخت مکمل کریں۔`,
+  eidPopupBlocked: 'اس سائٹ کے لیے پاپ اپ کی اجازت دیں، پھر دوبارہ کوشش کریں۔',
+  eidWindowDone: 'شناخت مکمل ہو گئی',
+  eidWindowDoneNote: 'آپ یہ ونڈو بند کر کے دستخط کے صفحے پر واپس جا سکتے ہیں۔',
   methods: { sms_pin: 'SMS کوڈ', se_bankid: 'BankID', freja: 'Freja eID', broker: 'ای-آئی ڈی' },
 };
