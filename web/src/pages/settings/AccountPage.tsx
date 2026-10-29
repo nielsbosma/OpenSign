@@ -341,7 +341,11 @@ export function AccountPage() {
   const [editing, setEditing] = useState(false);
   return (
     <div className="grid gap-6">
-      <SettingsCard title={user?.name ?? t('You')} description={`${user?.email} · ${user ? (ROLE_LABELS[user.role] ?? user.role) : ''}`}>
+      <SettingsCard
+        help="account-security"
+        title={user?.name ?? t('You')}
+        description={`${user?.email} · ${user ? (ROLE_LABELS[user.role] ?? user.role) : ''}`}
+      >
         {can('users.manage') ? (
           <Button variant="outline" onClick={() => setEditing(true)}>
             <Pencil /> {t('Edit Details')}

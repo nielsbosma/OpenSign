@@ -32,6 +32,7 @@ export function AuditPage() {
   return (
     <div className="grid gap-6">
       <SettingsCard
+        help="audit-log"
         title={t('Audit Trail')}
         description={t(
           'Every change, sign-in and signature, in a hash chain: each entry includes the hash of the one before, so a changed or deleted entry shows.',

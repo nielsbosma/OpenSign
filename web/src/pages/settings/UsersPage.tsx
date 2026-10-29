@@ -176,7 +176,11 @@ export function UsersPage() {
 
   return (
     <div className="grid gap-6">
-      <SettingsCard title={t('Users')} description={t('Everyone who can sign in. Roles decide what each person may see and do.')}>
+      <SettingsCard
+        help="users-and-roles"
+        title={t('Users')}
+        description={t('Everyone who can sign in. Roles decide what each person may see and do.')}
+      >
         {manage && (
           <Button className="mb-4" onClick={() => setInviting(true)}>
             <UserPlus /> {t('Invite')}

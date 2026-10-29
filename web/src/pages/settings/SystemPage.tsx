@@ -27,6 +27,7 @@ function VersionCard() {
 
   return (
     <SettingsCard
+      help="updates"
       title={t('Version')}
       description={tx('OpenSign checks {link} for new releases at most every six hours. Only the version is sent.', {
         link: (

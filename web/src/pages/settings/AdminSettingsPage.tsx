@@ -29,8 +29,9 @@ type Spec = {
   passwordKey?: string;
 };
 
-const GROUPS: Record<Group, { title: string; description: string; fields: Spec[] }> = {
+const GROUPS: Record<Group, { title: string; description: string; help?: string; fields: Spec[] }> = {
   org: {
+    help: 'settings#organisation',
     title: msg('Organisation'),
     description: msg('Shown to the people you send documents to, in emails and on the signing page.'),
     fields: [
@@ -49,6 +50,7 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
     ],
   },
   email: {
+    help: 'setup#step-2-email',
     title: msg('Email'),
     description: msg(
       'Invitations, codes and signed documents go out through Resend or your own SMTP server. Changing the provider, server, key or sender needs a new test email.',
@@ -93,6 +95,7 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
     ],
   },
   security: {
+    help: 'settings#security',
     title: msg('Security'),
     description: msg('Sessions, sign-in and uploads.'),
     fields: [
@@ -139,6 +142,7 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
     ],
   },
   retention: {
+    help: 'retention',
     title: msg('Retention'),
     description: msg(
       'Delete documents and their files automatically after a set time. 0 keeps them. Templates and documents on legal hold are always kept, and the audit trail keeps a record of every deletion.',
@@ -155,6 +159,7 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
     ],
   },
   signing: {
+    help: 'sealed-pdfs',
     title: msg('Signing and Seal'),
     description: msg('Completed documents are sealed with your organisation seal and a timestamp from a trusted timestamp authority.'),
     fields: [
@@ -164,6 +169,7 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
     ],
   },
   ai: {
+    help: 'ai',
     title: msg('AI'),
     description: msg('Optional. Connect a language model for the assistant and document reviews. Nothing is sent until this is set up.'),
     fields: [
@@ -189,6 +195,7 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
     ],
   },
   sms: {
+    help: 'identification#sms-codes',
     title: msg('SMS'),
     description: msg('For SMS invitations and one-time codes.'),
     fields: [
@@ -208,6 +215,7 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
     ],
   },
   eid: {
+    help: 'identification',
     title: msg('BankID and eID'),
     description: msg(
       'Let parties identify with Swedish BankID (directly or through TIC Identity), Freja eID, or other Nordic eIDs through a broker.',
@@ -537,7 +545,7 @@ export function SettingsGroup({ group }: { group: Group }) {
 
   return (
     <div className="grid gap-6">
-      <SettingsCard title={t(spec.title)} description={t(spec.description)}>
+      <SettingsCard title={t(spec.title)} description={t(spec.description)} help={spec.help}>
         <form onSubmit={submit} className="grid max-w-xl gap-5">
           {spec.fields
             .filter((f) => !f.when || (f.is === undefined ? !!value(f.when) : value(f.when) === f.is))

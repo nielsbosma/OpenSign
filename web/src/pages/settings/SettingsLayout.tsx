@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router';
-import { PageHeader } from '@/components/common';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { NavLink, Outlet } from 'react-router';
+import { HelpLink, PageHeader } from '@/components/common';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Permission } from '@/lib/api';
 import { msg, t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
@@ -34,30 +34,11 @@ const SECTIONS: { title: string; items: { path: string; label: string; permissio
   },
 ];
 
-const HELP: Record<string, string> = {
-  '/settings/account': 'account-security',
-  '/settings/users': 'users-and-roles',
-  '/settings/admin/org': 'settings#organisation',
-  '/settings/admin/signing': 'sealed-pdfs',
-  '/settings/admin/security': 'settings#security',
-  '/settings/admin/retention': 'retention',
-  '/settings/audit': 'audit-log',
-  '/settings/system': 'updates',
-  '/settings/admin/updates': 'updates',
-  '/settings/admin/email': 'setup#step-2-email',
-  '/settings/admin/sms': 'identification#sms-codes',
-  '/settings/admin/eid': 'identification',
-  '/settings/admin/ai': 'ai',
-  '/settings/api-keys': 'api#api-keys',
-  '/settings/webhooks': 'webhooks',
-};
-
 export function SettingsLayout() {
   const { can } = useSession();
-  const { pathname } = useLocation();
   return (
     <>
-      <PageHeader title={t('Settings')} help={HELP[pathname.replace(/\/$/, '')] ?? 'settings'} />
+      <PageHeader title={t('Settings')} />
       <div className="grid gap-8 md:grid-cols-[200px_minmax(0,1fr)]">
         <nav className="grid content-start gap-5" aria-label={t('Settings')}>
           {SECTIONS.map((section) => {
@@ -94,17 +75,24 @@ export function SettingsCard({
   description,
   children,
   className,
+  help,
 }: {
   title: string;
   description?: ReactNode;
   children: ReactNode;
   className?: string;
+  help?: string;
 }) {
   return (
     <Card className={cn('gap-5 shadow-none', className)}>
       <CardHeader className="gap-1.5">
         <CardTitle>{title}</CardTitle>
         {description && <CardDescription className="max-w-prose leading-relaxed">{description}</CardDescription>}
+        {help && (
+          <CardAction>
+            <HelpLink page={help} className="-my-1.5 -me-2" />
+          </CardAction>
+        )}
       </CardHeader>
       <CardContent>{children}</CardContent>
     </Card>

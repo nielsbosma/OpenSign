@@ -235,6 +235,7 @@ export function ApiKeysPage() {
   const [editing, setEditing] = useState<ApiKey | null>(null);
   return (
     <SettingsCard
+      help="api#api-keys"
       title={t('API Keys')}
       description={
         <>

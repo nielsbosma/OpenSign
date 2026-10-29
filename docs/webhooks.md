@@ -1,89 +1,245 @@
 # Webhooks
 
-Webhooks tell your systems when documents change, as signed JSON POSTs. Use them instead of polling: update your CRM when a contract is signed, start onboarding when an employment agreement is completed.
+Webhooks tell your systems when documents change, as signed JSON POSTs. Use them instead of polling: update your CRM when a contract is signed, start onboarding when an employment agreement is completed, or chase a declined offer.
 
 ## Adding a webhook
 
-In **Settings → Webhooks**, add the URL of your endpoint and choose the events, or all of them. You can also use `POST /api/v1/webhooks` with `{"url": "…", "events": ["document.completed"]}` (or `["*"]` for all).
+1. Open **Settings → Webhooks** and choose **New Webhook**.
+2. Enter the URL of your endpoint and pick the events you want, or all of them.
+3. Copy the **signing secret** (`whsec_…`). It is shown only once. Store it with your endpoint; you need it to [check signatures](#checking-the-signature).
+4. Choose **Test** to send a `webhook.test` event and see that your endpoint answers.
 
-OpenSign shows the webhook's **signing secret** (`whsec_…`) once. Store it with your endpoint; you need it to check signatures.
+The list shows each webhook's events and the result of its latest delivery: the status code your endpoint answered, or the error, such as a timeout. **Delete** stops deliveries at once and drops any that are still queued.
 
-Managing webhooks needs the **webhooks.manage** permission. A test sends a `webhook.test` event, and the list shows the result of each webhook's latest delivery.
+Managing webhooks needs the **webhooks.manage** permission (admins and managers). Every change is in the [audit trail](audit-log.md).
 
-The URL must be a public `https` address without credentials in it. Private, reserved, `localhost` and `.internal` addresses are refused, when the webhook is added and again at every delivery. Redirects are not followed.
+### Rules for the URL
+
+- It must be a public `https` address, without a user name or password in it.
+- Private, reserved, `localhost` and `.internal` addresses are refused, both when the webhook is added and again at every delivery.
+- Redirects are not followed. Point the webhook at the final address.
+
+### With the API
+
+Webhooks can also be managed with the [REST API](api.md), with an API key that has the `webhooks.manage` scope.
+
+| Request | |
+| --- | --- |
+| `GET /api/v1/webhooks` | List webhooks with their latest delivery result. |
+| `POST /api/v1/webhooks` | Add one: `{"url": "https://…", "events": ["document.completed"]}`, or `["*"]` for every event. The answer includes the secret, once. |
+| `POST /api/v1/webhooks/{id}/test` | Send a `webhook.test` event. |
+| `DELETE /api/v1/webhooks/{id}` | Remove one. |
 
 ## Events
 
 | Event | When | `data` |
 | --- | --- | --- |
-| `document.sent` | A draft is sent | `documentId`, `title`, `externalId` |
+| `document.sent` | A draft is sent for signing | `documentId`, `title`, `externalId` |
 | `document.signed` | A party signs or approves | `documentId`, `externalId`, `partyId`, `name` |
-| `document.completed` | The sealed PDF is ready | `documentId`, `title`, `externalId`, `sealedSha256` |
+| `document.completed` | Everyone has signed and the sealed PDF is ready | `documentId`, `title`, `externalId`, `sealedSha256` |
 | `document.declined` | A party declines | `documentId`, `externalId`, `partyId`, `reason` |
-| `document.canceled` | The sender cancels | `documentId`, `externalId` |
-| `document.expired` | The deadline passes | `documentId` |
-| `webhook.test` | You test the webhook | `webhookId`, `message` |
+| `document.canceled` | The sender or a manager cancels | `documentId`, `externalId` |
+| `document.expired` | The deadline passes before everyone signed | `documentId` |
+| `webhook.test` | You choose **Test** | `webhookId`, `message` |
 
-`externalId` is the document's **Your Reference**, so you can match events to your own records without storing OpenSign ids.
+`externalId` is the document's **Your Reference**, or `null` when it has none, so you can match events to your own records without storing OpenSign ids.
+
+A document that is signed by three parties fires `document.sent`, then `document.signed` three times, then `document.completed` once the seal is done, usually seconds after the last signature.
+
+Webhooks carry ids and a few facts, never document contents or personal numbers. Fetch the document, its parties or the sealed PDF with the [REST API](api.md) when you need more.
 
 ## The request
 
 ```http
-POST /your/endpoint
+POST /your/endpoint HTTP/1.1
 content-type: application/json
 opensign-signature: t=1793289600,v1=5d1c…e9
-opensign-delivery: 019a2c4e-…
+opensign-delivery: 019a2c4e-7b1f-7c3a-9e51-3f0d2a8b6c11
 
 {
-  "id": "019a2c4e-…",
+  "id": "019a2c4e-7b1f-7c3a-9e51-3f0d2a8b6c11",
   "event": "document.completed",
-  "createdAt": "2026-10-28T15:20:00Z",
+  "createdAt": "2026-10-28T15:20:00.412Z",
   "data": {
-    "documentId": "019a2b11-…",
+    "documentId": "019a2b11-5d0e-7a42-b6f3-1c9e0d7a4f28",
     "title": "Consulting agreement",
     "externalId": "crm-4711",
-    "sealedSha256": "b94d27…"
+    "sealedSha256": "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
   }
 }
 ```
 
-Webhooks carry ids and a few facts, never document contents. Fetch the document or the sealed PDF with the [REST API](api.md) when you need more.
+| Part | |
+| --- | --- |
+| `id` | The delivery id. The same as the `opensign-delivery` header, and the same on every retry of this delivery. |
+| `event` | The event name. |
+| `createdAt` | When the event happened, in UTC. |
+| `data` | The event's facts, below. |
+| `opensign-signature` | The signature. See [Checking the signature](#checking-the-signature). |
+
+### Payload examples
+
+`document.sent`:
+
+```json
+{
+  "id": "019a2c40-…",
+  "event": "document.sent",
+  "createdAt": "2026-10-28T09:02:11.087Z",
+  "data": { "documentId": "019a2b11-…", "title": "Consulting agreement", "externalId": "crm-4711" }
+}
+```
+
+`document.signed`:
+
+```json
+{
+  "id": "019a2c45-…",
+  "event": "document.signed",
+  "createdAt": "2026-10-28T13:47:53.530Z",
+  "data": { "documentId": "019a2b11-…", "externalId": "crm-4711", "partyId": "019a2b12-…", "name": "Anna Svensson" }
+}
+```
+
+`document.declined`:
+
+```json
+{
+  "id": "019a2c47-…",
+  "event": "document.declined",
+  "createdAt": "2026-10-28T14:05:30.002Z",
+  "data": { "documentId": "019a2b11-…", "externalId": "crm-4711", "partyId": "019a2b12-…", "reason": "The notice period should be one month." }
+}
+```
+
+`reason` is `null` when the party gave none.
+
+`document.canceled`:
+
+```json
+{
+  "id": "019a2c48-…",
+  "event": "document.canceled",
+  "createdAt": "2026-10-28T14:30:00.910Z",
+  "data": { "documentId": "019a2b11-…", "externalId": "crm-4711" }
+}
+```
+
+`document.expired`:
+
+```json
+{
+  "id": "019a2c49-…",
+  "event": "document.expired",
+  "createdAt": "2026-11-28T00:05:00.000Z",
+  "data": { "documentId": "019a2b11-…" }
+}
+```
+
+`webhook.test`:
+
+```json
+{
+  "id": "019a2c4a-…",
+  "event": "webhook.test",
+  "createdAt": "2026-10-28T08:00:00.000Z",
+  "data": { "webhookId": "019a2c00-…", "message": "Test event from OpenSign" }
+}
+```
 
 ## Checking the signature
 
-`opensign-signature` holds a Unix timestamp `t` and `v1`, an HMAC-SHA256 over `<t>.<raw body>` with the webhook's secret, in hex. This is the same scheme Stripe uses, so existing helpers often work.
+Anyone can send a POST to your endpoint, so check every request's signature before you trust it.
 
-1. Take the raw request body, before any JSON parsing.
-2. Compute the HMAC and compare it with `v1` in constant time.
+`opensign-signature` holds `t`, a Unix timestamp in seconds, and `v1`, an HMAC-SHA256 in hex over the string `<t>.<raw body>`, keyed with the webhook's secret (the whole `whsec_…` string). This is the same scheme Stripe uses, so existing helpers often work.
+
+1. Take the raw request body, exactly as received, before any JSON parsing.
+2. Compute the HMAC over `t`, a dot, and the body, and compare it with `v1` in constant time.
 3. Reject the request if `t` is more than a few minutes old, to stop replays.
+
+Node.js:
 
 ```js
 import crypto from "node:crypto";
 
 function verify(rawBody, header, secret) {
   const parts = Object.fromEntries(header.split(",").map((p) => p.split("=")));
-  if (Date.now() / 1000 - Number(parts.t) > 300) return false;
+  if (Math.abs(Date.now() / 1000 - Number(parts.t)) > 300) return false;
   const expected = crypto.createHmac("sha256", secret).update(`${parts.t}.${rawBody}`).digest("hex");
   return expected.length === parts.v1.length &&
     crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(parts.v1));
 }
 ```
 
+With Express, read the body with `express.raw({ type: "application/json" })` so it is not parsed first.
+
+Python:
+
 ```python
 import hmac, hashlib, time
 
 def verify(raw_body: bytes, header: str, secret: str) -> bool:
     parts = dict(p.split("=", 1) for p in header.split(","))
-    if time.time() - int(parts["t"]) > 300:
+    if abs(time.time() - int(parts["t"])) > 300:
         return False
     expected = hmac.new(secret.encode(), f"{parts['t']}.".encode() + raw_body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, parts["v1"])
 ```
 
-## Delivery
+C#:
 
-- Any 2xx answer within 10 seconds counts as delivered.
-- Anything else is retried with backoff, starting at 30 seconds and doubling up to 6 hours, for up to 8 attempts.
-- A delivery can arrive more than once. Use `opensign-delivery` (the same as the payload's `id`) to drop duplicates.
-- Events are queued in the same database transaction as the change, so a change that is rolled back never fires an event, and one that is saved always does.
-- Removing a webhook drops its queued deliveries.
+```csharp
+using System.Security.Cryptography;
+using System.Text;
+
+static bool Verify(byte[] rawBody, string header, string secret)
+{
+    var parts = header.Split(',').Select(p => p.Split('=', 2)).ToDictionary(p => p[0], p => p[1]);
+    var t = long.Parse(parts["t"]);
+    if (Math.Abs(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - t) > 300) return false;
+    var signed = Encoding.UTF8.GetBytes($"{t}.").Concat(rawBody).ToArray();
+    var expected = Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), signed)).ToLowerInvariant();
+    return CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(expected), Encoding.ASCII.GetBytes(parts["v1"]));
+}
+```
+
+If you lose the secret, delete the webhook and add it again to get a new one.
+
+## Delivery and retries
+
+- Any `2xx` answer within 10 seconds counts as delivered. The body of your answer is ignored.
+- Anything else, including a timeout, a refused connection or a `3xx`, `4xx` or `5xx` answer, is retried.
+- A delivery is tried up to 8 times. After the last failure it is given up, and the webhook list shows the error.
+
+| Attempt | About when |
+| --- | --- |
+| 1 | Right away |
+| 2 | 30 seconds after the first failure |
+| 3 | 1 minute later |
+| 4 | 2 minutes later |
+| 5 | 4 minutes later |
+| 6 | 8 minutes later |
+| 7 | 16 minutes later |
+| 8 | 32 minutes later, about an hour after the event |
+
+Each retry is signed again with a fresh `t`, so a delivery that waited is not mistaken for a replay.
+
+Events are queued in the same database transaction as the change, so a change that is rolled back never fires an event, and one that is saved always does.
+
+### Writing a good endpoint
+
+- **Answer fast.** Check the signature, store the event, answer `200`, and do the real work afterwards. Slow work risks the 10 second timeout and a retry.
+- **Expect duplicates.** A delivery can arrive more than once, for example when your answer is lost on the way back. Use `opensign-delivery` (the payload's `id`) to drop the ones you have already handled.
+- **Do not rely on order.** Deliveries are independent, and a retried one can arrive after a later event. Use `createdAt`, or fetch the document's current status from the API, when order matters.
+- **Answer `2xx` for events you ignore**, or they will be retried for an hour.
+
+## Troubleshooting
+
+| What you see | What to check |
+| --- | --- |
+| The webhook cannot be saved | The URL must be `https`, public, and without credentials. |
+| `The endpoint answered 401` or `403` | Your endpoint refused the request. Check that it reads the raw body and uses the right secret. |
+| `The endpoint answered 3xx` | Redirects are not followed. Use the final URL, including `https` and any trailing slash your server expects. |
+| A timeout | Your endpoint took more than 10 seconds. Answer first, then do the work. |
+| A refused address | The host resolves to a private or reserved address. Webhooks only go to the public internet. |
+| Nothing arrives | Check that the webhook subscribes to the event, and look under **Background Jobs** on **Settings → System** for queued or failed deliveries. |
