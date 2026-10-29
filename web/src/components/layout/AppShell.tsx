@@ -86,9 +86,9 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             <FileStack className="size-4 opacity-80" /> Templates
           </NavLink>
         )}
-        <NavLink to="/api-explorer" className={linkClass} onClick={onNavigate}>
+        <a href="/api-explorer" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
           <Braces className="size-4 opacity-80" /> API Explorer
-        </NavLink>
+        </a>
         <a href="/verify" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
           <ShieldCheck className="size-4 opacity-80" /> Verify a Document
         </a>
