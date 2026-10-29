@@ -31,7 +31,7 @@ The key is shown once, as `osk_<prefix>_<secret>`. OpenSign stores only its hash
 
 At each request a key gets the **intersection** of its scopes and its owner's current role. Demoting the owner narrows every key they made, and deactivating the owner revokes their keys.
 
-> **Coming soon.** Changing a key's name, scopes, expiry and allowed IPs after it is created.
+**Edit** changes a key's name, scopes and allowed IPs. The key itself stays the same and is never shown again, and the change applies from the next request. You can only give a key scopes your own role has. Through an API key or MCP a key can only be narrowed: fewer scopes, or a tighter IP list. Adding scopes or loosening the IP list needs a signed-in user. Each edit is in the audit log with the values before and after. The expiry cannot be changed; create a new key instead.
 
 ### Scopes
 
@@ -51,7 +51,7 @@ At each request a key gets the **intersection** of its scopes and its owner's cu
 | `ai.use` | Use the AI assistant and document review |
 | `system.read` | See versions, migrations and background jobs |
 | `settings.manage` | Read settings, the seal certificate, AI usage and the retention preview |
-| `api_keys.manage` | List and revoke your keys |
+| `api_keys.manage` | List, narrow and revoke your keys |
 
 ### App-only calls
 
@@ -138,6 +138,9 @@ Send answers `{ "document": {…}, "links": [{ "partyId", "name", "url" }] }`. T
 | Method | Path | |
 | --- | --- | --- |
 | GET | `/me` | Who the caller is, their role and effective permissions |
+| GET | `/api-keys` | List your keys, never the keys themselves |
+| PATCH | `/api-keys/{id}` | Change a key. Body: any of `name`, `permissions`, `allowedIps`. With a key, only narrowing is allowed |
+| DELETE | `/api-keys/{id}` | Revoke a key |
 
 ### Documents
 

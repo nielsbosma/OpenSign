@@ -45,7 +45,7 @@ Each tool is a service the connected user's role allows, named with underscores 
 | Webhooks | `webhooks_list`, `webhooks_create`, `webhooks_delete`, `webhooks_test` |
 | Users | `users_list`, `users_invite`, `users_list_invites`, `users_revoke_invite`, `users_update` |
 | Audit | `audit_list`, `audit_verify` |
-| Account and keys | `account_me`, `api_keys_list`, `api_keys_revoke` |
+| Account and keys | `account_me`, `api_keys_list`, `api_keys_update`, `api_keys_revoke` |
 | Settings and system | `settings_get`, `settings_send_test_email`, `seal_get`, `retention_preview`, `system_version`, `system_status`, `ai_usage` |
 
 Not offered as tools: signing in, passwords, two-factor and passkey setup, creating API keys, changing settings, the in-app update, replacing the seal key, in-person signing, anything a signer does, OAuth consent, and the AI chat itself.
