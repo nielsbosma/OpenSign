@@ -53,6 +53,8 @@ pub struct DocumentData {
     pub status: String,
     pub external_id: Option<String>,
     pub template_id: Option<Uuid>,
+    /// The template version the document was made from.
+    pub template_version: Option<i32>,
     pub folder_id: Option<Uuid>,
     pub archived_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
@@ -165,6 +167,7 @@ pub fn document_data(document: &DocumentRow, parties: &[PartyRow], fields: &[Fie
         status: document.status.clone(),
         external_id: document.external_id.clone(),
         template_id: document.template_id,
+        template_version: document.template_version,
         folder_id: document.folder_id,
         archived_at: document.archived_at,
         created_at: document.created_at,
@@ -416,6 +419,7 @@ mod tests {
             review_links: false,
             folder_id: None,
             archived_at: None,
+            template_version: Some(3),
         }
     }
 

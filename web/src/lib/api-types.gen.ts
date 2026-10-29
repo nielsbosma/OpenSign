@@ -652,6 +652,10 @@ export type DocumentView = {
   sequential: boolean;
   status: string;
   templateId?: string | null;
+  /** The title of the template this document was made from, if you can see it. */
+  templateTitle?: string | null;
+  /** The version of the template this document was made from. */
+  templateVersion?: number | null;
   title: string;
   updatedAt: string;
 };
@@ -800,6 +804,8 @@ export type DocumentData = {
   sentAt?: string | null;
   status: string;
   templateId?: string | null;
+  /** The template version the document was made from. */
+  templateVersion?: number | null;
   title: string;
   /** The same values keyed by `key`, for quick lookups. */
   values: {
@@ -944,6 +950,49 @@ export type DocumentsRemoveFileInput = {
 };
 
 export type DocumentsRemoveFileOutput = DocumentView;
+
+export type DocumentsReplaceFileInput = {
+  /** The new file's bytes, base64. PDF, .docx, .doc, .odt or .rtf. */
+  contentBase64: string;
+  documentId: string;
+  /** The file to replace. */
+  fileId: string;
+  /** The new file's name, e.g. "Lease 2027.docx". */
+  name: string;
+};
+
+/** Fields added from the file itself. */
+export type FieldsFromFile = {
+  /** Fields made from the PDF's own fillable form. */
+  formFields: number;
+  /** Parties added because a tag named a role the draft did not have yet. */
+  partiesAdded: Array<string>;
+  /** Tags and form fields that could not be used, each with the reason. */
+  problems: Array<string>;
+  /** Fields made from text tags. */
+  textTags: number;
+};
+
+export type MovedField = {
+  id: string;
+  kind: string;
+  label: string;
+  /** The page it is on now, from 0. */
+  page: number;
+};
+
+export type DocumentsReplaceFileOutput = ReplaceOutput;
+
+export type ReplaceOutput = {
+  /** When the new file has text tags, they replace the old file's fields; this says what they made. */
+  fields: FieldsFromFile;
+  file: FileRecord;
+  /** Fields that were on pages the new file does not have. They were moved to its last page; check them. */
+  moved: Array<MovedField>;
+  pages: number;
+  /** Active content taken out of the file, e.g. "JavaScript". */
+  removed: Array<string>;
+};
 
 export type DocumentsReviewInput = {
   /** Whose side to review from, or what to focus on, e.g. "We are the supplier" or "termination terms". */
@@ -1200,18 +1249,6 @@ export type DocumentsUploadInput = {
   name: string;
   /** Turn `{{Name;role=Tenant;type=signature}}` text tags in the file into fields and take their text out of the page. The syntax is DocuSeal's. On unless false. */
   textTags?: boolean | null;
-};
-
-/** Fields added from the file itself. */
-export type FieldsFromFile = {
-  /** Fields made from the PDF's own fillable form. */
-  formFields: number;
-  /** Parties added because a tag named a role the draft did not have yet. */
-  partiesAdded: Array<string>;
-  /** Tags and form fields that could not be used, each with the reason. */
-  problems: Array<string>;
-  /** Fields made from text tags. */
-  textTags: number;
 };
 
 export type DocumentsUploadOutput = UploadOutput;
@@ -1627,6 +1664,166 @@ export type VersionView = {
   updateLink?: string | null;
 };
 
+export type TemplatesCompareInput = {
+  /** The older version. Leave out to compare from the template as it is now. */
+  from?: number | null;
+  templateId: string;
+  /** The newer version. Leave out to compare with the template as it is now. */
+  to?: number | null;
+};
+
+export type Change = {
+  /** added, removed or changed. */
+  change: string;
+  /** For a changed party or field, what changed, such as email, position or required. */
+  details: Array<string>;
+  /** setting, file, party or field. */
+  item: string;
+  /** The setting's name (title, message, language, sequential, reminderDays, reviewLinks, fileOrder), the file or party name, or the field's label (its kind when it has none). */
+  name: string;
+  /** For a field, the name of its party; none for a field the sender fills in. */
+  party?: string | null;
+};
+
+export type TemplatesCompareOutput = CompareOutput;
+
+export type CompareOutput = {
+  changes: Array<Change>;
+};
+
+export type TemplatesRestoreInput = {
+  number: number;
+  templateId: string;
+};
+
+export type TemplatesRestoreOutput = DocumentView;
+
+export type TemplatesSaveVersionInput = {
+  /** What changed and why, for whoever reads the history. */
+  note?: string | null;
+  templateId: string;
+};
+
+export type TemplatesSaveVersionOutput = TemplateVersionSummary;
+
+export type TemplateVersionSummary = {
+  createdAt: string;
+  createdByName?: string | null;
+  /** Documents you can see that were made from this version. */
+  documentCount: number;
+  note?: string | null;
+  number: number;
+  /** The version this one restored, if it was made by a restore. */
+  restoredFrom?: number | null;
+};
+
+export type TemplatesVersionInput = {
+  number: number;
+  templateId: string;
+};
+
+/** Everything a document made from the template copies: its settings, files, parties with their attachment requests, and fields. */
+export type Content = {
+  fields: Array<ContentField>;
+  files: Array<ContentFile>;
+  language: string;
+  message: string;
+  parties: Array<ContentParty>;
+  reminderDays?: number | null;
+  reviewLinks: boolean;
+  sequential: boolean;
+  title: string;
+};
+
+export type ContentAttachment = {
+  description: string;
+  kind: string;
+  name: string;
+  position: number;
+  required: boolean;
+};
+
+export type ContentField = {
+  conditions: Array<Condition>;
+  format?: string | null;
+  formula?: string | null;
+  groupKey?: string | null;
+  height: number;
+  kind: string;
+  label: string;
+  options: Array<string>;
+  page: number;
+  /** The index of its party in `parties`; none for a field the sender fills in. */
+  party?: number | null;
+  readOnly: boolean;
+  required: boolean;
+  validation: Validation;
+  value?: string | null;
+  width: number;
+  x: number;
+  y: number;
+};
+
+export type ContentFile = {
+  id: string;
+  name: string;
+  sha256: string;
+  sizeBytes: number;
+};
+
+export type ContentParty = {
+  attachments: Array<ContentAttachment>;
+  authToSign: string;
+  authToView: string;
+  company?: string | null;
+  delivery: string;
+  email?: string | null;
+  language?: string | null;
+  name: string;
+  /** Masked when shown; encrypted when stored. */
+  personalNumber?: string | null;
+  phone?: string | null;
+  role: string;
+  signOrder: number;
+};
+
+export type VersionDocument = {
+  createdAt: string;
+  id: string;
+  status: string;
+  title: string;
+};
+
+export type TemplatesVersionOutput = TemplateVersion;
+
+export type TemplateVersion = {
+  /** The template as it was: settings, files, parties and fields. Personal numbers are masked. */
+  content: Content;
+  createdAt: string;
+  createdByName?: string | null;
+  /** Documents you can see that were made from this version. */
+  documentCount: number;
+  /** The newest 50 documents you can see that were made from this version. */
+  documents: Array<VersionDocument>;
+  note?: string | null;
+  number: number;
+  /** The version this one restored, if it was made by a restore. */
+  restoredFrom?: number | null;
+};
+
+export type TemplatesVersionsInput = {
+  templateId: string;
+};
+
+export type TemplatesVersionsOutput = VersionsOutput;
+
+export type VersionsOutput = {
+  /** The template has changed since its newest version (or has none yet). */
+  changed: boolean;
+  /** Newest first. */
+  versions: Array<TemplateVersionSummary>;
+};
+
 export type UsersAcceptInviteInput = {
   name: string;
   password: string;
@@ -1893,6 +2090,7 @@ export interface Services {
   "documents.move": { kind: "mutation"; input: DocumentsMoveInput; output: DocumentsMoveOutput };
   "documents.remind": { kind: "mutation"; input: DocumentsRemindInput; output: DocumentsRemindOutput };
   "documents.remove_file": { kind: "mutation"; input: DocumentsRemoveFileInput; output: DocumentsRemoveFileOutput };
+  "documents.replace_file": { kind: "mutation"; input: DocumentsReplaceFileInput; output: DocumentsReplaceFileOutput };
   "documents.review": { kind: "mutation"; input: DocumentsReviewInput; output: DocumentsReviewOutput };
   "documents.send": { kind: "mutation"; input: DocumentsSendInput; output: DocumentsSendOutput };
   "documents.set_fields": { kind: "mutation"; input: DocumentsSetFieldsInput; output: DocumentsSetFieldsOutput };
@@ -1937,6 +2135,11 @@ export interface Services {
   "system.status": { kind: "query"; input: SystemStatusInput; output: SystemStatusOutput };
   "system.update": { kind: "mutation"; input: SystemUpdateInput; output: SystemUpdateOutput };
   "system.version": { kind: "query"; input: SystemVersionInput; output: SystemVersionOutput };
+  "templates.compare": { kind: "query"; input: TemplatesCompareInput; output: TemplatesCompareOutput };
+  "templates.restore": { kind: "mutation"; input: TemplatesRestoreInput; output: TemplatesRestoreOutput };
+  "templates.save_version": { kind: "mutation"; input: TemplatesSaveVersionInput; output: TemplatesSaveVersionOutput };
+  "templates.version": { kind: "query"; input: TemplatesVersionInput; output: TemplatesVersionOutput };
+  "templates.versions": { kind: "query"; input: TemplatesVersionsInput; output: TemplatesVersionsOutput };
   "users.accept_invite": { kind: "mutation"; input: UsersAcceptInviteInput; output: UsersAcceptInviteOutput };
   "users.change_email": { kind: "mutation"; input: UsersChangeEmailInput; output: UsersChangeEmailOutput };
   "users.invite": { kind: "mutation"; input: UsersInviteInput; output: UsersInviteOutput };

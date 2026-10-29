@@ -26,10 +26,52 @@ To collect what people filled in on every document made from a template, choose 
 
 A document made from a template is independent of it: changing the template later does not change documents already made from it. The template's files are shared, not copied, so they take no extra storage.
 
+Each document shows which template and version it came from under its title, such as "From Lease, version 3".
+
+## Versions
+
+OpenSign keeps a history of each template. A version holds everything a document copies: the title, message, language, signing order, reminders, AI review setting, files, parties with their attachment requests, and every field with its options, validation, format, radio group, read-only flag, conditions and formula.
+
+- **Automatic versions.** When someone uses a template that changed since its newest version, OpenSign saves a new version first. So every document can name the exact version it was made from, without anyone remembering to save.
+- **Save Version.** Open **More → Version History** and save the current state with a note, such as "New notice period after the 2027 rent law". Saving again without changes only updates the note.
+- **The header** of a template says which version it is at, or "Changed since version 4" when there are unsaved changes. Click it to open the history.
+
+### Version history
+
+**Version History** lists the versions newest first, with who saved them, the note and how many documents were made from each. Pick one to see:
+
+- what changed from the version before it: settings, files, and parties and fields added, removed or changed (for example "Field Address for Tenant: position, required changed"),
+- the documents made from it that you can see,
+- **Preview**, which shows the version's pages with its fields placed as they were.
+
+When the template has unsaved changes, **Current** at the top shows what changed since the newest version.
+
+### Restoring a version
+
+**Restore** puts the template back the way it was in that version: files, parties, fields and settings. Nothing is lost. Unsaved changes are saved as a version first, and the restore itself becomes a new version marked "Restored from version 2". Documents already made are not touched.
+
+Personal numbers in versions are stored encrypted, like on parties, and shown masked.
+
+## Replacing a file
+
+When the contract text changes but the layout does not, use the replace button next to the file under **Files** instead of removing it and placing the fields again. Upload the new PDF or Word file and OpenSign:
+
+- puts it in the same place among the template's files,
+- keeps every field where it was, and moves fields on later files along if the page count changed,
+- moves fields that were on pages the new file does not have to its last page and lists them, so you can put them right.
+
+If the new file has [text tags](text-tags.md#text-tags), the tags win: the old file's fields are dropped and the tags placed instead, adding any parties they name.
+
+On a template, the state before the replace is kept as a version, so the old file stays in the history and can be restored. Replacing works on drafts too. From the API, `POST /api/v1/documents/{id}/files/{fileId}/replace` with the file as multipart `file`. See [REST API](api.md#documents).
+
+## Duplicating a template
+
+**More → Duplicate** makes a copy named "Lease (copy)" in the same folder, with everything the template has. The copy starts its own history. From the API, `POST /api/v1/documents` with `isTemplate: true` and the original as `templateId`.
+
 ## Folders and archive
 
 Template folders keep a long list of templates in order, such as *HR* and *Sales*. Archive a template you no longer use: it disappears from **New Document** and bulk send until you restore it. See [Folders and archive](folders.md).
 
 ## Templates and retention
 
-Retention rules never delete templates. See [Retention and legal hold](retention.md).
+Retention rules never delete templates, so their versions stay too. Deleting a template deletes its history, and the files only its versions used. See [Retention and legal hold](retention.md).
