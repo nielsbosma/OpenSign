@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { useRef } from 'react';
 import type { PartyView } from '@/lib/api';
+import { display } from '@/lib/field-values';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { clamp, type EditableField, kindLabel, partyColor } from './fields';
@@ -89,9 +90,20 @@ export function FieldLayer({
                 ['--tw-ring-color' as string]: color,
               }}
             >
-              <span className="truncate px-1 font-medium">
-                {f.value && !f.partyId ? f.value : f.kind === 'checkbox' ? '' : `${kindLabel(f.kind)}${f.required === false ? '' : ' *'}`}
-              </span>
+              {f.kind === 'radio' ? (
+                <span
+                  className="mx-auto aspect-square h-[70%] rounded-full border"
+                  style={{ borderColor: color, backgroundColor: f.value ? color : undefined }}
+                />
+              ) : (
+                <span className="truncate px-1 font-medium">
+                  {f.value && (!f.partyId || f.readOnly)
+                    ? display(f.kind, f.format, f.value)
+                    : f.kind === 'checkbox'
+                      ? ''
+                      : `${f.label || kindLabel(f.kind)}${f.required === false ? '' : ' *'}`}
+                </span>
+              )}
               {editable && active && (
                 <>
                   <button

@@ -118,6 +118,7 @@ fn party_out(p: &Value, fields: &[&Value], link: Option<&String>, app_url: &str)
         json!({ "type": "company", "value": p["company"].as_str().unwrap_or_default(), "is_obligatory": false, "should_be_filled_by_sender": false, "placements": placements("company") }),
         json!({ "type": "personal_number", "value": p["personalNumber"].as_str().unwrap_or_default(), "is_obligatory": false, "should_be_filled_by_sender": false, "placements": [] }),
     ];
+    let mut radio_groups: Vec<String> = Vec::new();
     for (n, f) in fields.iter().enumerate() {
         let label = f["label"].as_str().filter(|l| !l.is_empty()).map(str::to_string);
         let required = f["required"].as_bool().unwrap_or(true);
@@ -130,7 +131,22 @@ fn party_out(p: &Value, fields: &[&Value], link: Option<&String>, app_url: &str)
                 "type": "checkbox", "name": label.unwrap_or_else(|| format!("Checkbox {}", n + 1)),
                 "is_checked": f["value"] == "true", "is_obligatory": required, "should_be_filled_by_sender": false, "placements": [placement(f)],
             })),
-            "text" | "date" => out_fields.push(json!({
+            "radio" => {
+                let group = f["groupKey"].as_str().unwrap_or_default();
+                if radio_groups.iter().any(|g| g == group) {
+                    continue;
+                }
+                radio_groups.push(group.to_string());
+                let buttons: Vec<&&Value> = fields.iter().filter(|b| b["kind"] == "radio" && b["groupKey"] == group).collect();
+                out_fields.push(json!({
+                    "type": "radiogroup", "name": label.unwrap_or_else(|| group.to_string()),
+                    "values": buttons.iter().map(|b| b["options"][0].clone()).collect::<Vec<_>>(),
+                    "selected_value": buttons.iter().find_map(|b| b["value"].as_str()),
+                    "is_obligatory": buttons.iter().any(|b| b["required"] != false), "should_be_filled_by_sender": false,
+                    "placements": buttons.iter().map(|b| placement(b)).collect::<Vec<_>>(),
+                }));
+            }
+            "text" | "date" | "number" | "select" | "multiselect" | "phone" | "date_input" | "image" | "file" => out_fields.push(json!({
                 "type": "text", "name": label.unwrap_or_else(|| format!("Field {}", n + 1)), "value": f["value"].as_str().unwrap_or_default(),
                 "is_obligatory": required, "should_be_filled_by_sender": f["partyId"].is_null(), "placements": [placement(f)],
             })),
@@ -319,6 +335,7 @@ async fn apply_parties(api: &Api, id: Uuid, scrive: &[Value], owner: &Value) -> 
             }));
         }
     };
+    let mut radios = Vec::new();
     for (index, f) in &placed {
         let party = ids[*index].clone();
         let (kind, value) = match f["type"].as_str().unwrap_or_default() {
@@ -327,6 +344,30 @@ async fn apply_parties(api: &Api, id: Uuid, scrive: &[Value], owner: &Value) -> 
             "name" if f["order"].as_i64() == Some(1) => ("name", Value::Null),
             "email" => ("email", Value::Null),
             "company" => ("company", Value::Null),
+            "mobile" if f["value"].as_str().is_none_or(|v| v.is_empty() || v.starts_with('+')) => {
+                ("phone", f.get("value").cloned().unwrap_or(Value::Null))
+            }
+            "radiogroup" => {
+                let options: Vec<&str> = f["values"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+                let name =
+                    f["name"].as_str().filter(|n| !n.is_empty()).map_or_else(|| format!("radio{}", radios.len() + 1), str::to_string);
+                let group = format!("p{index}-{}", name.chars().take(50).collect::<String>());
+                for (i, p) in f["placements"].as_array().into_iter().flatten().enumerate() {
+                    let Some(option) = options.get(i) else { break };
+                    radios.push(json!({
+                        "partyId": party, "kind": "radio",
+                        "page": (p["page"].as_i64().unwrap_or(1) - 1).max(0),
+                        "x": p["xrel"], "y": p["yrel"],
+                        "width": p["wrel"].as_f64().filter(|w| *w > 0.0).unwrap_or(0.02),
+                        "height": p["hrel"].as_f64().filter(|h| *h > 0.0).unwrap_or(0.015),
+                        "required": f["is_obligatory"].as_bool().unwrap_or(true),
+                        "label": f["name"].as_str().unwrap_or_default(),
+                        "options": [option], "groupKey": group,
+                        "value": (f["selected_value"].as_str() == Some(option)).then_some(option),
+                    }));
+                }
+                continue;
+            }
             "text" | "personal_number" | "mobile" | "company_number" => {
                 ("text", f.get("value").cloned().filter(|v| v.as_str().is_some_and(|s| !s.is_empty())).unwrap_or(Value::Null))
             }
@@ -337,6 +378,7 @@ async fn apply_parties(api: &Api, id: Uuid, scrive: &[Value], owner: &Value) -> 
     for f in &sender_fields {
         push(Value::Null, f, "text", f.get("value").cloned().unwrap_or(Value::Null));
     }
+    out.extend(radios);
     api.call("documents.set_fields", json!({ "documentId": id, "fields": out })).await?;
     Ok(())
 }

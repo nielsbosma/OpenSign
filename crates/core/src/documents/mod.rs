@@ -5,6 +5,7 @@ pub mod ltv;
 pub mod notify;
 pub mod seal;
 pub mod upload;
+pub mod values;
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64;
@@ -67,6 +68,9 @@ string_enum!(
 );
 
 string_enum!(
+    /// `date` is the date of signing, filled in automatically; `date_input` is a date the signer picks.
+    /// `select` is a dropdown, `multiselect` a list to tick several from, and each `radio` is one
+    /// button of a group (`groupKey`) holding one option. `image` and `file` take an upload.
     FieldKind {
         Signature = "signature",
         Initials = "initials",
@@ -76,6 +80,14 @@ string_enum!(
         Name = "name",
         Email = "email",
         Company = "company",
+        Number = "number",
+        Select = "select",
+        Multiselect = "multiselect",
+        Radio = "radio",
+        Phone = "phone",
+        DateInput = "date_input",
+        Image = "image",
+        File = "file",
     }
 );
 
@@ -95,6 +107,11 @@ impl FieldKind {
     /// Filled from the party's details when they sign, not typed by them.
     pub fn is_automatic(self) -> bool {
         matches!(self, FieldKind::Date | FieldKind::Name | FieldKind::Email)
+    }
+
+    /// Filled by uploading an image or a file while signing.
+    pub fn is_upload(self) -> bool {
+        matches!(self, FieldKind::Image | FieldKind::File)
     }
 }
 
@@ -323,11 +340,26 @@ pub struct FieldRow {
     pub height: f64,
     pub required: bool,
     pub label: String,
+    /// The value; for image and file fields, the name of the upload.
     pub value: Option<String>,
+    /// The choices of a list field, or the one option of a radio button.
+    #[schemars(with = "Vec<String>")]
     pub options: Value,
+    #[schemars(with = "values::Validation")]
+    pub validation: Value,
+    /// How a date or number is written on the page.
+    pub format: Option<String>,
+    /// Radio buttons with the same key form one group.
+    pub group_key: Option<String>,
+    /// The signer sees the value but cannot change it.
+    pub read_only: bool,
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub file_id: Option<Uuid>,
 }
 
-pub const FIELD_COLUMNS: &str = "id, party_id, kind, page, x, y, width, height, required, label, value, options";
+pub const FIELD_COLUMNS: &str =
+    "id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only, file_id";
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -474,6 +506,7 @@ pub async fn purge(ctx: &Ctx, conn: &mut PgConnection, document: &DocumentRow, r
            union select sealed_file_id from documents where id = $1
            union select file_id from document_files where document_id = $1
            union select file_id from attachment_requests where document_id = $1
+           union select file_id from fields where document_id = $1
            union select (signature->>'imageFileId')::uuid from parties
              where document_id = $1 and signature->>'imageFileId' ~ '^[0-9a-f-]{36}$'
          ) ids where f is not null",
@@ -487,6 +520,7 @@ pub async fn purge(ctx: &Ctx, conn: &mut PgConnection, document: &DocumentRow, r
            and not exists (select 1 from documents d where d.source_file_id = f.id or d.sealed_file_id = f.id)
            and not exists (select 1 from document_files x where x.file_id = f.id)
            and not exists (select 1 from attachment_requests a where a.file_id = f.id)
+           and not exists (select 1 from fields x where x.file_id = f.id)
            and not exists (select 1 from parties p where p.signature->>'imageFileId' = f.id::text)
          returning storage_key",
     )

@@ -12,7 +12,33 @@ export const FIELD_KINDS: { kind: FieldKind; label: string; width: number; heigh
   { kind: 'email', label: msg('Email'), width: 0.24, height: 0.032 },
   { kind: 'company', label: msg('Company'), width: 0.24, height: 0.032 },
   { kind: 'checkbox', label: msg('Checkbox'), width: 0.028, height: 0.02 },
+  { kind: 'number', label: msg('Number'), width: 0.16, height: 0.032 },
+  { kind: 'select', label: msg('Dropdown'), width: 0.2, height: 0.032 },
+  { kind: 'multiselect', label: msg('Multi-Select'), width: 0.24, height: 0.032 },
+  { kind: 'radio', label: msg('Radio'), width: 0.022, height: 0.016 },
+  { kind: 'phone', label: msg('Phone'), width: 0.2, height: 0.032 },
+  { kind: 'date_input', label: msg('Date Picker'), width: 0.16, height: 0.032 },
+  { kind: 'image', label: msg('Image'), width: 0.2, height: 0.09 },
+  { kind: 'file', label: msg('File'), width: 0.24, height: 0.032 },
 ];
+
+/** What the sender can fill in themselves before sending. */
+export const SENDER_KINDS: FieldKind[] = [
+  'text',
+  'date',
+  'checkbox',
+  'name',
+  'company',
+  'email',
+  'number',
+  'select',
+  'multiselect',
+  'phone',
+  'date_input',
+];
+
+/** Kinds whose value the signer types or picks, so they can have a default and be read-only. */
+export const VALUE_KINDS: FieldKind[] = ['text', 'company', 'checkbox', 'number', 'select', 'multiselect', 'radio', 'phone', 'date_input'];
 
 export const kindLabel = (kind: string) => t(FIELD_KINDS.find((k) => k.kind === kind)?.label ?? kind);
 
@@ -37,11 +63,19 @@ export function toEditable(fields: FieldRow[]): EditableField[] {
     y: f.y,
     width: f.width,
     height: f.height,
+    options: f.options,
+    validation: Object.keys(f.validation ?? {}).length ? f.validation : null,
+    format: f.format ?? null,
+    groupKey: f.groupKey ?? null,
+    readOnly: f.readOnly,
   }));
 }
 
 export function toInput(fields: EditableField[]): FieldInput[] {
   return fields.map(({ key: _key, ...f }) => f);
 }
+
+/** A short random key that ties radio buttons into a group. */
+export const newGroupKey = () => `g${crypto.randomUUID().slice(0, 8)}`;
 
 export const clamp = (v: number, min = 0, max = 1) => Math.min(max, Math.max(min, v));

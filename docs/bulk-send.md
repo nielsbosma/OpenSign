@@ -22,7 +22,7 @@ Bulk send sends a [template](templates.md) to every row of a spreadsheet. Each r
 | Target | |
 | --- | --- |
 | A party's Name, Email, Mobile, Company or Personal Number | One set for each party in the template. |
-| A field | Any template field with a label, filled in as the sender's value for that row. |
+| A field | Any template field with a label, filled in as the sender's value for that row. Numbers can be written either way (`1 234,50` or `1,234.50`), dates as YYYY-MM-DD or in the field's format, list fields by option text, and several choices separated by commas. A value that breaks the field's checks fails that row. |
 | Title | The document title, instead of the pattern. |
 | Your Reference | The document's external id, such as a customer number. |
 | A party's Language | The language of that signer's emails and signing page, as a code such as `sv` or `pt-BR`. See [The signing page](signing-page.md#languages). |

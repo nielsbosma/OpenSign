@@ -508,14 +508,23 @@ export type AttachmentRequest = {
 };
 
 export type FieldRow = {
+  /** How a date or number is written on the page. */
+  format?: string | null;
+  /** Radio buttons with the same key form one group. */
+  groupKey?: string | null;
   height: number;
   id: string;
   kind: string;
   label: string;
-  options: unknown;
+  /** The choices of a list field, or the one option of a radio button. */
+  options: Array<string>;
   page: number;
   partyId?: string | null;
+  /** The signer sees the value but cannot change it. */
+  readOnly: boolean;
   required: boolean;
+  validation: Validation;
+  /** The value; for image and file fields, the name of the upload. */
   value?: string | null;
   width: number;
   x: number;
@@ -555,6 +564,22 @@ export type PartyView = {
   viewedAt?: string | null;
   /** The party must take a live webcam photo before signing. */
   webcamPhoto: boolean;
+};
+
+/** Checks on what a signer types. Each applies only to the kinds it makes sense for. */
+export type Validation = {
+  /** Largest number for a number field, or latest date as YYYY-MM-DD for a date picker. */
+  max?: string | null;
+  /** Most characters (text, initials and company fields). */
+  maxLength?: number | null;
+  /** Shown to the signer instead of the built-in error when any check fails. */
+  message?: string | null;
+  /** Smallest number for a number field, or earliest date as YYYY-MM-DD for a date picker. */
+  min?: string | null;
+  /** Fewest characters (text, initials and company fields). */
+  minLength?: number | null;
+  /** A regular expression the whole value must match (text, initials and company fields), such as `[0-9]{3} ?[0-9]{2}` for a Swedish postcode. */
+  pattern?: string | null;
 };
 
 export type DocumentsCancelOutput = DocumentView;
@@ -774,15 +799,25 @@ export type SendOutput = {
 };
 
 export type FieldInput = {
+  /** How a date or number is written on the page. Dates: YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY, DD.MM.YYYY or D MMM YYYY. Numbers: how 1234 would look, such as `1,234.00`, `1 234,00 kr` or `$1234`. */
+  format?: string | null;
+  /** Ties `radio` buttons into one group: give every button of the group the same key. */
+  groupKey?: string | null;
   height: number;
   kind: FieldKind;
   label?: string | null;
+  /** The choices of a `select` or `multiselect` field, or the one option of a `radio` button. */
+  options?: Array<string>;
   /** Zero-based page index in the combined document. */
   page: number;
   /** The party who fills it in. Leave out for text the sender fills in now. */
   partyId?: string | null;
+  /** The party sees the prefilled value but cannot change it. */
+  readOnly?: boolean | null;
   required?: boolean | null;
-  /** A prefilled value. */
+  /** Checks the signer's value must pass, with an optional error text of your own. */
+  validation?: Validation | null;
+  /** A prefilled value: for a party's field, what they start from. Numbers as `1234.5`, dates as YYYY-MM-DD, a multiselect as a JSON array of options, a radio button as its option when chosen. */
   value?: string | null;
   width: number;
   /** Position and size as fractions of the page (0 to 1), origin top-left. */
@@ -790,7 +825,8 @@ export type FieldInput = {
   y: number;
 };
 
-export type FieldKind = "signature" | "initials" | "text" | "date" | "checkbox" | "name" | "email" | "company";
+/** `date` is the date of signing, filled in automatically; `date_input` is a date the signer picks. `select` is a dropdown, `multiselect` a list to tick several from, and each `radio` is one button of a group (`groupKey`) holding one option. `image` and `file` take an upload. */
+export type FieldKind = "signature" | "initials" | "text" | "date" | "checkbox" | "name" | "email" | "company" | "number" | "select" | "multiselect" | "radio" | "phone" | "date_input" | "image" | "file";
 
 export type DocumentsSetFieldsInput = {
   documentId: string;
@@ -1217,6 +1253,15 @@ export type SigningRemoveAttachmentInput = {
 
 export type SigningRemoveAttachmentOutput = Ok_;
 
+export type SigningRemoveFieldFileInput = {
+  /** The image or file field to empty. */
+  fieldId: string;
+  session?: string | null;
+  token: string;
+};
+
+export type SigningRemoveFieldFileOutput = Ok_;
+
 export type SigningRequestCodeInput = {
   session?: string | null;
   token: string;
@@ -1631,6 +1676,7 @@ export interface Services {
   "signing.eid_status": { kind: "query"; input: SigningEidStatusInput; output: SigningEidStatusOutput };
   "signing.open": { kind: "mutation"; input: SigningOpenInput; output: SigningOpenOutput };
   "signing.remove_attachment": { kind: "mutation"; input: SigningRemoveAttachmentInput; output: SigningRemoveAttachmentOutput };
+  "signing.remove_field_file": { kind: "mutation"; input: SigningRemoveFieldFileInput; output: SigningRemoveFieldFileOutput };
   "signing.request_code": { kind: "mutation"; input: SigningRequestCodeInput; output: SigningRequestCodeOutput };
   "signing.revoke_review_link": { kind: "mutation"; input: SigningRevokeReviewLinkInput; output: SigningRevokeReviewLinkOutput };
   "signing.sign": { kind: "mutation"; input: SigningSignInput; output: SigningSignOutput };
