@@ -10,6 +10,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
+- Field types: number, dropdown, multi-select, radio groups, phone, date picker, image and in-place file upload. Text fields take a pattern (presets or a regular expression), a length and an error text of your own; numbers a smallest and largest value; dates an earliest and latest. Numbers and dates have formats such as `1 234,00 kr` or DD/MM/YYYY, used when stamping. A party's field can have a default and be read-only. Every check runs on the signing page and again on the server, from shared test cases. The DocuSign API maps number, list, radio group, date, phone, zip and signer attachment tabs with their validation, and the Scrive API maps radio groups.
 - Company logo in Settings → Organisation, shown in the app, on signing and verification pages, in emails and on the evidence page of sealed PDFs. PNG or JPEG only, re-encoded on upload and stored encrypted; SVG is refused. The brand color picker is a round swatch, and the color now tints the OpenSign mark when there is no logo.
 - Documentation at `/docs` on every install, public and searchable, rendered from the Markdown in `docs/`. The app links to it from the sidebar, settings pages, the document list and the party dialog.
 - SMTP as an alternative to Resend, in setup and Admin settings: host, port, STARTTLS or TLS (certificates verified, never plain text), optional sign-in with the password stored encrypted, and the same test email before anything is sent.

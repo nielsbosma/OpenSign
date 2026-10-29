@@ -126,6 +126,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<signing::Sign>(),
         erase::<signing::Decline>(),
         erase::<signing::RemoveAttachment>(),
+        erase::<signing::RemoveFieldFile>(),
         erase::<review::CreateLink>(),
         erase::<review::RevokeLink>(),
         erase::<review::SetReviewLinks>(),

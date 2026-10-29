@@ -68,7 +68,8 @@ import { ActivityPanel } from './ActivityPanel';
 import { BulkSendDialog } from './BulkSendDialog';
 import { StatusBadge } from './DocumentsPage';
 import { FieldLayer } from './FieldLayer';
-import { clamp, type EditableField, FIELD_KINDS, partyColor, toEditable, toInput } from './fields';
+import { FieldSettings } from './FieldSettings';
+import { clamp, type EditableField, FIELD_KINDS, newGroupKey, partyColor, SENDER_KINDS, toEditable, toInput } from './fields';
 import { FileDrop } from './NewDocumentDialog';
 import { PartyDialog, partyToInput } from './PartyDialog';
 import { PartyPhoto } from './PartyPhoto';
@@ -628,6 +629,13 @@ export function DocumentPage() {
       page,
       partyId: placingFor,
       required: kind !== 'checkbox',
+      options:
+        kind === 'select' || kind === 'multiselect'
+          ? [t('Option {n}', { n: 1 }), t('Option {n}', { n: 2 })]
+          : kind === 'radio'
+            ? [t('Option {n}', { n: 1 })]
+            : [],
+      groupKey: kind === 'radio' ? newGroupKey() : null,
       x: clamp(x - spec.width / 2, 0, 1 - spec.width),
       y: clamp(y - spec.height / 2, 0, 1 - spec.height),
       width: spec.width,
@@ -787,40 +795,26 @@ export function DocumentPage() {
                   ))}
                 <option value="">{t('Me, now (prefilled)')}</option>
               </select>
-              {FIELD_KINDS.filter((k) => placingFor || ['text', 'date', 'checkbox', 'name', 'company', 'email'].includes(k.kind)).map(
-                (k) => (
-                  <Button
-                    key={k.kind}
-                    size="sm"
-                    variant={armed === k.kind ? 'default' : 'ghost'}
-                    onClick={() => setArmed(armed === k.kind ? null : k.kind)}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData(FIELD_DRAG_TYPE, k.kind);
-                      e.dataTransfer.effectAllowed = 'copy';
-                    }}
-                    className="cursor-grab active:cursor-grabbing"
-                    style={armed === k.kind ? undefined : { color: partyColor(doc.parties, placingFor) }}
-                  >
-                    {k.label}
-                  </Button>
-                ),
-              )}
+              {FIELD_KINDS.filter((k) => placingFor || SENDER_KINDS.includes(k.kind)).map((k) => (
+                <Button
+                  key={k.kind}
+                  size="sm"
+                  variant={armed === k.kind ? 'default' : 'ghost'}
+                  onClick={() => setArmed(armed === k.kind ? null : k.kind)}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData(FIELD_DRAG_TYPE, k.kind);
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
+                  className="cursor-grab active:cursor-grabbing"
+                  style={armed === k.kind ? undefined : { color: partyColor(doc.parties, placingFor) }}
+                >
+                  {k.label}
+                </Button>
+              ))}
               <span className="ms-auto text-xs text-muted-foreground">
                 {armed ? t('Click on the page to place it') : t('Drag a field onto the page, or pick one and click')}
               </span>
-            </div>
-          )}
-          {draft && selectedField && !selectedField.partyId && (
-            <div className="mb-3 flex items-center gap-2">
-              <Label htmlFor="prefill" className="shrink-0">
-                {t('Prefilled Value')}
-              </Label>
-              <Input
-                id="prefill"
-                value={selectedField.value ?? ''}
-                onChange={(e) => update(fields.map((f) => (f.key === selected ? { ...f, value: e.target.value } : f)))}
-              />
             </div>
           )}
           {!doc.files.length ? (
@@ -867,6 +861,21 @@ export function DocumentPage() {
         </div>
 
         <aside className="min-w-0 lg:sticky lg:top-3 lg:max-h-[calc(100svh-1.5rem)] lg:self-start lg:overflow-y-auto lg:pb-4 [scrollbar-width:thin]">
+          {draft && selectedField && (
+            <div className="mb-4">
+              <FieldSettings
+                key={selectedField.key}
+                field={selectedField}
+                fields={fields}
+                parties={doc.parties}
+                onChange={update}
+                onRemove={() => {
+                  update(fields.filter((f) => f.key !== selectedField.key));
+                  setSelected(null);
+                }}
+              />
+            </div>
+          )}
           <Tabs defaultValue="setup">
             <TabsList className="w-full">
               <TabsTrigger value="setup">{draft ? t('Setup') : t('Parties')}</TabsTrigger>

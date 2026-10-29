@@ -20,6 +20,9 @@ pub const PHOTO_NAME: &str = "Webcam photo";
 const PHOTO_MAX_BYTES: usize = 5 * 1024 * 1024;
 const PHOTO_MIN_SIDE: u32 = 160;
 const PHOTO_MAX_SIDE: u32 = 4096;
+/// Images put in an image field are scaled down to this, which is plenty for print and keeps the
+/// sealed PDF small.
+const FIELD_IMAGE_SIDE: u32 = 1600;
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -186,6 +189,56 @@ pub async fn clean_photo(bytes: Vec<u8>) -> Result<(String, &'static str, Vec<u8
     Ok(("webcam-photo.png".into(), "image/png", png))
 }
 
+/// A clean copy of an image for an image field: a JPEG or PNG, scaled down to fit and encoded
+/// again as PNG without metadata.
+pub async fn clean_field_image(bytes: Vec<u8>, name: &str) -> Result<(String, &'static str, Vec<u8>)> {
+    if bytes.len() > MAX_BYTES {
+        return Err(bad_request(format!("Images can be at most {} MB", MAX_BYTES / 1024 / 1024)));
+    }
+    if !bytes.starts_with(&[0xFF, 0xD8, 0xFF]) && !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Err(bad_request("Upload a JPEG or PNG image"));
+    }
+    let png = tokio::task::spawn_blocking(move || {
+        let (width, height, rgba) = decode_rgba(&bytes)?;
+        let (width, height, rgba) = shrink(width, height, &rgba, FIELD_IMAGE_SIDE);
+        let rgb: Vec<u8> = rgba.as_chunks::<4>().0.iter().flat_map(|c| [c[0], c[1], c[2]]).collect();
+        encode_png(width, height, png::ColorType::Rgb, &rgb)
+    })
+    .await
+    .map_err(AppError::internal)??;
+    let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
+    let stem: String = base.rsplit_once('.').map_or(base, |(s, _)| s).chars().filter(|c| !c.is_control()).take(80).collect();
+    let stem = if stem.trim().is_empty() { "image".to_string() } else { stem.trim().to_string() };
+    Ok((format!("{stem}.png"), "image/png", png))
+}
+
+/// Scales an RGBA image down by a whole factor, averaging each block, until it fits `side`.
+fn shrink(width: u32, height: u32, rgba: &[u8], side: u32) -> (u32, u32, Vec<u8>) {
+    let factor = width.max(height).div_ceil(side).max(1);
+    if factor == 1 {
+        return (width, height, rgba.to_vec());
+    }
+    let (w, h) = (width.div_ceil(factor), height.div_ceil(factor));
+    let mut out = Vec::with_capacity((w * h * 4) as usize);
+    for by in 0..h {
+        for bx in 0..w {
+            let mut sum = [0u64; 4];
+            let mut count = 0u64;
+            for y in by * factor..((by + 1) * factor).min(height) {
+                for x in bx * factor..((bx + 1) * factor).min(width) {
+                    let i = ((y * width + x) * 4) as usize;
+                    for (s, v) in sum.iter_mut().zip(&rgba[i..i + 4]) {
+                        *s += u64::from(*v);
+                    }
+                    count += 1;
+                }
+            }
+            out.extend(sum.map(|s| (s / count.max(1)) as u8));
+        }
+    }
+    (w, h, out)
+}
+
 fn png_size(png: &[u8]) -> Option<(u32, u32)> {
     let header = png.get(16..24)?;
     Some((u32::from_be_bytes(header[..4].try_into().ok()?), u32::from_be_bytes(header[4..].try_into().ok()?)))
@@ -299,6 +352,17 @@ mod tests {
         assert_eq!(name, "scan.png");
         assert!(clean(b"<html><script>alert(1)</script>".to_vec(), "x.png").await.is_err());
         assert!(clean(b"\x89PNG\r\n\x1a\nbroken".to_vec(), "x.png").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn field_images_are_scaled_down() {
+        let (name, _, out) =
+            clean_field_image(png(3300, 10, png::ColorType::Rgb, &[200; 3300 * 10 * 3]), "C:\\scan.jpeg.png").await.unwrap();
+        assert_eq!(name, "scan.jpeg.png");
+        assert_eq!(png_size(&out), Some((1100, 4)));
+        assert!(clean_field_image(b"%PDF-1.7".to_vec(), "x.pdf").await.is_err());
+        let (_, _, small) = clean_field_image(png(4, 4, png::ColorType::Rgb, &[1; 48]), "x").await.unwrap();
+        assert_eq!(png_size(&small), Some((4, 4)));
     }
 
     #[tokio::test]

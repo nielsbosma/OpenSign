@@ -16,6 +16,7 @@ use crate::audit::{Entry, audit};
 use crate::auth::normalize_email;
 use crate::context::Ctx;
 use crate::documents::attachments::{self, AttachmentRequestInput};
+use crate::documents::values::{self, Spec, Validation};
 use crate::documents::{
     AuthMethod, Delivery, DocumentRow, DocumentView, FieldKind, Need, PartyRole, PartyRow, PartyView, VISIBLE, current_turn,
     decrypt_personal_number, files, load_document, notify, parties, personal_number_context, signer_url, status, upload, view, visibility,
@@ -343,8 +344,8 @@ async fn copy_template(ctx: &Ctx, conn: &mut PgConnection, from: Uuid, to: Uuid)
     attachments::copy(conn, to, &ids, from).await?;
     for f in crate::documents::fields(conn, from).await? {
         sqlx::query(
-            "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+            "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)",
         )
         .bind(Uuid::now_v7())
         .bind(to)
@@ -357,8 +358,12 @@ async fn copy_template(ctx: &Ctx, conn: &mut PgConnection, from: Uuid, to: Uuid)
         .bind(f.height)
         .bind(f.required)
         .bind(&f.label)
-        .bind(&f.value)
+        .bind(f.file_id.is_none().then_some(f.value.as_ref()).flatten())
         .bind(&f.options)
+        .bind(&f.validation)
+        .bind(&f.format)
+        .bind(&f.group_key)
+        .bind(f.read_only)
         .execute(&mut *conn)
         .await?;
     }
@@ -775,8 +780,47 @@ pub struct FieldInput {
     pub height: f64,
     pub required: Option<bool>,
     pub label: Option<String>,
-    /// A prefilled value.
+    /// A prefilled value: for a party's field, what they start from. Numbers as `1234.5`, dates as
+    /// YYYY-MM-DD, a multiselect as a JSON array of options, a radio button as its option when chosen.
     pub value: Option<String>,
+    /// The choices of a `select` or `multiselect` field, or the one option of a `radio` button.
+    #[serde(default)]
+    pub options: Vec<String>,
+    /// Checks the signer's value must pass, with an optional error text of your own.
+    #[serde(default)]
+    pub validation: Option<Validation>,
+    /// How a date or number is written on the page. Dates: YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY,
+    /// DD.MM.YYYY or D MMM YYYY. Numbers: how 1234 would look, such as `1,234.00`, `1 234,00 kr` or `$1234`.
+    pub format: Option<String>,
+    /// Ties `radio` buttons into one group: give every button of the group the same key.
+    pub group_key: Option<String>,
+    /// The party sees the prefilled value but cannot change it.
+    pub read_only: Option<bool>,
+}
+
+impl FieldInput {
+    /// The input that would save a stored field as it is.
+    pub fn from_row(f: &crate::documents::FieldRow) -> Result<FieldInput> {
+        let kind = FieldKind::parse(&f.kind).ok_or_else(|| AppError::internal(anyhow::anyhow!("field kind {}", f.kind)))?;
+        let spec = Spec::of(f);
+        Ok(FieldInput {
+            party_id: f.party_id,
+            kind,
+            page: f.page,
+            x: f.x,
+            y: f.y,
+            width: f.width,
+            height: f.height,
+            required: Some(f.required),
+            label: Some(f.label.clone()),
+            value: f.value.clone(),
+            options: spec.options,
+            validation: (!spec.validation.is_empty()).then_some(spec.validation),
+            format: spec.format,
+            group_key: f.group_key.clone(),
+            read_only: Some(f.read_only),
+        })
+    }
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -816,7 +860,7 @@ impl Service for SetFields {
     type Output = DocumentView;
     const META: Meta = Meta::mutation(
         "documents.set_fields",
-        "Place the fields of a draft: signatures, initials, text, dates, checkboxes, names, emails and companies, each assigned to a party.",
+        "Place the fields of a draft, each assigned to a party: signatures, initials, text, numbers, dropdowns, multi-select lists, radio groups, checkboxes, phone numbers, date pickers, image and file uploads, and the automatic name, email, company and date of signing. Text fields take a pattern and length limits, numbers and dates a smallest and largest value and a format, each with an optional error text of your own.",
         Access::Permission(Permission::DocumentsCreate),
     );
 
@@ -828,6 +872,7 @@ impl Service for SetFields {
         }
         let all = parties(conn, document.id).await?;
         sqlx::query("delete from fields where document_id = $1").bind(document.id).execute(&mut *conn).await?;
+        let mut groups: std::collections::HashMap<String, (Option<Uuid>, Vec<String>, bool)> = Default::default();
         for f in &input.fields {
             check_box(f)?;
             let party = match f.party_id {
@@ -837,13 +882,60 @@ impl Service for SetFields {
             if matches!(f.kind, FieldKind::Signature | FieldKind::Initials) && !party.is_some_and(|p| p.role() == PartyRole::Signer) {
                 return Err(bad_request("Signature and initials fields belong to a signer"));
             }
+            if (f.kind.is_upload() || f.kind == FieldKind::Radio) && !party.is_some_and(|p| p.must_act()) {
+                return Err(bad_request("Image, file and radio fields belong to a party who signs or approves"));
+            }
+            let label = f.label.as_deref().map(|l| clean_text(l, "A field label", 200)).transpose()?.unwrap_or_default();
+            let spec = Spec {
+                options: f.options.clone(),
+                validation: f.validation.clone().unwrap_or_default(),
+                format: f.format.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string),
+            };
+            let group_key = f.group_key.as_deref().map(str::trim).filter(|g| !g.is_empty());
+            let options = values::check_spec(f.kind, &spec, group_key)?;
+            let spec = Spec { options, ..spec };
             let value = f.value.as_deref().map(|v| clean_text(v, "A field value", 2000)).transpose()?.filter(|v| !v.is_empty());
-            if f.kind == FieldKind::Checkbox && value.as_deref().is_some_and(|v| v != "true" && v != "false") {
-                return Err(bad_request("A checkbox value is true or false"));
+            let value = match f.kind {
+                FieldKind::Checkbox if value.as_deref().is_some_and(|v| v != "true" && v != "false") => {
+                    return Err(bad_request("A checkbox value is true or false"));
+                }
+                _ if f.kind.is_upload() && value.is_some() => return Err(bad_request("Image and file fields are filled by the party")),
+                FieldKind::Checkbox | FieldKind::Signature => value,
+                kind => match value {
+                    Some(v) => values::normalize(kind, &spec, &v).map_err(|e| {
+                        bad_request(values::error_message(&spec, if label.is_empty() { kind.as_str() } else { &label }, &e))
+                    })?,
+                    None => None,
+                },
+            };
+            let read_only = f.read_only.unwrap_or(false);
+            if read_only
+                && (f.party_id.is_none()
+                    || f.kind.is_upload()
+                    || f.kind.is_automatic()
+                    || matches!(f.kind, FieldKind::Signature | FieldKind::Initials))
+            {
+                return Err(bad_request("Only a party's fields that take a value can be read-only"));
+            }
+            if let Some(key) = group_key {
+                let group = groups.entry(key.to_string()).or_insert((f.party_id, Vec::new(), false));
+                if group.0 != f.party_id {
+                    return Err(bad_request("All radio buttons of a group belong to the same party"));
+                }
+                if group.1.contains(&spec.options[0]) {
+                    return Err(bad_request(format!("The option \u{201c}{}\u{201d} is in its radio group twice", spec.options[0])));
+                }
+                group.1.push(spec.options[0].clone());
+                if value.is_some() {
+                    if group.2 {
+                        return Err(bad_request("Only one radio button of a group can be chosen"));
+                    }
+                    group.2 = true;
+                }
             }
             sqlx::query(
-                "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value)
-                 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+                "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only)
+                 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)",
             )
             .bind(Uuid::now_v7())
             .bind(document.id)
@@ -855,8 +947,13 @@ impl Service for SetFields {
             .bind(f.width)
             .bind(f.height)
             .bind(f.required.unwrap_or(f.kind != FieldKind::Checkbox))
-            .bind(f.label.as_deref().map(|l| clean_text(l, "A field label", 200)).transpose()?.unwrap_or_default())
+            .bind(label)
             .bind(value)
+            .bind(json!(spec.options))
+            .bind(serde_json::to_value(&spec.validation).map_err(AppError::internal)?)
+            .bind(&spec.format)
+            .bind(group_key)
+            .bind(read_only)
             .execute(&mut *conn)
             .await?;
         }

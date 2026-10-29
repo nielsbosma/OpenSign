@@ -141,8 +141,13 @@ async fn build_stamps(ctx: &Ctx, conn: &mut PgConnection, document: &DocumentRow
                 StampContent::Text(field.value.clone().filter(|v| !v.is_empty()).unwrap_or_else(|| initials(&p.name)))
             }
             (FieldKind::Checkbox, _) => StampContent::Check(field.value.as_deref() == Some("true")),
-            _ => match field.value.clone().filter(|v| !v.is_empty()) {
-                Some(value) => StampContent::Text(value),
+            (FieldKind::Radio, _) => StampContent::Radio(field.value.is_some()),
+            (FieldKind::Image, _) => match field.file_id {
+                Some(id) => StampContent::Image(read_file(&ctx.app.storage, ctx.keys(), &file_record(conn, id).await?).await?),
+                None => continue,
+            },
+            _ => match field.value.as_deref().filter(|v| !v.is_empty()) {
+                Some(value) => StampContent::Text(super::values::display(kind, field.format.as_deref(), value)),
                 None => continue,
             },
         };
@@ -182,6 +187,13 @@ async fn evidence_events(conn: &mut PgConnection, document_id: Uuid) -> Result<V
                 "party.photo_taken" => {
                     format!("{name} took a webcam photo (SHA-256 {})", metadata["sha256"].as_str().unwrap_or(""))
                 }
+                "party.field_file_uploaded" => {
+                    format!(
+                        "{name} uploaded {} to \u{201c}{}\u{201d}",
+                        metadata["file"].as_str().unwrap_or("a file"),
+                        metadata["label"].as_str().filter(|l| !l.is_empty()).unwrap_or("a field")
+                    )
+                }
                 "party.attachment_uploaded" => {
                     format!(
                         "{name} uploaded {} ({})",
@@ -210,6 +222,19 @@ async fn evidence_attachments(
         out.push(EvidenceAttachment {
             party: parties.iter().find(|p| p.id == request.party_id).map(|p| p.name.clone()).unwrap_or_default(),
             name: request.name,
+            file_name: record.name,
+            sha256: record.sha256,
+            content_type: record.content_type,
+            content,
+        });
+    }
+    for field in fields(conn, document.id).await? {
+        let (Some(file_id), Some(FieldKind::File)) = (field.file_id, FieldKind::parse(&field.kind)) else { continue };
+        let record = file_record(conn, file_id).await?;
+        let content = read_file(&ctx.app.storage, ctx.keys(), &record).await?;
+        out.push(EvidenceAttachment {
+            party: parties.iter().find(|p| Some(p.id) == field.party_id).map(|p| p.name.clone()).unwrap_or_default(),
+            name: if field.label.is_empty() { "File".into() } else { field.label },
             file_name: record.name,
             sha256: record.sha256,
             content_type: record.content_type,
