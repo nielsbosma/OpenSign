@@ -90,7 +90,12 @@ async fn main() -> anyhow::Result<()> {
     let settings = SettingsCache::from_env(std::env::vars());
     let users: i64 = sqlx::query_scalar("select count(*) from users").fetch_one(&db).await?;
     if users == 0 {
-        tracing::warn!("No admin yet. Open {} and enter the setup code {}", env.app_url.as_deref().unwrap_or("the app"), keys.setup_code());
+        let url = env.app_url.as_deref().unwrap_or("the app");
+        if env.setup_code.is_some() {
+            tracing::warn!("No admin yet. Open {url} with the setup link from your deployment, or enter SETUP_CODE from the environment");
+        } else {
+            tracing::warn!("No admin yet. Open {url} and enter the setup code {}", keys.setup_code());
+        }
     }
     let port = env.port;
     let role = env.role;

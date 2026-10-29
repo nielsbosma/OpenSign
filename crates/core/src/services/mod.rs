@@ -1,6 +1,7 @@
 pub mod admin;
 pub mod ai;
 pub mod auth;
+pub mod branding;
 pub mod bulk;
 pub mod documents;
 pub mod eid;
@@ -72,6 +73,9 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<admin::GetSettings>(),
         erase::<admin::UpdateSettings>(),
         erase::<admin::SendTestEmail>(),
+        erase::<branding::Get>(),
+        erase::<branding::SetLogo>(),
+        erase::<branding::RemoveLogo>(),
         erase::<admin::ListAudit>(),
         erase::<admin::VerifyAudit>(),
         erase::<documents::List>(),

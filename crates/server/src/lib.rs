@@ -114,6 +114,7 @@ pub fn router(state: AppState) -> Router {
         .route("/documents/{id}/attachments/{request}", get(files::document_attachment))
         .route("/eid/callback", get(files::eid_callback))
         .route("/verify", post(files::verify))
+        .route("/logo/{file}", get(files::logo))
         .nest("/v1", rest::router(&state))
         .nest("/v2", compat::scrive::router())
         .fallback(api_not_found)

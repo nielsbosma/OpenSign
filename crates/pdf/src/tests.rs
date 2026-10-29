@@ -168,6 +168,7 @@ fn report() -> EvidenceReport {
             content: b"png bytes".to_vec(),
         }],
         audit_head: Some("ef".repeat(32)),
+        logo_png: None,
     }
 }
 
@@ -181,6 +182,18 @@ fn evidence_adds_pages_and_attachment() {
     let tree = names.get(b"EmbeddedFiles").unwrap().as_dict().unwrap().get(b"Names").unwrap().as_array().unwrap();
     let keys: Vec<&[u8]> = tree.iter().step_by(2).map(|k| k.as_str().unwrap()).collect();
     assert_eq!(keys, [&b"attachment-01-passport.png"[..], b"evidence.json"]);
+}
+
+#[test]
+fn evidence_draws_the_logo_and_skips_a_broken_one() {
+    let input = sanitize(&sample_pdf(false), Limits::default()).unwrap().pdf;
+    let out = append_evidence(&input, &EvidenceReport { logo_png: Some(tiny_png()), ..report() }).unwrap();
+    let doc = Document::load_mem(&out).unwrap();
+    let pages = doc.get_pages();
+    let first_evidence = *pages.values().nth(1).unwrap();
+    let resources = doc.get_dictionary(first_evidence).unwrap().get(b"Resources").unwrap().as_dict().unwrap();
+    assert!(resources.get(b"XObject").unwrap().as_dict().unwrap().has(b"Logo"));
+    assert!(append_evidence(&input, &EvidenceReport { logo_png: Some(b"not a png".to_vec()), ..report() }).is_ok());
 }
 
 #[test]

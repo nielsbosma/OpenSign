@@ -271,7 +271,14 @@ impl Service for UpdateSettings {
             return Err(bad_request("values must be an object"));
         }
         match input.group {
-            Group::Org => update::<OrgSettings>(ctx, conn, &input.values).await,
+            Group::Org => {
+                // The logo is changed only through branding.set_logo, which checks the image.
+                let mut patch = input.values.clone();
+                if let Value::Object(map) = &mut patch {
+                    map.remove("logoFileId");
+                }
+                update::<OrgSettings>(ctx, conn, &patch).await
+            }
             Group::Email => {
                 let mut patch = input.values.clone();
                 if let Value::Object(map) = &mut patch {

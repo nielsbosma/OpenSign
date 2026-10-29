@@ -24,7 +24,7 @@ Instructions for coding agents and people. Read the README and SECURITY.md first
 
 ## Settings and configuration
 
-- Environment variables are only `DATABASE_URL`, `S3_*`, `APP_SECRET`, `APP_URL`, `CONVERTER_URL`, `PORT`, `ROLE`, `APP_ENV`. Runtime configuration belongs in Admin settings.
+- Environment variables are only `DATABASE_URL`, `S3_*`, `APP_SECRET`, `APP_URL`, `CONVERTER_URL`, `PORT`, `ROLE`, `APP_ENV`, and the optional `SETUP_CODE`. Runtime configuration belongs in Admin settings.
 - A new setting: a field on its group in `crates/core/src/settings.rs` (list secrets in `SECRETS`), validation in `admin::validate`, and a line in the `GROUPS` table in `web/src/pages/settings/AdminSettingsPage.tsx`. It is stored encrypted if secret, cached, audited, and can be pinned with `OPENSIGN_<GROUP>_<FIELD>`.
 
 ## Data

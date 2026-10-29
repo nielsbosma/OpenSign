@@ -433,3 +433,68 @@ fn base64_of(bytes: &[u8]) -> String {
     use base64::Engine;
     base64::engine::general_purpose::STANDARD.encode(bytes)
 }
+
+#[tokio::test]
+async fn logos_are_checked_and_served_publicly() {
+    use base64::Engine;
+    let Some(app) = app().await else { return };
+    let client = Client { router: router(AppState::new(app.clone())), ip: "203.0.113.12" };
+    let setup = json!({ "setupCode": app.keys.setup_code(), "orgName": "Acme AB", "name": "Ada", "email": "ada@example.com", "password": PASSWORD });
+    client.call("setup.create_first_admin", setup, &[]).await;
+    let (response, _) = client.call("auth.login", json!({ "email": "ada@example.com", "password": PASSWORD }), &[]).await;
+    let cookie = cookie_of(&response);
+    let auth: [(&str, &str); 2] = [("cookie", &cookie), ("origin", ORIGIN)];
+
+    let mut image = Vec::new();
+    let mut encoder = png::Encoder::new(&mut image, 40, 20);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().unwrap();
+    writer.write_image_data(&[200; 40 * 20 * 4]).unwrap();
+    writer.finish().unwrap();
+    let encode = |bytes: &[u8]| base64::engine::general_purpose::STANDARD.encode(bytes);
+
+    let svg = encode(br#"<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>"#);
+    let (response, _) = client.call("branding.set_logo", json!({ "contentBase64": svg }), &auth).await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let (response, _) = client.call("branding.set_logo", json!({ "contentBase64": encode(&image) }), &[]).await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let (response, branding) = client.call("branding.set_logo", json!({ "contentBase64": encode(&image) }), &auth).await;
+    assert_eq!(response.status(), StatusCode::OK, "{branding}");
+    let url = branding["logoUrl"].as_str().unwrap().to_string();
+    let (_, public) = client.call("branding.get", json!({}), &[]).await;
+    assert_eq!(public["logoUrl"], url.as_str());
+    assert_eq!(public["organisation"], "Acme AB");
+
+    let fetch = |path: &str| Request::get(path).header("x-forwarded-for", "203.0.113.12").body(Body::empty()).unwrap();
+    let response = client.router.clone().oneshot(fetch(&url)).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let h = response.headers();
+    assert_eq!(h.get(header::CONTENT_TYPE).unwrap(), "image/png");
+    assert!(h.get(header::CONTENT_SECURITY_POLICY).unwrap().to_str().unwrap().starts_with("sandbox"));
+    assert_eq!(h.get("x-content-type-options").unwrap(), "nosniff");
+    assert_eq!(h.get("cross-origin-resource-policy").unwrap(), "cross-origin");
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    assert!(body.starts_with(b"\x89PNG\r\n\x1a\n"));
+
+    // The logo can only be changed by uploading one; another file's id is ignored, and is never served as a logo.
+    let (_, doc) = client.call("documents.create", json!({ "title": "Agreement" }), &auth).await;
+    let pdf = encode(&opensign_pdf_fixture());
+    let (_, upload) =
+        client.call("documents.upload", json!({ "documentId": doc["id"], "name": "a.pdf", "contentBase64": pdf }), &auth).await;
+    let file_id = upload["file"]["id"].as_str().unwrap().to_string();
+    let (response, _) = client.call("settings.update", json!({ "group": "org", "values": { "logoFileId": file_id } }), &auth).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let (_, after) = client.call("branding.get", json!({}), &[]).await;
+    assert_eq!(after["logoUrl"], url.as_str());
+    assert_eq!(client.send(fetch(&format!("/api/logo/{}.png", file_id.replace('-', "")))).await.0.status(), StatusCode::NOT_FOUND);
+
+    let (_, replaced) = client.call("branding.set_logo", json!({ "contentBase64": encode(&image) }), &auth).await;
+    assert_ne!(replaced["logoUrl"], url.as_str());
+    assert_eq!(client.send(fetch(&url)).await.0.status(), StatusCode::NOT_FOUND);
+    assert_eq!(client.send(fetch("/api/logo/not-a-uuid.png")).await.0.status(), StatusCode::NOT_FOUND);
+
+    let (_, removed) = client.call("branding.remove_logo", json!({}), &auth).await;
+    assert!(removed["logoUrl"].is_null());
+}

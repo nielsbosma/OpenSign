@@ -6,7 +6,7 @@ When the last party has signed, OpenSign turns the document into one sealed PDF.
 
 1. **The document**, exactly as sent, with each party's field values and signatures stamped in place.
 2. **Evidence pages** at the end:
-   - the document title, its id and your organisation,
+   - your [logo](settings.md#logo), if you uploaded one, the document title, its id and your organisation,
    - each party: name, email, role, how they identified (for example "Swedish BankID, personal number 19xxxxxx-1234"), when they signed, and their IP address,
    - the events from the audit trail: sent, opened, identified, signed, and so on, with times,
    - the attachments signers uploaded and any [webcam photos](identification.md#webcam-photo), with their SHA-256 hashes,

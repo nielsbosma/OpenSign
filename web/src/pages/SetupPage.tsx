@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Check, ShieldCheck } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { Field, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
@@ -71,9 +71,19 @@ function generatePassword() {
   return out.join('').match(/.{6}/g)!.join('-');
 }
 
+/** A deployer can link to `/setup#code=…`; the fragment never reaches the server or a Referer header. */
+function codeFromLink() {
+  return new URLSearchParams(window.location.hash.slice(1)).get('code') ?? '';
+}
+
 function AdminStep() {
   const queryClient = useQueryClient();
-  const [values, setValues] = useState({ setupCode: '', orgName: '', name: '', email: '', password: '' });
+  const [linkedCode] = useState(codeFromLink);
+  const [askCode, setAskCode] = useState(!linkedCode);
+  const [values, setValues] = useState({ setupCode: linkedCode, orgName: '', name: '', email: '', password: '' });
+  useEffect(() => {
+    if (window.location.hash) window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+  }, []);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -89,6 +99,7 @@ function AdminStep() {
       await queryClient.invalidateQueries();
     } catch (e) {
       setError(e instanceof Error ? e.message : t('Setup failed'));
+      setAskCode(true);
     } finally {
       setBusy(false);
     }
@@ -103,11 +114,13 @@ function AdminStep() {
       <Steps step={1} />
       <form onSubmit={submit} className="grid gap-4">
         <FormError message={error} />
-        <Field label={t('Setup Code')} htmlFor="setupCode" hint={t('Printed in the server log when OpenSign starts without any users.')}>
-          <Input id="setupCode" value={values.setupCode} onChange={set('setupCode')} className="font-mono" required autoFocus />
-        </Field>
+        {askCode && (
+          <Field label={t('Setup Code')} htmlFor="setupCode" hint={t('Printed in the server log when OpenSign starts without any users.')}>
+            <Input id="setupCode" value={values.setupCode} onChange={set('setupCode')} className="font-mono" required autoFocus />
+          </Field>
+        )}
         <Field label={t('Organisation')} htmlFor="orgName">
-          <Input id="orgName" autoComplete="organization" value={values.orgName} onChange={set('orgName')} required />
+          <Input id="orgName" autoComplete="organization" value={values.orgName} onChange={set('orgName')} required autoFocus={!askCode} />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={t('Your Name')} htmlFor="name">
