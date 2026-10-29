@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { toast } from 'sonner';
-import { ConfirmButton, Field, Spinner } from '@/components/common';
+import { ConfirmButton, Field, Loading, Spinner } from '@/components/common';
 import { SearchSelect } from '@/components/SearchSelect';
 import { Button } from '@/components/ui/button';
 import { FilePicker } from '@/components/ui/file-picker';
@@ -524,7 +524,7 @@ export function SettingsGroup({ group }: { group: Group }) {
     setCertFiles({});
   }, [group]);
 
-  if (current.isPending) return <Spinner />;
+  if (current.isPending) return <Loading />;
   const saved = (current.data?.values ?? {}) as Record<string, unknown>;
   const pinned = current.data?.pinned ?? [];
   const value = (key: string) => (key in draft ? draft[key] : saved[key]);

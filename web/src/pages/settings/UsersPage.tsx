@@ -1,7 +1,7 @@
 import { UserPlus } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { toast } from 'sonner';
-import { Field, Spinner } from '@/components/common';
+import { Field, Loading } from '@/components/common';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -120,7 +120,7 @@ export function UsersPage() {
           </Button>
         )}
         {users.isPending ? (
-          <Spinner />
+          <Loading />
         ) : (
           <div className="rounded-md border">
             <Table>

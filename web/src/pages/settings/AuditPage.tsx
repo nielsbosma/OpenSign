@@ -1,6 +1,6 @@
 import { ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
-import { Spinner } from '@/components/common';
+import { Loading, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { type AuditView, call, useApi } from '@/lib/api';
@@ -65,7 +65,7 @@ export function AuditPage() {
           />
         </div>
         {first.isPending ? (
-          <Spinner />
+          <Loading />
         ) : (
           <ul className="grid gap-1.5">
             {entries.map((e) => (

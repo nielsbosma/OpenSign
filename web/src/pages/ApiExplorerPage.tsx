@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ChevronRight, Download, KeyRound, Moon, Play, RotateCcw, Search, Sun } from 'lucide-react';
 import { type KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { CopyButton, EmptyState, Logo, PageHeader, Spinner } from '@/components/common';
+import { CopyButton, EmptyState, Loading, Logo, PageHeader, Spinner } from '@/components/common';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -537,7 +537,7 @@ export function ApiExplorerPage() {
           }
         />
         {spec.isPending ? (
-          <Spinner />
+          <Loading />
         ) : !spec.data ? (
           <EmptyState title={t('The API description could not be loaded')}>{t('Reload the page to try again.')}</EmptyState>
         ) : (

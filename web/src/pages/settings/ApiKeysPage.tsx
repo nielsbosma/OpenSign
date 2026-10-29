@@ -1,6 +1,6 @@
 import { KeyRound, Pencil, Plus, Trash2 } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
-import { ConfirmButton, CopyButton, EmptyState, Field, IconButton, Spinner } from '@/components/common';
+import { ConfirmButton, CopyButton, EmptyState, Field, IconButton, Loading } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -248,7 +248,7 @@ export function ApiKeysPage() {
         <Plus /> {t('New Key')}
       </Button>
       {keys.isPending ? (
-        <Spinner />
+        <Loading />
       ) : !keys.data?.length ? (
         <EmptyState icon={<KeyRound />} title={t('No API keys')} />
       ) : (

@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import QRCode from 'qrcode';
 import { type FormEvent, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { CopyButton, Field, Spinner } from '@/components/common';
+import { CopyButton, Field, Loading, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -281,7 +281,7 @@ function McpCard() {
         <CopyButton value={url} />
       </div>
       {connections.isPending ? (
-        <Spinner />
+        <Loading />
       ) : !connections.data?.length ? (
         <p className="text-muted-foreground">{t('No apps connected.')}</p>
       ) : (

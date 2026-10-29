@@ -1,7 +1,7 @@
 import { FileStack, FileText, Plus, Search } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { EmptyState, PageHeader, Spinner } from '@/components/common';
+import { EmptyState, Loading, PageHeader } from '@/components/common';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -76,7 +76,7 @@ export function DocumentsPage({ templates }: { templates: boolean }) {
         </div>
       </div>
       {list.isPending ? (
-        <Spinner />
+        <Loading />
       ) : !list.data?.length ? (
         <EmptyState
           icon={templates ? <FileStack /> : <FileText />}

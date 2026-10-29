@@ -1,6 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 import { Link, useParams } from 'react-router';
-import { ConfirmButton, PageHeader, Spinner } from '@/components/common';
+import { ConfirmButton, Loading, PageHeader } from '@/components/common';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useApi, useApiMutation } from '@/lib/api';
@@ -29,7 +29,7 @@ export function BulkSendPage() {
     { refetchInterval: (q) => (q.state.data && ['queued', 'running'].includes(q.state.data.status) ? 2000 : false) },
   );
   const cancel = useApiMutation('bulk.cancel', { invalidates: ['bulk.get', 'bulk.list'] });
-  if (bulk.isPending) return <Spinner />;
+  if (bulk.isPending) return <Loading />;
   if (!bulk.data) return null;
   const b = bulk.data;
   const handled = b.sent + b.failed;

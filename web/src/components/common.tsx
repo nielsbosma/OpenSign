@@ -11,6 +11,15 @@ export function Spinner({ className }: { className?: string }) {
   return <Loader2 className={cn('size-4 animate-spin text-muted-foreground', className)} aria-label={t('Loading')} />;
 }
 
+/** A spinner centred in the space the content will take. */
+export function Loading({ className }: { className?: string }) {
+  return (
+    <div className={cn('flex items-center justify-center py-16', className)}>
+      <Spinner className="size-5" />
+    </div>
+  );
+}
+
 export function Logo({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" className={cn('size-7', className)} aria-hidden>
