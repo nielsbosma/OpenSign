@@ -1,9 +1,12 @@
 import {
+  Archive,
+  ArchiveRestore,
   ArrowLeft,
   ChevronDown,
   ChevronUp,
   Download,
   Eye,
+  Folder,
   HandHelping,
   History,
   Link2,
@@ -69,6 +72,7 @@ import { BulkSendDialog } from './BulkSendDialog';
 import { StatusBadge } from './DocumentsPage';
 import { FieldLayer } from './FieldLayer';
 import { FieldSettings } from './FieldSettings';
+import { folderPath, MoveToSubmenu } from './Folders';
 import { clamp, type EditableField, FIELD_KINDS, newGroupKey, partyColor, SENDER_KINDS, toEditable, toInput } from './fields';
 import { FileDrop } from './NewDocumentDialog';
 import { PartyDialog, partyToInput } from './PartyDialog';
@@ -511,6 +515,7 @@ export function DocumentPage() {
   const query = useApi('documents.get', { id });
   const authMethods = useApi('documents.auth_methods');
   const doc = query.data;
+  const folders = useApi('folders.list', { scope: doc?.isTemplate ? 'templates' : 'documents' }, { enabled: !!doc });
   const draft = !!doc && doc.status === 'draft' && doc.canEdit;
   const pending = !!doc && doc.status === 'pending';
   const { fields, update, flush, saving } = useFields(doc, draft);
@@ -541,6 +546,11 @@ export function DocumentPage() {
     onSuccess: () => navigate(doc?.isTemplate ? '/templates' : '/documents'),
   });
   const fromTemplate = useApiMutation('documents.create', { onSuccess: (d) => navigate(`/documents/${d.id}`) });
+  const move = useApiMutation('documents.move', { invalidates: ['documents.', 'folders.'], onSuccess: () => toast.success(t('Moved')) });
+  const archive = useApiMutation('documents.archive', {
+    invalidates: ['documents.', 'folders.'],
+    onSuccess: (_, input) => toast.success(input.archived ? t('Archived') : t('Restored from the archive')),
+  });
   const legalHold = useApiMutation('documents.legal_hold', {
     invalidates: ['documents.'],
     onSuccess: (out) => {
@@ -695,17 +705,27 @@ export function DocumentPage() {
                 · <Scale className="size-3.5" /> {t('Legal Hold')}
               </span>
             )}
+            {doc.folderId && folders.data && (
+              <span className="inline-flex min-w-0 items-center gap-1">
+                · <Folder className="size-3.5 shrink-0" /> <span className="truncate">{folderPath(folders.data, doc.folderId)}</span>
+              </span>
+            )}
+            {doc.archivedAt && (
+              <span className="inline-flex items-center gap-1 font-medium">
+                · <Archive className="size-3.5" /> {t('Archived')}
+              </span>
+            )}
             {doc.deletesAt && <span>· Kept until {formatDate(doc.deletesAt)}</span>}
             {saving && <span>{t('· Saving…')}</span>}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {doc.isTemplate && (
+          {doc.isTemplate && !doc.archivedAt && (
             <Button onClick={() => fromTemplate.mutate({ title: doc.title, templateId: doc.id })} disabled={fromTemplate.isPending}>
               <Plus /> {t('Use Template')}
             </Button>
           )}
-          {doc.isTemplate && can('documents.create') && (
+          {doc.isTemplate && !doc.archivedAt && can('documents.create') && (
             <Button variant="outline" onClick={() => setBulkSending(true)}>
               <Users /> {t('Bulk Send')}
             </Button>
@@ -756,6 +776,18 @@ export function DocumentPage() {
               {pending && doc.canEdit && (
                 <DropdownMenuItem onSelect={() => setCanceling(true)} className="text-destructive">
                   {t('Cancel Signing')}
+                </DropdownMenuItem>
+              )}
+              {doc.canEdit && folders.data && (
+                <MoveToSubmenu
+                  folders={folders.data}
+                  current={doc.folderId ?? null}
+                  onMove={(folderId) => move.mutate({ ids: [doc.id], folderId })}
+                />
+              )}
+              {doc.canEdit && (doc.isTemplate || ['completed', 'declined', 'canceled', 'expired'].includes(doc.status)) && (
+                <DropdownMenuItem onSelect={() => archive.mutate({ ids: [doc.id], archived: !doc.archivedAt })}>
+                  {doc.archivedAt ? <ArchiveRestore /> : <Archive />} {doc.archivedAt ? t('Restore') : t('Archive')}
                 </DropdownMenuItem>
               )}
               {!doc.isTemplate && can('documents.legal_hold') && (

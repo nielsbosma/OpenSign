@@ -146,3 +146,5 @@ A document that is not pending can be deleted with its files. Cancel a pending d
 ## Finding documents
 
 The **Documents** page lists the documents you can see, newest first, with tabs per status. Search by title or by your reference.
+
+Sort documents into folders from the folder column beside the list, and archive finished ones so they leave the status tabs. The **Archived** tab lists them. See [Folders and archive](folders.md).

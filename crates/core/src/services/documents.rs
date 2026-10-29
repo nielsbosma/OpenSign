@@ -79,6 +79,11 @@ pub struct ListInput {
     /// List templates instead of documents.
     #[serde(default)]
     pub templates: bool,
+    /// Only what is directly in this folder. Leave out to list everything regardless of folder.
+    pub folder_id: Option<Uuid>,
+    /// List the archive instead: archived documents or templates only. Archived ones are left out otherwise.
+    #[serde(default)]
+    pub archived: bool,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }
@@ -98,6 +103,8 @@ pub struct DocumentSummary {
     pub expires_at: Option<DateTime<Utc>>,
     pub parties_total: i64,
     pub parties_done: i64,
+    pub folder_id: Option<Uuid>,
+    pub archived_at: Option<DateTime<Utc>>,
 }
 
 fn like_pattern(search: &str) -> String {
@@ -113,7 +120,7 @@ impl Service for List {
     type Output = Vec<DocumentSummary>;
     const META: Meta = Meta::query(
         "documents.list",
-        "List documents (or templates) you can see, newest first, optionally filtered by status or a search on the title.",
+        "List documents (or templates) you can see, newest first, optionally filtered by status, folder or a search on the title. Archived ones are only listed with archived true.",
         Access::Authenticated,
     );
 
@@ -123,10 +130,12 @@ impl Service for List {
         Ok(sqlx::query_as(&format!(
             "select d.id, d.title, d.status, d.is_template, u.name as owner_name, d.external_id, d.created_at, d.sent_at, d.completed_at, d.expires_at,
                     (select count(*) from parties p where p.document_id = d.id and p.role <> 'viewer') as parties_total,
-                    (select count(*) from parties p where p.document_id = d.id and p.role <> 'viewer' and p.signed_at is not null) as parties_done
+                    (select count(*) from parties p where p.document_id = d.id and p.role <> 'viewer' and p.signed_at is not null) as parties_done,
+                    d.folder_id, d.archived_at
              from documents d left join users u on u.id = d.owner_id
              where {VISIBLE} and d.is_template = $4 and ($5::text is null or d.status = $5)
                and ($6::text is null or d.title ilike $7 escape '\\' or d.external_id = $6)
+               and ($10::uuid is null or d.folder_id = $10) and (d.archived_at is not null) = $11
              order by d.created_at desc limit $8 offset $9"
         ))
         .bind(read_all)
@@ -138,6 +147,8 @@ impl Service for List {
         .bind(search.map(like_pattern))
         .bind(input.limit.unwrap_or(50).clamp(1, 200))
         .bind(input.offset.unwrap_or(0).max(0))
+        .bind(input.folder_id)
+        .bind(input.archived)
         .fetch_all(&mut *conn)
         .await?)
     }
@@ -148,6 +159,11 @@ impl Service for List {
 pub struct CountsInput {
     /// Matches the title, or an exact external id, as in documents.list.
     pub search: Option<String>,
+    /// Count templates instead of documents.
+    #[serde(default)]
+    pub templates: bool,
+    /// Only what is directly in this folder, as in documents.list.
+    pub folder_id: Option<Uuid>,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -156,6 +172,8 @@ pub struct StatusCounts {
     pub all: i64,
     /// Documents per status: draft, pending, completed, declined, canceled and expired. Missing means none.
     pub by_status: std::collections::BTreeMap<String, i64>,
+    /// Archived ones, which `all` and `byStatus` leave out.
+    pub archived: i64,
 }
 
 pub struct Counts;
@@ -166,27 +184,32 @@ impl Service for Counts {
     type Output = StatusCounts;
     const META: Meta = Meta::query(
         "documents.counts",
-        "Count the documents you can see, in total and per status, optionally matching a search on the title. Use it for an overview before listing.",
+        "Count the documents (or templates) you can see, in total, per status and archived, optionally in one folder or matching a search on the title. Use it for an overview before listing.",
         Access::Authenticated,
     );
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CountsInput) -> Result<StatusCounts> {
         let (read_all, user_id, can_create) = visibility(ctx)?;
         let search = input.search.as_deref().map(str::trim).filter(|s| !s.is_empty());
-        let rows: Vec<(String, i64)> = sqlx::query_as(&format!(
-            "select d.status, count(*) from documents d
-             where {VISIBLE} and not d.is_template
+        let rows: Vec<(String, bool, i64)> = sqlx::query_as(&format!(
+            "select d.status, d.archived_at is not null, count(*) from documents d
+             where {VISIBLE} and d.is_template = $6
                and ($4::text is null or d.title ilike $5 escape '\\' or d.external_id = $4)
-             group by d.status"
+               and ($7::uuid is null or d.folder_id = $7)
+             group by 1, 2"
         ))
         .bind(read_all)
         .bind(user_id)
         .bind(can_create)
         .bind(search)
         .bind(search.map(like_pattern))
+        .bind(input.templates)
+        .bind(input.folder_id)
         .fetch_all(&mut *conn)
         .await?;
-        Ok(StatusCounts { all: rows.iter().map(|(_, n)| n).sum(), by_status: rows.into_iter().collect() })
+        let archived = rows.iter().filter(|(_, a, _)| *a).map(|(_, _, n)| n).sum();
+        let active: Vec<_> = rows.into_iter().filter(|(_, a, _)| !a).map(|(s, _, n)| (s, n)).collect();
+        Ok(StatusCounts { all: active.iter().map(|(_, n)| n).sum(), by_status: active.into_iter().collect(), archived })
     }
 }
 
@@ -221,6 +244,8 @@ pub struct CreateInput {
     /// Your own reference, e.g. a CRM id. Searchable.
     pub external_id: Option<String>,
     pub metadata: Option<Value>,
+    /// Put it in this folder: a document folder for documents, a template folder for templates.
+    pub folder_id: Option<Uuid>,
 }
 
 pub fn language(value: Option<&str>) -> Result<String> {
@@ -263,10 +288,16 @@ impl Service for Create {
                 if !t.is_template {
                     return Err(bad_request("That document is not a template"));
                 }
+                if t.archived_at.is_some() {
+                    return Err(conflict("That template is archived. Restore it before using it."));
+                }
                 Some(t)
             }
             None => None,
         };
+        if let Some(folder_id) = input.folder_id {
+            super::folders::check_folder(conn, folder_id, input.is_template).await?;
+        }
         let org: crate::settings::OrgSettings = settings(ctx, conn).await?;
         let id = Uuid::now_v7();
         let message = match (&input.message, &template) {
@@ -275,8 +306,8 @@ impl Service for Create {
             (None, None) => String::new(),
         };
         sqlx::query(
-            "insert into documents (id, title, is_template, template_id, owner_id, message, language, sequential, reminder_days, external_id, metadata, review_links)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+            "insert into documents (id, title, is_template, template_id, owner_id, message, language, sequential, reminder_days, external_id, metadata, review_links, folder_id)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
         )
         .bind(id)
         .bind(title(&input.title)?)
@@ -293,6 +324,7 @@ impl Service for Create {
         .bind(input.external_id.as_deref().map(|e| clean_text(e, "The external id", 200)).transpose()?.filter(|e| !e.is_empty()))
         .bind(metadata(input.metadata)?)
         .bind(template.as_ref().is_none_or(|t| t.review_links))
+        .bind(input.folder_id)
         .execute(&mut *conn)
         .await?;
         if let Some(t) = &template {
@@ -302,7 +334,7 @@ impl Service for Create {
             ctx,
             conn,
             Entry::new("document.created", "document", id)
-                .metadata(json!({ "template": input.template_id, "isTemplate": input.is_template })),
+                .metadata(json!({ "template": input.template_id, "isTemplate": input.is_template, "folder": input.folder_id })),
         )
         .await?;
         if !input.is_template {
