@@ -57,7 +57,11 @@ impl Api {
     }
 
     pub async fn upload(&self, id: Uuid, name: &str, bytes: &[u8]) -> Result<Value, AppError> {
-        self.call("documents.upload", json!({ "documentId": id, "name": name, "contentBase64": B64.encode(bytes) })).await
+        self.call(
+            "documents.upload",
+            json!({ "documentId": id, "name": name, "contentBase64": B64.encode(bytes), "textTags": false, "formFields": false }),
+        )
+        .await
     }
 
     /// The sealed PDF once complete, otherwise the file as sent (or the draft's files merged).

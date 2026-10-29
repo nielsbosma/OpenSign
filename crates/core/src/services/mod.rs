@@ -3,6 +3,7 @@ pub mod ai;
 pub mod auth;
 pub mod branding;
 pub mod bulk;
+pub mod detect;
 pub mod documents;
 pub mod eid;
 pub mod folders;
@@ -90,6 +91,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<documents::Update>(),
         erase::<documents::SetParties>(),
         erase::<documents::SetFields>(),
+        erase::<detect::DetectFields>(),
         erase::<documents::ListAuthMethods>(),
         erase::<documents::Send>(),
         erase::<documents::Cancel>(),

@@ -12,7 +12,7 @@ A template is a document you prepare once and send many times: an employment con
 1. Go to **Templates** and choose **New Template**. OpenSign creates an untitled template and opens it.
 2. Give it a title, upload the files, and set the message, language, signing order and reminders as for a document.
 3. Add the parties. For a template these are usually placeholders, such as "Tenant" or "Employee", with the role, delivery and identification you want. Whoever uses the template fills in the real names and contact details.
-4. Place the fields for each party.
+4. Place the fields for each party. [Text tags](text-tags.md) in the file can place them for you: a tag's `role` names the placeholder party, and a role the template does not have yet is added.
 
 A template stays a template; there is no "send" step.
 
@@ -57,6 +57,8 @@ When the contract text changes but the layout does not, use the replace button n
 - puts it in the same place among the template's files,
 - keeps every field where it was, and moves fields on later files along if the page count changed,
 - moves fields that were on pages the new file does not have to its last page and lists them, so you can put them right.
+
+If the new file has [text tags](text-tags.md#text-tags), the tags win: the old file's fields are dropped and the tags placed instead, adding any parties they name.
 
 On a template, the state before the replace is kept as a version, so the old file stays in the history and can be restored. Replacing works on drafts too. From the API, `POST /api/v1/documents/{id}/files/{fileId}/replace` with the file as multipart `file`. See [REST API](api.md#documents).
 

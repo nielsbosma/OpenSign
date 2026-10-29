@@ -52,6 +52,7 @@ import {
   type PartyView,
   replaceFile,
   type SignerLink,
+  type SuggestedField,
   uploadFile,
   useApi,
   useApiMutation,
@@ -82,6 +83,7 @@ import { PartyDialog, partyToInput } from './PartyDialog';
 import { PartyPhoto } from './PartyPhoto';
 import { Checks, ReviewPanel } from './ReviewPanel';
 import { SigningPreviewDialog } from './SigningPreviewDialog';
+import { announceUpload, DetectButton, SuggestionBar, SuggestionLayer } from './SuggestedFields';
 import { TemplateHistoryDialog } from './TemplateHistory';
 
 function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
@@ -125,11 +127,11 @@ function useFields(doc: DocumentView | undefined, editable: boolean) {
     if (persist) commit(next);
   };
   const reload = (doc: DocumentView) => setFields(toEditable(doc.fields));
-  const flush = () => {
+  const flush = async () => {
     if (!timer.current || !doc || !editable) return;
     clearTimeout(timer.current);
     timer.current = undefined;
-    save.mutate({ documentId: doc.id, fields: toInput(fields) });
+    await save.mutateAsync({ documentId: doc.id, fields: toInput(fields) });
   };
   return { fields, update, reload, flush, saving: save.isPending };
 }
@@ -552,6 +554,9 @@ export function DocumentPage() {
   const draft = !!doc && doc.status === 'draft' && doc.canEdit;
   const pending = !!doc && doc.status === 'pending';
   const { fields, update, reload, flush, saving } = useFields(doc, draft);
+  const [suggestions, setSuggestions] = useState<SuggestedField[]>([]);
+  const [aiNote, setAiNote] = useState<string | null>(null);
+  const aiStatus = useApi('ai.status', undefined, { staleTime: 5 * 60_000 });
   const [selected, setSelected] = useState<string | null>(null);
   const [armed, setArmed] = useState<FieldKind | null>(null);
   const [placingFor, setPlacingFor] = useState<string | null>(null);
@@ -574,6 +579,13 @@ export function DocumentPage() {
   const setParties = useApiMutation('documents.set_parties', { invalidates: ['documents.', 'templates.versions'] });
   const setSequential = useApiMutation('documents.update', { invalidates: ['documents.', 'templates.versions'] });
   const removeFile = useApiMutation('documents.remove_file', { invalidates: ['documents.', 'templates.versions'] });
+  const detect = useApiMutation('documents.detect_fields', {
+    onSuccess: (out) => {
+      setSuggestions(out.suggestions);
+      setAiNote(out.aiNote ?? null);
+      if (!out.suggestions.length) toast.info(out.aiNote ?? t('No places for new fields were found'));
+    },
+  });
   const remind = useApiMutation('documents.remind', { onSuccess: () => toast.success(t('Reminders sent')) });
   const cancel = useApiMutation('documents.cancel', { invalidates: ['documents.'], onSuccess: () => setCanceling(false) });
   const remove = useApiMutation('documents.delete', {
@@ -705,11 +717,10 @@ export function DocumentPage() {
   const upload = async (files: File[]) => {
     setUploading(true);
     try {
-      for (const file of files) {
-        const out = await uploadFile(doc.id, file);
-        if (out.removed.length) toast.warning(t('Removed from {file}: {items}', { file: file.name, items: out.removed.join(', ') }));
-      }
-      await query.refetch();
+      await flush();
+      for (const file of files) announceUpload(file.name, await uploadFile(doc.id, file));
+      const fresh = await query.refetch();
+      if (fresh.data) reload(fresh.data);
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -718,11 +729,11 @@ export function DocumentPage() {
   };
 
   const replace = async (fileId: string, file: File) => {
-    flush();
     setUploading(true);
     try {
+      await flush();
       const out = await replaceFile(doc.id, fileId, file);
-      if (out.removed.length) toast.warning(t('Removed from {file}: {items}', { file: file.name, items: out.removed.join(', ') }));
+      announceUpload(file.name, out);
       if (out.moved.length)
         toast.warning(
           t('{count} fields were on pages the new file does not have and are now on its last page: {fields}', {
@@ -731,7 +742,7 @@ export function DocumentPage() {
           }),
           { duration: 15000 },
         );
-      else toast.success(t('File replaced'));
+      else if (!out.fields.textTags) toast.success(t('File replaced'));
       const next = await query.refetch();
       if (next.data) reload(next.data);
       void versions.refetch();
@@ -752,6 +763,41 @@ export function DocumentPage() {
   };
 
   const selectedField = fields.find((f) => f.key === selected);
+
+  const toField = (s: SuggestedField): EditableField | null => {
+    const signer = doc.parties.find((p) => p.role === 'signer')?.id ?? null;
+    const actor = doc.parties.find((p) => p.role !== 'viewer')?.id ?? null;
+    const needsSigner = s.kind === 'signature' || s.kind === 'initials';
+    const placing = doc.parties.find((p) => p.id === placingFor);
+    const partyId = needsSigner
+      ? placing?.role === 'signer'
+        ? placing.id
+        : signer
+      : (placingFor ?? (SENDER_KINDS.includes(s.kind) ? null : actor));
+    if (needsSigner && !partyId) return null;
+    return {
+      key: crypto.randomUUID(),
+      kind: s.kind,
+      label: s.label || null,
+      page: s.page,
+      partyId,
+      required: s.kind !== 'checkbox',
+      options: [],
+      groupKey: null,
+      x: s.x,
+      y: s.y,
+      width: s.width,
+      height: s.height,
+    };
+  };
+  const accept = (picked: SuggestedField[]) => {
+    const added = picked.map(toField);
+    if (added.some((f) => !f)) toast.warning(t('Add a signer first: signature and initials fields belong to a signer'));
+    const ok = added.filter((f): f is EditableField => !!f);
+    if (ok.length) update([...fields, ...ok]);
+    setSuggestions((all) => all.filter((s) => !picked.includes(s) || !toField(s)));
+    if (ok.length === 1) setSelected(ok[0]!.key);
+  };
 
   return (
     <div className="grid gap-5">
@@ -964,6 +1010,14 @@ export function DocumentPage() {
               <span className="ms-auto text-xs text-muted-foreground">
                 {armed ? t('Click on the page to place it') : t('Drag a field onto the page, or pick one and click')}
               </span>
+              <DetectButton
+                busy={detect.isPending}
+                aiReady={!!aiStatus.data?.configured && aiStatus.data.allowDocumentText && aiStatus.data.canUse}
+                onDetect={async (ai) => {
+                  await flush();
+                  detect.mutate({ documentId: doc.id, ai });
+                }}
+              />
             </div>
           )}
           {!doc.files.length ? (
@@ -974,6 +1028,14 @@ export function DocumentPage() {
             )
           ) : pdf.pages ? (
             <div className={cn(armed && '[&_canvas]:cursor-crosshair')}>
+              {draft && suggestions.length > 0 && (
+                <SuggestionBar
+                  count={suggestions.length}
+                  note={aiNote}
+                  onAcceptAll={() => accept(suggestions)}
+                  onDismissAll={() => setSuggestions([])}
+                />
+              )}
               <PdfPages
                 pages={pdf.pages}
                 onPageClick={draft ? place : undefined}
@@ -982,24 +1044,34 @@ export function DocumentPage() {
                 // The sealed copy has the values drawn into it.
                 overlay={(page) =>
                   doc.status !== 'completed' && (
-                    <FieldLayer
-                      page={page}
-                      fields={fields}
-                      parties={doc.parties}
-                      editable={draft}
-                      selected={selected}
-                      onSelect={setSelected}
-                      onChange={(key, patch, done) =>
-                        update(
-                          fields.map((f) => (f.key === key ? { ...f, ...patch } : f)),
-                          done,
-                        )
-                      }
-                      onRemove={(key) => {
-                        update(fields.filter((f) => f.key !== key));
-                        setSelected(null);
-                      }}
-                    />
+                    <>
+                      <FieldLayer
+                        page={page}
+                        fields={fields}
+                        parties={doc.parties}
+                        editable={draft}
+                        selected={selected}
+                        onSelect={setSelected}
+                        onChange={(key, patch, done) =>
+                          update(
+                            fields.map((f) => (f.key === key ? { ...f, ...patch } : f)),
+                            done,
+                          )
+                        }
+                        onRemove={(key) => {
+                          update(fields.filter((f) => f.key !== key));
+                          setSelected(null);
+                        }}
+                      />
+                      {draft && (
+                        <SuggestionLayer
+                          page={page}
+                          suggestions={suggestions}
+                          onAccept={(s) => accept([s])}
+                          onDismiss={(s) => setSuggestions((all) => all.filter((x) => x !== s))}
+                        />
+                      )}
+                    </>
                   )
                 }
               />

@@ -69,7 +69,12 @@ fn kind<T>(result: opensign_core::Result<T>) -> ErrorKind {
 async fn upload(ctx: &Ctx, id: Uuid, pages: usize) -> Uuid {
     call::<docs::Upload>(
         ctx,
-        docs::UploadInput { document_id: id, name: "lease.pdf".into(), content_base64: B64.encode(sample_pdf(pages)) },
+        docs::UploadInput {
+            document_id: id,
+            name: "lease.pdf".into(),
+            content_base64: B64.encode(sample_pdf(pages)),
+            ..Default::default()
+        },
     )
     .await
     .unwrap()
@@ -275,4 +280,36 @@ async fn replacing_a_file_keeps_fields_and_history() {
     let gone: bool =
         sqlx::query_scalar("select exists (select 1 from files where id = $1)").bind(terms).fetch_one(&mut *conn).await.unwrap();
     assert!(!gone, "deleting the template deletes the files only its versions used");
+}
+
+#[tokio::test]
+async fn text_tags_in_a_replacement_win_over_the_old_fields() {
+    let Some(app) = app().await else { return };
+    let manager = person(&app, Role::Manager).await;
+    let template = call::<docs::Create>(&manager, input(json!({ "title": "Lease", "isTemplate": true }))).await.unwrap().document.id;
+    let file = upload(&manager, template, 1).await;
+    let landlord = call::<docs::SetParties>(
+        &manager,
+        input(json!({ "documentId": template, "parties": [{ "name": "Landlord", "email": "l@example.com" }] })),
+    )
+    .await
+    .unwrap()[0]
+        .id;
+    set_fields(
+        &manager,
+        template,
+        json!([{ "partyId": landlord, "kind": "text", "label": "Old", "page": 0, "x": 0.1, "y": 0.1, "width": 0.3, "height": 0.04 }]),
+    )
+    .await;
+
+    let tagged = include_bytes!("../../pdf/fixtures/word-tags.pdf").to_vec();
+    let out = docs::replace_file(&manager, template, file, "Lease with tags.pdf", tagged).await.unwrap();
+    assert_eq!(out.fields.text_tags, 9, "{:?}", out.fields.problems);
+    assert_eq!(out.fields.parties_added, ["Tenant"]);
+    assert!(out.moved.is_empty());
+    let doc = call::<docs::Get>(&manager, input(json!({ "id": template }))).await.unwrap();
+    assert_eq!(doc.fields.len(), 9);
+    assert!(doc.fields.iter().all(|f| f.label != "Old"));
+    let old = call::<templates::GetVersion>(&manager, input(json!({ "templateId": template, "number": 1 }))).await.unwrap();
+    assert_eq!(old.content.fields[0].label, "Old");
 }

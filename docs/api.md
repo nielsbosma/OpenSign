@@ -152,7 +152,7 @@ Send answers `{ "document": {…}, "links": [{ "partyId", "name", "url" }] }`. T
 | GET | `/documents/{id}` | One document with files, parties and fields |
 | PATCH | `/documents/{id}` | Change `title`, `message`, `language`, `sequential`, `expiresAt`, `reminderDays` (0 turns reminders off), `externalId`, `metadata` |
 | DELETE | `/documents/{id}` | Delete a document or template that is not pending, with its files |
-| POST | `/documents/{id}/files` | Upload one file as multipart `file`: PDF, .docx, .doc, .odt or .rtf |
+| POST | `/documents/{id}/files` | Upload one file as multipart `file`: PDF, .docx, .doc, .odt or .rtf. [Text tags and form fields](text-tags.md) become fields unless `textTags` or `formFields` is `false` |
 | DELETE | `/documents/{documentId}/files/{fileId}` | Remove a file from a draft |
 | POST | `/documents/{id}/files/{fileId}/replace` | Replace a file with a new one (multipart `file`) without redoing its fields. Returns `moved`: fields that were on pages the new file lacks, now on its last page |
 | PUT | `/documents/{documentId}/parties` | Replace the party list. Parties left out are removed with their fields; pass `id` to keep one |
