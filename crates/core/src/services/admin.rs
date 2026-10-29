@@ -213,8 +213,10 @@ pub(crate) fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
             Ok(())
         }
         "updates" => {
-            if let Some(hook) = value.get("deployHookUrl").and_then(Value::as_str).filter(|u| !u.is_empty()) {
-                crate::net::check_public_url(hook).map_err(bad_request)?;
+            for key in ["deployHookUrl", "updateUrl"] {
+                if let Some(url) = value.get(key).and_then(Value::as_str).filter(|u| !u.is_empty()) {
+                    crate::net::check_public_url(url).map_err(bad_request)?;
+                }
             }
             Ok(())
         }

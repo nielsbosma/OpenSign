@@ -63,6 +63,7 @@ services:
       OPENSIGN_AI_MODEL: ${{ addons.llm.model }}
       OPENSIGN_AI_API_KEY: ${{ addons.llm.apiKey }}
       OPENSIGN_AI_BASE_URL: ${{ if(addons.llm.provider == "openai-compatible", addons.llm.baseUrl, "") }}
+      OPENSIGN_UPDATES_UPDATE_URL: ${{ deployment.updateUrl }}
 
 done:
   open: ${{ services.opensign.url }}

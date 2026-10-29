@@ -126,11 +126,14 @@ pub struct UpdateSettings {
     pub check_for_updates: bool,
     /// A secret URL that redeploys the service when called, such as Sliplane's deploy hook.
     pub deploy_hook_url: Option<String>,
+    /// A page that updates this installation to a release given as `ref`, such as the update link
+    /// the Sliplane Deployer passes in.
+    pub update_url: Option<String>,
 }
 
 impl Default for UpdateSettings {
     fn default() -> Self {
-        Self { check_for_updates: true, deploy_hook_url: None }
+        Self { check_for_updates: true, deploy_hook_url: None, update_url: None }
     }
 }
 

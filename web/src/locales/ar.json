@@ -682,5 +682,8 @@
   "· Saving…": "· جارٍ الحفظ…",
   "· matched with AI": "· مطابق بالذكاء الاصطناعي",
   "“{title}” is deleted for everyone. This cannot be undone.": "سيُحذف ”{title}“ لدى الجميع. لا يمكن التراجع عن ذلك.",
-  "“{title}”, completed {date}. The file is exactly as sealed.": "”{title}“، اكتمل في {date}. الملف مطابق تمامًا لما خُتم."
+  "“{title}”, completed {date}. The file is exactly as sealed.": "”{title}“، اكتمل في {date}. الملف مطابق تمامًا لما خُتم.",
+  "Update Link": "رابط التحديث",
+  "A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.": "صفحة تثبّت إصدارًا محددًا في ref، مثل الرابط الذي يضبطه Sliplane Deployer. يُستخدم عند عدم وجود deploy hook.",
+  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "يفتح «التحديث الآن» Sliplane Deployer. سجّل الدخول إلى Sliplane وأكّد؛ تُشغَّل عمليات الترحيل عند بدء الإصدار الجديد."
 }

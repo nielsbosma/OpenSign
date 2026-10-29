@@ -682,5 +682,8 @@
   "· Saving…": "· محفوظ ہو رہا ہے…",
   "· matched with AI": "· AI سے ملایا گیا",
   "“{title}” is deleted for everyone. This cannot be undone.": "”{title}“ سب کے لیے حذف ہو جائے گی۔ اسے واپس نہیں کیا جا سکتا۔",
-  "“{title}”, completed {date}. The file is exactly as sealed.": "”{title}“، {date} کو مکمل ہوئی۔ فائل بالکل ویسی ہی ہے جیسی مہر لگتے وقت تھی۔"
+  "“{title}”, completed {date}. The file is exactly as sealed.": "”{title}“، {date} کو مکمل ہوئی۔ فائل بالکل ویسی ہی ہے جیسی مہر لگتے وقت تھی۔",
+  "Update Link": "اپ ڈیٹ لنک",
+  "A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.": "ایک صفحہ جو ref میں دیا گیا ریلیز انسٹال کرتا ہے، جیسے Sliplane Deployer کا مقرر کردہ لنک۔ جب کوئی deploy hook نہ ہو تو استعمال ہوتا ہے۔",
+  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "\"ابھی اپ ڈیٹ کریں\" Sliplane Deployer کھولتا ہے۔ Sliplane میں سائن ان کریں اور تصدیق کریں؛ نیا ورژن شروع ہونے پر مائیگریشنز چلتی ہیں۔"
 }

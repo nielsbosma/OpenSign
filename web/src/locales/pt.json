@@ -682,5 +682,8 @@
   "· Saving…": "· Salvando…",
   "· matched with AI": "· combinado com IA",
   "“{title}” is deleted for everyone. This cannot be undone.": "“{title}” será excluído para todos. Isso não pode ser desfeito.",
-  "“{title}”, completed {date}. The file is exactly as sealed.": "“{title}”, concluído em {date}. O arquivo está exatamente como foi selado."
+  "“{title}”, completed {date}. The file is exactly as sealed.": "“{title}”, concluído em {date}. O arquivo está exatamente como foi selado.",
+  "Update Link": "Link de atualização",
+  "A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.": "Uma página que instala uma versão indicada como ref, como o link definido pelo Sliplane Deployer. Usado quando não há deploy hook.",
+  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "Atualizar agora abre o Sliplane Deployer. Entre no Sliplane e confirme; as migrações são executadas quando a nova versão inicia."
 }

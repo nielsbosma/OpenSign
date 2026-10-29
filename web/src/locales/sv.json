@@ -682,5 +682,8 @@
   "· Saving…": "· Sparar…",
   "· matched with AI": "· matchat med AI",
   "“{title}” is deleted for everyone. This cannot be undone.": "”{title}” tas bort för alla. Detta kan inte ångras.",
-  "“{title}”, completed {date}. The file is exactly as sealed.": "”{title}”, klart {date}. Filen är exakt som när den förseglades."
+  "“{title}”, completed {date}. The file is exactly as sealed.": "”{title}”, klart {date}. Filen är exakt som när den förseglades.",
+  "Update Link": "Uppdateringslänk",
+  "A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.": "En sida som installerar en version angiven som ref, till exempel länken som Sliplane Deployer sätter. Används när det inte finns någon deploy hook.",
+  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "Uppdatera nu öppnar Sliplane Deployer. Logga in på Sliplane och bekräfta; migreringar körs när den nya versionen startar."
 }
