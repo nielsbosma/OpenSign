@@ -1,6 +1,6 @@
-import { KeyRound, Plus } from 'lucide-react';
+import { KeyRound, Pencil, Plus, Trash2 } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
-import { ConfirmButton, CopyButton, EmptyState, Field, Spinner } from '@/components/common';
+import { ConfirmButton, CopyButton, EmptyState, Field, IconButton, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -271,15 +271,18 @@ export function ApiKeysPage() {
                     : t('from any IP address')}
                 </div>
               </div>
-              <Button variant="ghost" onClick={() => setEditing(k)}>
-                {t('Edit')}
-              </Button>
-              <ConfirmButton
-                label={t('Revoke')}
-                title={t('Revoke “{name}”?', { name: k.name })}
-                description={t('Anything using this key stops working at once.')}
-                onConfirm={() => revoke.mutate({ id: k.id })}
-              />
+              <div className="flex shrink-0">
+                <IconButton label={t('Edit')} onClick={() => setEditing(k)}>
+                  <Pencil />
+                </IconButton>
+                <ConfirmButton
+                  label={t('Revoke')}
+                  icon={<Trash2 />}
+                  title={t('Revoke “{name}”?', { name: k.name })}
+                  description={t('Anything using this key stops working at once.')}
+                  onConfirm={() => revoke.mutate({ id: k.id })}
+                />
+              </div>
             </li>
           ))}
         </ul>
