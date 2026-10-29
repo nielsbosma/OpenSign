@@ -42,6 +42,27 @@ async fn signed_in(app: &Arc<App>, result: LoginResult) -> Ctx {
 }
 
 #[tokio::test]
+async fn a_deployment_setup_code_replaces_the_derived_one() {
+    let Some(app) = app().await else { return };
+    let Ok(mut inner) = Arc::try_unwrap(app) else { panic!("only reference") };
+    let code = "Zq8rT2vLmX9pK4wN7bC3dF6hJ1sA";
+    inner.env.setup_code = Some(code.into());
+    let app = Arc::new(inner);
+    let anon = web(&app);
+    let input = |code: &str| setup::CompleteInput {
+        setup_code: code.into(),
+        org_name: "Acme AB".into(),
+        name: "Ada Admin".into(),
+        email: "ada@example.com".into(),
+        password: PASSWORD.into(),
+    };
+    assert!(call::<setup::Complete>(&anon, input(&app.keys.setup_code())).await.is_err(), "the logged code no longer works");
+    assert!(call::<setup::Complete>(&anon, input(&code.to_lowercase())).await.is_err(), "the code is case sensitive");
+    call::<setup::Complete>(&anon, input(&format!(" {code} "))).await.unwrap();
+    assert!(call::<setup::Complete>(&anon, input(code)).await.is_err(), "setup locks after the first admin");
+}
+
+#[tokio::test]
 async fn setup_login_lockout_two_factor_and_api_keys() {
     let Some(app) = app().await else { return };
     let anon = web(&app);

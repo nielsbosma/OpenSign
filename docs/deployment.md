@@ -33,6 +33,7 @@ Email, SMS, eID, AI and every other provider are set up later in the browser.
 | `APP_SECRET` | At least 32 random characters, such as the output of `openssl rand -base64 48`. Every key derives from it. Keep it safe, back it up apart from the database, and never change it: without it every document is unreadable. |
 | `APP_URL` | The public https address, such as `https://sign.example.com`. Used in links, passkeys and OAuth. |
 | `CONVERTER_URL` | Gotenberg's private address, such as `http://gotenberg:3000`. Optional. |
+| `SETUP_CODE` | Optional. At least 24 random characters that replace the setup code printed in the log, so a deployer can link straight to `/setup#code=…`. It stops working once the first admin exists. |
 | `PORT` | Optional, default `3000`. |
 | `ROLE` | Optional. `all` (default) runs the web server and the background worker; `web` or `worker` runs one half, to scale them apart. |
 
@@ -40,7 +41,7 @@ Any admin setting can also be pinned with an `OPENSIGN_<GROUP>_<FIELD>` variable
 
 ## Sliplane
 
-[Sliplane](https://sliplane.io) runs the whole stack with one click. The repository's `sliplane.yaml` describes it: a managed Postgres, a bucket, Gotenberg on the private network, and OpenSign with a freshly generated `APP_SECRET`. It asks for your Resend key (and optionally an AI provider) and shows what it creates and what it costs.
+[Sliplane](https://sliplane.io) runs the whole stack with one click. The repository's `sliplane.yaml` describes it: a managed Postgres, a bucket, Gotenberg on the private network, and OpenSign with a freshly generated `APP_SECRET`. It asks for your Resend key (and optionally an AI provider) and shows what it creates and what it costs. When it finishes, **Open OpenSign** goes straight to setup with a generated `SETUP_CODE` filled in, so there is no code to find in the logs.
 
 **[Deploy to Sliplane](https://sliplane.opendeploy.cloud/?repo=https://github.com/nielsbosma/OpenSign)**
 

@@ -24,6 +24,7 @@ pub async fn app() -> Option<Arc<App>> {
         s3_region: "us-east-1".into(),
         app_secret: TEST_SECRET.into(),
         app_url: Some("http://localhost:3000".into()),
+        setup_code: None,
         converter_url: std::env::var("TEST_CONVERTER_URL").ok(),
         port: 3000,
         role: ProcessRole::All,

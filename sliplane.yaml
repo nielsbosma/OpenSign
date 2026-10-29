@@ -23,6 +23,12 @@ addons:
     providers: [anthropic, openai, opper, berget, openai-compatible]
     default: anthropic
 
+secrets:
+  setup_code:
+    length: 32
+    label: Setup Code
+    show: true
+
 databases:
   db:
     engine: postgres
@@ -56,6 +62,7 @@ services:
       S3_SECRET_KEY: ${{ buckets.files.secretAccessKey }}
       APP_SECRET: ${{ secret(48) }}
       APP_URL: ${{ services.opensign.url }}
+      SETUP_CODE: ${{ secrets.setup_code }}
       CONVERTER_URL: ${{ services.converter.internalUrl }}
       OPENSIGN_EMAIL_API_KEY: ${{ addons.email.apiKey }}
       OPENSIGN_EMAIL_FROM_ADDRESS: ${{ addons.email.from }}
@@ -66,7 +73,7 @@ services:
       OPENSIGN_UPDATES_UPDATE_URL: ${{ deployment.updateUrl }}
 
 done:
-  open: ${{ services.opensign.url }}
+  open: ${{ services.opensign.url }}/setup#code=${{ secrets.setup_code }}
   message: |
-    Open OpenSign and enter the setup code from the opensign service's logs in Sliplane to create the first admin.
+    Open OpenSign to create the first admin. The link carries the setup code, which stops working once the admin exists.
     Resend is already set up; the wizard sends a test email to confirm it.
