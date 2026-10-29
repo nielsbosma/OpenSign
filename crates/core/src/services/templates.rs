@@ -132,7 +132,7 @@ pub struct TemplateInput {
 
 #[derive(Serialize, JsonSchema, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
-pub struct VersionSummary {
+pub struct TemplateVersionSummary {
     pub number: i32,
     pub note: Option<String>,
     /// The version this one restored, if it was made by a restore.
@@ -147,12 +147,12 @@ pub struct VersionSummary {
 #[serde(rename_all = "camelCase")]
 pub struct VersionsOutput {
     /// Newest first.
-    pub versions: Vec<VersionSummary>,
+    pub versions: Vec<TemplateVersionSummary>,
     /// The template has changed since its newest version (or has none yet).
     pub changed: bool,
 }
 
-async fn summaries(ctx: &Ctx, conn: &mut PgConnection, template_id: Uuid, number: Option<i32>) -> Result<Vec<VersionSummary>> {
+async fn summaries(ctx: &Ctx, conn: &mut PgConnection, template_id: Uuid, number: Option<i32>) -> Result<Vec<TemplateVersionSummary>> {
     let (read_all, user_id, can_create) = visibility(ctx)?;
     Ok(sqlx::query_as(&format!(
         "select v.number, v.note, v.restored_from, u.name as created_by_name, v.created_at,
@@ -209,9 +209,9 @@ pub struct VersionDocument {
 
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct VersionView {
+pub struct TemplateVersion {
     #[serde(flatten)]
-    pub summary: VersionSummary,
+    pub summary: TemplateVersionSummary,
     /// The template as it was: settings, files, parties and fields. Personal numbers are masked.
     pub content: Content,
     /// The newest 50 documents you can see that were made from this version.
@@ -223,14 +223,14 @@ pub struct GetVersion;
 #[async_trait]
 impl Service for GetVersion {
     type Input = VersionInput;
-    type Output = VersionView;
+    type Output = TemplateVersion;
     const META: Meta = Meta::query(
         "templates.version",
         "Get one saved version of a template: its settings, files, parties and fields as they were, and the documents made from it.",
         Access::Authenticated,
     );
 
-    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: VersionInput) -> Result<VersionView> {
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: VersionInput) -> Result<TemplateVersion> {
         let t = template(ctx, conn, input.template_id, Need::Read).await?;
         let content = versions::masked(version(ctx, conn, t.id, input.number).await?);
         let summary = summaries(ctx, conn, t.id, Some(input.number)).await?.pop().ok_or_else(|| not_found("Version"))?;
@@ -246,7 +246,7 @@ impl Service for GetVersion {
         .bind(input.number)
         .fetch_all(&mut *conn)
         .await?;
-        Ok(VersionView { summary, content, documents })
+        Ok(TemplateVersion { summary, content, documents })
     }
 }
 
@@ -305,14 +305,14 @@ pub struct Save;
 #[async_trait]
 impl Service for Save {
     type Input = SaveInput;
-    type Output = VersionSummary;
+    type Output = TemplateVersionSummary;
     const META: Meta = Meta::mutation(
         "templates.save_version",
         "Save the template as it is now as a new version, with an optional note. Versions are also saved automatically when a changed template is used.",
         Access::Authenticated,
     );
 
-    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SaveInput) -> Result<VersionSummary> {
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SaveInput) -> Result<TemplateVersionSummary> {
         let t = template(ctx, conn, input.template_id, Need::Edit).await?;
         let note = note(input.note.as_deref())?;
         sqlx::query("select 1 from documents where id = $1 for update").bind(t.id).execute(&mut *conn).await?;

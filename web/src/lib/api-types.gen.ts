@@ -1539,7 +1539,7 @@ export type Change = {
   details: Array<string>;
   /** setting, file, party or field. */
   item: string;
-  /** The setting's name (title, message, language, sequential, reminderDays, reviewLinks), the file or party name, or the field's label (its kind when it has none). */
+  /** The setting's name (title, message, language, sequential, reminderDays, reviewLinks, fileOrder), the file or party name, or the field's label (its kind when it has none). */
   name: string;
   /** For a field, the name of its party; none for a field the sender fills in. */
   party?: string | null;
@@ -1564,9 +1564,9 @@ export type TemplatesSaveVersionInput = {
   templateId: string;
 };
 
-export type TemplatesSaveVersionOutput = VersionSummary;
+export type TemplatesSaveVersionOutput = TemplateVersionSummary;
 
-export type VersionSummary = {
+export type TemplateVersionSummary = {
   createdAt: string;
   createdByName?: string | null;
   /** Documents you can see that were made from this version. */
@@ -1654,9 +1654,9 @@ export type VersionDocument = {
   title: string;
 };
 
-export type TemplatesVersionOutput = VersionView2;
+export type TemplatesVersionOutput = TemplateVersion;
 
-export type VersionView2 = {
+export type TemplateVersion = {
   /** The template as it was: settings, files, parties and fields. Personal numbers are masked. */
   content: Content;
   createdAt: string;
@@ -1681,7 +1681,7 @@ export type VersionsOutput = {
   /** The template has changed since its newest version (or has none yet). */
   changed: boolean;
   /** Newest first. */
-  versions: Array<VersionSummary>;
+  versions: Array<TemplateVersionSummary>;
 };
 
 export type UsersAcceptInviteInput = {

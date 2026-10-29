@@ -294,7 +294,7 @@ pub struct Change {
     pub change: String,
     /// setting, file, party or field.
     pub item: String,
-    /// The setting's name (title, message, language, sequential, reminderDays, reviewLinks), the
+    /// The setting's name (title, message, language, sequential, reminderDays, reviewLinks, fileOrder), the
     /// file or party name, or the field's label (its kind when it has none).
     pub name: String,
     /// For a field, the name of its party; none for a field the sender fills in.
