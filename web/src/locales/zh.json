@@ -682,5 +682,8 @@
   "· Saving…": "· 正在保存…",
   "· matched with AI": "· 已用 AI 匹配",
   "“{title}” is deleted for everyone. This cannot be undone.": "“{title}”将对所有人删除。此操作无法撤销。",
-  "“{title}”, completed {date}. The file is exactly as sealed.": "“{title}”，完成于 {date}。该文件与封印时完全一致。"
+  "“{title}”, completed {date}. The file is exactly as sealed.": "“{title}”，完成于 {date}。该文件与封印时完全一致。",
+  "Update Link": "更新链接",
+  "A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.": "安装 ref 所指定版本的页面，例如 Sliplane Deployer 设置的链接。没有 deploy hook 时使用。",
+  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "“立即更新”会打开 Sliplane Deployer。登录 Sliplane 并确认；新版本启动时会运行迁移。"
 }

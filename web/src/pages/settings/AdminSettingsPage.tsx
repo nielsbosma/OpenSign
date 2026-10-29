@@ -128,6 +128,14 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
           'Calling it redeploys the service with its configured image tag, so use latest or a version series such as 1.2 rather than an exact version.',
         ),
       },
+      {
+        key: 'updateUrl',
+        label: msg('Update Link'),
+        placeholder: 'https://sliplane.opendeploy.cloud/update?…',
+        hint: msg(
+          'A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.',
+        ),
+      },
     ],
   },
   retention: {

@@ -1272,6 +1272,8 @@ export type VersionView = {
   development: boolean;
   latest?: Release | null;
   updateAvailable: boolean;
+  /** Where an admin updates to the latest release when there is no deploy hook, such as the Sliplane Deployer's update page. */
+  updateLink?: string | null;
 };
 
 export type UsersAcceptInviteInput = {

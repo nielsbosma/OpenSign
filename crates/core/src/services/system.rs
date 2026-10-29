@@ -111,6 +111,9 @@ pub struct VersionView {
     pub check_problem: Option<String>,
     /// An admin can update from the app: a deploy hook is set.
     pub can_update: bool,
+    /// Where an admin updates to the latest release when there is no deploy hook, such as the
+    /// Sliplane Deployer's update page.
+    pub update_link: Option<String>,
 }
 
 async fn version_view(ctx: &Ctx, conn: &mut PgConnection, refresh: bool) -> Result<VersionView> {
@@ -125,6 +128,7 @@ async fn version_view(ctx: &Ctx, conn: &mut PgConnection, refresh: bool) -> Resu
         }
     };
     let update_available = latest.as_ref().is_some_and(|l| is_newer(&l.version, &current));
+    let update_link = latest.as_ref().filter(|_| update_available).and_then(|l| update_link(updates.update_url.as_deref()?, &l.version));
     Ok(VersionView {
         development: current.contains("-dev"),
         current,
@@ -132,7 +136,16 @@ async fn version_view(ctx: &Ctx, conn: &mut PgConnection, refresh: bool) -> Resu
         update_available,
         check_problem,
         can_update: updates.deploy_hook_url.as_deref().is_some_and(|u| !u.is_empty()),
+        update_link,
     })
+}
+
+/// The update page with the release tag as `ref`. Only https links to public hosts are offered.
+fn update_link(base: &str, version: &str) -> Option<String> {
+    let mut url = crate::net::check_public_url(base).ok()?;
+    let others: Vec<(String, String)> = url.query_pairs().filter(|(k, _)| k != "ref").map(|(k, v)| (k.into(), v.into())).collect();
+    url.query_pairs_mut().clear().extend_pairs(others).append_pair("ref", &format!("v{version}"));
+    Some(url.to_string())
 }
 
 #[derive(Deserialize, JsonSchema, Default)]
@@ -262,6 +275,16 @@ impl Service for Update {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn builds_update_links() {
+        assert_eq!(
+            update_link("https://sliplane.opendeploy.cloud/update?repo=nielsbosma%2FOpenSign&project=p_1&ref=v0.1.0", "0.2.0").as_deref(),
+            Some("https://sliplane.opendeploy.cloud/update?repo=nielsbosma%2FOpenSign&project=p_1&ref=v0.2.0")
+        );
+        assert_eq!(update_link("http://deployer.example/update", "0.2.0"), None);
+        assert_eq!(update_link("https://10.0.0.1/update", "0.2.0"), None);
+    }
 
     #[test]
     fn compares_versions() {

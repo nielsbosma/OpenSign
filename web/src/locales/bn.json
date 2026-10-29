@@ -682,5 +682,8 @@
   "· Saving…": "· সংরক্ষণ হচ্ছে…",
   "· matched with AI": "· AI দিয়ে মেলানো",
   "“{title}” is deleted for everyone. This cannot be undone.": "“{title}” সবার জন্য মুছে ফেলা হবে। এটি আর ফেরানো যাবে না।",
-  "“{title}”, completed {date}. The file is exactly as sealed.": "“{title}”, {date}-এ সম্পন্ন। ফাইলটি ঠিক সিলমোহরের সময়ের মতোই আছে।"
+  "“{title}”, completed {date}. The file is exactly as sealed.": "“{title}”, {date}-এ সম্পন্ন। ফাইলটি ঠিক সিলমোহরের সময়ের মতোই আছে।",
+  "Update Link": "আপডেট লিংক",
+  "A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.": "একটি পেজ যা ref হিসেবে দেওয়া রিলিজ ইনস্টল করে, যেমন Sliplane Deployer-এর সেট করা লিংক। deploy hook না থাকলে ব্যবহৃত হয়।",
+  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "\"এখনই আপডেট করুন\" Sliplane Deployer খোলে। Sliplane-এ সাইন ইন করে নিশ্চিত করুন; নতুন সংস্করণ চালু হলে মাইগ্রেশন চলে।"
 }

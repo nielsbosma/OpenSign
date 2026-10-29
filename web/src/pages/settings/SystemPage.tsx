@@ -76,14 +76,26 @@ function VersionCard() {
                 disabled={update.isPending}
               />
             )}
+            {v.updateAvailable && !v.canUpdate && v.updateLink && can('settings.manage') && (
+              <Button asChild>
+                <a href={v.updateLink} target="_blank" rel="noreferrer">
+                  {t('Update Now')} <ExternalLink />
+                </a>
+              </Button>
+            )}
           </div>
         </div>
+        {v.updateAvailable && !v.canUpdate && v.updateLink && can('settings.manage') && (
+          <p className="text-muted-foreground text-sm">
+            {t('Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.')}
+          </p>
+        )}
         {v.latest?.url && (
           <a href={v.latest.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary text-sm">
             {t('Release notes for {version}', { version: v.latest.version })} <ExternalLink className="size-3.5" />
           </a>
         )}
-        {v.updateAvailable && !v.canUpdate && (
+        {v.updateAvailable && !v.canUpdate && !v.updateLink && (
           <div className="grid gap-2 text-sm">
             <p className="text-muted-foreground">
               {t('To update from here, add a deploy hook under Updates below. Or redeploy yourself; migrations run on start:')}

@@ -57,6 +57,7 @@ On the **System** page, below the version and background jobs. See [Updates](upd
 | --- | --- | --- |
 | Check for Updates | `OPENSIGN_UPDATES_CHECK_FOR_UPDATES` | On |
 | Deploy Hook | `OPENSIGN_UPDATES_DEPLOY_HOOK_URL` | Secret. Empty. |
+| Update Link | `OPENSIGN_UPDATES_UPDATE_URL` | Empty. Set by the Sliplane Deployer. |
 
 ## Retention
 

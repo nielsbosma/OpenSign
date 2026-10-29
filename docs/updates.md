@@ -18,11 +18,15 @@ The System page needs the **system.read** permission (admins and auditors). The 
 
 ## Updating
 
-### From the app (Sliplane)
+### From the app (Deploy to Sliplane button)
+
+Installs made with the **Deploy to Sliplane** button get an **Update Link** pinned from the deployer. When a release is out, **Update Now** on the System page opens the Sliplane Deployer with the new version. Sign in to Sliplane and confirm, and the deployer moves the services to the new image tag. Migrations run when the new version starts. Nothing needs to be set up, and no Sliplane credentials are stored in OpenSign.
+
+### From the app (deploy hook)
 
 1. In Sliplane, open the OpenSign service, then **Settings → Deploy hook**, and copy the hook URL.
 2. In OpenSign, paste it as **Deploy Hook** under **Updates** on **Settings → System**.
-3. Press **Update Now** on the System page.
+3. Press **Update Now** on the System page. With both set, the deploy hook is used.
 
 OpenSign calls the hook, Sliplane pulls the image again and restarts the service, and OpenSign is back on the new version a minute or two later. The hook redeploys the service's configured tag, so run `:latest` or a release series such as `:1.2`, not an exact version.
 

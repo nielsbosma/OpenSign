@@ -682,5 +682,8 @@
   "· Saving…": "· Сохранение…",
   "· matched with AI": "· сопоставлено ИИ",
   "“{title}” is deleted for everyone. This cannot be undone.": "«{title}» будет удалён для всех. Это нельзя отменить.",
-  "“{title}”, completed {date}. The file is exactly as sealed.": "«{title}», завершён {date}. Файл в точности такой, каким был запечатан."
+  "“{title}”, completed {date}. The file is exactly as sealed.": "«{title}», завершён {date}. Файл в точности такой, каким был запечатан.",
+  "Update Link": "Ссылка для обновления",
+  "A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.": "Страница, которая устанавливает выпуск, указанный в ref, например ссылка, заданная Sliplane Deployer. Используется, если нет deploy hook.",
+  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "«Обновить сейчас» открывает Sliplane Deployer. Войдите в Sliplane и подтвердите; миграции выполняются при запуске новой версии."
 }
