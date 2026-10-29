@@ -45,7 +45,8 @@ impl Service for List {
         "users.list",
         "List everyone with an account, their role and whether they use two-factor.",
         Access::Permission(Permission::UsersRead),
-    );
+    )
+    .tool();
 
     async fn run(_ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<Vec<UserView>> {
         Ok(sqlx::query_as(
@@ -82,7 +83,9 @@ impl Service for Invite {
         "users.invite",
         "Invite someone by email with a role. They choose their own password.",
         Access::Permission(Permission::UsersManage),
-    );
+    )
+    .tool()
+    .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: InviteInput) -> Result<InviteView> {
         let email = normalize_email(&input.email)?;
@@ -140,7 +143,8 @@ impl Service for ListInvites {
     type Input = Empty;
     type Output = Vec<InviteView>;
     const META: Meta =
-        Meta::query("users.list_invites", "List invitations that have not been accepted yet.", Access::Permission(Permission::UsersManage));
+        Meta::query("users.list_invites", "List invitations that have not been accepted yet.", Access::Permission(Permission::UsersManage))
+            .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<Vec<InviteView>> {
         let rows: Vec<(Uuid, String, String, DateTime<Utc>)> = sqlx::query_as(
@@ -168,7 +172,9 @@ impl Service for RevokeInvite {
         "users.revoke_invite",
         "Cancel an invitation so its link stops working.",
         Access::Permission(Permission::UsersManage),
-    );
+    )
+    .tool()
+    .destructive();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<Ok_> {
         let done = sqlx::query("update invites set revoked_at = now() where id = $1 and accepted_at is null and revoked_at is null")
@@ -260,7 +266,9 @@ impl Service for Update {
         "users.update",
         "Change someone's name or role, or deactivate or reactivate their account. Use users.change_email for their email.",
         Access::Permission(Permission::UsersManage),
-    );
+    )
+    .tool()
+    .destructive();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: UpdateInput) -> Result<UserView> {
         let user = user_by_id(conn, input.id).await?.ok_or_else(|| not_found("User"))?;
@@ -328,7 +336,9 @@ impl Service for ChangeEmail {
         "Change someone's sign-in email. A confirmation link goes to the new address, and the change applies once it is opened.",
         Access::Permission(Permission::UsersManage),
     )
-    .not_a_tool();
+    .tool()
+    .destructive()
+    .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ChangeEmailInput) -> Result<Ok_> {
         let actor = ctx.actor()?;
@@ -481,7 +491,7 @@ impl Service for ResetTwoFactor {
         "Turn off someone's two-factor when they lost their phone. They set it up again at next sign-in if it is required.",
         Access::Permission(Permission::UsersManage),
     )
-    .not_a_tool();
+    .not_a_tool("Turning off someone's two-factor weakens their sign-in, so an admin does it in the app.");
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<Ok_> {
         if input.id == ctx.actor()?.user_id {
@@ -531,7 +541,7 @@ impl Service for CreateApiKey {
     type Output = CreatedApiKey;
     const META: Meta =
         Meta::mutation("api_keys.create", "Create an API key for integrations.", Access::Permission(Permission::ApiKeysManage))
-            .not_a_tool();
+            .not_a_tool("Returns a new credential, which must not end up in an agent's context.");
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CreateApiKeyInput) -> Result<CreatedApiKey> {
         let actor = ctx.actor()?;
@@ -608,7 +618,8 @@ impl Service for ListApiKeys {
     type Input = Empty;
     type Output = Vec<ApiKeyView>;
     const META: Meta =
-        Meta::query("api_keys.list", "List your API keys (never the keys themselves).", Access::Permission(Permission::ApiKeysManage));
+        Meta::query("api_keys.list", "List your API keys (never the keys themselves).", Access::Permission(Permission::ApiKeysManage))
+            .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<Vec<ApiKeyView>> {
         Ok(sqlx::query_as(&format!(
@@ -642,7 +653,7 @@ impl Service for UpdateApiKey {
         "api_keys.update",
         "Rename one of your API keys or change its permissions or IP allowlist. The key itself stays the same and is never shown again. Through an API key or MCP you can only narrow a key's access; widening it needs the app, signed in.",
         Access::Permission(Permission::ApiKeysManage),
-    );
+    ).tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: UpdateApiKeyInput) -> Result<ApiKeyView> {
         let actor = ctx.actor()?;
@@ -708,7 +719,9 @@ impl Service for RevokeApiKey {
         "api_keys.revoke",
         "Revoke one of your API keys; it stops working at once.",
         Access::Permission(Permission::ApiKeysManage),
-    );
+    )
+    .tool()
+    .destructive();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<Ok_> {
         let done = sqlx::query("update api_keys set revoked_at = now() where id = $1 and user_id = $2 and revoked_at is null")

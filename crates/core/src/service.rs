@@ -4,7 +4,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use sqlx::PgConnection;
 
-use crate::context::Ctx;
+use crate::context::{Actor, Ctx};
 use crate::error::{AppError, ErrorKind, Result, bad_request, forbidden, unauthorized};
 use crate::permissions::Permission;
 
@@ -22,6 +22,18 @@ pub enum Access {
     Permission(Permission),
 }
 
+/// Whether agents (MCP clients and the in-app assistant) and non-session credentials (API keys,
+/// OAuth tokens) may call a service. Every service decides; `Undecided` is hidden and fails a test.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Exposure {
+    Undecided,
+    Tool,
+    /// Not a tool, with the reason shown in the docs and tests.
+    Hidden(&'static str),
+}
+
+const PUBLIC: Exposure = Exposure::Hidden("Callable without signing in, so it never acts for a user.");
+
 #[derive(Debug, Clone, Copy)]
 pub struct Meta {
     /// Dotted name, e.g. `users.update`. The MCP and AI tool name is this with dots as underscores.
@@ -30,8 +42,12 @@ pub struct Meta {
     pub description: &'static str,
     pub kind: Kind,
     pub access: Access,
-    /// Offered as an MCP and AI tool. Off for credentials, the caller's own session, and public calls.
-    pub tool: bool,
+    /// Offered as an MCP and AI tool. Hidden for credentials, the caller's own session, and public calls.
+    pub exposure: Exposure,
+    /// May delete or overwrite something, or weaken a control. MCP clients ask before calling it.
+    pub destructive: bool,
+    /// Reaches outside OpenSign: sends email or SMS, calls a webhook, the AI provider or a deploy hook.
+    pub open_world: bool,
     /// Mutations run in one transaction. Off when a failure must still persist writes (failed-login counters).
     pub transaction: bool,
     /// Callable while the user still has to set up enforced two-factor.
@@ -45,7 +61,9 @@ impl Meta {
             description,
             kind: Kind::Query,
             access,
-            tool: !matches!(access, Access::Public),
+            exposure: if matches!(access, Access::Public) { PUBLIC } else { Exposure::Undecided },
+            destructive: false,
+            open_world: false,
             transaction: false,
             allow_without_two_factor: false,
         }
@@ -57,15 +75,36 @@ impl Meta {
             description,
             kind: Kind::Mutation,
             access,
-            tool: !matches!(access, Access::Public),
+            exposure: if matches!(access, Access::Public) { PUBLIC } else { Exposure::Undecided },
+            destructive: false,
+            open_world: false,
             transaction: true,
             allow_without_two_factor: false,
         }
     }
 
-    pub const fn not_a_tool(mut self) -> Meta {
-        self.tool = false;
+    pub const fn tool(mut self) -> Meta {
+        self.exposure = Exposure::Tool;
         self
+    }
+
+    pub const fn not_a_tool(mut self, reason: &'static str) -> Meta {
+        self.exposure = Exposure::Hidden(reason);
+        self
+    }
+
+    pub const fn destructive(mut self) -> Meta {
+        self.destructive = true;
+        self
+    }
+
+    pub const fn open_world(mut self) -> Meta {
+        self.open_world = true;
+        self
+    }
+
+    pub fn is_tool(&self) -> bool {
+        self.exposure == Exposure::Tool
     }
 
     pub const fn without_transaction(mut self) -> Meta {
@@ -94,10 +133,14 @@ pub trait Service: Send + Sync + 'static {
 }
 
 pub fn can_access(access: Access, ctx: &Ctx) -> bool {
+    allows(access, ctx.actor.as_ref())
+}
+
+pub fn allows(access: Access, actor: Option<&Actor>) -> bool {
     match access {
         Access::Public => true,
-        Access::Authenticated => ctx.actor.is_some(),
-        Access::Permission(p) => ctx.can(p),
+        Access::Authenticated => actor.is_some(),
+        Access::Permission(p) => actor.is_some_and(|a| a.can(p)),
     }
 }
 

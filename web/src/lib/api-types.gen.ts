@@ -801,6 +801,49 @@ export type BulkStartInput = {
 
 export type BulkStartOutput = BulkSend;
 
+export type DocsReadInput = {
+  /** A heading's anchor from docs.search, to read one section instead of the whole page. */
+  anchor?: string | null;
+  /** The page, such as "identification". Leave empty for the list of pages. */
+  slug?: string | null;
+};
+
+export type PageSummary = {
+  slug: string;
+  title: string;
+};
+
+export type DocsReadOutput = ReadOutput;
+
+export type ReadOutput = {
+  /** The page or section as Markdown. Links like `api.md#api-keys` point at other pages and anchors. */
+  markdown?: string | null;
+  /** Every page, when no slug was given. */
+  pages: Array<PageSummary>;
+  slug?: string | null;
+  title?: string | null;
+  url?: string | null;
+};
+
+export type DocsSearchInput = {
+  /** At most this many results, 1 to 20. Defaults to 8. */
+  limit?: number | null;
+  /** Words to look for, such as "bankid signing order" or "webhook retries". */
+  query: string;
+};
+
+export type SearchHit = {
+  /** Pass with the slug to docs.read for just this section. */
+  anchor: string;
+  heading: string;
+  page: string;
+  slug: string;
+  snippet: string;
+  url: string;
+};
+
+export type DocsSearchOutput = Array<SearchHit>;
+
 export type DocumentsArchiveInput = {
   /** true archives, false restores from the archive. */
   archived: boolean;
@@ -1095,6 +1138,22 @@ export type DownloadOutput = {
   contentType: string;
   name: string;
   sha256: string;
+};
+
+export type DocumentsDownloadUrlInput = {
+  id: string;
+  version?: Version | null;
+};
+
+export type DocumentsDownloadUrlOutput = DownloadUrl;
+
+export type DownloadUrl = {
+  expiresAt: string;
+  name: string;
+  sha256: string;
+  sizeBytes: number;
+  /** Fetch the file with a plain GET, e.g. `curl -o file.pdf <url>`. No other header is needed. */
+  url: string;
 };
 
 export type ExportFormat = "csv" | "xlsx" | "json";
@@ -1612,6 +1671,26 @@ export type UploadOutput = {
   pages: number;
   /** Active content taken out of the file, e.g. "JavaScript". */
   removed: Array<string>;
+};
+
+export type DocumentsUploadUrlInput = {
+  documentId: string;
+  /** As in documents.upload: turn a fillable PDF form's fields into fields. On unless false. */
+  formFields?: boolean | null;
+  /** The file name, e.g. "Agreement.docx". */
+  name: string;
+  /** As in documents.upload: turn DocuSeal-style text tags into fields. On unless false. */
+  textTags?: boolean | null;
+};
+
+export type DocumentsUploadUrlOutput = UploadUrl;
+
+export type UploadUrl = {
+  expiresAt: string;
+  maxBytes: number;
+  method: string;
+  /** Send the file's raw bytes here with PUT, e.g. `curl -T Agreement.pdf <url>`. No other header is needed. */
+  url: string;
 };
 
 export type DocumentsValuesInput = {
@@ -2488,6 +2567,8 @@ export interface Services {
   "bulk.list": { kind: "query"; input: BulkListInput; output: BulkListOutput };
   "bulk.preview": { kind: "mutation"; input: BulkPreviewInput; output: BulkPreviewOutput };
   "bulk.start": { kind: "mutation"; input: BulkStartInput; output: BulkStartOutput };
+  "docs.read": { kind: "query"; input: DocsReadInput; output: DocsReadOutput };
+  "docs.search": { kind: "query"; input: DocsSearchInput; output: DocsSearchOutput };
   "documents.archive": { kind: "mutation"; input: DocumentsArchiveInput; output: DocumentsArchiveOutput };
   "documents.auth_methods": { kind: "query"; input: DocumentsAuthMethodsInput; output: DocumentsAuthMethodsOutput };
   "documents.cancel": { kind: "mutation"; input: DocumentsCancelInput; output: DocumentsCancelOutput };
@@ -2497,6 +2578,7 @@ export interface Services {
   "documents.delete": { kind: "mutation"; input: DocumentsDeleteInput; output: DocumentsDeleteOutput };
   "documents.detect_fields": { kind: "mutation"; input: DocumentsDetectFieldsInput; output: DocumentsDetectFieldsOutput };
   "documents.download": { kind: "query"; input: DocumentsDownloadInput; output: DocumentsDownloadOutput };
+  "documents.download_url": { kind: "query"; input: DocumentsDownloadUrlInput; output: DocumentsDownloadUrlOutput };
   "documents.export": { kind: "query"; input: DocumentsExportInput; output: DocumentsExportOutput };
   "documents.get": { kind: "query"; input: DocumentsGetInput; output: DocumentsGetOutput };
   "documents.latest_review": { kind: "query"; input: DocumentsLatestReviewInput; output: DocumentsLatestReviewOutput };
@@ -2519,6 +2601,7 @@ export interface Services {
   "documents.unshare": { kind: "mutation"; input: DocumentsUnshareInput; output: DocumentsUnshareOutput };
   "documents.update": { kind: "mutation"; input: DocumentsUpdateInput; output: DocumentsUpdateOutput };
   "documents.upload": { kind: "mutation"; input: DocumentsUploadInput; output: DocumentsUploadOutput };
+  "documents.upload_url": { kind: "mutation"; input: DocumentsUploadUrlInput; output: DocumentsUploadUrlOutput };
   "documents.values": { kind: "query"; input: DocumentsValuesInput; output: DocumentsValuesOutput };
   "documents.verify": { kind: "query"; input: DocumentsVerifyInput; output: DocumentsVerifyOutput };
   "folders.create": { kind: "mutation"; input: FoldersCreateInput; output: FoldersCreateOutput };

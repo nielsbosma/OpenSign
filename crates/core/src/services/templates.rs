@@ -179,7 +179,8 @@ impl Service for Versions {
         "templates.versions",
         "List a template's saved versions, newest first, with who saved them, their notes and how many documents were made from each, and whether the template has changed since the newest.",
         Access::Authenticated,
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: TemplateInput) -> Result<VersionsOutput> {
         let t = template(ctx, conn, input.template_id, Need::Read).await?;
@@ -228,7 +229,8 @@ impl Service for GetVersion {
         "templates.version",
         "Get one saved version of a template: its settings, files, parties and fields as they were, and the documents made from it.",
         Access::Authenticated,
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: VersionInput) -> Result<TemplateVersion> {
         let t = template(ctx, conn, input.template_id, Need::Read).await?;
@@ -276,7 +278,8 @@ impl Service for Compare {
         "templates.compare",
         "Compare two versions of a template, or a version with the template as it is now: which settings, files, parties and fields were added, removed or changed.",
         Access::Authenticated,
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CompareInput) -> Result<CompareOutput> {
         let t = template(ctx, conn, input.template_id, Need::Read).await?;
@@ -310,7 +313,8 @@ impl Service for Save {
         "templates.save_version",
         "Save the template as it is now as a new version, with an optional note. Versions are also saved automatically when a changed template is used.",
         Access::Authenticated,
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SaveInput) -> Result<TemplateVersionSummary> {
         let t = template(ctx, conn, input.template_id, Need::Edit).await?;
@@ -352,7 +356,8 @@ impl Service for Restore {
         "templates.restore",
         "Put a template back the way it was in an earlier version: settings, files, parties and fields. Unsaved changes are saved as a version first, and the restore itself becomes a new version, so nothing is lost.",
         Access::Authenticated,
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: VersionInput) -> Result<DocumentView> {
         let t = template(ctx, conn, input.template_id, Need::Edit).await?;

@@ -30,7 +30,7 @@ See [Sign-in, passkeys and two-factor](account-security.md).
 
 ## Permissions
 
-Roles are enforced in the service layer, which every entry point uses: the web app, REST, the Scrive and DocuSign APIs, MCP and the AI assistant. The app only hides what the server would refuse anyway. MCP and the assistant act with the user's own permissions, and the assistant never gets tools that change who has access, add webhooks or hand out signing links. See [Users and roles](users-and-roles.md).
+Roles are enforced in the service layer, which every entry point uses: the web app, REST, the Scrive and DocuSign APIs, MCP and the AI assistant. The app only hides what the server would refuse anyway. MCP and the assistant act with the user's own permissions, and the assistant never gets tools that change who has access, add webhooks, change settings or hand out signing links. Secrets in settings can be cleared but never set through MCP or an API key, see [MCP](mcp.md#settings-and-secrets). See [Users and roles](users-and-roles.md).
 
 ## Signing links
 

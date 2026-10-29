@@ -4,7 +4,7 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use opensign_crypto::Keys;
 use opensign_db::Db;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::env::Env;
@@ -29,7 +29,7 @@ impl App {
 }
 
 /// Where a call came from. Recorded on every audit entry.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Surface {
     Web,
@@ -57,7 +57,7 @@ impl Surface {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Credential {
     Session,
@@ -107,6 +107,11 @@ impl Ctx {
 
     pub fn can(&self, permission: Permission) -> bool {
         self.actor.as_ref().is_some_and(|a| a.can(permission))
+    }
+
+    /// A person signed in to the web app, as opposed to an agent, the assistant or an API credential.
+    pub fn in_app(&self) -> bool {
+        self.surface != Surface::Ai && self.actor.as_ref().is_some_and(|a| a.credential == Credential::Session)
     }
 
     pub fn actor(&self) -> crate::error::Result<&Actor> {

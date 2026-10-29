@@ -140,7 +140,7 @@ impl Service for SetLogo {
         "branding.set_logo",
         "Upload the organisation's logo, shown in the app, on signing pages, in emails and on the evidence page. PNG or JPEG; it replaces any earlier logo.",
         Access::Permission(Permission::SettingsManage),
-    );
+    ).tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SetLogoInput) -> Result<Branding> {
         if input.content_base64.len() > LOGO_MAX_BYTES / 3 * 4 + 8 {
@@ -178,7 +178,9 @@ impl Service for RemoveLogo {
         "branding.remove_logo",
         "Remove the organisation's logo. The OpenSign mark in the brand color is shown instead.",
         Access::Permission(Permission::SettingsManage),
-    );
+    )
+    .tool()
+    .destructive();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<Branding> {
         let (org, old) = replace_logo(ctx, conn, None).await?;

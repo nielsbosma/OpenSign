@@ -78,7 +78,8 @@ impl Service for Preview {
         "retention.preview",
         "Count the documents the retention rules would delete at the next run, by rule, and the documents on legal hold.",
         Access::Permission(Permission::SettingsManage),
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _input: super::Empty) -> Result<RetentionPreview> {
         let rules: RetentionSettings = settings(ctx, conn).await?;
@@ -135,7 +136,7 @@ impl Service for SetLegalHold {
         "documents.legal_hold",
         "Place a document on legal hold, so no retention rule or person can delete it, or release the hold. Placing a hold needs a reason such as a case reference.",
         Access::Permission(Permission::DocumentsLegalHold),
-    );
+    ).tool().destructive();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: LegalHoldInput) -> Result<LegalHoldView> {
         let document = load_document(ctx, conn, input.id, Need::Read).await?;

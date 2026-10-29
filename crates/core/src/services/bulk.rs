@@ -368,7 +368,7 @@ impl Service for Preview {
         "Read a CSV or Excel file for a bulk send from a template: its columns, a few rows, the template fields they can fill, a suggested column mapping and rows that would fail. Sends nothing.",
         Access::Permission(Permission::DocumentsCreate),
     )
-    .without_transaction();
+    .without_transaction().tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: PreviewInput) -> Result<PreviewOutput> {
         let t = template(ctx, conn, input.file.template_id).await?;
@@ -445,7 +445,7 @@ impl Service for Start {
         "bulk.start",
         "Send a template to every row of a CSV or Excel file, using a column mapping from bulk.preview. Each row becomes its own document; they are created and sent in the background. Refuses the whole file if any row cannot be sent.",
         Access::Permission(Permission::DocumentsCreate),
-    );
+    ).tool().open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: StartInput) -> Result<BulkSend> {
         let t = template(ctx, conn, input.file.template_id).await?;
@@ -541,7 +541,8 @@ impl Service for Get {
         "bulk.get",
         "A bulk send with the outcome of every row and the documents it created.",
         Access::Permission(Permission::DocumentsRead),
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: BulkIdInput) -> Result<BulkSend> {
         load(ctx, conn, input.id).await
@@ -558,7 +559,8 @@ impl Service for List {
         "bulk.list",
         "Recent bulk sends you started (all of them with permission to read every document).",
         Access::Permission(Permission::DocumentsRead),
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: super::Empty) -> Result<Vec<BulkSend>> {
         let actor = ctx.actor()?;
@@ -583,7 +585,9 @@ impl Service for Cancel {
         "bulk.cancel",
         "Stop a bulk send: rows not sent yet are skipped. Documents already sent stay out for signing; cancel those one by one.",
         Access::Permission(Permission::DocumentsCreate),
-    );
+    )
+    .tool()
+    .destructive();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: BulkIdInput) -> Result<BulkSend> {
         let bulk = load(ctx, conn, input.id).await?;

@@ -39,7 +39,7 @@ pub struct IdInput {
     pub id: Uuid,
 }
 
-fn require_draft(document: &DocumentRow) -> Result<()> {
+pub(crate) fn require_draft(document: &DocumentRow) -> Result<()> {
     if document.status != status::DRAFT {
         return Err(conflict("Only drafts can be changed. Cancel the document and make a copy to change it."));
     }
@@ -123,7 +123,8 @@ impl Service for List {
         "documents.list",
         "List documents (or templates) you can see, newest first, optionally filtered by status, folder or a search on the title. Archived ones are only listed with archived true.",
         Access::Authenticated,
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ListInput) -> Result<Vec<DocumentSummary>> {
         let (read_all, user_id, can_create) = visibility(ctx)?;
@@ -187,7 +188,7 @@ impl Service for Counts {
         "documents.counts",
         "Count the documents (or templates) you can see, in total, per status and archived, optionally in one folder or matching a search on the title. Use it for an overview before listing.",
         Access::Authenticated,
-    );
+    ).tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CountsInput) -> Result<StatusCounts> {
         let (read_all, user_id, can_create) = visibility(ctx)?;
@@ -221,7 +222,8 @@ impl Service for Get {
     type Input = IdInput;
     type Output = DocumentView;
     const META: Meta =
-        Meta::query("documents.get", "Get a document or template with its files, parties, fields and status.", Access::Authenticated);
+        Meta::query("documents.get", "Get a document or template with its files, parties, fields and status.", Access::Authenticated)
+            .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<DocumentView> {
         reload(ctx, conn, input.id).await
@@ -277,7 +279,8 @@ impl Service for Create {
         "documents.create",
         "Create a draft document, optionally from a template, or a new template. Add files, parties and fields next, then send it.",
         Access::Permission(Permission::DocumentsCreate),
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CreateInput) -> Result<DocumentView> {
         Ok(create(ctx, conn, input, Origin::Manual).await?.0)
@@ -669,7 +672,8 @@ impl Service for Upload {
         "Add a file (PDF or Word, base64) to a draft. Word files are converted to PDF; scripts, attachments and forms are removed. Text tags such as {{Tenant Sign;role=Tenant;type=signature}} (DocuSeal's syntax) become fields, as do the fields of a fillable PDF form; parties named by a tag's role are added. The result lists what was added and any tag that could not be used.",
         Access::Permission(Permission::DocumentsCreate),
     )
-    .without_transaction();
+    .without_transaction()
+    .tool();
 
     async fn run(ctx: &Ctx, _conn: &mut PgConnection, input: UploadInput) -> Result<UploadOutput> {
         if input.content_base64.len() > 140 * 1024 * 1024 {
@@ -842,7 +846,8 @@ impl Service for ReplaceFile {
         "Replace one of a draft's or template's files with a new version (PDF or Word, base64) without redoing its fields: fields keep their positions, and any on pages the new file lacks are moved to its last page and listed. If the new file has text tags, they replace that file's fields instead. A template's previous state is kept in its version history.",
         Access::Permission(Permission::DocumentsCreate),
     )
-    .without_transaction();
+    .without_transaction()
+    .tool();
 
     async fn run(ctx: &Ctx, _conn: &mut PgConnection, input: ReplaceFileInput) -> Result<ReplaceOutput> {
         if input.content_base64.len() > 140 * 1024 * 1024 {
@@ -867,7 +872,9 @@ impl Service for RemoveFile {
     type Input = RemoveFileInput;
     type Output = DocumentView;
     const META: Meta =
-        Meta::mutation("documents.remove_file", "Remove a file from a draft.", Access::Permission(Permission::DocumentsCreate));
+        Meta::mutation("documents.remove_file", "Remove a file from a draft.", Access::Permission(Permission::DocumentsCreate))
+            .tool()
+            .destructive();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: RemoveFileInput) -> Result<DocumentView> {
         let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
@@ -914,7 +921,8 @@ impl Service for Update {
         "documents.update",
         "Change a draft's title, message, language, signing order, expiry, reminders, external id or metadata.",
         Access::Permission(Permission::DocumentsCreate),
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: UpdateInput) -> Result<DocumentView> {
         let document = load_document(ctx, conn, input.id, Need::Edit).await?;
@@ -1077,7 +1085,8 @@ impl Service for SetParties {
         "documents.set_parties",
         "Set who signs, approves or receives a copy of a draft, how each gets their link, and how each must identify themselves.",
         Access::Permission(Permission::DocumentsCreate),
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SetPartiesInput) -> Result<Vec<PartyView>> {
         let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
@@ -1420,7 +1429,7 @@ impl Service for SetFields {
         "documents.set_fields",
         "Place the fields of a draft, each assigned to a party: signatures, initials, text, numbers, dropdowns, multi-select lists, radio groups, checkboxes, phone numbers, date pickers, image and file uploads, formulas, and the automatic name, email, company and date of signing. Text fields take a pattern and length limits, numbers and dates a smallest and largest value and a format, each with an optional error text of your own. Any field can be shown only when other fields hold given values, and a formula field computes a number from other fields.",
         Access::Permission(Permission::DocumentsCreate),
-    );
+    ).tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SetFieldsInput) -> Result<DocumentView> {
         let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
@@ -1518,7 +1527,8 @@ impl Service for ListAuthMethods {
         "documents.auth_methods",
         "The identification methods parties can be asked for here: email link always, SMS codes and eIDs when an admin has set them up.",
         Access::Authenticated,
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: super::Empty) -> Result<AuthMethods> {
         let sms: SmsSettings = settings(ctx, conn).await?;
@@ -1544,7 +1554,7 @@ impl Service for Send {
         "documents.send",
         "Send a draft for signing. Its files are combined into one PDF that can no longer change, and parties are notified in signing order.",
         Access::Permission(Permission::DocumentsCreate),
-    );
+    ).tool().open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SendInput) -> Result<SendOutput> {
         let document = load_document(ctx, conn, input.id, Need::Edit).await?;
@@ -1678,7 +1688,9 @@ impl Service for Cancel {
         "documents.cancel",
         "Stop signing a pending document. Every signing link stops working and notified parties are told.",
         Access::Permission(Permission::DocumentsCreate),
-    );
+    )
+    .tool()
+    .destructive();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CancelInput) -> Result<DocumentView> {
         let document = load_document(ctx, conn, input.id, Need::Edit).await?;
@@ -1714,7 +1726,9 @@ impl Service for Remind {
         "documents.remind",
         "Send a reminder now to every party whose turn it is and who has not signed.",
         Access::Permission(Permission::DocumentsCreate),
-    );
+    )
+    .tool()
+    .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<Ok_> {
         let document = load_document(ctx, conn, input.id, Need::Edit).await?;
@@ -1741,7 +1755,7 @@ impl Service for Delete {
         "documents.delete",
         "Delete a document or template that is not pending, with its files. Signed documents can only be deleted by someone who manages all documents, and documents on legal hold by no one.",
         Access::Permission(Permission::DocumentsCreate),
-    );
+    ).tool().destructive();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<Ok_> {
         let document = load_document(ctx, conn, input.id, Need::Edit).await?;
@@ -1775,7 +1789,8 @@ impl Service for Share {
         "documents.share",
         "Let a colleague see a document, and optionally change it.",
         Access::Permission(Permission::DocumentsCreate),
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ShareInput) -> Result<Ok_> {
         let document = load_document(ctx, conn, input.id, Need::Edit).await?;
@@ -1814,7 +1829,9 @@ impl Service for Unshare {
     type Input = UnshareInput;
     type Output = Ok_;
     const META: Meta =
-        Meta::mutation("documents.unshare", "Stop sharing a document with a colleague.", Access::Permission(Permission::DocumentsCreate));
+        Meta::mutation("documents.unshare", "Stop sharing a document with a colleague.", Access::Permission(Permission::DocumentsCreate))
+            .tool()
+            .destructive();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: UnshareInput) -> Result<Ok_> {
         let document = load_document(ctx, conn, input.id, Need::Edit).await?;
@@ -1900,12 +1917,13 @@ impl Service for Download {
         "documents.download",
         "Download a document's signed PDF (default) or the original as sent, base64. Every download is audited.",
         Access::Authenticated,
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: DownloadInput) -> Result<DownloadOutput> {
         let record = document_file(ctx, conn, input.id, input.version.unwrap_or(Version::Signed)).await?;
         if record.size_bytes > MAX_DOWNLOAD {
-            return Err(bad_request("The file is too large to return here. Download it from the web app or the REST API."));
+            return Err(bad_request("The file is too large to return here. Use documents.download_url for a download link."));
         }
         let body = read_file(&ctx.app.storage, ctx.keys(), &record).await?;
         Ok(DownloadOutput { name: record.name, content_type: record.content_type, sha256: record.sha256, content_base64: B64.encode(body) })
@@ -1966,7 +1984,8 @@ impl Service for IssueSigningLink {
         "documents.signing_link",
         "Get a party's personal signing link to hand over yourself, optionally revoking the old one.",
         Access::Permission(Permission::DocumentsCreate),
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SigningLinkInput) -> Result<SignerLink> {
         let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
@@ -2038,7 +2057,7 @@ impl Service for SignInPerson {
         "Start in-person signing: a fresh signing link for a party who signs on the sender's own device. Earlier links for the party stop working. Only for parties whose delivery is in_person and whose turn it is.",
         Access::Permission(Permission::DocumentsCreate),
     )
-    .not_a_tool();
+    .not_a_tool("In-person signing needs the signer at the sender's device.");
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: InPersonInput) -> Result<InPersonLink> {
         let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
@@ -2105,7 +2124,7 @@ impl Service for SignMyself {
         "Sign a draft yourself: you become its only signer, fields of other signers and approvers become yours, the document is sent, and you get a signing link for this device. People who receive a copy still get one. Your sign-in to OpenSign is recorded as your identification unless an eID is asked for.",
         Access::Permission(Permission::DocumentsCreate),
     )
-    .not_a_tool();
+    .not_a_tool("Signing needs the signed-in person, and it returns a signer session.");
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SignMyselfInput) -> Result<SelfSigning> {
         let actor = ctx.actor()?.clone();
@@ -2171,7 +2190,7 @@ impl Service for SigningPreview {
         "documents.signing_preview",
         "Show what a party will see on their signing page: branding, message, language and their fields, with the identification they will be asked for. Read-only: nothing is sent, signed or recorded as the party's.",
         Access::Authenticated,
-    );
+    ).tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SigningPreviewInput) -> Result<SignerView> {
         let document = load_document(ctx, conn, input.document_id, Need::Read).await?;
@@ -2258,7 +2277,8 @@ impl Service for Verify {
         "documents.verify",
         "Check a signed PDF (base64): whether its signatures are intact and whether this server sealed exactly this file.",
         Access::Authenticated,
-    );
+    )
+    .tool();
 
     async fn run(_ctx: &Ctx, conn: &mut PgConnection, input: VerifyInput) -> Result<VerifyOutput> {
         if input.content_base64.len() > 70 * 1024 * 1024 {
@@ -2287,7 +2307,8 @@ impl Service for GetSeal {
         "seal.get",
         "Show the certificate that seals completed documents. None until the first document is sealed.",
         Access::Permission(Permission::SettingsManage),
-    );
+    )
+    .tool();
 
     async fn run(_ctx: &Ctx, conn: &mut PgConnection, _: super::Empty) -> Result<Option<SealInfo>> {
         Ok(sqlx::query_as::<_, (String, DateTime<Utc>, DateTime<Utc>)>(
@@ -2310,7 +2331,7 @@ impl Service for RegenerateSeal {
         "Replace the document seal with a new self-signed certificate in the organisation's current name. Documents already sealed are unaffected.",
         Access::Permission(Permission::SettingsManage),
     )
-    .not_a_tool();
+    .not_a_tool("Replacing the seal key is done in the app.");
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: super::Empty) -> Result<SealInfo> {
         let org: crate::settings::OrgSettings = settings(ctx, conn).await?;

@@ -74,7 +74,8 @@ impl Service for Status {
         "automations.status",
         "Whether Composio automations are turned on and have an API key, with the events and the placeholders a rule's arguments can use.",
         ACCESS,
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<StatusView> {
         let automations: AutomationSettings = settings(ctx, conn).await?;
@@ -137,7 +138,9 @@ impl Service for Apps {
         "automations.apps",
         "Search the apps Composio can connect to (Google Drive, Slack, HubSpot, Salesforce and hundreds more), most used first.",
         ACCESS,
-    );
+    )
+    .tool()
+    .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: AppsInput) -> Result<Vec<AppView>> {
         let composio = client(ctx, conn).await?;
@@ -170,7 +173,9 @@ impl Service for Connections {
         "automations.connections",
         "List the app accounts connected to this OpenSign through Composio, with their status.",
         ACCESS,
-    );
+    )
+    .tool()
+    .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<Vec<ConnectionView>> {
         let composio = client(ctx, conn).await?;
@@ -228,7 +233,7 @@ impl Service for Connect {
         "Start connecting an app account through Composio. Returns a link where a person signs in to the app; the connection is ready once its status is ACTIVE.",
         ACCESS,
     )
-    .without_transaction();
+    .without_transaction().tool().open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ConnectInput) -> Result<ConnectOutput> {
         let composio = client(ctx, conn).await?;
@@ -262,7 +267,10 @@ impl Service for Disconnect {
     type Output = DisconnectOutput;
     const META: Meta =
         Meta::mutation("automations.disconnect", "Remove a connected app account from Composio. Rules that use it are turned off.", ACCESS)
-            .without_transaction();
+            .without_transaction()
+            .tool()
+            .destructive()
+            .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ConnectionInput) -> Result<DisconnectOutput> {
         let composio = client(ctx, conn).await?;
@@ -313,7 +321,9 @@ impl Service for Tools {
         "automations.tools",
         "List what an app can do through Composio (its tools), such as uploading a file or updating a deal, to pick one for a rule.",
         ACCESS,
-    );
+    )
+    .tool()
+    .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ToolsInput) -> Result<Vec<ToolSummary>> {
         let composio = client(ctx, conn).await?;
@@ -368,7 +378,9 @@ impl Service for Tool {
     type Input = ToolInput;
     type Output = ToolView;
     const META: Meta =
-        Meta::query("automations.tool", "One Composio tool with the JSON schema of its arguments, to fill in a rule's arguments.", ACCESS);
+        Meta::query("automations.tool", "One Composio tool with the JSON schema of its arguments, to fill in a rule's arguments.", ACCESS)
+            .tool()
+            .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ToolInput) -> Result<ToolView> {
         let composio = client(ctx, conn).await?;
@@ -430,7 +442,8 @@ impl Service for List {
         "automations.list",
         "List automation rules: the event, the app and tool they run, their arguments, and the result of the latest run.",
         ACCESS,
-    );
+    )
+    .tool();
 
     async fn run(_ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<Vec<AutomationView>> {
         Ok(sqlx::query_as(&view_sql("order by a.created_at")).fetch_all(&mut *conn).await?)
@@ -548,7 +561,7 @@ impl Service for Create {
         "Add an automation rule: when a document event happens (optionally only for some templates or folders), run a Composio tool on a connected app with arguments filled from the document. The tool and its required inputs are checked with Composio first.",
         ACCESS,
     )
-    .without_transaction();
+    .without_transaction().tool().open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: AutomationInput) -> Result<AutomationView> {
         let checked = check(ctx, conn, &input).await?;
@@ -602,7 +615,9 @@ impl Service for Update {
         "Change an automation rule. Send the whole rule, as for automations.create; set active to false to pause it.",
         ACCESS,
     )
-    .without_transaction();
+    .without_transaction()
+    .tool()
+    .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: UpdateInput) -> Result<AutomationView> {
         let before = load(conn, input.id).await?;
@@ -644,7 +659,9 @@ impl Service for Delete {
     type Input = IdInput;
     type Output = Ok_;
     const META: Meta =
-        Meta::mutation("automations.delete", "Remove an automation rule and its run history. The connected app account stays.", ACCESS);
+        Meta::mutation("automations.delete", "Remove an automation rule and its run history. The connected app account stays.", ACCESS)
+            .tool()
+            .destructive();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<Ok_> {
         let before = load(conn, input.id).await?;
@@ -672,7 +689,7 @@ impl Service for Test {
         "automations.test",
         "Run an automation now with one document's data, as if its event had just happened, to check it end to end. The tool really runs. Returns the run's id.",
         ACCESS,
-    );
+    ).tool().open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: TestInput) -> Result<ResendOutput> {
         let rule = load(conn, input.id).await?;
@@ -716,7 +733,7 @@ impl Service for Runs {
         "automations.runs",
         "List an automation's runs from the last 30 days, newest first: event, status, attempts, Composio's latest answer or error, and the next retry.",
         ACCESS,
-    );
+    ).tool();
 
     async fn run(_ctx: &Ctx, conn: &mut PgConnection, input: RunsInput) -> Result<Vec<DeliveryView>> {
         let filter = LogFilter { status: input.status, event: None, before: input.before, limit: input.limit };
@@ -734,7 +751,8 @@ impl Service for GetRun {
         "automations.run",
         "One automation run with its event and every attempt: time, Composio's status code, error, duration and the start of its answer.",
         ACCESS,
-    );
+    )
+    .tool();
 
     async fn run(_ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<DeliveryDetail> {
         super::webhooks::delivery(conn, Log::Automation, input.id).await
@@ -751,7 +769,9 @@ impl Service for Resend {
         "automations.resend",
         "Run an automation again for an earlier run's event, as a new run. The tool really runs again, with the document's current data.",
         ACCESS,
-    );
+    )
+    .tool()
+    .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<ResendOutput> {
         let id = super::webhooks::resend(conn, Log::Automation, input.id).await?.ok_or_else(|| not_found("Run"))?;
@@ -782,7 +802,7 @@ impl Service for ResendFailed {
         "automations.resend_failed",
         "Run again every run of an automation that was given up and not resent yet, up to 500 at a time. Use it after fixing the connection or the rule.",
         ACCESS,
-    );
+    ).tool().open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ResendFailedInput) -> Result<ResendFailedOutput> {
         load(conn, input.automation_id).await?;

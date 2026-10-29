@@ -232,3 +232,138 @@ async fn oauth_and_mcp() {
     let names: Vec<&str> = list["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
     assert!(names.contains(&"documents_create") && !names.contains(&"users_invite"), "an API key gets only its scopes: {names:?}");
 }
+
+fn pdf_fixture() -> Vec<u8> {
+    use lopdf::{Document, Object, Stream, dictionary};
+    let mut doc = Document::with_version("1.7");
+    let pages_id = doc.new_object_id();
+    let font = doc.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica" });
+    let content = doc.add_object(Stream::new(dictionary! {}, b"BT /F1 12 Tf 72 720 Td (Agreement) Tj ET".to_vec()));
+    let page = doc.add_object(dictionary! {
+        "Type" => "Page", "Parent" => pages_id, "MediaBox" => vec![0.into(), 0.into(), 595.into(), 842.into()],
+        "Contents" => content, "Resources" => dictionary! { "Font" => dictionary! { "F1" => font } },
+    });
+    doc.objects.insert(pages_id, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }));
+    let catalog = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+    doc.trailer.set("Root", catalog);
+    let mut out = Vec::new();
+    doc.save_to(&mut out).unwrap();
+    out
+}
+
+async fn call(router: &axum::Router, token: &str, name: &str, arguments: Value) -> (bool, Value) {
+    let (_, reply) = mcp(
+        router,
+        token,
+        json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": name, "arguments": arguments } }),
+    )
+    .await;
+    let result = &reply["result"];
+    let ok = result["isError"] == false;
+    (ok, if ok { result["structuredContent"]["result"].clone() } else { result["content"][0]["text"].clone() })
+}
+
+fn path_of(url: &str) -> String {
+    url.strip_prefix("http://localhost:3000").unwrap().to_string()
+}
+
+#[tokio::test]
+async fn agent_tools() {
+    let Some(app) = app().await else { return };
+    let router = router(AppState::new(app.clone()));
+    let first = json!({ "setupCode": app.keys.setup_code(), "orgName": "Acme AB", "name": "Ada Admin", "email": "ada@example.com", "password": PASSWORD });
+    send(&router, post_json("/api/rpc/setup.create_first_admin", first, &[])).await;
+    let (response, _) =
+        send(&router, post_json("/api/rpc/auth.login", json!({ "email": "ada@example.com", "password": PASSWORD }), &[])).await;
+    let cookie = response.headers().get(header::SET_COOKIE).unwrap().to_str().unwrap().split(';').next().unwrap().to_string();
+    let session = [("cookie", cookie.as_str()), ("origin", ORIGIN)];
+    let scopes =
+        json!({ "name": "Agent", "permissions": ["settings.manage", "documents.read", "documents.create", "users.read", "ai.use"] });
+    let (_, key) = send(&router, post_json("/api/rpc/api_keys.create", scopes, &session)).await;
+    let key = key["key"].as_str().unwrap().to_string();
+
+    let (_, list) = mcp(&router, &key, json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" })).await;
+    let tools = list["result"]["tools"].as_array().unwrap();
+    let tool = |name: &str| tools.iter().find(|t| t["name"] == name).cloned();
+    for name in
+        ["settings_update", "system_update", "ai_models", "ai_test", "documents_review", "docs_search", "docs_read", "documents_upload_url"]
+    {
+        assert!(tool(name).is_some(), "{name} is a tool");
+    }
+    for name in
+        ["api_keys_create", "account_change_password", "account_two_factor_begin", "seal_regenerate", "users_reset_two_factor", "ai_chat"]
+    {
+        assert!(tool(name).is_none(), "{name} stays hidden");
+    }
+    assert_eq!(tool("settings_update").unwrap()["annotations"]["destructiveHint"], true);
+    assert_eq!(tool("system_update").unwrap()["annotations"]["openWorldHint"], true);
+    assert_eq!(tool("docs_search").unwrap()["annotations"]["readOnlyHint"], true);
+
+    let (ok, hits) = call(&router, &key, "docs_search", json!({ "query": "refresh token rotate" })).await;
+    assert!(ok, "{hits}");
+    assert_eq!(hits[0]["slug"], "mcp", "{hits}");
+    let (_, page) = call(&router, &key, "docs_read", json!({ "slug": "mcp", "anchor": hits[0]["anchor"] })).await;
+    assert!(page["markdown"].as_str().unwrap().starts_with("## "), "{page}");
+    let (_, index) = call(&router, &key, "docs_read", json!({})).await;
+    assert!(index["pages"].as_array().unwrap().len() > 20);
+
+    let (ok, refused) = call(&router, &key, "settings_update", json!({ "group": "ai", "values": { "apiKey": "sk-from-chat" } })).await;
+    assert!(!ok && refused.as_str().unwrap().contains("secret"), "{refused}");
+    let (ok, refused) =
+        call(&router, &key, "settings_update", json!({ "group": "email", "values": { "smtpPassword": "hunter2", "provider": "smtp" } }))
+            .await;
+    assert!(!ok, "{refused}");
+    let saved = json!({ "group": "ai", "values": { "provider": "openai", "model": "gpt-test", "apiKey": "sk-saved" } });
+    let (response, body) = send(&router, post_json("/api/rpc/settings.update", saved, &session)).await;
+    assert_eq!(response.status(), StatusCode::OK, "{body}");
+    let (ok, refused) =
+        call(&router, &key, "settings_update", json!({ "group": "ai", "values": { "baseUrl": "https://evil.example/v1" } })).await;
+    assert!(!ok && refused.as_str().unwrap().contains("somewhere new"), "a saved key cannot be pointed elsewhere: {refused}");
+    let (ok, changed) = call(&router, &key, "settings_update", json!({ "group": "ai", "values": { "monthlyTokenBudget": 5000 } })).await;
+    assert!(ok, "{changed}");
+    assert_eq!(changed["values"]["monthlyTokenBudget"], 5000);
+    let (ok, cleared) =
+        call(&router, &key, "settings_update", json!({ "group": "ai", "values": { "apiKey": "", "baseUrl": "https://other.example/v1" } }))
+            .await;
+    assert!(ok, "clearing the key while moving it is fine: {cleared}");
+    let (ok, refused) = call(&router, &key, "ai_models", json!({ "apiKey": "sk-typed" })).await;
+    assert!(!ok && refused.as_str().unwrap().contains("signed in"), "{refused}");
+
+    let (_, doc) = call(&router, &key, "documents_create", json!({ "title": "Big file" })).await;
+    let id = doc["id"].as_str().unwrap().to_string();
+    let (ok, link) = call(&router, &key, "documents_upload_url", json!({ "documentId": id, "name": "Big.pdf" })).await;
+    assert!(ok, "{link}");
+    let url = path_of(link["url"].as_str().unwrap());
+    let put = |body: Vec<u8>| Request::put(&url).header("x-forwarded-for", IP).body(Body::from(body)).unwrap();
+    let (response, uploaded) = send(&router, put(pdf_fixture())).await;
+    assert_eq!(response.status(), StatusCode::OK, "{uploaded}");
+    assert_eq!(uploaded["pages"], 1);
+    let (response, _) = send(&router, put(pdf_fixture())).await;
+    assert_eq!(response.status(), StatusCode::CONFLICT, "an upload link works once");
+    let forged = format!("{}x", url);
+    let (response, _) = send(&router, Request::put(&forged).header("x-forwarded-for", IP).body(Body::from(pdf_fixture())).unwrap()).await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let (_, audit) = send(&router, post_json("/api/rpc/audit.list", json!({ "action": "document.file_added" }), &session)).await;
+    assert!(audit.to_string().contains("\"mcp\""), "the upload is audited as the agent's call: {audit}");
+
+    let parties = json!({ "documentId": id, "parties": [{ "role": "signer", "name": "Anna", "delivery": "link" }] });
+    let (ok, body) = call(&router, &key, "documents_set_parties", parties).await;
+    assert!(ok, "{body}");
+    let (ok, body) = call(&router, &key, "documents_send", json!({ "id": id })).await;
+    assert!(ok, "{body}");
+    let (ok, link) = call(&router, &key, "documents_download_url", json!({ "id": id, "version": "original" })).await;
+    assert!(ok, "{link}");
+    let (response, _) =
+        send(&router, Request::get(path_of(link["url"].as_str().unwrap())).header("x-forwarded-for", IP).body(Body::empty()).unwrap())
+            .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers().get(header::CONTENT_TYPE).unwrap(), "application/pdf");
+
+    let (_, draft) = call(&router, &key, "documents_create", json!({ "title": "Later" })).await;
+    let (_, link) = call(&router, &key, "documents_upload_url", json!({ "documentId": draft["id"], "name": "Later.pdf" })).await;
+    let (_, keys) = send(&router, post_json("/api/rpc/api_keys.list", json!({}), &session)).await;
+    send(&router, post_json("/api/rpc/api_keys.revoke", json!({ "id": keys[0]["id"] }), &session)).await;
+    let late = Request::put(path_of(link["url"].as_str().unwrap())).header("x-forwarded-for", IP).body(Body::from(pdf_fixture())).unwrap();
+    let (response, _) = send(&router, late).await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND, "revoking the key also stops its upload links");
+}

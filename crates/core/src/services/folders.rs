@@ -205,7 +205,8 @@ impl Service for List {
         "folders.list",
         "List every document folder or every template folder, sorted by name, with their parent and how many items you can see in each. Folders nest up to three levels through parentId.",
         Access::Authenticated,
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ListInput) -> Result<Vec<FolderView>> {
         list(ctx, conn, input.scope).await
@@ -232,7 +233,8 @@ impl Service for Create {
         "folders.create",
         "Create a folder for documents or for templates, optionally inside another folder of the same kind. Folders are shared by the whole organisation but never give access to the documents in them.",
         Access::Authenticated,
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CreateInput) -> Result<FolderView> {
         if !may_create(ctx, input.scope) {
@@ -280,7 +282,8 @@ impl Service for Update {
         "folders.update",
         "Rename a folder or move it into another folder (null parentId for the top level). Give both the name and the parent you want it to have.",
         Access::Authenticated,
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: UpdateInput) -> Result<FolderView> {
         let before = folder(conn, input.id).await?;
@@ -333,7 +336,9 @@ impl Service for Delete {
         "folders.delete",
         "Delete a folder. Nothing in it is deleted: its documents, templates and subfolders move up to the folder it was in, or to the top level.",
         Access::Authenticated,
-    );
+    )
+    .tool()
+    .destructive();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<Ok_> {
         let before = folder(conn, input.id).await?;
@@ -413,7 +418,8 @@ impl Service for Move {
         "documents.move",
         "Move documents or templates into a folder, or out of any folder with a null folderId. Works at any status. You need to be allowed to change each one.",
         Access::Permission(Permission::DocumentsCreate),
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: MoveInput) -> Result<MoveOutput> {
         let ids = check_ids(&input.ids)?;
@@ -472,7 +478,8 @@ impl Service for Archive {
         "documents.archive",
         "Archive finished documents (completed, declined, canceled or expired) or templates so they leave the normal lists, or restore them with archived false. Archived templates cannot be used until restored. Retention rules and legal holds apply to archived documents as before.",
         Access::Permission(Permission::DocumentsCreate),
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ArchiveInput) -> Result<ArchiveOutput> {
         let ids = check_ids(&input.ids)?;

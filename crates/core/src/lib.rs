@@ -1,6 +1,7 @@
 pub mod ai;
 pub mod audit;
 pub mod context;
+pub mod docs;
 pub mod env;
 pub mod error;
 pub mod net;

@@ -10,6 +10,7 @@ use opensign_core::context::{Ctx, Surface};
 use opensign_core::error::bad_request;
 use opensign_core::services::documents::{self as docs, Version};
 use opensign_core::services::signing::signer_file;
+use opensign_core::services::transfers;
 use opensign_core::storage::read_file;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -500,5 +501,43 @@ pub async fn review_pdf(State(state): State<AppState>, Path(token): Path<String>
             response
         }
         Err(e) => review_error(e, caller.request_id),
+    }
+}
+
+/// `GET /api/transfers/<token>`: a download link from `documents.download_url`.
+pub async fn transfer_download(State(state): State<AppState>, Path(token): Path<String>, parts: Parts) -> Response {
+    let ip = security::client_ip(&parts.headers, parts.extensions.get::<ConnectInfo<SocketAddr>>().map(|c| c.0));
+    if !state.limiter.allow(security::UPLOAD, ip) {
+        return security::too_many();
+    }
+    let result = async {
+        let record = transfers::download(&state.app, &token).await?;
+        let body = read_file(&state.app.storage, &state.app.keys, &record).await?;
+        Ok::<_, opensign_core::AppError>((record.name, body))
+    }
+    .await;
+    match result {
+        Ok((name, body)) => pdf(&name, body),
+        Err(e) => ApiError(e, None).into_response(),
+    }
+}
+
+/// `PUT /api/transfers/<token>` with the file's raw bytes: an upload link from `documents.upload_url`.
+pub async fn transfer_upload(State(state): State<AppState>, Path(token): Path<String>, request: Request) -> Response {
+    let (parts, body) = request.into_parts();
+    let request_id = parts.extensions.get::<RequestId>().map(|r| r.0.clone()).unwrap_or_default();
+    let ip = security::client_ip(&parts.headers, parts.extensions.get::<ConnectInfo<SocketAddr>>().map(|c| c.0));
+    if !state.limiter.allow(security::UPLOAD, ip) {
+        return security::too_many();
+    }
+    let Ok(bytes) = to_bytes(body, transfers::MAX_UPLOAD_BYTES).await else {
+        return ApiError(bad_request("The upload was interrupted or is too large"), Some(request_id)).into_response();
+    };
+    if bytes.is_empty() {
+        return ApiError(bad_request("Send the file's bytes as the request body"), Some(request_id)).into_response();
+    }
+    match transfers::upload(state.app.clone(), &token, ip.map(|i| i.to_string()), request_id.clone(), bytes.to_vec()).await {
+        Ok(output) => Json(output).into_response(),
+        Err(e) => ApiError(e, Some(request_id)).into_response(),
     }
 }

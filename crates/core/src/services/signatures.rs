@@ -80,7 +80,7 @@ impl Service for Get {
         "Your saved signature and initials, offered on the signing page when you sign a document yourself.",
         Access::Authenticated,
     )
-    .not_a_tool();
+    .not_a_tool("The caller's own saved signature, which only the person adds or changes.");
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: super::Empty) -> Result<SavedSignature> {
         load(ctx, conn, ctx.actor()?.user_id).await
@@ -109,7 +109,7 @@ impl Service for Set {
         "Save your own signature (drawn or typed) and initials, to reuse when you sign documents yourself.",
         Access::Authenticated,
     )
-    .not_a_tool();
+    .not_a_tool("The caller's own saved signature, which only the person adds or changes.");
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SetSignatureInput) -> Result<SavedSignature> {
         let user_id = ctx.actor()?.user_id;
@@ -167,8 +167,8 @@ pub struct Remove;
 impl Service for Remove {
     type Input = super::Empty;
     type Output = super::Ok_;
-    const META: Meta =
-        Meta::mutation("account.remove_signature", "Delete your saved signature and initials.", Access::Authenticated).not_a_tool();
+    const META: Meta = Meta::mutation("account.remove_signature", "Delete your saved signature and initials.", Access::Authenticated)
+        .not_a_tool("The caller's own saved signature, which only the person adds or changes.");
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: super::Empty) -> Result<super::Ok_> {
         let user_id = ctx.actor()?.user_id;

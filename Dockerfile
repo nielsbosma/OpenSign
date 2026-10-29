@@ -19,6 +19,7 @@ FROM rust:1.99-slim AS server
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
+COPY docs docs
 # Compiled into the binary. Set by CI from the release tag; empty means a local build.
 ARG OPENSIGN_VERSION=
 ENV OPENSIGN_VERSION=$OPENSIGN_VERSION

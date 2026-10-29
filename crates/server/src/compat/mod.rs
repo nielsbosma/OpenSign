@@ -46,7 +46,7 @@ impl Api {
     /// Runs a service by name, as the REST API does. Only tool services are reachable with a key.
     pub async fn call(&self, name: &str, input: Value) -> Result<Value, AppError> {
         let service = self.state.services.get(name).ok_or_else(|| AppError::new(ErrorKind::Internal, "missing service"))?;
-        if !service.meta().tool {
+        if !service.meta().is_tool() {
             return Err(AppError::new(ErrorKind::Forbidden, "This call is not available with an API key"));
         }
         service.invoke(&self.ctx, input).await

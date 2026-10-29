@@ -112,7 +112,9 @@ impl Service for DetectFields {
         "Suggest fields for a draft: finds lines and underscores to write on with the label beside or below them (Name, Date, Signature, Underskrift and so on) and empty boxes to tick, optionally asking the AI model too. Returns suggestions only; place the ones you want with documents.set_fields, giving each a party.",
         Access::Permission(Permission::DocumentsCreate),
     )
-    .without_transaction();
+    .without_transaction()
+    .tool()
+    .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: DetectInput) -> Result<DetectOutput> {
         let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;

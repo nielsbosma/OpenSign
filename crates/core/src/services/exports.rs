@@ -79,7 +79,8 @@ impl Service for Values {
         "documents.values",
         "Get the values filled in on one document as data: each field keyed by its label, typed (numbers as numbers, checkboxes as true or false, several choices as a list, dates as YYYY-MM-DD, uploads by file name), with the parties and when they signed. Use it after document.completed to read what signers entered.",
         Access::Authenticated,
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<DocumentData> {
         let document = load_document(ctx, conn, input.id, Need::Read).await?;
@@ -147,7 +148,8 @@ impl Service for Export {
         "documents.export",
         "Export the values filled in on many documents you can see as CSV, Excel (xlsx) or JSON: one row per document with its status, each party's name, email and signing time, and one column per field. Filter by template, bulk send, status, folder, search or archive, as in documents.list. Personal numbers and uploaded files are never included. Every export is audited.",
         Access::Permission(Permission::DocumentsExport),
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ExportInput) -> Result<ExportOutput> {
         let (read_all, user_id, can_create) = visibility(ctx)?;

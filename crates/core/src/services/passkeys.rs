@@ -76,7 +76,7 @@ impl Service for BeginRegistration {
     type Input = BeginInput;
     type Output = Ceremony;
     const META: Meta = Meta::mutation("account.passkey_begin", "Start adding a passkey to your account.", Access::Authenticated)
-        .not_a_tool()
+        .not_a_tool("Passkeys are credentials registered by the browser.")
         .before_two_factor();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: BeginInput) -> Result<Ceremony> {
@@ -150,7 +150,7 @@ impl Service for FinishRegistration {
     type Input = FinishRegistrationInput;
     type Output = PasskeyView;
     const META: Meta = Meta::mutation("account.passkey_add", "Finish adding a passkey with the browser's response.", Access::Authenticated)
-        .not_a_tool()
+        .not_a_tool("Passkeys are credentials registered by the browser.")
         .before_two_factor();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: FinishRegistrationInput) -> Result<PasskeyView> {
@@ -203,7 +203,9 @@ pub struct List;
 impl Service for List {
     type Input = super::Empty;
     type Output = Vec<PasskeyView>;
-    const META: Meta = Meta::query("account.passkeys", "Your passkeys.", Access::Authenticated).not_a_tool().before_two_factor();
+    const META: Meta = Meta::query("account.passkeys", "Your passkeys.", Access::Authenticated)
+        .not_a_tool("Passkeys are credentials, managed in the app.")
+        .before_two_factor();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: super::Empty) -> Result<Vec<PasskeyView>> {
         Ok(sqlx::query_as("select id, name, created_at, last_used_at from passkeys where user_id = $1 order by created_at")
@@ -225,8 +227,9 @@ pub struct Remove;
 impl Service for Remove {
     type Input = RemoveInput;
     type Output = Ok_;
-    const META: Meta =
-        Meta::mutation("account.passkey_remove", "Remove one of your passkeys.", Access::Authenticated).not_a_tool().before_two_factor();
+    const META: Meta = Meta::mutation("account.passkey_remove", "Remove one of your passkeys.", Access::Authenticated)
+        .not_a_tool("Passkeys are credentials, managed in the app.")
+        .before_two_factor();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: RemoveInput) -> Result<Ok_> {
         let actor = ctx.actor()?;

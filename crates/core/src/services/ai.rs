@@ -45,6 +45,11 @@ const NOT_FOR_ASSISTANT: &[&str] = &[
     "settings.send_test_email",
     "ai.test",
     "ai.models",
+    "settings.update",
+    "system.update",
+    "users.change_email",
+    "share_links.set",
+    "share_links.rotate",
 ];
 const MAX_DOCUMENT_CHARS: usize = 180_000;
 
@@ -67,7 +72,7 @@ impl Service for GetStatus {
     type Input = Empty;
     type Output = Status;
     const META: Meta =
-        Meta::query("ai.status", "Whether the AI assistant and document review are available.", Access::Authenticated).not_a_tool();
+        Meta::query("ai.status", "Whether the AI assistant and document review are available.", Access::Authenticated).tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<Status> {
         let s = settings(ctx, conn).await?;
@@ -134,7 +139,7 @@ impl Service for Chat {
         "Ask the assistant something; it can use the tools you have access to.",
         Access::Permission(Permission::AiUse),
     )
-    .not_a_tool()
+    .not_a_tool("The in-app assistant itself; agents call the tools directly.")
     .without_transaction();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ChatInput) -> Result<ChatOutput> {
@@ -153,7 +158,7 @@ impl Service for Chat {
         let registry = super::registry();
         let available: Vec<_> = registry
             .iter()
-            .filter(|s| s.meta().tool && !NOT_FOR_ASSISTANT.contains(&s.meta().name) && can_access(s.meta().access, ctx))
+            .filter(|s| s.meta().is_tool() && !NOT_FOR_ASSISTANT.contains(&s.meta().name) && can_access(s.meta().access, ctx))
             .collect();
         let tools: Vec<Tool> = available
             .iter()
@@ -308,7 +313,8 @@ impl Service for CheckSetup {
         "documents.check",
         "Check a document's setup for mistakes before sending: missing signature fields, contact details or eID numbers.",
         Access::Authenticated,
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<Vec<Check>> {
         let document = load_document(ctx, conn, input.id, Need::Read).await?;
@@ -359,8 +365,9 @@ impl Service for Review {
         "Have the AI read a document and point out key terms, risks, missing clauses and setup mistakes.",
         Access::Permission(Permission::AiUse),
     )
-    .not_a_tool()
-    .without_transaction();
+    .without_transaction()
+    .tool()
+    .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ReviewInput) -> Result<ReviewOutput> {
         let document = load_document(ctx, conn, input.id, Need::Read).await?;
@@ -430,8 +437,7 @@ impl Service for LatestReview {
     type Input = IdInput;
     type Output = Option<ReviewOutput>;
     const META: Meta =
-        Meta::query("documents.latest_review", "The most recent AI review of a document, if there is one.", Access::Authenticated)
-            .not_a_tool();
+        Meta::query("documents.latest_review", "The most recent AI review of a document, if there is one.", Access::Authenticated).tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<Option<ReviewOutput>> {
         let document = load_document(ctx, conn, input.id, Need::Read).await?;
@@ -469,8 +475,9 @@ impl Service for TestProvider {
         "Send a tiny request to check the AI provider, model and key.",
         Access::Permission(Permission::SettingsManage),
     )
-    .not_a_tool()
-    .without_transaction();
+    .without_transaction()
+    .tool()
+    .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<TestOutput> {
         let s = settings(ctx, conn).await?;
@@ -514,10 +521,14 @@ impl Service for ListModels {
         "List the chat models the AI provider offers, using the saved settings or unsaved ones from the form.",
         Access::Permission(Permission::SettingsManage),
     )
-    .not_a_tool()
-    .without_transaction();
+    .without_transaction()
+    .tool()
+    .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ModelsInput) -> Result<Vec<ai::Model>> {
+        if !ctx.in_app() && input.api_key.as_deref().is_some_and(|k| !k.trim().is_empty()) {
+            return Err(bad_request("Keys are only entered signed in to OpenSign. Leave apiKey out to use the saved one."));
+        }
         let saved = settings(ctx, conn).await?;
         let mut s = saved.clone();
         if let Some(provider) = input.provider {
@@ -559,7 +570,8 @@ impl Service for GetUsage {
         "ai.usage",
         "Tokens the AI features used this month, against the budget.",
         Access::Permission(Permission::SettingsManage),
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<Usage> {
         let s = settings(ctx, conn).await?;

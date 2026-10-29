@@ -140,7 +140,8 @@ impl Service for Get {
         "share_links.get",
         "Get a template's public share link: whether it is on, its address, which party the visitor becomes, its limits and how many documents it made. Empty when the template never had one.",
         Access::Authenticated,
-    );
+    )
+    .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: TemplateInput) -> Result<Option<ShareLinkView>> {
         let template = template(ctx, conn, input.template_id, Need::Read).await?;
@@ -177,7 +178,9 @@ impl Service for Set {
         "share_links.set",
         "Turn a template's public share link on or off and set its limits. Anyone with the link can start a document from the template after confirming their email address; the documents belong to the user who turns it on.",
         Access::Permission(Permission::DocumentsCreate),
-    );
+    )
+    .tool()
+    .destructive();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SetInput) -> Result<ShareLinkView> {
         let template = template(ctx, conn, input.template_id, Need::Edit).await?;
@@ -263,7 +266,9 @@ impl Service for Rotate {
         "share_links.rotate",
         "Give a template's share link a new address. The old address and any printed QR codes stop working at once.",
         Access::Permission(Permission::DocumentsCreate),
-    );
+    )
+    .tool()
+    .destructive();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: TemplateInput) -> Result<ShareLinkView> {
         let template = template(ctx, conn, input.template_id, Need::Edit).await?;
