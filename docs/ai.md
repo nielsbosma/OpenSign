@@ -29,7 +29,7 @@ Open the assistant from the sparkle button in the app's header. Ask in plain lan
 
 The assistant uses the same tools as the [MCP server](mcp.md), limited to what your role allows, and every action it takes is in the audit trail under your name. The app shows which tools it used.
 
-Because text inside documents could try to steer it, the assistant never gets tools that change who has access or that send things to people you did not pick: it cannot invite or change users or their email addresses, add, remove, test or resend webhooks, change or revoke API keys, hand out signing links, share documents, send test emails, change settings, or start an update.
+Because text inside documents could try to steer it, the assistant never gets tools that change who has access or that send things to people you did not pick: it cannot invite or change users or their email addresses, add, remove, test or resend webhooks, change or revoke API keys, hand out signing links, share documents, send test emails, change settings, open or rotate share links, or start an update.
 
 ## Document review
 

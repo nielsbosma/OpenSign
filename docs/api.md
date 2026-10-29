@@ -175,6 +175,9 @@ Send answers `{ "document": {…}, "links": [{ "partyId", "name", "url" }] }`. T
 | POST | `/templates/{templateId}/versions/{number}/restore` | Put the template back to a version; the restore is saved as a new version |
 | POST | `/documents/move` | Move documents or templates to a folder. Body: `ids`, `folderId` (`null` for none) |
 | POST | `/documents/archive` | Archive finished documents or templates, or restore them. Body: `ids`, `archived` |
+| GET | `/templates/{templateId}/share-link` | A template's [share link](share-links.md), or `null` |
+| PUT | `/templates/{templateId}/share-link` | Turn the share link on or off. Body: `enabled`, `partyId`, `perHour`, `maxTotal`, `expiresAt` |
+| POST | `/templates/{templateId}/share-link/rotate` | Give the share link a new address; the old one stops working |
 | GET | `/folders` | List folders. Query: `scope` (`documents` or `templates`) |
 | POST | `/folders` | Create a folder. Body: `scope`, `name`, `parentId` |
 | PUT | `/folders/{id}` | Rename or move a folder. Body: `name`, `parentId` |

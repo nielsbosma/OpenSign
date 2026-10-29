@@ -26,6 +26,7 @@ import { SystemPage } from '@/pages/settings/SystemPage';
 import { UsersPage } from '@/pages/settings/UsersPage';
 import { WebhookDeliveriesPage } from '@/pages/settings/WebhookDeliveriesPage';
 import { WebhooksPage } from '@/pages/settings/WebhooksPage';
+import { SharePage } from '@/pages/sign/SharePage';
 import { SignPage } from '@/pages/sign/SignPage';
 import { VerifyPage } from '@/pages/VerifyPage';
 
@@ -69,6 +70,7 @@ export function App() {
       <Route path="/confirm-email" element={<ConfirmEmailPage />} />
       <Route path="/invite" element={<InvitePage />} />
       <Route path="/sign" element={<SignPage />} />
+      <Route path="/s/:slug" element={<SharePage />} />
       <Route path="/verify" element={<VerifyPage />} />
       <Route
         path="/api-explorer"

@@ -166,7 +166,8 @@ pub async fn load(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid) -> Resu
 
 /// Adds the content's files, parties, attachment requests and fields to a draft. Settings are the
 /// caller's business, since a new document and a restored template treat them differently.
-pub async fn apply(ctx: &Ctx, conn: &mut PgConnection, content: &Content, to: Uuid) -> Result<()> {
+/// Copies the content into the draft `to`; returns the new parties' ids in the order of `content.parties`.
+pub async fn apply(ctx: &Ctx, conn: &mut PgConnection, content: &Content, to: Uuid) -> Result<Vec<Uuid>> {
     for (position, file) in content.files.iter().enumerate() {
         sqlx::query("insert into document_files (document_id, file_id, position) values ($1, $2, $3)")
             .bind(to)
@@ -242,7 +243,7 @@ pub async fn apply(ctx: &Ctx, conn: &mut PgConnection, content: &Content, to: Uu
         .execute(&mut *conn)
         .await?;
     }
-    Ok(())
+    Ok(ids)
 }
 
 /// Removes a draft's files, parties (with their requests) and fields.

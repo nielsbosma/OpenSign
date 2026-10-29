@@ -14,6 +14,8 @@ pub mod passkeys;
 pub mod retention;
 pub mod review;
 pub mod setup;
+pub mod share_links;
+pub mod signatures;
 pub mod signing;
 pub mod system;
 pub mod templates;
@@ -56,6 +58,9 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<auth::Logout>(),
         erase::<auth::WhoAmI>(),
         erase::<auth::SetLanguage>(),
+        erase::<signatures::Get>(),
+        erase::<signatures::Set>(),
+        erase::<signatures::Remove>(),
         erase::<auth::BeginTwoFactor>(),
         erase::<auth::ConfirmTwoFactor>(),
         erase::<auth::ChangePassword>(),
@@ -113,6 +118,12 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<folders::Delete>(),
         erase::<folders::Move>(),
         erase::<folders::Archive>(),
+        erase::<share_links::Get>(),
+        erase::<share_links::Set>(),
+        erase::<share_links::Rotate>(),
+        erase::<share_links::Open>(),
+        erase::<share_links::RequestCode>(),
+        erase::<share_links::Confirm>(),
         erase::<retention::SetLegalHold>(),
         erase::<retention::Preview>(),
         erase::<system::GetVersion>(),
@@ -126,6 +137,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<documents::IssueSigningLink>(),
         erase::<documents::SigningPreview>(),
         erase::<documents::SignInPerson>(),
+        erase::<documents::SignMyself>(),
         erase::<passkeys::BeginRegistration>(),
         erase::<passkeys::FinishRegistration>(),
         erase::<passkeys::List>(),
@@ -197,13 +209,17 @@ mod tests {
         "account.passkey_begin",
         "account.passkey_remove",
         "account.passkeys",
+        "account.remove_signature",
         "account.revoke_mcp_connection",
+        "account.set_signature",
+        "account.signature",
         "account.two_factor_begin",
         "account.two_factor_confirm",
         "ai.chat",
         "api_keys.create",
         "auth.logout",
         "documents.sign_in_person",
+        "documents.sign_myself",
         "oauth.approve",
         "oauth.describe",
         "oauth.deny",

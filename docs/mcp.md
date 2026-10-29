@@ -49,6 +49,7 @@ Tools carry the standard hints, so clients can ask before running them:
 | Documents | `documents_list`, `documents_counts`, `documents_get`, `documents_create`, `documents_upload`, `documents_upload_url`, `documents_replace_file`, `documents_remove_file` ◆, `documents_update`, `documents_set_parties`, `documents_set_fields`, `documents_detect_fields` ↗, `documents_set_review_links`, `documents_check`, `documents_auth_methods`, `documents_signing_preview`, `documents_send` ↗, `documents_remind` ↗, `documents_cancel` ◆, `documents_delete` ◆, `documents_share`, `documents_unshare` ◆, `documents_signing_link`, `documents_download`, `documents_download_url`, `documents_verify`, `documents_legal_hold` ◆, `documents_move`, `documents_archive`, `documents_values`, `documents_export` |
 | Templates | `templates_versions`, `templates_version`, `templates_compare`, `templates_save_version`, `templates_restore` |
 | Folders | `folders_list`, `folders_create`, `folders_update`, `folders_delete` ◆ |
+| Share links | `share_links_get`, `share_links_set` ◆, `share_links_rotate` ◆ |
 | AI review | `documents_review` ↗, `documents_latest_review`, `ai_status`, `ai_usage`, `ai_models` ↗, `ai_test` ↗ |
 | Bulk send | `bulk_preview`, `bulk_start` ↗, `bulk_list`, `bulk_get`, `bulk_cancel` ◆ |
 | Webhooks | `webhooks_list`, `webhooks_create` ↗, `webhooks_delete` ◆, `webhooks_test` ↗, `webhooks_deliveries`, `webhooks_delivery`, `webhooks_resend` ↗, `webhooks_resend_failed` ↗ |
@@ -92,7 +93,8 @@ Some things stay in the app on purpose, because they are credentials, need the p
 | Resetting someone's two-factor | It weakens their sign-in, so an admin does it in the app. |
 | OAuth consent and connected AI apps | Consent is given by the person in the browser, and an agent cannot see or change which clients hold access. |
 | Replacing the seal key | Done in the app. |
-| In-person signing and anything a signer does | Needs the signer at the device, with their own link. |
+| In-person signing, Sign Myself and anything a signer does | Needs the signer at the device, with their own link or session. |
+| Your saved signature | Only you draw or change it, in the app. |
 | The in-app AI assistant | Agents call the tools directly. |
 
 Every service in OpenSign states in its definition whether it is a tool, and if not, why. A test fails when a new one makes no choice, so new features reach agents from day one.

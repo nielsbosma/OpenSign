@@ -46,12 +46,26 @@ pub(crate) struct SignerSession {
     /// What the identification proved, e.g. the name from an eID, for the evidence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     i: Option<String>,
+    /// The OpenSign user who signs their own document, signed in to the app.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    u: Option<Uuid>,
 }
 
 pub fn issue_session(ctx: &Ctx, party: &PartyRow, method: AuthMethod, identity: Option<String>) -> String {
     ctx.keys().sign_token(
         "signer-session",
-        &SignerSession { p: party.id, v: party.link_version, a: method, i: identity },
+        &SignerSession { p: party.id, v: party.link_version, a: method, i: identity, u: None },
+        SESSION_MINUTES * 60,
+        ctx.now.timestamp(),
+    )
+}
+
+/// For self-signing: the sender's own sign-in to the app is their identification.
+pub(crate) fn issue_account_session(ctx: &Ctx, party: &PartyRow, actor: &crate::context::Actor) -> String {
+    let identity = format!("Signed in to OpenSign as {} <{}>", actor.name, actor.email);
+    ctx.keys().sign_token(
+        "signer-session",
+        &SignerSession { p: party.id, v: party.link_version, a: AuthMethod::Standard, i: Some(identity), u: Some(actor.user_id) },
         SESSION_MINUTES * 60,
         ctx.now.timestamp(),
     )
@@ -141,6 +155,8 @@ pub struct SignerParty {
     pub signed_at: Option<DateTime<Utc>>,
     /// The party signs on the sender's device, which is handed over to them.
     pub in_person: bool,
+    /// The party is the sender, signing their own document on their own device.
+    pub is_sender: bool,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -192,10 +208,13 @@ pub(crate) async fn signer_view(
     locked: bool,
 ) -> Result<SignerView> {
     let org: OrgSettings = settings(ctx, conn).await?;
-    let sender: Option<String> = match document.owner_id {
-        Some(id) => sqlx::query_scalar("select name from users where id = $1").bind(id).fetch_optional(&mut *conn).await?,
+    let owner: Option<(String, String)> = match document.owner_id {
+        Some(id) => sqlx::query_as("select name, email from users where id = $1").bind(id).fetch_optional(&mut *conn).await?,
         None => None,
     };
+    let in_person = party.delivery == Delivery::InPerson.as_str();
+    let is_sender = in_person && owner.as_ref().is_some_and(|(_, email)| party.email.as_deref() == Some(email.as_str()));
+    let sender = owner.map(|(name, _)| name);
     Ok(SignerView {
         document: SignerDocument {
             id: document.id,
@@ -217,7 +236,8 @@ pub(crate) async fn signer_view(
             role: party.role.clone(),
             status: party.status.clone(),
             signed_at: party.signed_at,
-            in_person: party.delivery == Delivery::InPerson.as_str(),
+            in_person,
+            is_sender,
         },
         needs_authentication: None,
         sign_authentication: None,
@@ -445,7 +465,7 @@ pub struct SignOutput {
     pub completed: bool,
 }
 
-fn clean_value(value: &str) -> Result<String> {
+pub(crate) fn clean_value(value: &str) -> Result<String> {
     let value = value.trim();
     if value.chars().count() > 1000 || value.chars().any(|c| c.is_control() && c != '\n') {
         return Err(bad_request("A field value is too long or contains characters that are not allowed"));
@@ -453,13 +473,19 @@ fn clean_value(value: &str) -> Result<String> {
     Ok(value.to_string())
 }
 
-async fn store_signature_image(ctx: &Ctx, conn: &mut PgConnection, encoded: &str) -> Result<FileRecord> {
+/// A drawn signature from the browser: base64 PNG, bounded, and checked to decode as an image.
+pub(crate) fn signature_png(encoded: &str) -> Result<Vec<u8>> {
     if encoded.len() > MAX_SIGNATURE_IMAGE * 4 / 3 + 8 {
         return Err(bad_request("The signature image is too large"));
     }
     let encoded = encoded.trim().trim_start_matches("data:image/png;base64,");
     let png = B64.decode(encoded).map_err(|_| bad_request("The signature image is not valid base64"))?;
     opensign_pdf::check_signature_image(&png).map_err(|e| bad_request(e.to_string()))?;
+    Ok(png)
+}
+
+async fn store_signature_image(ctx: &Ctx, conn: &mut PgConnection, encoded: &str) -> Result<FileRecord> {
+    let png = signature_png(encoded)?;
     store_file(
         conn,
         &ctx.app.storage,
@@ -633,6 +659,7 @@ impl Service for Sign {
         let evidence = json!({
             "auth": method,
             "identity": session.as_ref().and_then(|s| s.i.as_deref()).map(|i| seal_identity(ctx.keys(), party.id, i)),
+            "account": session.as_ref().and_then(|s| s.u),
             "ip": ctx.ip,
             "userAgent": ctx.user_agent,
             "signedAt": ctx.now,
@@ -754,7 +781,7 @@ async fn request_of(conn: &mut PgConnection, party_id: Uuid, id: Uuid) -> Result
     attachments::for_party(conn, party_id).await?.into_iter().find(|r| r.id == id).ok_or_else(|| crate::error::not_found("Attachment"))
 }
 
-async fn retire_file(conn: &mut PgConnection, file_id: Option<Uuid>) -> Result<()> {
+pub(crate) async fn retire_file(conn: &mut PgConnection, file_id: Option<Uuid>) -> Result<()> {
     if let Some(id) = file_id {
         sqlx::query("update files set deleted_at = now() where id = $1 and deleted_at is null").bind(id).execute(&mut *conn).await?;
     }

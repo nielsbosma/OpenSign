@@ -35,6 +35,14 @@ An admin can turn on **Require two-factor authentication for everyone** in **Set
 
 Under **Settings → Account and Security**, pick the language OpenSign is shown in for you: English, Chinese (Simplified), Hindi, Spanish, French, Arabic, Bengali, Portuguese, Russian, Urdu or Swedish. Before you sign in, the app follows your browser, and the sign-in page has a picker. This does not change what signers see; they get the language set on their document or party. Some messages from the server are still in English.
 
+## Saved signature
+
+Under **Settings → Account and Security → My Signature**, draw or type your signature once, and add your initials if you like. When you sign a document yourself, the signing page offers it on a **Saved** tab. It is never applied by itself: you still choose to sign, and you can draw or type a new one instead.
+
+It is offered only when the signing link belongs to you: when you [sign a document yourself](in-person.md#signing-a-document-yourself), or open a link sent to your own email address while signed in. Someone you hand your device to for in-person signing never sees it. The drawing is stored encrypted like every other file, and **Remove** deletes it. Saving and removing it are recorded in the audit trail.
+
+Outside signers have no account, so they can tick **Remember my signature in this browser** instead. That keeps it in their browser only, offered next time to a party with the same name; nothing about them is stored on the server between documents. See [The signing page](signing-page.md#signing).
+
 ## Sessions
 
 Sessions are browser cookies that scripts cannot read, bound to your install, and stored on the server only as a keyed hash. In **Settings → Security** an admin sets:

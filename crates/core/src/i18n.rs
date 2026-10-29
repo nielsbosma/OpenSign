@@ -60,6 +60,9 @@ struct Texts {
     stopped_declined: &'static str,
     stopped_canceled: &'static str,
     freja_confirm: &'static str,
+    share_code_subject: &'static str,
+    share_code: &'static str,
+    share_code_ignore: &'static str,
 }
 
 const EN: Texts = Texts {
@@ -84,6 +87,9 @@ const EN: Texts = Texts {
     stopped_declined: "{name} declined to sign, so {title} will not be completed. You do not need to do anything.",
     stopped_canceled: "The sender canceled it, so {title} will not be completed. You do not need to do anything.",
     freja_confirm: "Confirm in the Freja eID app.",
+    share_code_subject: "{code} is your code for {title}",
+    share_code: "Enter this code to confirm your email address and start {title} from {org}. It works for 15 minutes.",
+    share_code_ignore: "If you did not ask for this, you can ignore this email.",
 };
 
 const ZH: Texts = Texts {
@@ -108,6 +114,9 @@ const ZH: Texts = Texts {
     stopped_declined: "{name} 拒绝签署，因此 {title} 将不会完成。您无需进行任何操作。",
     stopped_canceled: "发件人已取消，因此 {title} 将不会完成。您无需进行任何操作。",
     freja_confirm: "请在 Freja eID 应用中确认。",
+    share_code_subject: "{code} 是您用于 {title} 的验证码",
+    share_code: "输入此验证码以确认您的电子邮件地址，并开始处理 {org} 的 {title}。验证码 15 分钟内有效。",
+    share_code_ignore: "如果这不是您本人的请求，请忽略此邮件。",
 };
 
 const HI: Texts = Texts {
@@ -132,6 +141,9 @@ const HI: Texts = Texts {
     stopped_declined: "{name} ने हस्ताक्षर करने से मना कर दिया है, इसलिए {title} पूरा नहीं होगा। आपको कुछ करने की आवश्यकता नहीं है।",
     stopped_canceled: "भेजने वाले ने इसे रद्द कर दिया है, इसलिए {title} पूरा नहीं होगा। आपको कुछ करने की आवश्यकता नहीं है।",
     freja_confirm: "Freja eID ऐप में पुष्टि करें।",
+    share_code_subject: "{title} के लिए आपका कोड {code} है",
+    share_code: "अपना ईमेल पता पक्का करने और {org} का {title} शुरू करने के लिए यह कोड डालें। यह 15 मिनट तक काम करेगा।",
+    share_code_ignore: "अगर आपने यह नहीं माँगा था, तो इस ईमेल को अनदेखा कर दें।",
 };
 
 const ES: Texts = Texts {
@@ -156,6 +168,9 @@ const ES: Texts = Texts {
     stopped_declined: "{name} ha rechazado firmar, así que {title} no se completará. No tiene que hacer nada.",
     stopped_canceled: "El remitente lo ha cancelado, así que {title} no se completará. No tiene que hacer nada.",
     freja_confirm: "Confirme en la app Freja eID.",
+    share_code_subject: "{code} es su código para {title}",
+    share_code: "Introduzca este código para confirmar su dirección de correo y empezar {title} de {org}. Es válido durante 15 minutos.",
+    share_code_ignore: "Si no lo ha solicitado, puede ignorar este correo.",
 };
 
 const FR: Texts = Texts {
@@ -180,6 +195,9 @@ const FR: Texts = Texts {
     stopped_declined: "{name} a refusé de signer, donc {title} ne sera pas finalisé. Vous n\u{2019}avez rien à faire.",
     stopped_canceled: "L\u{2019}expéditeur l\u{2019}a annulé, donc {title} ne sera pas finalisé. Vous n\u{2019}avez rien à faire.",
     freja_confirm: "Confirmez dans l\u{2019}application Freja eID.",
+    share_code_subject: "{code} est votre code pour {title}",
+    share_code: "Saisissez ce code pour confirmer votre adresse e-mail et commencer {title} de {org}. Il est valable 15 minutes.",
+    share_code_ignore: "Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail.",
 };
 
 const AR: Texts = Texts {
@@ -204,6 +222,9 @@ const AR: Texts = Texts {
     stopped_declined: "تم رفض التوقيع من قِبل {name}، لذلك لن يكتمل {title}. لا يلزمك فعل أي شيء.",
     stopped_canceled: "ألغى المرسل {title}، لذلك لن يكتمل. لا يلزمك فعل أي شيء.",
     freja_confirm: "أكّد في تطبيق Freja eID.",
+    share_code_subject: "{code} هو رمزك لـ {title}",
+    share_code: "أدخل هذا الرمز لتأكيد بريدك الإلكتروني وبدء {title} من {org}. يبقى صالحًا لمدة 15 دقيقة.",
+    share_code_ignore: "إذا لم تطلب ذلك، يمكنك تجاهل هذه الرسالة.",
 };
 
 const BN: Texts = Texts {
@@ -228,6 +249,9 @@ const BN: Texts = Texts {
     stopped_declined: "{name} স্বাক্ষর করতে অস্বীকার করেছেন, তাই {title} সম্পন্ন হবে না। আপনাকে কিছু করতে হবে না।",
     stopped_canceled: "প্রেরক এটি বাতিল করেছেন, তাই {title} সম্পন্ন হবে না। আপনাকে কিছু করতে হবে না।",
     freja_confirm: "Freja eID অ্যাপে নিশ্চিত করুন।",
+    share_code_subject: "{title}-এর জন্য আপনার কোড {code}",
+    share_code: "আপনার ইমেল ঠিকানা নিশ্চিত করতে এবং {org}-এর {title} শুরু করতে এই কোডটি লিখুন। এটি ১৫ মিনিট কাজ করবে।",
+    share_code_ignore: "আপনি এটি না চেয়ে থাকলে এই ইমেলটি উপেক্ষা করুন।",
 };
 
 const PT: Texts = Texts {
@@ -252,6 +276,9 @@ const PT: Texts = Texts {
     stopped_declined: "{name} recusou a assinatura, então {title} não será concluído. Você não precisa fazer nada.",
     stopped_canceled: "O remetente cancelou, então {title} não será concluído. Você não precisa fazer nada.",
     freja_confirm: "Confirme no app Freja eID.",
+    share_code_subject: "{code} é o seu código para {title}",
+    share_code: "Digite este código para confirmar seu endereço de e-mail e começar {title} de {org}. Ele vale por 15 minutos.",
+    share_code_ignore: "Se você não pediu isso, pode ignorar este e-mail.",
 };
 
 const RU: Texts = Texts {
@@ -276,6 +303,9 @@ const RU: Texts = Texts {
     stopped_declined: "Участник {name} отказался от подписания, поэтому документ {title} не будет завершён. Вам ничего не нужно делать.",
     stopped_canceled: "Отправитель отменил документ {title}, поэтому он не будет завершён. Вам ничего не нужно делать.",
     freja_confirm: "Подтвердите в приложении Freja eID.",
+    share_code_subject: "{code} — ваш код для {title}",
+    share_code: "Введите этот код, чтобы подтвердить адрес электронной почты и начать {title} от {org}. Код действует 15 минут.",
+    share_code_ignore: "Если вы этого не запрашивали, просто проигнорируйте это письмо.",
 };
 
 const UR: Texts = Texts {
@@ -300,6 +330,9 @@ const UR: Texts = Texts {
     stopped_declined: "{name} نے دستخط کرنے سے انکار کر دیا ہے، اس لیے {title} مکمل نہیں ہوگا۔ آپ کو کچھ کرنے کی ضرورت نہیں۔",
     stopped_canceled: "بھیجنے والے نے اسے منسوخ کر دیا ہے، اس لیے {title} مکمل نہیں ہوگا۔ آپ کو کچھ کرنے کی ضرورت نہیں۔",
     freja_confirm: "Freja eID ایپ میں تصدیق کریں۔",
+    share_code_subject: "{title} کے لیے آپ کا کوڈ {code} ہے",
+    share_code: "اپنا ای میل پتہ تصدیق کرنے اور {org} کا {title} شروع کرنے کے لیے یہ کوڈ درج کریں۔ یہ 15 منٹ تک کام کرے گا۔",
+    share_code_ignore: "اگر آپ نے یہ نہیں مانگا تھا تو اس ای میل کو نظر انداز کر دیں۔",
 };
 
 const SV: Texts = Texts {
@@ -324,6 +357,9 @@ const SV: Texts = Texts {
     stopped_declined: "{name} avböjde att signera, så {title} kommer inte att slutföras. Du behöver inte göra något.",
     stopped_canceled: "Avsändaren har avbrutit {title}, så det kommer inte att slutföras. Du behöver inte göra något.",
     freja_confirm: "Bekräfta i Freja eID-appen.",
+    share_code_subject: "{code} är din kod för {title}",
+    share_code: "Ange koden för att bekräfta din e-postadress och starta {title} från {org}. Den gäller i 15 minuter.",
+    share_code_ignore: "Om du inte bad om detta kan du bortse från mejlet.",
 };
 
 /// Replaces `{name}` placeholders in one pass, so a value that itself contains a placeholder
@@ -473,6 +509,18 @@ impl Lang {
     pub fn freja_confirm(self) -> &'static str {
         self.texts().freja_confirm
     }
+
+    pub fn share_code_subject(self, code: &str, title: &str) -> String {
+        fill(self.texts().share_code_subject, &[("code", code), ("title", &self.q(title))])
+    }
+
+    pub fn share_code(self, title: &str, org: &str) -> String {
+        fill(self.texts().share_code, &[("title", &self.q(title)), ("org", org)])
+    }
+
+    pub fn share_code_ignore(self) -> &'static str {
+        self.texts().share_code_ignore
+    }
 }
 
 #[cfg(test)]
@@ -529,6 +577,8 @@ mod tests {
                 lang.stopped_subject("T"),
                 lang.stopped(&Stopped::Declined("N"), "T"),
                 lang.stopped(&Stopped::Canceled, "T"),
+                lang.share_code_subject("123456", "T"),
+                lang.share_code("T", "O"),
             ];
             for text in texts {
                 assert!(!text.contains('{') && !text.contains('}'), "{lang:?}: {text}");

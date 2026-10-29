@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Pencil } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { type FormEvent, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -14,6 +14,8 @@ import { APP_LANGUAGES, t, useLanguage } from '@/lib/i18n';
 import { createPasskey, passkeyCanceled, passkeysSupported } from '@/lib/passkeys';
 import { useSession } from '@/lib/session';
 import { FormError, PASSWORD_HINT } from '../auth/AuthLayout';
+import { type Signature, SignaturePad, SignaturePreview } from '../sign/SignaturePad';
+import { TextsContext, textsFor } from '../sign/texts';
 import { SettingsCard } from './SettingsLayout';
 import { EditUserDialog } from './UsersPage';
 
@@ -308,6 +310,87 @@ function McpCard() {
   );
 }
 
+function SignatureCard() {
+  const { user } = useSession();
+  const { language } = useLanguage();
+  const saved = useApi('account.signature');
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Signature | null>(null);
+  const [initials, setInitials] = useState('');
+  const save = useApiMutation('account.set_signature', {
+    invalidates: ['account.signature'],
+    onSuccess: () => {
+      setEditing(false);
+      toast.success(t('Signature saved'));
+    },
+  });
+  const remove = useApiMutation('account.remove_signature', { invalidates: ['account.signature'] });
+  const current = saved.data && !saved.data.empty ? saved.data : null;
+  const start = () => {
+    setDraft(null);
+    setInitials(current?.initials ?? '');
+    setEditing(true);
+  };
+  return (
+    <SettingsCard
+      help="account-security#saved-signature"
+      title={t('My Signature')}
+      description={t(
+        'Draw or type it once. When you sign a document yourself, it is offered on the signing page, never applied by itself.',
+      )}
+    >
+      {saved.isPending ? (
+        <Loading />
+      ) : editing ? (
+        <div className="grid max-w-md gap-4">
+          <TextsContext.Provider value={textsFor(language)}>
+            <SignaturePad defaultName={user?.name ?? ''} onChange={setDraft} />
+          </TextsContext.Provider>
+          <Field label={t('Initials')} htmlFor="initials">
+            <Input id="initials" value={initials} maxLength={5} onChange={(e) => setInitials(e.target.value)} className="w-24" />
+          </Field>
+          <div className="flex gap-2">
+            <Button
+              disabled={!draft || save.isPending}
+              onClick={() =>
+                save.mutate({
+                  typedName: draft?.typedName ?? null,
+                  imagePngBase64: draft?.imagePngBase64 ?? null,
+                  initials: initials.trim() || null,
+                })
+              }
+            >
+              {t('Save Signature')}
+            </Button>
+            <Button variant="outline" onClick={() => setEditing(false)}>
+              {t('Cancel')}
+            </Button>
+          </div>
+        </div>
+      ) : current ? (
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex h-20 min-w-48 items-center justify-center rounded-md border bg-white px-4">
+            <SignaturePreview signature={{ imagePngBase64: current.imagePngBase64 ?? null, typedName: current.typedName ?? null }} />
+          </div>
+          {current.initials && <span className="text-muted-foreground">{t('Initials: {initials}', { initials: current.initials })}</span>}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={start}>
+              <Pencil /> {t('Change')}
+            </Button>
+            <Button variant="outline" onClick={() => remove.mutate({})} disabled={remove.isPending}>
+              <Trash2 /> {t('Remove')}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button variant="outline" className="justify-self-start" onClick={start}>
+          {t('Add Signature')}
+        </Button>
+      )}
+    </SettingsCard>
+  );
+}
+
 function LanguageCard() {
   const { language, setLanguage } = useLanguage();
   const save = useApiMutation('account.set_language', { invalidates: ['account.me'] });
@@ -356,6 +439,7 @@ export function AccountPage() {
       </SettingsCard>
       <EditUserDialog user={editing && user ? user : null} onOpenChange={setEditing} />
       <LanguageCard />
+      <SignatureCard />
       <PasskeysCard />
       <TwoFactorCard />
       <PasswordCard />

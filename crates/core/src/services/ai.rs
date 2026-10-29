@@ -40,6 +40,8 @@ const NOT_FOR_ASSISTANT: &[&str] = &[
     "settings.update",
     "system.update",
     "users.change_email",
+    "share_links.set",
+    "share_links.rotate",
 ];
 const MAX_DOCUMENT_CHARS: usize = 180_000;
 
