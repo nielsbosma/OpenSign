@@ -27,7 +27,8 @@ fn limit_for(name: &str) -> Option<Limit> {
         | "account.change_password"
         | "account.two_factor_confirm"
         | "setup.create_first_admin" => Some(security::AUTH),
-        "signing.request_code" | "signing.verify_code" => Some(security::CODES),
+        "signing.request_code" | "signing.verify_code" | "share_links.request_code" | "share_links.confirm" => Some(security::CODES),
+        "share_links.open" => Some(security::SIGNER),
         n if n.starts_with("signing.") => Some(security::SIGNER),
         "documents.upload" => Some(security::UPLOAD),
         "documents.verify" => Some(security::VERIFY),

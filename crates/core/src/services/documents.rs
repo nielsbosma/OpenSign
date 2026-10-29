@@ -281,6 +281,36 @@ impl Service for Create {
     );
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CreateInput) -> Result<DocumentView> {
+        Ok(create(ctx, conn, input, Origin::Manual).await?.0)
+    }
+}
+
+/// Where a new document came from, for the `document.created` webhook.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Origin {
+    Manual,
+    BulkSend,
+    ShareLink(Uuid),
+}
+
+impl Origin {
+    fn as_str(self) -> &'static str {
+        match self {
+            Origin::Manual => "manual",
+            Origin::BulkSend => "bulk_send",
+            Origin::ShareLink(_) => "share_link",
+        }
+    }
+}
+
+/// Creates a document or template; for one made from a template, also returns which new party
+/// each template party became.
+pub(crate) async fn create(
+    ctx: &Ctx,
+    conn: &mut PgConnection,
+    input: CreateInput,
+    origin: Origin,
+) -> Result<(DocumentView, std::collections::HashMap<Uuid, Uuid>)> {
         if input.is_template && !ctx.can(Permission::TemplatesManage) {
             return Err(forbidden());
         }
@@ -329,14 +359,23 @@ impl Service for Create {
         .bind(input.folder_id)
         .execute(&mut *conn)
         .await?;
-        if let Some(t) = &template {
-            copy_template(ctx, conn, t.id, id).await?;
+        let share_link = match origin {
+            Origin::ShareLink(link) => Some(link),
+            _ => None,
+        };
+        if share_link.is_some() {
+            sqlx::query("update documents set share_link_id = $2 where id = $1").bind(id).bind(share_link).execute(&mut *conn).await?;
         }
+        let party_ids = match &template {
+            Some(t) => copy_template(ctx, conn, t.id, id).await?,
+            None => Default::default(),
+        };
         audit(
             ctx,
             conn,
-            Entry::new("document.created", "document", id)
-                .metadata(json!({ "template": input.template_id, "isTemplate": input.is_template, "folder": input.folder_id })),
+            Entry::new("document.created", "document", id).metadata(json!({
+                "template": input.template_id, "isTemplate": input.is_template, "folder": input.folder_id, "shareLink": share_link,
+            })),
         )
         .await?;
         if !input.is_template {
@@ -344,16 +383,18 @@ impl Service for Create {
             notify::emit(
                 conn,
                 "document.created",
-                json!({ "documentId": id, "title": document.document.title, "externalId": document.document.external_id, "templateId": input.template_id }),
+                json!({
+                    "documentId": id, "title": document.document.title, "externalId": document.document.external_id,
+                    "templateId": input.template_id, "source": origin.as_str(), "shareLinkId": share_link,
+                }),
             )
             .await?;
-            return Ok(document);
+            return Ok((document, party_ids));
         }
-        reload(ctx, conn, id).await
-    }
+        Ok((reload(ctx, conn, id).await?, party_ids))
 }
 
-async fn copy_template(ctx: &Ctx, conn: &mut PgConnection, from: Uuid, to: Uuid) -> Result<()> {
+async fn copy_template(ctx: &Ctx, conn: &mut PgConnection, from: Uuid, to: Uuid) -> Result<std::collections::HashMap<Uuid, Uuid>> {
     sqlx::query("insert into document_files (document_id, file_id, position) select $2, file_id, position from document_files where document_id = $1")
         .bind(from)
         .bind(to)
@@ -413,7 +454,7 @@ async fn copy_template(ctx: &Ctx, conn: &mut PgConnection, from: Uuid, to: Uuid)
         .execute(&mut *conn)
         .await?;
     }
-    Ok(())
+    Ok(ids)
 }
 
 #[derive(Deserialize, JsonSchema, Default)]
@@ -1891,6 +1932,85 @@ impl Service for SignInPerson {
         )
         .await?;
         Ok(SignerLink { party_id: party.id, name: party.name.clone(), url: signer_url(ctx, ctx.keys(), &party) })
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SignMyselfInput {
+    pub id: Uuid,
+    /// How you identify before signing: `standard` (your sign-in to OpenSign, the default) or an eID such as `se_bankid`.
+    #[serde(default = "default_sign_auth")]
+    pub auth_to_sign: AuthMethod,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SelfSigning {
+    pub party_id: Uuid,
+    /// The signing page for you, on this device.
+    pub url: String,
+    /// The signer session that records your sign-in as your identification; the signing page keeps it for this tab.
+    pub session: String,
+}
+
+pub struct SignMyself;
+
+#[async_trait]
+impl Service for SignMyself {
+    type Input = SignMyselfInput;
+    type Output = SelfSigning;
+    const META: Meta = Meta::mutation(
+        "documents.sign_myself",
+        "Sign a draft yourself: you become its only signer, fields of other signers and approvers become yours, the document is sent, and you get a signing link for this device. People who receive a copy still get one. Your sign-in to OpenSign is recorded as your identification unless an eID is asked for.",
+        Access::Permission(Permission::DocumentsCreate),
+    )
+    .not_a_tool();
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SignMyselfInput) -> Result<SelfSigning> {
+        let actor = ctx.actor()?.clone();
+        let document = load_document(ctx, conn, input.id, Need::Edit).await?;
+        if document.is_template {
+            return Err(bad_request("Templates cannot be signed. Create a document from it first."));
+        }
+        require_draft(&document)?;
+        if input.auth_to_sign == AuthMethod::None {
+            return Err(bad_request("authToSign is standard, sms_pin, se_bankid, freja or broker"));
+        }
+        let removed: Vec<Uuid> = parties(conn, document.id).await?.iter().filter(|p| p.must_act()).map(|p| p.id).collect();
+        let me = Uuid::now_v7();
+        sqlx::query(
+            "insert into parties (id, document_id, role, name, email, sign_order, delivery, auth_to_view, auth_to_sign)
+             values ($1, $2, 'signer', $3, $4, 1, 'in_person', 'none', $5)",
+        )
+        .bind(me)
+        .bind(document.id)
+        .bind(&actor.name)
+        .bind(&actor.email)
+        .bind(input.auth_to_sign.as_str())
+        .execute(&mut *conn)
+        .await?;
+        sqlx::query("update fields set party_id = $2 where document_id = $1 and party_id = any($3)")
+            .bind(document.id)
+            .bind(me)
+            .bind(&removed)
+            .execute(&mut *conn)
+            .await?;
+        sqlx::query("delete from parties where id = any($1)").bind(&removed).execute(&mut *conn).await?;
+        audit(
+            ctx,
+            conn,
+            Entry::new("document.self_sign_started", "document", document.id)
+                .metadata(json!({ "party": me, "removedParties": removed.len(), "authToSign": input.auth_to_sign })),
+        )
+        .await?;
+        Send::run(ctx, conn, SendInput { id: document.id, expires_at: None }).await?;
+        let party = parties(conn, document.id).await?.into_iter().find(|p| p.id == me).ok_or_else(|| not_found("Party"))?;
+        Ok(SelfSigning {
+            party_id: party.id,
+            url: signer_url(ctx, ctx.keys(), &party),
+            session: super::signing::issue_account_session(ctx, &party, &actor),
+        })
     }
 }
 

@@ -88,6 +88,10 @@ export type AccountPasskeysInput = Record<string, unknown>;
 
 export type AccountPasskeysOutput = Array<PasskeyView>;
 
+export type AccountRemoveSignatureInput = Record<string, unknown>;
+
+export type AccountRemoveSignatureOutput = Ok_;
+
 export type AccountRevokeMcpConnectionInput = {
   id: string;
 };
@@ -100,6 +104,32 @@ export type AccountSetLanguageInput = {
 };
 
 export type AccountSetLanguageOutput = Ok_;
+
+export type AccountSetSignatureInput = {
+  /** A drawn signature as PNG, base64. Replaces the typed name when given. */
+  imagePngBase64?: string | null;
+  /** Up to five letters, filled into initials fields. */
+  initials?: string | null;
+  /** The name as typed. Used when there is no image. */
+  typedName?: string | null;
+};
+
+export type AccountSetSignatureOutput = SavedSignature;
+
+export type SavedSignature = {
+  /** Nothing is saved yet. */
+  empty: boolean;
+  /** A drawn signature as PNG, base64. */
+  imagePngBase64?: string | null;
+  initials?: string | null;
+  /** The name as typed, drawn in a script style when there is no image. */
+  typedName?: string | null;
+  updatedAt?: string | null;
+};
+
+export type AccountSignatureInput = Record<string, unknown>;
+
+export type AccountSignatureOutput = SavedSignature;
 
 export type AccountTwoFactorBeginInput = Record<string, unknown>;
 
@@ -999,6 +1029,22 @@ export type DocumentsSignInPersonInput = {
 
 export type DocumentsSignInPersonOutput = SignerLink;
 
+export type DocumentsSignMyselfInput = {
+  /** How you identify before signing: `standard` (your sign-in to OpenSign, the default) or an eID such as `se_bankid`. */
+  authToSign?: AuthMethod;
+  id: string;
+};
+
+export type DocumentsSignMyselfOutput = SelfSigning;
+
+export type SelfSigning = {
+  partyId: string;
+  /** The signer session that records your sign-in as your identification; the signing page keeps it for this tab. */
+  session: string;
+  /** The signing page for you, on this device. */
+  url: string;
+};
+
 export type DocumentsSigningLinkInput = {
   documentId: string;
   partyId: string;
@@ -1056,6 +1102,8 @@ export type SignerParty = {
   id: string;
   /** The party signs on the sender's device, which is handed over to them. */
   inPerson: boolean;
+  /** The party is the sender, signing their own document on their own device. */
+  isSender: boolean;
   name: string;
   role: string;
   signedAt?: string | null;
@@ -1323,6 +1371,108 @@ export type SetupStatus = {
   needsSetup: boolean;
 };
 
+export type ShareLinksConfirmInput = {
+  code: string;
+  requestId: string;
+  slug: string;
+};
+
+export type ShareLinksConfirmOutput = Started;
+
+export type Started = {
+  /** The visitor's personal signing link for the new document. It was also emailed to them. */
+  url: string;
+  /** False when other parties sign first; the visitor is emailed when it is their turn. */
+  yourTurn: boolean;
+};
+
+export type ShareLinksGetInput = {
+  templateId: string;
+};
+
+export type ShareLinkView = {
+  documentsCreated: number;
+  enabled: boolean;
+  /** The link stops working at this time. */
+  expiresAt?: string | null;
+  /** At most this many documents in total; unset for no limit. */
+  maxTotal?: number | null;
+  /** Documents made through the link belong to this user. */
+  ownerName?: string | null;
+  /** The template party that whoever opens the link becomes. */
+  partyId?: string | null;
+  partyName?: string | null;
+  /** At most this many documents per hour. */
+  perHour: number;
+  templateId: string;
+  updatedAt: string;
+  /** The public address to share or print as a QR code. */
+  url: string;
+};
+
+export type ShareLinksGetOutput = ShareLinkView | null;
+
+export type ShareLinksOpenInput = {
+  /** The last part of the share link's address. */
+  slug: string;
+};
+
+export type ShareLinksOpenOutput = PublicShareLink;
+
+export type PublicShareLink = {
+  brandColor: string;
+  /** The template's language: en, zh, hi, es, fr, ar, bn, pt, ru, ur or sv. */
+  language: string;
+  logoUrl?: string | null;
+  message?: string | null;
+  /** A phone number is asked for, because the party gets SMS codes or SMS links. */
+  needsPhone: boolean;
+  organisation: string;
+  /** The visitor signs (`signer`) or approves (`approver`). */
+  role: string;
+  title: string;
+};
+
+export type ShareLinksRequestCodeInput = {
+  email: string;
+  /** The language the visitor reads the page in, for the email. */
+  language?: string | null;
+  name: string;
+  /** With country code. Asked for when `needsPhone` is set. */
+  phone?: string | null;
+  slug: string;
+};
+
+export type ShareLinksRequestCodeOutput = CodeRequested;
+
+export type CodeRequested = {
+  expiresAt: string;
+  /** Pass this with the code to `share_links.confirm`. */
+  requestId: string;
+};
+
+export type ShareLinksRotateInput = {
+  templateId: string;
+};
+
+export type ShareLinksRotateOutput = ShareLinkView;
+
+export type ShareLinksSetInput = {
+  /** Turn the public link on or off. Off stops it at once; the address is kept for when it is turned on again. */
+  enabled: boolean;
+  /** Stop the link at this time. Leave out for no end date. */
+  expiresAt?: string | null;
+  /** At most this many documents in total. Leave out for no limit. */
+  maxTotal?: number | null;
+  /** The template's signer or approver that whoever opens the link becomes. Other parties stay as in the template. */
+  partyId?: string | null;
+  /** At most this many documents per hour, 1 to 1000. Defaults to 10. */
+  perHour?: number | null;
+  templateId: string;
+};
+
+export type ShareLinksSetOutput = ShareLinkView;
+
 export type SigningCreateReviewLinkInput = {
   session?: string | null;
   token: string;
@@ -1359,9 +1509,9 @@ export type SigningEidStartInput = {
   token: string;
 };
 
-export type SigningEidStartOutput = Started;
+export type SigningEidStartOutput = Started2;
 
-export type Started = {
+export type Started2 = {
   /** Opens the BankID app on this device: `bankid:///?autostarttoken=...&redirect=null`. */
   autoStartToken?: string | null;
   expiresAt: string;
@@ -1758,8 +1908,11 @@ export interface Services {
   "account.passkey_begin": { kind: "mutation"; input: AccountPasskeyBeginInput; output: AccountPasskeyBeginOutput };
   "account.passkey_remove": { kind: "mutation"; input: AccountPasskeyRemoveInput; output: AccountPasskeyRemoveOutput };
   "account.passkeys": { kind: "query"; input: AccountPasskeysInput; output: AccountPasskeysOutput };
+  "account.remove_signature": { kind: "mutation"; input: AccountRemoveSignatureInput; output: AccountRemoveSignatureOutput };
   "account.revoke_mcp_connection": { kind: "mutation"; input: AccountRevokeMcpConnectionInput; output: AccountRevokeMcpConnectionOutput };
   "account.set_language": { kind: "mutation"; input: AccountSetLanguageInput; output: AccountSetLanguageOutput };
+  "account.set_signature": { kind: "mutation"; input: AccountSetSignatureInput; output: AccountSetSignatureOutput };
+  "account.signature": { kind: "query"; input: AccountSignatureInput; output: AccountSignatureOutput };
   "account.two_factor_begin": { kind: "mutation"; input: AccountTwoFactorBeginInput; output: AccountTwoFactorBeginOutput };
   "account.two_factor_confirm": { kind: "mutation"; input: AccountTwoFactorConfirmInput; output: AccountTwoFactorConfirmOutput };
   "ai.chat": { kind: "mutation"; input: AiChatInput; output: AiChatOutput };
@@ -1812,6 +1965,7 @@ export interface Services {
   "documents.set_review_links": { kind: "mutation"; input: DocumentsSetReviewLinksInput; output: DocumentsSetReviewLinksOutput };
   "documents.share": { kind: "mutation"; input: DocumentsShareInput; output: DocumentsShareOutput };
   "documents.sign_in_person": { kind: "mutation"; input: DocumentsSignInPersonInput; output: DocumentsSignInPersonOutput };
+  "documents.sign_myself": { kind: "mutation"; input: DocumentsSignMyselfInput; output: DocumentsSignMyselfOutput };
   "documents.signing_link": { kind: "mutation"; input: DocumentsSigningLinkInput; output: DocumentsSigningLinkOutput };
   "documents.signing_preview": { kind: "query"; input: DocumentsSigningPreviewInput; output: DocumentsSigningPreviewOutput };
   "documents.unshare": { kind: "mutation"; input: DocumentsUnshareInput; output: DocumentsUnshareOutput };
@@ -1833,6 +1987,12 @@ export interface Services {
   "settings.update": { kind: "mutation"; input: SettingsUpdateInput; output: SettingsUpdateOutput };
   "setup.create_first_admin": { kind: "mutation"; input: SetupCreateFirstAdminInput; output: SetupCreateFirstAdminOutput };
   "setup.status": { kind: "query"; input: SetupStatusInput; output: SetupStatusOutput };
+  "share_links.confirm": { kind: "mutation"; input: ShareLinksConfirmInput; output: ShareLinksConfirmOutput };
+  "share_links.get": { kind: "query"; input: ShareLinksGetInput; output: ShareLinksGetOutput };
+  "share_links.open": { kind: "query"; input: ShareLinksOpenInput; output: ShareLinksOpenOutput };
+  "share_links.request_code": { kind: "mutation"; input: ShareLinksRequestCodeInput; output: ShareLinksRequestCodeOutput };
+  "share_links.rotate": { kind: "mutation"; input: ShareLinksRotateInput; output: ShareLinksRotateOutput };
+  "share_links.set": { kind: "mutation"; input: ShareLinksSetInput; output: ShareLinksSetOutput };
   "signing.create_review_link": { kind: "mutation"; input: SigningCreateReviewLinkInput; output: SigningCreateReviewLinkOutput };
   "signing.decline": { kind: "mutation"; input: SigningDeclineInput; output: SigningDeclineOutput };
   "signing.eid_cancel": { kind: "mutation"; input: SigningEidCancelInput; output: SigningEidCancelOutput };

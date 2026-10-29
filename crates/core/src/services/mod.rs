@@ -12,6 +12,8 @@ pub mod passkeys;
 pub mod retention;
 pub mod review;
 pub mod setup;
+pub mod share_links;
+pub mod signatures;
 pub mod signing;
 pub mod system;
 pub mod users;
@@ -52,6 +54,9 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<auth::Logout>(),
         erase::<auth::WhoAmI>(),
         erase::<auth::SetLanguage>(),
+        erase::<signatures::Get>(),
+        erase::<signatures::Set>(),
+        erase::<signatures::Remove>(),
         erase::<auth::BeginTwoFactor>(),
         erase::<auth::ConfirmTwoFactor>(),
         erase::<auth::ChangePassword>(),
@@ -101,6 +106,12 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<folders::Delete>(),
         erase::<folders::Move>(),
         erase::<folders::Archive>(),
+        erase::<share_links::Get>(),
+        erase::<share_links::Set>(),
+        erase::<share_links::Rotate>(),
+        erase::<share_links::Open>(),
+        erase::<share_links::RequestCode>(),
+        erase::<share_links::Confirm>(),
         erase::<retention::SetLegalHold>(),
         erase::<retention::Preview>(),
         erase::<system::GetVersion>(),
@@ -112,6 +123,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<documents::IssueSigningLink>(),
         erase::<documents::SigningPreview>(),
         erase::<documents::SignInPerson>(),
+        erase::<documents::SignMyself>(),
         erase::<passkeys::BeginRegistration>(),
         erase::<passkeys::FinishRegistration>(),
         erase::<passkeys::List>(),

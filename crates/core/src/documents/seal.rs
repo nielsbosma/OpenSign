@@ -110,6 +110,9 @@ fn initials(name: &str) -> String {
 fn auth_label(party: &PartyRow) -> String {
     let evidence = party.evidence.as_ref();
     let method = evidence.and_then(|e| e["auth"].as_str()).and_then(AuthMethod::parse).unwrap_or(party.auth_to_sign());
+    if method == AuthMethod::Standard && evidence.is_some_and(|e| e["account"].is_string()) {
+        return "Signed-in OpenSign account".into();
+    }
     method.label().to_string()
 }
 
