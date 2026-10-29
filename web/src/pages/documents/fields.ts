@@ -20,6 +20,7 @@ export const FIELD_KINDS: { kind: FieldKind; label: string; width: number; heigh
   { kind: 'date_input', label: msg('Date Picker'), width: 0.16, height: 0.032 },
   { kind: 'image', label: msg('Image'), width: 0.2, height: 0.09 },
   { kind: 'file', label: msg('File'), width: 0.24, height: 0.032 },
+  { kind: 'formula', label: msg('Formula'), width: 0.16, height: 0.032 },
 ];
 
 /** What the sender can fill in themselves before sending. */
@@ -35,6 +36,7 @@ export const SENDER_KINDS: FieldKind[] = [
   'multiselect',
   'phone',
   'date_input',
+  'formula',
 ];
 
 /** Kinds whose value the signer types or picks, so they can have a default and be read-only. */
@@ -68,11 +70,32 @@ export function toEditable(fields: FieldRow[]): EditableField[] {
     format: f.format ?? null,
     groupKey: f.groupKey ?? null,
     readOnly: f.readOnly,
+    conditions: f.conditions ?? [],
+    formula: f.formula ?? null,
   }));
 }
 
 export function toInput(fields: EditableField[]): FieldInput[] {
   return fields.map(({ key: _key, ...f }) => f);
+}
+
+/** Renames a label in every condition and formula that uses it, so references follow a renamed field. */
+export function renameReferences(fields: EditableField[], from: string, to: string): EditableField[] {
+  const old = from.trim();
+  const next = to.trim();
+  const owners = new Set(fields.filter((f) => (f.label ?? '').trim() === old).map((f) => f.groupKey ?? f.key));
+  if (!old || !next || old === next || owners.size > 1) return fields;
+  const braces = new RegExp(`\\{\\s*${old.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\}`, 'g');
+  return fields.map((f) => {
+    const uses = f.conditions?.some((c) => c.field.trim() === old) || braces.test(f.formula ?? '');
+    braces.lastIndex = 0;
+    if (!uses) return f;
+    return {
+      ...f,
+      conditions: f.conditions?.map((c) => (c.field.trim() === old ? { ...c, field: next } : c)),
+      formula: f.formula?.replace(braces, () => `{${next}}`),
+    };
+  });
 }
 
 /** A short random key that ties radio buttons into a group. */

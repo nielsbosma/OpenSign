@@ -30,6 +30,7 @@ Field values are written the way OpenSign stores them, so they sort and sum in a
 | Field | Value |
 | --- | --- |
 | Number | A plain number, such as `1234.5`, whatever display format the field has. In Excel it is a real number. |
+| Formula | The number the server computed, as for a number field. |
 | Date picker and date of signing | `YYYY-MM-DD`. |
 | Checkbox | `true` or `false`. In Excel a real TRUE or FALSE. |
 | Dropdown and radio group | The chosen option. A radio group is one column, named after the group's label. |
@@ -38,7 +39,7 @@ Field values are written the way OpenSign stores them, so they sort and sum in a
 | Image and file upload | The file name. The file itself is not exported; download it from the document. |
 | Signature | Left out: the party's Signed column says when they signed. |
 
-A field that is not filled in yet is empty, so pending documents can be exported too.
+A field that is not filled in yet is empty, so pending documents can be exported too. So is a field a condition hid when the party signed.
 
 ### Column names
 

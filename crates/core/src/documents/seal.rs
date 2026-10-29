@@ -119,7 +119,12 @@ fn fmt_time(t: Option<DateTime<Utc>>) -> String {
 
 async fn build_stamps(ctx: &Ctx, conn: &mut PgConnection, document: &DocumentRow, parties: &[PartyRow]) -> Result<Vec<Stamp>> {
     let mut stamps = Vec::new();
-    for field in fields(conn, document.id).await? {
+    let all = fields(conn, document.id).await?;
+    let outcomes = super::logic::evaluate_rows(&all, None);
+    for (field, outcome) in all.into_iter().zip(outcomes) {
+        if !outcome.visible {
+            continue;
+        }
         let party = parties.iter().find(|p| Some(p.id) == field.party_id);
         let kind = FieldKind::parse(&field.kind).unwrap_or(FieldKind::Text);
         let content = match (kind, party) {

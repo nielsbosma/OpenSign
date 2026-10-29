@@ -239,7 +239,7 @@ See [Webhooks](webhooks.md).
 | Field | |
 | --- | --- |
 | `partyId` | Who fills it in. Omit for a value the sender fills in now |
-| `kind` | `signature`, `initials`, `text`, `number`, `select`, `multiselect`, `radio`, `checkbox`, `phone`, `date_input`, `image`, `file`, and the automatic `date` (of signing), `name`, `email`, `company` |
+| `kind` | `signature`, `initials`, `text`, `number`, `select`, `multiselect`, `radio`, `checkbox`, `phone`, `date_input`, `image`, `file`, `formula`, and the automatic `date` (of signing), `name`, `email`, `company` |
 | `page` | Zero-based page in the combined document (all files in order) |
 | `x`, `y` | Top-left corner as fractions of the page (0 to 1), origin top-left |
 | `width`, `height` | Fractions of the page |
@@ -250,8 +250,10 @@ See [Webhooks](webhooks.md).
 | `validation` | `{ "pattern", "minLength", "maxLength", "min", "max", "message" }`, see [Checks](documents.md#checks-and-error-texts) |
 | `format` | How a number or date is written on the page, see [formats](documents.md#number-and-date-formats) |
 | `readOnly` | The party sees the value but cannot change it |
+| `conditions` | Show the field only when all of these hold: `[{ "field": "Type", "op": "equals", "value": "Company" }]`. `field` is another field's label; `op` is `equals`, `not_equals`, `filled`, `empty`, `contains`, `greater` or `less`. See [Conditional fields](documents.md#conditional-fields) |
+| `formula` | For a `formula` field, such as `{Hours} * {Rate} * 1.25`. See [Formulas](documents.md#formulas) |
 
-Values the signer gives come back normalised: numbers as plain decimals, phone numbers in E.164, dates as YYYY-MM-DD and multi-select choices as a JSON array. Image and file fields hold the name of the upload.
+Values the signer gives come back normalised: numbers as plain decimals, phone numbers in E.164, dates as YYYY-MM-DD and multi-select choices as a JSON array. Image and file fields hold the name of the upload. A formula holds the number the server computed, and a field its conditions hid is empty.
 
 Parties upload to an image or file field with `POST /api/sign/field-file` (multipart with `token`, `session`, `field` and `file`) from their signing page; `signing.remove_field_file` empties it again.
 

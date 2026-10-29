@@ -1,0 +1,195 @@
+{
+  "documents": [
+    {
+      "name": "VAT on hours",
+      "fields": [
+        { "label": "Hours", "kind": "number", "value": "7.5" },
+        { "label": "Rate", "kind": "number", "value": "100" },
+        { "label": "Total", "kind": "formula", "formula": "{Hours} * {Rate} * 1.25", "format": "1 234,00 kr" }
+      ],
+      "visible": [true, true, true],
+      "values": ["7.5", "100", "937.5"]
+    },
+    {
+      "name": "Organisation number for companies",
+      "fields": [
+        { "label": "Type", "kind": "select", "value": "Company" },
+        {
+          "label": "Org Number",
+          "kind": "text",
+          "value": "556677-8899",
+          "conditions": [{ "field": "Type", "op": "equals", "value": "company" }]
+        }
+      ],
+      "visible": [true, true],
+      "values": ["Company", "556677-8899"]
+    },
+    {
+      "name": "Hidden fields are cleared",
+      "fields": [
+        { "label": "Type", "kind": "select", "value": "Private" },
+        {
+          "label": "Org Number",
+          "kind": "text",
+          "value": "556677-8899",
+          "conditions": [{ "field": "Type", "op": "equals", "value": "Company" }]
+        }
+      ],
+      "visible": [true, false],
+      "values": ["Private", null]
+    },
+    {
+      "name": "Hiding cascades",
+      "fields": [
+        { "label": "More", "kind": "checkbox", "value": "false" },
+        { "label": "B", "kind": "text", "value": "x", "conditions": [{ "field": "More", "op": "filled" }] },
+        { "label": "C", "kind": "text", "value": "y", "conditions": [{ "field": "B", "op": "filled" }] }
+      ],
+      "visible": [true, false, false],
+      "values": ["false", null, null]
+    },
+    {
+      "name": "Float noise is rounded away",
+      "fields": [
+        { "label": "A", "kind": "number", "value": "0.1" },
+        { "label": "B", "kind": "number", "value": "0.2" },
+        { "label": "Sum", "kind": "formula", "formula": "{A}+{B}" }
+      ],
+      "visible": [true, true, true],
+      "values": ["0.1", "0.2", "0.3"]
+    },
+    {
+      "name": "Empty counts as zero, division by zero gives nothing",
+      "fields": [
+        { "label": "Hours", "kind": "number" },
+        { "label": "Zero", "kind": "number", "value": "0" },
+        { "label": "F1", "kind": "formula", "formula": "{Hours} * 2 + 1" },
+        { "label": "F2", "kind": "formula", "formula": "1 / {Zero}" },
+        { "label": "F3", "kind": "formula", "formula": "{Nope} + 1" }
+      ],
+      "visible": [true, true, true, true, true],
+      "values": [null, "0", "1", null, "1"]
+    },
+    {
+      "name": "Rounding",
+      "fields": [
+        { "label": "F1", "kind": "formula", "formula": "round(2.345, 2)" },
+        { "label": "F2", "kind": "formula", "formula": "round(-2.5)" },
+        { "label": "F3", "kind": "formula", "formula": "10 / 3", "format": "1234.00" },
+        { "label": "F4", "kind": "formula", "formula": "10 / 3" },
+        { "label": "F5", "kind": "formula", "formula": "1 / 10000000" },
+        { "label": "F6", "kind": "formula", "formula": "999999999999999 * 10" },
+        { "label": "F7", "kind": "formula", "formula": "0.125", "format": "$1,234.00" },
+        { "label": "F8", "kind": "formula", "formula": "-(0)" },
+        { "label": "F9", "kind": "formula", "formula": "round(1.005, 2)" },
+        { "label": "F10", "kind": "formula", "formula": "round(5, 7)" }
+      ],
+      "visible": [true, true, true, true, true, true, true, true, true, true],
+      "values": ["2.35", "-3", "3.33", "3.3333333333", "0.0000001", null, "0.13", "0", "1.01", null]
+    },
+    {
+      "name": "Functions and operators",
+      "fields": [
+        { "label": "Amount", "kind": "number", "value": "1500" },
+        { "label": "Paid", "kind": "checkbox", "value": "false" },
+        { "label": "Discount", "kind": "formula", "formula": "if({Amount} >= 1000, {Amount} * 0.1, 0)" },
+        { "label": "F1", "kind": "formula", "formula": "sum(1, 2, 3) + max(4, -5) + min(1, 2) + abs(-2) + floor(1.7) + ceil(1.2)" },
+        { "label": "F2", "kind": "formula", "formula": "if(and({Amount} > 1, not({Paid})), 1, 2)" },
+        { "label": "F3", "kind": "formula", "formula": "-{Discount} * 2" },
+        { "label": "F4", "kind": "formula", "formula": "3 × 4 ÷ 2 − 1" },
+        { "label": "F5", "kind": "formula", "formula": "if(or({Paid}, {Amount} == 1500), 7, 8)" },
+        { "label": "F6", "kind": "formula", "formula": "({Amount} <> 1500) + ({Amount} != 1) * 10" }
+      ],
+      "visible": [true, true, true, true, true, true, true, true, true],
+      "values": ["1500", "false", "150", "16", "1", "-300", "5", "7", "10"]
+    },
+    {
+      "name": "Text in formulas",
+      "fields": [
+        { "label": "Country", "kind": "text", "value": "Sweden" },
+        { "label": "Count", "kind": "text", "value": "12" },
+        { "label": "VAT", "kind": "formula", "formula": "if({Country} = \"sweden\", 25, 0)" },
+        { "label": "Twice", "kind": "formula", "formula": "{Count} * 2" },
+        { "label": "Broken", "kind": "formula", "formula": "{Country} * 2" },
+        { "label": "Has", "kind": "formula", "formula": "if(contains({Country}, \"wed\"), 1, 0)" }
+      ],
+      "visible": [true, true, true, true, true, true],
+      "values": ["Sweden", "12", "25", "24", null, "1"]
+    },
+    {
+      "name": "Radio groups by their label",
+      "fields": [
+        { "label": "Plan", "kind": "radio" },
+        { "label": "Plan", "kind": "radio", "value": "Pro" },
+        { "label": "Seats", "kind": "number", "value": "3", "conditions": [{ "field": "Plan", "op": "equals", "value": "Pro" }] },
+        { "label": "Price", "kind": "formula", "formula": "if({Plan} = \"Pro\", 99, 49) * max({Seats}, 1)" }
+      ],
+      "visible": [true, true, true, true],
+      "values": [null, "Pro", "3", "297"]
+    },
+    {
+      "name": "Lists, dates and numbers",
+      "fields": [
+        { "label": "Extras", "kind": "multiselect", "value": "[\"A\",\"C\"]" },
+        { "label": "Start", "kind": "date_input", "value": "2026-05-01" },
+        { "label": "Qty", "kind": "number", "value": "10" },
+        { "label": "N1", "kind": "text", "value": "1", "conditions": [{ "field": "Extras", "op": "contains", "value": "c" }] },
+        { "label": "N2", "kind": "text", "value": "2", "conditions": [{ "field": "Extras", "op": "contains", "value": "B" }] },
+        { "label": "N3", "kind": "text", "value": "3", "conditions": [{ "field": "Start", "op": "greater", "value": "2026-01-01" }] },
+        { "label": "N4", "kind": "text", "value": "4", "conditions": [{ "field": "Start", "op": "less", "value": "2026-01-01" }] },
+        { "label": "N5", "kind": "text", "value": "5", "conditions": [{ "field": "Qty", "op": "greater", "value": "9,5" }] },
+        { "label": "N6", "kind": "text", "value": "6", "conditions": [{ "field": "Qty", "op": "equals", "value": "10.0" }] },
+        { "label": "N7", "kind": "text", "value": "7", "conditions": [{ "field": "Qty", "op": "less", "value": "abc" }] }
+      ],
+      "visible": [true, true, true, true, false, true, false, false, true, false],
+      "values": ["[\"A\",\"C\"]", "2026-05-01", "10", "1", null, "3", null, null, "6", null]
+    },
+    {
+      "name": "Empty and filled",
+      "fields": [
+        { "label": "A", "kind": "text" },
+        { "label": "Zero", "kind": "number", "value": "0" },
+        { "label": "B", "kind": "text", "value": "b", "conditions": [{ "field": "A", "op": "not_equals", "value": "x" }] },
+        { "label": "C", "kind": "text", "value": "c", "conditions": [{ "field": "A", "op": "empty" }] },
+        { "label": "D", "kind": "text", "value": "d", "conditions": [{ "field": "A", "op": "filled" }] },
+        {
+          "label": "E",
+          "kind": "text",
+          "value": "e",
+          "conditions": [{ "field": "Zero", "op": "filled" }, { "field": "C", "op": "equals", "value": "C" }]
+        },
+        { "label": "F", "kind": "formula", "formula": "1 + 1", "conditions": [{ "field": "D", "op": "filled" }] }
+      ],
+      "visible": [true, true, true, true, false, true, false],
+      "values": [null, "0", "b", "c", null, "e", null]
+    },
+    {
+      "name": "A loop leaves its fields hidden",
+      "fields": [
+        { "label": "A", "kind": "text", "value": "a", "conditions": [{ "field": "B", "op": "filled" }] },
+        { "label": "B", "kind": "text", "value": "b", "conditions": [{ "field": "A", "op": "filled" }] }
+      ],
+      "visible": [false, false],
+      "values": [null, null]
+    }
+  ],
+  "invalid": [
+    { "formula": "" },
+    { "formula": "1 +" },
+    { "formula": "(1 + 2" },
+    { "formula": "{Hours" },
+    { "formula": "{ }" },
+    { "formula": "foo(1)" },
+    { "formula": "round(1, 2, 3)" },
+    { "formula": "if(1, 2)" },
+    { "formula": "1 2" },
+    { "formula": "\"abc" },
+    { "formula": "1..2" },
+    { "formula": ".5" },
+    { "formula": "1 % 2" },
+    { "formula": "round 1" },
+    { "formula": "1 = 2 = 3" },
+    { "formula": "alert(1)" },
+    { "formula": "((((((((((((((((((((((((((((((((((1))))))))))))))))))))))))))))))))))" }
+  ]
+}

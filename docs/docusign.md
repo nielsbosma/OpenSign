@@ -54,8 +54,9 @@ All paths are under `/accounts/{accountId}`.
 | `phoneNumberTabs` | phone | 130 × 18 |
 | `signerAttachmentTabs` | file | 150 × 30 |
 | `checkboxTabs` | checkbox | 14 × 14 |
+| `formulaTabs` | formula, with `[Label]` written as `{Label}` | 100 × 18 |
 
-`validationPattern`, `validationMessage` and `maxLength` become the field's [checks](documents.md#checks-and-error-texts), as do `minNumericalValue` and `maxNumericalValue` on number tabs. A `locked` tab with a value is read-only.
+`validationPattern`, `validationMessage` and `maxLength` become the field's [checks](documents.md#checks-and-error-texts), as do `minNumericalValue` and `maxNumericalValue` on number tabs. A `locked` tab with a value is read-only. `conditionalParentLabel` and `conditionalParentValue` become a [condition](documents.md#conditional-fields): the value `on` means the parent checkbox is ticked, `off` that it is not, and anything else that the parent equals it.
 
 Tabs are placed by `documentId`, `pageNumber`, `xPosition` and `yPosition` in points, measured against the real page size of the uploaded file and clamped onto the page.
 

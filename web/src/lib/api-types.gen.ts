@@ -520,9 +520,24 @@ export type AttachmentRequest = {
   uploadedAt?: string | null;
 };
 
+/** One rule of when a field is shown. A field with several rules shows only when all hold. */
+export type Condition = {
+  /** The label of the field the rule looks at. */
+  field: string;
+  op: ConditionOp;
+  /** What to compare with: an option, a number, a date as YYYY-MM-DD or text. Not used by `filled` and `empty`. */
+  value?: string | null;
+};
+
+export type ConditionOp = "equals" | "not_equals" | "empty" | "greater" | "less" | "filled" | "contains";
+
 export type FieldRow = {
+  /** The field is shown only when all of these hold. */
+  conditions: Array<Condition>;
   /** How a date or number is written on the page. */
   format?: string | null;
+  /** For a formula field, the expression it computes. */
+  formula?: string | null;
   /** Radio buttons with the same key form one group. */
   groupKey?: string | null;
   height: number;
@@ -923,8 +938,12 @@ export type SendOutput = {
 };
 
 export type FieldInput = {
+  /** Show the field only when all of these hold. Each looks at another field by its label. A party's field may look at their own fields, the sender's, and fields of parties who sign earlier in order; a hidden field is never required and is left empty. */
+  conditions?: Array<Condition>;
   /** How a date or number is written on the page. Dates: YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY, DD.MM.YYYY or D MMM YYYY. Numbers: how 1234 would look, such as `1,234.00`, `1 234,00 kr` or `$1234`. */
   format?: string | null;
+  /** For a `formula` field: the number it computes from other fields, which are named by label in braces. `+ - * /`, brackets, comparisons (`= != < <= > >=`) and the functions round(x, decimals), floor, ceil, abs, min, max, sum, if(condition, then, else), and, or, not and contains. Example: `round({Hours} * {Rate} * 1.25, 2)`. The signer cannot change it; the server computes it when they sign. */
+  formula?: string | null;
   /** Ties `radio` buttons into one group: give every button of the group the same key. */
   groupKey?: string | null;
   height: number;
@@ -949,8 +968,8 @@ export type FieldInput = {
   y: number;
 };
 
-/** `date` is the date of signing, filled in automatically; `date_input` is a date the signer picks. `select` is a dropdown, `multiselect` a list to tick several from, and each `radio` is one button of a group (`groupKey`) holding one option. `image` and `file` take an upload. */
-export type FieldKind = "signature" | "initials" | "text" | "date" | "checkbox" | "name" | "email" | "company" | "number" | "select" | "multiselect" | "radio" | "phone" | "date_input" | "image" | "file";
+/** `date` is the date of signing, filled in automatically; `date_input` is a date the signer picks. `select` is a dropdown, `multiselect` a list to tick several from, and each `radio` is one button of a group (`groupKey`) holding one option. `image` and `file` take an upload. `formula` is a number computed from other fields. */
+export type FieldKind = "signature" | "initials" | "text" | "date" | "checkbox" | "name" | "email" | "company" | "number" | "select" | "multiselect" | "radio" | "phone" | "date_input" | "image" | "file" | "formula";
 
 export type DocumentsSetFieldsInput = {
   documentId: string;
@@ -1101,7 +1120,7 @@ export type SignerView = {
   document: SignerDocument;
   /** Set for a link the sender hands over while embedded signing is on. */
   embed?: EmbedView | null;
-  /** The party's own fields, and the sender's prefilled text for context. */
+  /** The party's own fields, the sender's prefilled text for context, and the fields of earlier parties that the conditions and formulas of these look at. */
   fields: Array<FieldRow>;
   /** Set when the party must identify before seeing the document; nothing else is filled in. */
   needsAuthentication?: AuthMethod | null;

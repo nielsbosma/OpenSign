@@ -84,13 +84,16 @@ fn default_label(kind: FieldKind) -> &'static str {
         FieldKind::DateInput => "Date",
         FieldKind::Image => "Image",
         FieldKind::File => "File",
+        FieldKind::Formula => "Formula",
     }
 }
 
 fn typed(kind: FieldKind, value: Option<&str>) -> Value {
     let Some(v) = value.map(str::trim).filter(|v| !v.is_empty()) else { return Value::Null };
     match kind {
-        FieldKind::Number => serde_json::from_str::<serde_json::Number>(v).map(Value::Number).unwrap_or_else(|_| v.into()),
+        FieldKind::Number | FieldKind::Formula => {
+            serde_json::from_str::<serde_json::Number>(v).map(Value::Number).unwrap_or_else(|_| v.into())
+        }
         FieldKind::Checkbox => Value::Bool(v == "true"),
         FieldKind::Multiselect => serde_json::from_str::<Vec<String>>(v).map(Value::from).unwrap_or_else(|_| v.into()),
         _ => v.into(),
@@ -376,6 +379,8 @@ mod tests {
             format: None,
             group_key: None,
             read_only: false,
+            conditions: json!([]),
+            formula: None,
             file_id: None,
         }
     }

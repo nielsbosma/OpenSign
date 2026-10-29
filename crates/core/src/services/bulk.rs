@@ -118,7 +118,12 @@ async fn template(ctx: &Ctx, conn: &mut PgConnection, id: Uuid) -> Result<Templa
 }
 
 fn sender_fields(t: &Template) -> impl Iterator<Item = &FieldRow> {
-    t.fields.iter().filter(|f| f.party_id.is_none() && !f.label.trim().is_empty() && f.kind != FieldKind::Signature.as_str())
+    t.fields.iter().filter(|f| {
+        f.party_id.is_none()
+            && !f.label.trim().is_empty()
+            && f.kind != FieldKind::Signature.as_str()
+            && f.kind != FieldKind::Formula.as_str()
+    })
 }
 
 fn targets(t: &Template) -> Vec<Target> {
