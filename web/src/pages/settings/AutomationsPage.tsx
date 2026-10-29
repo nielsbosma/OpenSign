@@ -435,7 +435,7 @@ function ConnectDialog({
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted font-medium text-sm">
                   {(a.name || a.slug).slice(0, 1).toUpperCase()}
                 </span>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-40 flex-1">
                   <div className="truncate font-medium text-sm">{a.name || a.slug}</div>
                   <div className="truncate text-muted-foreground text-xs">{a.description ?? a.categories.join(', ')}</div>
                 </div>
@@ -562,11 +562,11 @@ function Automations() {
         ) : !list.length ? (
           <EmptyState icon={<Plug />} title={t('No apps connected')} />
         ) : (
-          <ul className="grid gap-2">
+          <ul className="grid grid-cols-1 gap-2">
             {list.map((c) => (
               <li key={c.id} className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
                 <StatusDot tone={c.status === 'ACTIVE' ? 'ok' : c.status === 'INITIATED' ? 'warn' : 'error'} />
-                <div className="min-w-0 flex-1">
+                <div className="min-w-40 flex-1">
                   <div className="truncate font-medium text-sm">{c.app}</div>
                   <div className="truncate text-muted-foreground text-xs" dir="ltr">
                     {c.id}
@@ -604,7 +604,13 @@ function Automations() {
           <div className="text-muted-foreground text-xs">{t('Start from a recipe')}</div>
           <div className="flex flex-wrap gap-2">
             {RECIPES.map((r) => (
-              <Button key={r.tool} variant="outline" size="sm" onClick={() => setEditing({ recipe: r })}>
+              <Button
+                key={r.tool}
+                variant="outline"
+                size="sm"
+                className="h-auto min-h-8 max-w-full whitespace-normal text-start"
+                onClick={() => setEditing({ recipe: r })}
+              >
                 <Zap /> {t(r.label)}
               </Button>
             ))}
@@ -615,7 +621,7 @@ function Automations() {
         ) : !rules.data?.length ? (
           <EmptyState icon={<Workflow />} title={t('No automations')} />
         ) : (
-          <ul className="grid gap-2">
+          <ul className="grid grid-cols-1 gap-2">
             {rules.data.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
                 <StatusDot
@@ -631,7 +637,7 @@ function Automations() {
                             : 'off'
                   }
                 />
-                <div className="min-w-0 flex-1">
+                <div className="min-w-40 flex-1">
                   <div className="truncate font-medium text-sm">{r.name}</div>
                   <div className="truncate text-muted-foreground text-xs">
                     {t(EVENT_LABELS[r.event] ?? r.event)} · {r.app} · <span dir="ltr">{r.tool}</span>
@@ -688,7 +694,7 @@ function Automations() {
 export function AutomationsPage() {
   const status = useApi('automations.status');
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-1 gap-6">
       <SettingsGroup group="automations" />
       {status.data?.enabled && status.data.keySet && <Automations />}
     </div>
