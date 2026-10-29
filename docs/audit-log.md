@@ -6,7 +6,7 @@ Every change in OpenSign, every sign-in and every step a signer takes is written
 
 - Document events: created, edited, sent, opened, identified, signed, approved, declined, canceled, expired, completed, downloaded, deleted, and legal holds placed or released.
 - Account events: sign-ins (including failed ones), two-factor and passkey changes, password changes and resets.
-- Administration: invitations, role changes, deactivations, API keys created and revoked, webhooks added and removed, settings changes (with secret values masked), updates started.
+- Administration: invitations, role changes, deactivations, API keys created, changed and revoked, webhooks added and removed, settings changes (with secret values masked), updates started.
 - Integrations: API calls, MCP calls and AI assistant actions are recorded as the user they act for.
 
 Each entry has the time, the action (such as `document.signed`), what it was about, who did it (a user, an API key, a signer or the system), their IP address and browser where it applies, and the details of the change. Personal numbers, tokens and document contents are never written to it.
