@@ -92,6 +92,12 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
       { key: 'idleMinutes', label: 'Sign Out After Idle (Minutes)', type: 'number' },
       { key: 'signerLinkDays', label: 'Signing Links Expire After (Days)', type: 'number' },
       { key: 'maxUploadMb', label: 'Largest Upload (MB)', type: 'number' },
+      {
+        key: 'reviewLinkDays',
+        label: 'AI Review Links Expire After (Days)',
+        type: 'number',
+        hint: 'Signers can give their own AI a read-only copy of a document. 0 turns this off; at most 30.',
+      },
     ],
   },
   updates: {

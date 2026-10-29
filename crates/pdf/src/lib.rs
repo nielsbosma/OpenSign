@@ -4,6 +4,7 @@
 mod cert;
 mod evidence;
 mod geometry;
+mod hidden;
 mod ltv;
 mod merge;
 mod sanitize;
@@ -21,6 +22,7 @@ mod tests;
 pub use cert::{SealIdentity, generate_seal_identity};
 pub use evidence::{EvidenceAttachment, EvidenceEvent, EvidenceParty, EvidenceReport, append_evidence};
 pub use geometry::{PageBox, extract_text, page_sizes};
+pub use hidden::{HiddenText, hidden_text};
 pub use ltv::{
     Revocation, RevocationCheck, RevocationStatus, ValidationData, ValidationPlan, add_validation_data, finish_document_timestamp,
     parse_issuer_certificates, plan as plan_validation, prepare_document_timestamp,
