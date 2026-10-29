@@ -183,11 +183,11 @@ pub fn check_spec(kind: FieldKind, spec: &Spec, group_key: Option<&str>) -> Resu
             let names: Vec<&str> = DATE_FORMATS.iter().map(|(name, _)| *name).collect();
             return Err(bad_request(format!("A date format is one of {}", names.join(", "))));
         }
-        (FieldKind::Number, Some(f)) if NumberFormat::parse(f).is_some() => {}
-        (FieldKind::Number, Some(_)) => {
+        (FieldKind::Number | FieldKind::Formula, Some(f)) if NumberFormat::parse(f).is_some() => {}
+        (FieldKind::Number | FieldKind::Formula, Some(_)) => {
             return Err(bad_request("Write a number format as 1234 would look, such as 1,234.00 or 1 234,00 kr"));
         }
-        _ => return Err(bad_request("Only date and number fields have a format")),
+        _ => return Err(bad_request("Only date, number and formula fields have a format")),
     }
 
     let v = &spec.validation;
@@ -336,7 +336,7 @@ fn parse_date(raw: &str, format: Option<&str>) -> Option<NaiveDate> {
     })
 }
 
-fn number_value(canonical: &str) -> Option<f64> {
+pub(crate) fn number_value(canonical: &str) -> Option<f64> {
     let clean = canonical.trim();
     let ok = !clean.is_empty()
         && clean.trim_start_matches('-').split('.').count() <= 2
@@ -410,7 +410,7 @@ fn canonical_number(raw: &str, format: Option<&NumberFormat>) -> Option<String> 
 
 /// Rounds a decimal written as digits, half away from zero, as people round money. Floats would
 /// round 0.125 differently here and in the browser.
-fn round_half_up(int: &str, frac: &str, decimals: usize) -> (String, String) {
+pub(crate) fn round_half_up(int: &str, frac: &str, decimals: usize) -> (String, String) {
     if frac.len() <= decimals {
         return (int.to_string(), frac.to_string());
     }
@@ -475,6 +475,10 @@ impl NumberFormat {
         Some(NumberFormat { prefix: prefix.to_string(), group, decimal, decimals, suffix: suffix.to_string() })
     }
 
+    pub fn decimals(&self) -> usize {
+        self.decimals
+    }
+
     pub fn write(&self, canonical: &str) -> Option<String> {
         number_value(canonical)?;
         let negative = canonical.starts_with('-');
@@ -507,7 +511,9 @@ impl NumberFormat {
 /// A stored value as it is written on the page.
 pub fn display(kind: FieldKind, format: Option<&str>, value: &str) -> String {
     match kind {
-        FieldKind::Number => format.and_then(NumberFormat::parse).and_then(|f| f.write(value)).unwrap_or_else(|| value.to_string()),
+        FieldKind::Number | FieldKind::Formula => {
+            format.and_then(NumberFormat::parse).and_then(|f| f.write(value)).unwrap_or_else(|| value.to_string())
+        }
         FieldKind::Date | FieldKind::DateInput => {
             let pattern = DATE_FORMATS.iter().find(|(name, _)| Some(*name) == format).map(|(_, p)| *p);
             match (pattern, NaiveDate::parse_from_str(value, "%Y-%m-%d")) {

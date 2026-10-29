@@ -156,7 +156,7 @@ struct Tab {
 }
 
 fn tabs_of(recipient: &Value) -> Vec<Tab> {
-    let kinds: [(&str, &'static str, f64, f64); 14] = [
+    let kinds: [(&str, &'static str, f64, f64); 15] = [
         ("signHereTabs", "signature", 150.0, 40.0),
         ("initialHereTabs", "initials", 60.0, 30.0),
         ("dateSignedTabs", "date", 100.0, 18.0),
@@ -171,6 +171,7 @@ fn tabs_of(recipient: &Value) -> Vec<Tab> {
         ("phoneNumberTabs", "phone", 130.0, 18.0),
         ("signerAttachmentTabs", "file", 150.0, 30.0),
         ("zipTabs", "text", 80.0, 18.0),
+        ("formulaTabs", "formula", 100.0, 18.0),
     ];
     let mut out = Vec::new();
     for (key, kind, width, height) in kinds {
@@ -200,7 +201,7 @@ fn tabs_of(recipient: &Value) -> Vec<Tab> {
 }
 
 /// What a DocuSign tab adds beyond its place: a list's items, a radio button's option and group,
-/// and the validation DocuSign tabs carry.
+/// a formula, the parent tab it is shown under, and the validation DocuSign tabs carry.
 fn tab_details(tab: &Value, kind: &str) -> Value {
     let mut out = json!({});
     match kind {
@@ -218,7 +219,17 @@ fn tab_details(tab: &Value, kind: &str) -> Value {
                 out["value"] = json!(str_of(tab, "value").unwrap_or("Yes"));
             }
         }
+        // DocuSign writes `[Hours] * [Rate]`; OpenSign names fields in braces.
+        "formula" => out["formula"] = json!(str_of(tab, "formula").unwrap_or("0").replace('[', "{").replace(']', "}")),
         _ => {}
+    }
+    if let Some(parent) = str_of(tab, "conditionalParentLabel").filter(|p| !p.trim().is_empty()) {
+        let (op, value) = match str_of(tab, "conditionalParentValue").unwrap_or("on") {
+            "on" => ("filled", None),
+            "off" => ("empty", None),
+            v => ("equals", Some(v)),
+        };
+        out["conditions"] = json!([{ "field": parent, "op": op, "value": value }]);
     }
     let keys: &[(&str, &str)] = match kind {
         "text" | "company" | "initials" => &[("validationPattern", "pattern"), ("maxLength", "maxLength")],

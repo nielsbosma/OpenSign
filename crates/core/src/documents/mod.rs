@@ -1,6 +1,7 @@
 //! Documents, their parties and fields: shared types, who may see what, and signer links.
 
 pub mod attachments;
+pub mod logic;
 pub mod ltv;
 pub mod notify;
 pub mod seal;
@@ -70,7 +71,8 @@ string_enum!(
 string_enum!(
     /// `date` is the date of signing, filled in automatically; `date_input` is a date the signer picks.
     /// `select` is a dropdown, `multiselect` a list to tick several from, and each `radio` is one
-    /// button of a group (`groupKey`) holding one option. `image` and `file` take an upload.
+    /// button of a group (`groupKey`) holding one option. `image` and `file` take an upload. `formula`
+    /// is a number computed from other fields.
     FieldKind {
         Signature = "signature",
         Initials = "initials",
@@ -88,6 +90,7 @@ string_enum!(
         DateInput = "date_input",
         Image = "image",
         File = "file",
+        Formula = "formula",
     }
 );
 
@@ -358,13 +361,23 @@ pub struct FieldRow {
     pub group_key: Option<String>,
     /// The signer sees the value but cannot change it.
     pub read_only: bool,
+    /// The field is shown only when all of these hold.
+    #[schemars(with = "Vec<logic::Condition>")]
+    pub conditions: Value,
+    /// For a formula field, the expression it computes.
+    pub formula: Option<String>,
     #[serde(skip)]
     #[schemars(skip)]
     pub file_id: Option<Uuid>,
 }
 
-pub const FIELD_COLUMNS: &str =
-    "id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only, file_id";
+impl FieldRow {
+    pub fn conditions(&self) -> Vec<logic::Condition> {
+        serde_json::from_value(self.conditions.clone()).unwrap_or_default()
+    }
+}
+
+pub const FIELD_COLUMNS: &str = "id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only, conditions, formula, file_id";
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]

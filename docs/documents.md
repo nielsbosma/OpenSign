@@ -61,6 +61,7 @@ Pick a party in the field toolbar, then place fields on the pages. Each field be
 | Date Picker | A date the party picks from a calendar, with an earliest and latest date and a [format](#number-and-date-formats). |
 | Image | The party uploads an image or takes a photo. It is drawn into the box, scaled to fit. |
 | File | The party uploads a PDF, JPEG or PNG in place on the page. Its name goes in the box and the file is sealed into the signed PDF, like [attachments](attachments.md). |
+| Formula | A number worked out from other fields, such as a total with VAT. See [Formulas](#formulas). |
 | Date | Filled in with the date of signing, in the format you choose. |
 | Name, Email, Company | Filled in from the party's details. |
 
@@ -95,6 +96,44 @@ Dates can be written as YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY, DD.MM.YYYY or D MMM 
 #### Radio groups
 
 Placing **Radio** adds one button. Select it and choose **Add a Button to the Group** for each further option, then drag the buttons where they belong. Each button holds one option; the group shares its label and whether an answer is required. The party can pick one button of the group.
+
+#### Conditional fields
+
+Under **Show Only When** in the Field panel, add conditions on other fields. The field is shown only while all of them hold, for example *Org Number* only when *Type* is *Company*, or a *Reason* box only when the *Other* checkbox is ticked. Fields with conditions are drawn with a dashed border in the editor.
+
+| Rule | |
+| --- | --- |
+| Is, Is Not | Compares with an option, a number or text. Text is compared without regard to case, and numbers by value, so 10 and 10.0 are the same. |
+| Is Filled In, Is Empty | For a checkbox: Is Ticked, Is Not Ticked. |
+| Contains | A multi-select list has the option ticked, or a text contains the words. |
+| Is More Than, Is Less Than | Numbers, and dates (Is After, Is Before). |
+
+A hidden field is never required, is left empty when the party signs, and is not written on the signed PDF. A field that depends on a hidden field sees it as empty, so hiding cascades.
+
+Conditions refer to fields by their label, so the field you look at needs a label, and only one field may have it. Renaming a field in the editor updates the conditions and formulas that use it. A party's field can look at their own fields, at values you prefilled, and at fields of parties who sign earlier when **Sign in Order** is on. The server checks the conditions again when the party signs, so a party cannot skip a field by changing the page.
+
+#### Formulas
+
+A **Formula** field computes a number from other fields while the party fills in the document. The party sees the result but cannot change it, and the server computes it again from the submitted values when they sign, so the stored result can be trusted. Give it a [number format](#number-and-date-formats) to round and write it, such as `1 234,00 kr`.
+
+Write other fields' labels in braces, and use `+ - * /` (or `× ÷`), brackets and these functions:
+
+| Function | |
+| --- | --- |
+| `round(x, 2)` | Rounds half up to 0 to 6 decimals; without a second value, to a whole number. |
+| `floor(x)`, `ceil(x)`, `abs(x)` | Down, up, or without its sign. |
+| `min(a, b, …)`, `max(a, b, …)`, `sum(a, b, …)` | |
+| `if(condition, then, else)` | Conditions compare with `=`, `!=`, `<`, `<=`, `>` and `>=`, and combine with `and(…)`, `or(…)` and `not(…)`. |
+| `contains(list, "text")` | Whether a multi-select list has the option ticked, or a text contains the words. |
+
+Examples:
+
+- VAT on a price: `{Price} * 0.25`
+- A total with VAT: `round({Hours} * {Rate} * 1.25, 2)`
+- A discount over an amount: `if({Amount} >= 10000, {Amount} * 0.05, 0)`
+- A price by plan: `if({Plan} = "Pro", 99, 49) * {Seats}`
+
+An empty field counts as 0, a ticked checkbox as 1. A formula that divides by zero, or uses text that is not a number, stays empty. A formula you fill in yourself can only use your own prefilled fields and is worked out when you save; a party's formula can use the same fields as a [condition](#conditional-fields).
 
 Fields are stored as fractions of the page, so they stay in place whatever the page size.
 
