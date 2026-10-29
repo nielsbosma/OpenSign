@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpCircle,
+  BookOpen,
   Braces,
   FileStack,
   FileText,
@@ -129,6 +130,9 @@ function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onClose: ()
         </a>
         <a href="/verify" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
           <ShieldCheck className="size-4 opacity-80" /> {t('Verify a Document')}
+        </a>
+        <a href="/docs" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
+          <BookOpen className="size-4 opacity-80" /> {t('Documentation')}
         </a>
       </nav>
       <div className="grid gap-0.5 border-t border-sidebar-border px-2 py-2">

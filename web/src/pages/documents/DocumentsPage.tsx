@@ -41,6 +41,7 @@ export function DocumentsPage({ templates }: { templates: boolean }) {
       <PageHeader
         title={templates ? t('Templates') : t('Documents')}
         description={templates ? t('Reusable documents with parties and fields set up in advance.') : undefined}
+        help={templates ? 'templates' : 'documents'}
         actions={
           can('documents.create') && (
             <Button

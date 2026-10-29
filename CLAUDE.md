@@ -11,6 +11,7 @@ Instructions for coding agents and people. Read the README and SECURITY.md first
 - Mutations run in a transaction. `without_transaction()` only when a failure must still persist writes (attempt counters) or the service calls out to the network (eID, SMS). `not_a_tool()` for anything with credentials or the caller's own session; public services are never tools.
 - Signer-facing services are named `signing.*`, take the link token, and resolve the party with `signing::resolve`. They never use the signed-in user.
 - After changing a service's input or output, run `pnpm api:types` and commit `web/src/lib/api-types.gen.ts`.
+- A change people can see updates its page in `docs/` (served at `/docs`). A new page also goes in the `NAV` list in `web/src/pages/docs/content.ts`.
 
 ## Security habits
 

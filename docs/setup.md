@@ -1,0 +1,54 @@
+# First-run setup and email
+
+A fresh install walks you through two steps before anyone can use it: create the first admin, then connect email. Until both are done, OpenSign sends every admin back to the setup page.
+
+## Step 1: the first admin
+
+When OpenSign starts and has no users, it prints a one-time **setup code** in its log:
+
+```
+No admin yet. Open https://sign.example.com and enter the setup code …
+```
+
+Open the install in a browser and fill in:
+
+| Field | |
+| --- | --- |
+| Setup Code | The code from the log. It proves you have access to the server, so nobody who finds a fresh install on the internet can claim it. |
+| Organisation | Your organisation's name. Signers see it in emails and on the signing page. You can change it later in **Settings → Organisation**. |
+| Your Name, Email, Password | Your admin account. |
+
+Once the first admin exists, the setup code stops working for good. Everyone else is invited from **Settings → Users** (see [Users and roles](users-and-roles.md)).
+
+## Step 2: email
+
+OpenSign sends signing invitations, reminders, notices when a document is stopped, the sealed documents, user invitations and password resets by email. Setup asks for a working email provider and sends you a test message. Setup only finishes once the provider accepts it, and documents cannot go out by email before that.
+
+### Resend
+
+[Resend](https://resend.com) is the default provider.
+
+1. Create a Resend account and verify the domain you want to send from under **Domains**.
+2. Create an API key under **API Keys**, with permission to send.
+3. In OpenSign, enter the API key, a **From Address** on the verified domain (such as `sign@example.com`) and a **From Name**.
+
+> **Coming soon.** SMTP as an alternative to Resend: a host, a port, STARTTLS or TLS, and an optional username and password. TLS is always required and certificates are always checked, so credentials never travel unencrypted. Hosts on private networks are refused.
+
+### Changing email later
+
+Email settings live in **Settings → Email**. Changing the key or the sender clears the "verified" state, and OpenSign asks for a new test email before documents can go out again. **Reply-To** is optional: empty sends replies to the person who sent each document.
+
+## What to set up next
+
+All other configuration is done in the browser, under **Settings**. None of it is needed to start sending documents with email links.
+
+- **Organisation**: name, registration number, country, time zone, default signer language and brand color. See [Admin settings](settings.md).
+- **SMS**: for SMS invitations and one-time codes. See [Identification](identification.md#sms-codes).
+- **BankID and eID**: Swedish BankID, Freja eID and other Nordic eIDs. See [Identification](identification.md).
+- **Signing and Seal**: the seal name, reason and time stamp authority. See [Sealed PDFs and evidence](sealed-pdfs.md).
+- **Security**: require two-factor sign-in for everyone. See [Sign-in, passkeys and two-factor](account-security.md).
+- **AI**: optional. See [AI assistant and review](ai.md).
+
+## Pinning settings with environment variables
+
+Any admin setting can be set with an environment variable named `OPENSIGN_<GROUP>_<FIELD>`, for example `OPENSIGN_EMAIL_API_KEY` or `OPENSIGN_SECURITY_ENFORCE_TWO_FACTOR=true`. A pinned field is locked in the browser and shows "Set by an environment variable." This is handy for infrastructure as code, and for keeping a secret out of the database entirely. See [Admin settings](settings.md#pinning-settings) for the full list of names.

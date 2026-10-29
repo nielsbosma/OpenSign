@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from 'react';
+import { lazy, type ReactNode, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router';
 import { Spinner } from '@/components/common';
 import { AppShell } from '@/components/layout/AppShell';
@@ -26,6 +26,8 @@ import { UsersPage } from '@/pages/settings/UsersPage';
 import { WebhooksPage } from '@/pages/settings/WebhooksPage';
 import { SignPage } from '@/pages/sign/SignPage';
 import { VerifyPage } from '@/pages/VerifyPage';
+
+const DocsPage = lazy(() => import('@/pages/docs/DocsPage').then((m) => ({ default: m.DocsPage })));
 
 function FullPageSpinner() {
   return (
@@ -71,6 +73,14 @@ export function App() {
           <RequireSession>
             <ApiExplorerPage />
           </RequireSession>
+        }
+      />
+      <Route
+        path="/docs/*"
+        element={
+          <Suspense fallback={<FullPageSpinner />}>
+            <DocsPage />
+          </Suspense>
         }
       />
       <Route

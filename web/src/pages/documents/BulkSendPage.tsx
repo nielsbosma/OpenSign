@@ -43,6 +43,7 @@ export function BulkSendPage() {
       <PageHeader
         title={t('Bulk Send: {template}', { template: b.templateTitle })}
         description={`${b.fileName} · ${t('started {date}', { date: formatDateTime(b.createdAt) })}`}
+        help="bulk-send"
         actions={
           active && (
             <ConfirmButton

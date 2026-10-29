@@ -176,7 +176,12 @@ export function PartyDialog({
         <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
             <DialogTitle>{party ? t('Edit Party') : t('Add Party')}</DialogTitle>
-            <DialogDescription>{t('Who takes part, how they get their link and how they prove who they are.')}</DialogDescription>
+            <DialogDescription>
+              {t('Who takes part, how they get their link and how they prove who they are.')}{' '}
+              <a href="/docs/parties" target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:text-foreground">
+                {t('How parties and identification work')}
+              </a>
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label={t('Name')} htmlFor="party-name">

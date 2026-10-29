@@ -520,6 +520,7 @@ export function ApiExplorerPage() {
         <PageHeader
           title={t('API Explorer')}
           description={t('Every REST endpoint, with live calls and code to copy. Calls run as you, or with an API key you paste.')}
+          help="api"
           actions={
             <div className="flex gap-2">
               <Button variant="outline" asChild>

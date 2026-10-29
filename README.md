@@ -14,6 +14,10 @@ An open source electronic signing service you run yourself. Upload a Word or PDF
 - **Multi-user with roles**: admin, manager, sender, auditor and viewer; passkeys or an authenticator app for two-factor. One organisation per install.
 - **Security first**: see [SECURITY.md](SECURITY.md) for the threat model and the controls.
 
+## Documentation
+
+The full documentation is in [`docs/`](docs/index.md), and every install serves it at `/docs`, without signing in. It covers sending and signing, identification, sealed PDFs, administration, the APIs, and deployment.
+
 ## Running it
 
 OpenSign is one container image plus Postgres, an S3-compatible bucket and (for Word files) Gotenberg.

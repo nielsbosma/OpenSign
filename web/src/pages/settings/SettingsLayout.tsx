@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { NavLink, Outlet } from 'react-router';
+import { NavLink, Outlet, useLocation } from 'react-router';
 import { PageHeader } from '@/components/common';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Permission } from '@/lib/api';
@@ -34,11 +34,30 @@ const SECTIONS: { title: string; items: { path: string; label: string; permissio
   },
 ];
 
+const HELP: Record<string, string> = {
+  '/settings/account': 'account-security',
+  '/settings/users': 'users-and-roles',
+  '/settings/admin/org': 'settings#organisation',
+  '/settings/admin/signing': 'sealed-pdfs',
+  '/settings/admin/security': 'settings#security',
+  '/settings/admin/retention': 'retention',
+  '/settings/audit': 'audit-log',
+  '/settings/system': 'updates',
+  '/settings/admin/updates': 'updates',
+  '/settings/admin/email': 'setup#step-2-email',
+  '/settings/admin/sms': 'identification#sms-codes',
+  '/settings/admin/eid': 'identification',
+  '/settings/admin/ai': 'ai',
+  '/settings/api-keys': 'api#api-keys',
+  '/settings/webhooks': 'webhooks',
+};
+
 export function SettingsLayout() {
   const { can } = useSession();
+  const { pathname } = useLocation();
   return (
     <>
-      <PageHeader title={t('Settings')} />
+      <PageHeader title={t('Settings')} help={HELP[pathname.replace(/\/$/, '')] ?? 'settings'} />
       <div className="grid gap-8 md:grid-cols-[200px_minmax(0,1fr)]">
         <nav className="grid content-start gap-5" aria-label={t('Settings')}>
           {SECTIONS.map((section) => {
