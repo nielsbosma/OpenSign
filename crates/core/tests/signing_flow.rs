@@ -10,9 +10,9 @@ use opensign_core::context::{Actor, App, Credential, Ctx, Surface};
 use opensign_core::documents::attachments::AttachmentRequestInput;
 use opensign_core::documents::{AuthMethod, Delivery, FieldKind, PartyRole, parties, signer_token};
 use opensign_core::error::ErrorKind;
-use opensign_core::services::bulk;
 use opensign_core::services::documents::{self as docs, FieldInput, PartyInput, Version};
 use opensign_core::services::signing::{self, FieldValue, SignatureInput, sms_code_hash};
+use opensign_core::services::{branding, bulk};
 use opensign_core::settings::SigningSettings;
 use opensign_core::testing::app;
 use opensign_core::{Role, call, worker};
@@ -35,6 +35,17 @@ fn sample_pdf(pages: usize) -> Vec<u8> {
     doc.trailer.set("Root", catalog);
     let mut out = Vec::new();
     doc.save_to(&mut out).unwrap();
+    out
+}
+
+fn logo_png() -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut encoder = png::Encoder::new(&mut out, 60, 20);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().unwrap();
+    writer.write_image_data(&[90; 60 * 20 * 4]).unwrap();
+    writer.finish().unwrap();
     out
 }
 
@@ -112,6 +123,13 @@ async fn sends_signs_seals_and_verifies() {
     }
     let sender = user(&app, "Sara Sender", Role::Sender).await;
     let outsider = user(&app, "Olle Other", Role::Sender).await;
+    let admin = user(&app, "Adam Admin", Role::Admin).await;
+    let logo = call::<branding::SetLogo>(&admin, branding::SetLogoInput { content_base64: B64.encode(logo_png()) }).await.unwrap();
+    assert!(logo.logo_url.is_some());
+    assert_eq!(
+        kind(call::<branding::SetLogo>(&sender, branding::SetLogoInput { content_base64: B64.encode(logo_png()) }).await),
+        ErrorKind::Forbidden
+    );
 
     let document = call::<docs::Create>(
         &sender,
@@ -434,6 +452,16 @@ async fn sends_signs_seals_and_verifies() {
     let names = embedded.catalog().unwrap().get(b"Names").unwrap().as_dict().unwrap();
     let tree = names.get(b"EmbeddedFiles").unwrap().as_dict().unwrap().get(b"Names").unwrap().as_array().unwrap();
     assert_eq!(tree[0].as_str().unwrap(), b"attachment-01-id.pdf", "Anna's attachment travels inside the sealed PDF");
+    let has_logo = embedded.get_pages().values().any(|page| {
+        embedded
+            .get_dictionary(*page)
+            .and_then(|p| p.get(b"Resources"))
+            .and_then(Object::as_dict)
+            .and_then(|r| r.get(b"XObject"))
+            .and_then(Object::as_dict)
+            .is_ok_and(|x| x.has(b"Logo"))
+    });
+    assert!(has_logo, "the evidence page carries the organisation's logo");
     if let Ok(path) = std::env::var("SEALED_PDF_OUT") {
         std::fs::write(path, &sealed).unwrap();
     }

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useApi } from '@/lib/api';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
@@ -11,10 +12,22 @@ export function Spinner({ className }: { className?: string }) {
   return <Loader2 className={cn('size-4 animate-spin text-muted-foreground', className)} aria-label={t('Loading')} />;
 }
 
-export function Logo({ className }: { className?: string }) {
+export function safeColor(color?: string | null) {
+  return color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : undefined;
+}
+
+/** The organisation's name, brand color and logo. Public, so it works on signing and login pages too. */
+export function useBranding() {
+  return useApi('branding.get', undefined, { staleTime: 5 * 60_000, retry: false }).data;
+}
+
+/** The OpenSign mark, in the organisation's brand color. */
+export function Logo({ className, color }: { className?: string; color?: string | null }) {
+  const branding = useBranding();
+  const fill = safeColor(color ?? branding?.brandColor);
   return (
-    <svg viewBox="0 0 32 32" className={cn('size-7', className)} aria-hidden>
-      <rect width="32" height="32" rx="8" className="fill-primary" />
+    <svg viewBox="0 0 32 32" className={cn('size-7 shrink-0', className)} aria-hidden>
+      <rect width="32" height="32" rx="8" className={fill ? undefined : 'fill-primary'} style={fill ? { fill } : undefined} />
       <path
         d="M8 21c3-1 4-9 7-9s1 7 4 7 2-4 5-4"
         fill="none"
@@ -26,6 +39,30 @@ export function Logo({ className }: { className?: string }) {
       <path d="M8 25h16" stroke="#fff" strokeOpacity=".6" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
+}
+
+/** The organisation's uploaded logo, or the OpenSign mark in its brand color when there is none. */
+export function BrandLogo({
+  className,
+  markClassName,
+  branding: given,
+}: {
+  className?: string;
+  markClassName?: string;
+  branding?: { logoUrl?: string | null; brandColor?: string; organisation?: string };
+}) {
+  const fetched = useBranding();
+  const branding = given ?? fetched;
+  if (branding?.logoUrl?.startsWith('/api/logo/')) {
+    return (
+      <img
+        src={branding.logoUrl}
+        alt={branding.organisation ?? ''}
+        className={cn('h-7 w-auto max-w-40 shrink-0 object-contain dark:rounded-md dark:bg-white dark:px-1.5 dark:py-0.5', className)}
+      />
+    );
+  }
+  return <Logo className={markClassName} color={branding?.brandColor} />;
 }
 
 /** Opens a page of the public documentation in a new tab. `page` is a docs path such as `bulk-send#row-checks`. */

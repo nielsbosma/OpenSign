@@ -53,10 +53,15 @@ pub struct EvidenceReport {
     pub events: Vec<EvidenceEvent>,
     pub attachments: Vec<EvidenceAttachment>,
     pub audit_head: Option<String>,
+    /// The organisation's logo as PNG, drawn at the top of the first page.
+    #[serde(skip)]
+    pub logo_png: Option<Vec<u8>>,
 }
 
 const A4: (f64, f64) = (595.28, 841.89);
 const MARGIN: f64 = 56.0;
+const LOGO_HEIGHT: f64 = 32.0;
+const LOGO_MAX_WIDTH: f64 = 180.0;
 
 fn wrap(text: &str, size: f64, width: f64) -> Vec<String> {
     let mut lines = Vec::new();
@@ -147,6 +152,19 @@ fn qr(url: &str, x: f64, y: f64, size: f64) -> Vec<u8> {
 pub fn append_evidence(pdf: &[u8], report: &EvidenceReport) -> Result<Vec<u8>> {
     let mut doc = Document::load_mem(pdf)?;
     let mut w = Writer::new();
+    let mut images = Vec::new();
+    if let Some(logo) = report.logo_png.as_deref()
+        && let Ok(id) = crate::stamp::png_image(&mut doc, logo)
+    {
+        let (width, height) = crate::stamp::image_size(&doc, id);
+        let scale = (LOGO_HEIGHT / height).min(LOGO_MAX_WIDTH / width);
+        let (w_pt, h_pt) = (width * scale, height * scale);
+        w.y -= h_pt;
+        let y = w.y;
+        w.page().extend(format!("q {w_pt:.2} 0 0 {h_pt:.2} {MARGIN} {y:.2} cm /Logo Do Q\n").into_bytes());
+        w.gap(10.0);
+        images.push((b"Logo".to_vec(), id));
+    }
     w.text(FONT_BOLD, 16.0, 0.0, "Verification", 0.1);
     w.gap(4.0);
     w.text(FONT, 9.5, 0.0, &format!("{} · {}", report.title, report.organisation), 0.35);
@@ -219,7 +237,7 @@ pub fn append_evidence(pdf: &[u8], report: &EvidenceReport) -> Result<Vec<u8>> {
             "MediaBox" => vec![0.into(), 0.into(), Object::Real(A4.0 as f32), Object::Real(A4.1 as f32)],
             "Contents" => Object::Array(vec![]),
         });
-        page_resources(&mut doc, page_id, &[])?;
+        page_resources(&mut doc, page_id, if i == 0 { &images } else { &[] })?;
         append_content(&mut doc, page_id, content)?;
         let root = doc.get_dictionary_mut(pages_root)?;
         let mut kids = root.get(b"Kids")?.as_array()?.clone();

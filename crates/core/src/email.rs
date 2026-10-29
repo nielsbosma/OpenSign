@@ -58,7 +58,8 @@ pub struct Rendered {
     pub text: String,
 }
 
-pub fn render(message: &Message, org: &OrgSettings) -> Rendered {
+/// `base_url` is where the app is reached; the logo, when set, is loaded from there.
+pub fn render(message: &Message, org: &OrgSettings, base_url: &str) -> Rendered {
     let color =
         if org.brand_color.len() == 7 && org.brand_color.starts_with('#') && org.brand_color[1..].chars().all(|c| c.is_ascii_hexdigit()) {
             org.brand_color.as_str()
@@ -66,11 +67,19 @@ pub fn render(message: &Message, org: &OrgSettings) -> Rendered {
             "#4f46e5"
         };
     let org_name = if org.name.is_empty() { "OpenSign" } else { org.name.as_str() };
+    let heading = match crate::services::branding::logo_path(org) {
+        Some(path) if base_url.starts_with("https://") || base_url.starts_with("http://") => format!(
+            r#"<img src="{}{}" alt="{}" height="40" style="display:block;height:40px;max-width:200px;border:0;margin:0 0 24px">"#,
+            escape(base_url.trim_end_matches('/')),
+            escape(&path),
+            escape(org_name)
+        ),
+        _ => format!(r#"<p style="margin:0 0 24px;font-weight:600">{}</p>"#, escape(org_name)),
+    };
     let mut html = format!(
-        r#"<!doctype html><html lang="{}" dir="{}"><body style="margin:0;background:#f5f5f4;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1c1917"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px"><table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid #e7e5e4;border-radius:12px"><tr><td style="padding:32px"><p style="margin:0 0 24px;font-weight:600">{}</p>"#,
+        r#"<!doctype html><html lang="{}" dir="{}"><body style="margin:0;background:#f5f5f4;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1c1917"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px"><table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid #e7e5e4;border-radius:12px"><tr><td style="padding:32px">{heading}"#,
         message.lang.code(),
         if message.lang.rtl() { "rtl" } else { "ltr" },
-        escape(org_name)
     );
     let mut text = String::new();
     for p in &message.paragraphs {
@@ -118,7 +127,7 @@ pub fn is_configured(settings: &EmailSettings) -> bool {
 
 /// Sends through Resend or SMTP. In development without a Resend key, mail goes to Mailpit instead.
 pub async fn send(app: &App, settings: &EmailSettings, org: &OrgSettings, message: &Message) -> Result<()> {
-    let rendered = render(message, org);
+    let rendered = render(message, org, &app.public_url());
     let from_name = header_safe(if settings.from_name.is_empty() { &org.name } else { &settings.from_name });
     let from_address = header_safe(&settings.from_address);
     if is_smtp(settings) {
@@ -389,11 +398,31 @@ mod tests {
                 lang: crate::i18n::Lang::En,
             },
             &org,
+            "https://sign.example.com",
         );
         assert!(!rendered.html.contains("<script>"));
         assert!(!rendered.html.contains("javascript:"));
         assert!(!rendered.html.contains("url(x)"));
         assert!(rendered.html.contains("&lt;Acme&gt;"));
+    }
+
+    #[test]
+    fn shows_the_logo_in_place_of_the_name() {
+        let id = uuid::Uuid::now_v7();
+        let org = OrgSettings { name: "Acme \"AB\"".into(), logo_file_id: Some(id), ..Default::default() };
+        let message = Message {
+            to: "a@b.c".into(),
+            to_name: None,
+            subject: "s".into(),
+            paragraphs: vec![],
+            button: None,
+            footer: None,
+            attachments: vec![],
+            lang: crate::i18n::Lang::En,
+        };
+        let html = render(&message, &org, "https://sign.example.com/").html;
+        assert!(html.contains(&format!(r#"src="https://sign.example.com/api/logo/{}.png" alt="Acme &quot;AB&quot;""#, id.simple())));
+        assert!(!render(&message, &org, "javascript:x").html.contains("<img"));
     }
 
     #[test]

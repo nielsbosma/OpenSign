@@ -54,7 +54,7 @@ Email settings live in **Settings → Email**. Changing the provider, key, SMTP 
 
 All other configuration is done in the browser, under **Settings**. None of it is needed to start sending documents with email links.
 
-- **Organisation**: name, registration number, country, time zone, default signer language and brand color. See [Admin settings](settings.md).
+- **Organisation**: name, registration number, country, time zone, default signer language, brand color and logo. See [Admin settings](settings.md).
 - **SMS**: for SMS invitations and one-time codes. See [Identification](identification.md#sms-codes).
 - **BankID and eID**: Swedish BankID, Freja eID and other Nordic eIDs. See [Identification](identification.md).
 - **Signing and Seal**: the seal name, reason and time stamp authority. See [Sealed PDFs and evidence](sealed-pdfs.md).

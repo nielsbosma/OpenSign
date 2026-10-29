@@ -317,7 +317,7 @@ pub fn stamp(pdf: &[u8], stamps: &[Stamp]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-fn image_size(doc: &Document, id: ObjectId) -> (f64, f64) {
+pub(crate) fn image_size(doc: &Document, id: ObjectId) -> (f64, f64) {
     let dict = doc.get_object(id).ok().and_then(|o| o.as_stream().ok()).map(|s| s.dict.clone()).unwrap_or_default();
     let get = |k: &[u8]| dict.get(k).ok().and_then(|v| v.as_i64().ok()).unwrap_or(1) as f64;
     (get(b"Width"), get(b"Height"))

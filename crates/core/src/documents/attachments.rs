@@ -196,7 +196,19 @@ fn unreadable() -> AppError {
 }
 
 fn reencode_image(bytes: &[u8]) -> Result<Vec<u8>> {
-    let (width, height, rgb) = if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+    let (width, height, rgba) = decode_rgba(bytes)?;
+    let rgb: Vec<u8> = rgba.as_chunks::<4>().0.iter().flat_map(|c| [c[0], c[1], c[2]]).collect();
+    encode_png(width, height, png::ColorType::Rgb, &rgb)
+}
+
+/// Like `reencode_image`, but keeps transparency, which logos depend on.
+pub(crate) fn reencode_image_with_alpha(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
+    let (width, height, rgba) = decode_rgba(bytes)?;
+    Ok((width, height, encode_png(width, height, png::ColorType::Rgba, &rgba)?))
+}
+
+fn decode_rgba(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
+    let (width, height, rgba) = if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
         let mut decoder = jpeg_decoder::Decoder::new(bytes);
         decoder.read_info().map_err(|_| unreadable())?;
         let info = decoder.info().ok_or_else(unreadable)?;
@@ -204,21 +216,22 @@ fn reencode_image(bytes: &[u8]) -> Result<Vec<u8>> {
             return Err(bad_request("The image is too large"));
         }
         let pixels = decoder.decode().map_err(|_| unreadable())?;
-        let rgb = match info.pixel_format {
-            jpeg_decoder::PixelFormat::RGB24 => pixels,
-            jpeg_decoder::PixelFormat::L8 => pixels.iter().flat_map(|&l| [l, l, l]).collect(),
-            jpeg_decoder::PixelFormat::L16 => pixels.as_chunks::<2>().0.iter().flat_map(|c| [c[0], c[0], c[0]]).collect(),
+        let rgba = match info.pixel_format {
+            jpeg_decoder::PixelFormat::RGB24 => pixels.as_chunks::<3>().0.iter().flat_map(|c| [c[0], c[1], c[2], 255]).collect(),
+            jpeg_decoder::PixelFormat::L8 => pixels.iter().flat_map(|&l| [l, l, l, 255]).collect(),
+            jpeg_decoder::PixelFormat::L16 => pixels.as_chunks::<2>().0.iter().flat_map(|c| [c[0], c[0], c[0], 255]).collect(),
             jpeg_decoder::PixelFormat::CMYK32 => pixels
                 .as_chunks::<4>()
                 .0
                 .iter()
                 .flat_map(|c| {
                     let k = u16::from(c[3]);
-                    [c[0], c[1], c[2]].map(|v| ((u16::from(v) * k) / 255) as u8)
+                    let [r, g, b] = [c[0], c[1], c[2]].map(|v| ((u16::from(v) * k) / 255) as u8);
+                    [r, g, b, 255]
                 })
                 .collect(),
         };
-        (u32::from(info.width), u32::from(info.height), rgb)
+        (u32::from(info.width), u32::from(info.height), rgba)
     } else if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
         decoder.set_transformations(png::Transformations::normalize_to_color8());
@@ -230,27 +243,31 @@ fn reencode_image(bytes: &[u8]) -> Result<Vec<u8>> {
         let mut buf = vec![0; reader.output_buffer_size()];
         let frame = reader.next_frame(&mut buf).map_err(|_| unreadable())?;
         let data = &buf[..frame.buffer_size()];
-        let rgb = match frame.color_type {
-            png::ColorType::Rgb => data.to_vec(),
-            png::ColorType::Rgba => data.as_chunks::<4>().0.iter().flat_map(|c| [c[0], c[1], c[2]]).collect(),
-            png::ColorType::Grayscale => data.iter().flat_map(|&l| [l, l, l]).collect(),
-            png::ColorType::GrayscaleAlpha => data.as_chunks::<2>().0.iter().flat_map(|c| [c[0], c[0], c[0]]).collect(),
+        let rgba = match frame.color_type {
+            png::ColorType::Rgb => data.as_chunks::<3>().0.iter().flat_map(|c| [c[0], c[1], c[2], 255]).collect(),
+            png::ColorType::Rgba => data.to_vec(),
+            png::ColorType::Grayscale => data.iter().flat_map(|&l| [l, l, l, 255]).collect(),
+            png::ColorType::GrayscaleAlpha => data.as_chunks::<2>().0.iter().flat_map(|c| [c[0], c[0], c[0], c[1]]).collect(),
             png::ColorType::Indexed => return Err(unreadable()),
         };
-        (frame.width, frame.height, rgb)
+        (frame.width, frame.height, rgba)
     } else {
         return Err(unreadable());
     };
-    if rgb.len() != width as usize * height as usize * 3 {
+    if rgba.len() != width as usize * height as usize * 4 {
         return Err(unreadable());
     }
+    Ok((width, height, rgba))
+}
+
+fn encode_png(width: u32, height: u32, color: png::ColorType, data: &[u8]) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     let mut encoder = png::Encoder::new(&mut out, width, height);
-    encoder.set_color(png::ColorType::Rgb);
+    encoder.set_color(color);
     encoder.set_depth(png::BitDepth::Eight);
     encoder.set_compression(png::Compression::Fast);
     let mut writer = encoder.write_header().map_err(AppError::internal)?;
-    writer.write_image_data(&rgb).map_err(AppError::internal)?;
+    writer.write_image_data(data).map_err(AppError::internal)?;
     writer.finish().map_err(AppError::internal)?;
     Ok(out)
 }

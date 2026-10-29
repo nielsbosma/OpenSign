@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Logo } from '@/components/common';
+import { BrandLogo, useBranding } from '@/components/common';
 import { LanguagePicker } from '@/components/LanguagePicker';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { msg } from '@/lib/i18n';
@@ -16,11 +16,12 @@ export function AuthLayout({
   children: ReactNode;
   wide?: boolean;
 }) {
+  const branding = useBranding();
   return (
     <div className="flex min-h-svh flex-col items-center justify-center bg-muted/40 px-4 py-10">
       <div className="mb-6 flex items-center gap-2.5">
-        <Logo className="size-8" />
-        <span className="text-base font-semibold">OpenSign</span>
+        <BrandLogo className="h-9 max-w-56" markClassName="size-8" />
+        {!branding?.logoUrl && <span className="text-base font-semibold">OpenSign</span>}
       </div>
       <Card className={cn('w-full shadow-none', wide ? 'max-w-xl' : 'max-w-sm')}>
         <CardHeader>

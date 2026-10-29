@@ -18,7 +18,7 @@ import {
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { AssistantPanel } from '@/components/AssistantPanel';
-import { Logo } from '@/components/common';
+import { BrandLogo, useBranding } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -100,11 +100,12 @@ function storedCollapsed() {
 function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onClose: () => void }) {
   const { user, can } = useSession();
   const version = useApi('system.version', { refresh: false }, { enabled: can('settings.manage'), staleTime: 60 * 60_000 });
+  const branding = useBranding();
   return (
     <div className="flex h-full flex-col bg-sidebar">
       <div className="flex h-14 shrink-0 items-center gap-2.5 px-3">
-        <Logo />
-        <span className="text-sm font-semibold">OpenSign</span>
+        <BrandLogo />
+        {!branding?.logoUrl && <span className="text-sm font-semibold">OpenSign</span>}
         {user?.version && <span className="text-[11px] text-muted-foreground tabular-nums">{user.version}</span>}
         <Button
           variant="ghost"

@@ -26,7 +26,7 @@ pub async fn headers(State(state): State<AppState>, request: Request, next: Next
     h.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
     h.insert(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
     h.insert("cross-origin-opener-policy", HeaderValue::from_static("same-origin"));
-    h.insert("cross-origin-resource-policy", HeaderValue::from_static("same-origin"));
+    h.entry("cross-origin-resource-policy").or_insert(HeaderValue::from_static("same-origin"));
     h.insert(
         "permissions-policy",
         HeaderValue::from_static(if camera {

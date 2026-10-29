@@ -1,7 +1,7 @@
 import { CheckCircle2, Download, FileSignature, HandHelping, Languages, ShieldCheck, XCircle } from 'lucide-react';
 import { Direction } from 'radix-ui';
 import { type FormEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Logo, Spinner } from '@/components/common';
+import { BrandLogo, Spinner, safeColor } from '@/components/common';
 import { PdfLoading, PdfPages, usePdf } from '@/components/PdfPages';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -75,10 +75,6 @@ function useSignerSession(token: string) {
   return [session, update] as const;
 }
 
-function safeColor(color?: string) {
-  return color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : undefined;
-}
-
 const LANGUAGE_KEY = 'opensign-sign-language';
 
 /** A language the signer picked on this page, for this tab and this link only. */
@@ -136,7 +132,7 @@ function Shell({ view, children }: { view?: SignerView; children: React.ReactNod
       <div className="min-h-svh bg-muted/40" lang={code} dir={dir}>
         <header className="border-b bg-background">
           <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4">
-            <Logo className="size-6" />
+            <BrandLogo className="h-6" markClassName="size-6" branding={view?.document} />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold">{view?.document.title ?? 'OpenSign'}</div>
               {view && (

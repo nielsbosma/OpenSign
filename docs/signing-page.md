@@ -69,7 +69,7 @@ Choose **Preview** in the document editor to see the signing page as a chosen pa
 
 ## Branding
 
-The page shows your organisation's name and uses your brand color from **Settings → Organisation**.
+The page shows your organisation's name and logo and uses your brand color, all from **Settings → Organisation**. See [Logo](settings.md#logo).
 
 ## Privacy and safety
 

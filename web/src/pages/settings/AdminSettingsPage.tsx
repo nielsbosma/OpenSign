@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { toast } from 'sonner';
-import { ConfirmButton, Field, Spinner } from '@/components/common';
+import { ConfirmButton, Field, Logo, Spinner } from '@/components/common';
 import { SearchSelect } from '@/components/SearchSelect';
 import { Button } from '@/components/ui/button';
 import { FilePicker } from '@/components/ui/file-picker';
@@ -45,7 +45,12 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
         options: languages,
         hint: msg('The default for new documents. Each document can use its own.'),
       },
-      { key: 'brandColor', label: msg('Brand Color'), type: 'color' },
+      {
+        key: 'brandColor',
+        label: msg('Brand Color'),
+        type: 'color',
+        hint: msg('Used for buttons on the signing page and in emails, and for the OpenSign mark when there is no logo.'),
+      },
     ],
   },
   email: {
@@ -299,6 +304,57 @@ async function readCertificate(file: File) {
   let binary = '';
   for (const b of bytes) binary += String.fromCharCode(b);
   return btoa(binary);
+}
+
+async function toBase64(file: File) {
+  let binary = '';
+  for (const b of new Uint8Array(await file.arrayBuffer())) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
+function LogoExtras() {
+  const branding = useApi('branding.get');
+  const upload = useApiMutation('branding.set_logo', { invalidates: ['branding.'], onSuccess: () => toast.success(t('Logo saved')) });
+  const remove = useApiMutation('branding.remove_logo', { invalidates: ['branding.'] });
+  const [file, setFile] = useState<File>();
+  const logoUrl = branding.data?.logoUrl;
+  return (
+    <SettingsCard
+      title={t('Logo')}
+      description={t('Shown in the app, on signing pages, in emails and on the evidence page of signed documents.')}
+    >
+      <div className="grid max-w-xl gap-4">
+        <div className="flex h-20 items-center justify-center rounded-lg border bg-muted/40 px-4">
+          {logoUrl ? (
+            <img src={logoUrl} alt={t('Your logo')} className="max-h-14 w-auto max-w-full object-contain" />
+          ) : (
+            <span className="text-muted-foreground">{t('No logo yet. The OpenSign mark is shown in your brand color.')}</span>
+          )}
+        </div>
+        <FilePicker
+          accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+          hint={t('PNG or JPEG, at most 2 MB and 2000 pixels on a side. SVG is not accepted.')}
+          disabled={upload.isPending}
+          files={file ? [file] : []}
+          onChange={async ([picked]) => {
+            setFile(picked);
+            if (!picked) return;
+            upload.mutate({ contentBase64: await toBase64(picked) }, { onSettled: () => setFile(undefined) });
+          }}
+        />
+        {logoUrl && (
+          <div>
+            <ConfirmButton
+              label={t('Remove Logo')}
+              title={t('Remove the logo?')}
+              description={t('The OpenSign mark in your brand color is shown instead.')}
+              onConfirm={() => remove.mutate({})}
+            />
+          </div>
+        )}
+      </div>
+    </SettingsCard>
+  );
 }
 
 function isPkcs12(value: unknown) {
@@ -682,17 +738,35 @@ export function SettingsGroup({ group }: { group: Group }) {
                   </Field>
                 );
               }
+              if (f.type === 'color') {
+                const color = String(value(f.key) ?? '');
+                return (
+                  <Field key={f.key} label={label} htmlFor={id} hint={hint}>
+                    <div className="flex items-center gap-3">
+                      <input
+                        id={id}
+                        type="color"
+                        value={color}
+                        onChange={(e) => set(f.key, e.target.value)}
+                        disabled={locked}
+                        className="size-9 shrink-0 cursor-pointer appearance-none overflow-hidden rounded-full border bg-transparent p-0 disabled:cursor-not-allowed disabled:opacity-50 [&::-moz-color-swatch]:rounded-full [&::-moz-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
+                      />
+                      <span className="font-mono text-xs text-muted-foreground uppercase">{color}</span>
+                      <Logo className="ms-auto size-7" color={color} />
+                    </div>
+                  </Field>
+                );
+              }
               return (
                 <Field key={f.key} label={label} htmlFor={id} hint={hint}>
                   <Input
                     id={id}
-                    type={f.type === 'number' ? 'number' : f.type === 'color' ? 'color' : 'text'}
+                    type={f.type === 'number' ? 'number' : 'text'}
                     min={f.type === 'number' ? 0 : undefined}
                     value={String(value(f.key) ?? '')}
                     onChange={(e) => set(f.key, f.type === 'number' ? Number(e.target.value) : e.target.value)}
                     placeholder={f.placeholder}
                     disabled={locked}
-                    className={f.type === 'color' ? 'h-9 w-20 p-1' : undefined}
                   />
                 </Field>
               );
@@ -719,6 +793,7 @@ export function SettingsGroup({ group }: { group: Group }) {
           <div className="mt-6 border-t pt-5">{group === 'email' ? <EmailExtras /> : <AiExtras />}</div>
         )}
       </SettingsCard>
+      {group === 'org' && <LogoExtras />}
       {group === 'signing' && <SealExtras />}
       {group === 'retention' && <RetentionExtras />}
     </div>
