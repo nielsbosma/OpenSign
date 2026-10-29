@@ -1,6 +1,7 @@
 pub mod admin;
 pub mod ai;
 pub mod auth;
+pub mod automations;
 pub mod branding;
 pub mod bulk;
 pub mod detect;
@@ -154,6 +155,22 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<webhooks::GetDelivery>(),
         erase::<webhooks::Resend>(),
         erase::<webhooks::ResendFailed>(),
+        erase::<automations::Status>(),
+        erase::<automations::Apps>(),
+        erase::<automations::Connections>(),
+        erase::<automations::Connect>(),
+        erase::<automations::Disconnect>(),
+        erase::<automations::Tools>(),
+        erase::<automations::Tool>(),
+        erase::<automations::List>(),
+        erase::<automations::Create>(),
+        erase::<automations::Update>(),
+        erase::<automations::Delete>(),
+        erase::<automations::Test>(),
+        erase::<automations::Runs>(),
+        erase::<automations::GetRun>(),
+        erase::<automations::Resend>(),
+        erase::<automations::ResendFailed>(),
         erase::<oauth::Describe>(),
         erase::<oauth::Approve>(),
         erase::<oauth::Deny>(),

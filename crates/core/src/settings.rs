@@ -288,6 +288,28 @@ impl SettingsGroup for EidSettings {
     const SECRETS: &'static [&'static str] = &["bankidCertificate", "frejaCertificate", "brokerClientSecret", "ticClientSecret"];
 }
 
+/// Composio automations: rules that send document data to other apps.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(default, rename_all = "camelCase")]
+pub struct AutomationSettings {
+    /// Off: no rule runs and no app can be connected.
+    pub enabled: bool,
+    /// The install's own Composio project API key.
+    pub composio_api_key: Option<String>,
+}
+
+impl SettingsGroup for AutomationSettings {
+    const NAME: &'static str = "automations";
+    const SECRETS: &'static [&'static str] = &["composioApiKey"];
+}
+
+impl AutomationSettings {
+    /// The key, only when automations are on.
+    pub fn key(&self) -> Option<&str> {
+        self.composio_api_key.as_deref().map(str::trim).filter(|k| self.enabled && !k.is_empty())
+    }
+}
+
 const TTL: Duration = Duration::from_secs(5);
 
 #[derive(Default)]

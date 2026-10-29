@@ -42,6 +42,7 @@ permissions! {
     TemplatesManage = "templates.manage": "Create and change shared templates",
     ApiKeysManage = "api_keys.manage": "Create API keys that act with your permissions",
     WebhooksManage = "webhooks.manage": "Add and remove webhooks",
+    AutomationsManage = "automations.manage": "Connect apps through Composio and set up automations that send them document data",
     AiUse = "ai.use": "Use the AI assistant and document review",
     SystemRead = "system.read": "See version, migrations, backups and background jobs",
 }
