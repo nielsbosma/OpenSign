@@ -1,7 +1,7 @@
 import { Plus, Webhook } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { toast } from 'sonner';
-import { ConfirmButton, CopyButton, EmptyState, Field, Spinner, StatusDot } from '@/components/common';
+import { ConfirmButton, CopyButton, EmptyState, Field, Loading, StatusDot } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -118,7 +118,7 @@ export function WebhooksPage() {
         <Plus /> {t('New Webhook')}
       </Button>
       {hooks.isPending ? (
-        <Spinner />
+        <Loading />
       ) : !hooks.data?.length ? (
         <EmptyState icon={<Webhook />} title={t('No webhooks')} />
       ) : (

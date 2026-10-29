@@ -281,6 +281,16 @@ export type ChainReport = {
   valid: boolean;
 };
 
+export type AuthConfirmEmailChangeInput = {
+  token: string;
+};
+
+export type AuthConfirmEmailChangeOutput = EmailView;
+
+export type EmailView = {
+  email: string;
+};
+
 export type AuthLoginInput = {
   email: string;
   password: string;
@@ -602,6 +612,21 @@ export type Check = {
 };
 
 export type DocumentsCheckOutput = Array<Check>;
+
+export type DocumentsCountsInput = {
+  /** Matches the title, or an exact external id, as in documents.list. */
+  search?: string | null;
+};
+
+export type DocumentsCountsOutput = StatusCounts;
+
+export type StatusCounts = {
+  all: number;
+  /** Documents per status: draft, pending, completed, declined, canceled and expired. Missing means none. */
+  byStatus: {
+    [key: string]: number;
+  };
+};
 
 export type DocumentsCreateInput = {
   /** Your own reference, e.g. a CRM id. Searchable. */
@@ -1308,6 +1333,14 @@ export type UsersAcceptInviteInput = {
 
 export type UsersAcceptInviteOutput = Ok_;
 
+export type UsersChangeEmailInput = {
+  /** The new address. It only takes effect once someone opens the link sent to it. */
+  email: string;
+  id: string;
+};
+
+export type UsersChangeEmailOutput = Ok_;
+
 export type UsersInviteInput = {
   email: string;
   name?: string | null;
@@ -1427,6 +1460,7 @@ export interface Services {
   "api_keys.update": { kind: "mutation"; input: ApiKeysUpdateInput; output: ApiKeysUpdateOutput };
   "audit.list": { kind: "query"; input: AuditListInput; output: AuditListOutput };
   "audit.verify": { kind: "query"; input: AuditVerifyInput; output: AuditVerifyOutput };
+  "auth.confirm_email_change": { kind: "mutation"; input: AuthConfirmEmailChangeInput; output: AuthConfirmEmailChangeOutput };
   "auth.login": { kind: "mutation"; input: AuthLoginInput; output: AuthLoginOutput };
   "auth.logout": { kind: "mutation"; input: AuthLogoutInput; output: AuthLogoutOutput };
   "auth.passkey_begin": { kind: "mutation"; input: AuthPasskeyBeginInput; output: AuthPasskeyBeginOutput };
@@ -1445,6 +1479,7 @@ export interface Services {
   "documents.auth_methods": { kind: "query"; input: DocumentsAuthMethodsInput; output: DocumentsAuthMethodsOutput };
   "documents.cancel": { kind: "mutation"; input: DocumentsCancelInput; output: DocumentsCancelOutput };
   "documents.check": { kind: "query"; input: DocumentsCheckInput; output: DocumentsCheckOutput };
+  "documents.counts": { kind: "query"; input: DocumentsCountsInput; output: DocumentsCountsOutput };
   "documents.create": { kind: "mutation"; input: DocumentsCreateInput; output: DocumentsCreateOutput };
   "documents.delete": { kind: "mutation"; input: DocumentsDeleteInput; output: DocumentsDeleteOutput };
   "documents.download": { kind: "query"; input: DocumentsDownloadInput; output: DocumentsDownloadOutput };
@@ -1493,6 +1528,7 @@ export interface Services {
   "system.update": { kind: "mutation"; input: SystemUpdateInput; output: SystemUpdateOutput };
   "system.version": { kind: "query"; input: SystemVersionInput; output: SystemVersionOutput };
   "users.accept_invite": { kind: "mutation"; input: UsersAcceptInviteInput; output: UsersAcceptInviteOutput };
+  "users.change_email": { kind: "mutation"; input: UsersChangeEmailInput; output: UsersChangeEmailOutput };
   "users.invite": { kind: "mutation"; input: UsersInviteInput; output: UsersInviteOutput };
   "users.list": { kind: "query"; input: UsersListInput; output: UsersListOutput };
   "users.list_invites": { kind: "query"; input: UsersListInvitesInput; output: UsersListInvitesOutput };

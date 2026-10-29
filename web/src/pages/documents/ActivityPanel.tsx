@@ -1,4 +1,4 @@
-import { Spinner } from '@/components/common';
+import { Loading } from '@/components/common';
 import { type DocumentView, useApi } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
@@ -49,7 +49,7 @@ export function ActivityPanel({ document }: { document: DocumentView }) {
         <section className="grid gap-2">
           <h3 className="font-medium">{t('Audit Trail')}</h3>
           {audit.isPending ? (
-            <Spinner />
+            <Loading className="py-6" />
           ) : (
             <ul className="grid gap-2">
               {audit.data?.map((entry) => (

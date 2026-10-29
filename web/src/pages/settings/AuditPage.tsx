@@ -1,6 +1,6 @@
 import { ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
-import { Spinner } from '@/components/common';
+import { Loading, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { type AuditView, call, useApi } from '@/lib/api';
@@ -62,11 +62,11 @@ export function AuditPage() {
               setMore([]);
             }}
             placeholder={t('Filter by action, e.g. document.signed')}
-            className="ms-auto max-w-xs font-mono text-xs"
+            className="ms-auto max-w-xs"
           />
         </div>
         {first.isPending ? (
-          <Spinner />
+          <Loading />
         ) : (
           <ul className="grid gap-1.5">
             {entries.map((e) => (

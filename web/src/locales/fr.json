@@ -695,5 +695,18 @@
   "“{title}”, completed {date}. The file is exactly as sealed.": "« {title} », terminé le {date}. Le fichier est exactement tel qu’il a été scellé.",
   "Update Link": "Lien de mise à jour",
   "A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.": "Une page qui installe une version indiquée par ref, comme le lien défini par Sliplane Deployer. Utilisé en l’absence de deploy hook.",
-  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "Mettre à jour ouvre Sliplane Deployer. Connectez-vous à Sliplane et confirmez ; les migrations s’exécutent au démarrage de la nouvelle version."
+  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "Mettre à jour ouvre Sliplane Deployer. Connectez-vous à Sliplane et confirmez ; les migrations s’exécutent au démarrage de la nouvelle version.",
+  "Generate Password": "Générer un mot de passe",
+  "To secure your account, turn on two-factor authentication or add a passkey under Settings once you are signed in.": "Pour sécuriser votre compte, activez l’authentification à deux facteurs ou ajoutez une clé d’accès dans les paramètres une fois connecté.",
+  "Try calls in the {explorer} or read the {docs}.": "Testez des appels dans l'{explorer} ou lisez le {docs}.",
+  "API guide": "guide de l'API",
+  "We sent a confirmation link to {email}. The email changes once it is opened.": "Nous avons envoyé un lien de confirmation à {email}. L'adresse change une fois le lien ouvert.",
+  "Edit Details": "Modifier les informations",
+  "A new email is confirmed by a link sent to it before it is used to sign in.": "Une nouvelle adresse est confirmée par un lien qui y est envoyé avant de servir à se connecter.",
+  "Email Changed": "Adresse e-mail modifiée",
+  "You now sign in with {email}.": "Vous vous connectez désormais avec {email}.",
+  "Continue": "Continuer",
+  "Confirm Your New Email": "Confirmez votre nouvelle adresse e-mail",
+  "Confirm to start signing in with this address.": "Confirmez pour vous connecter avec cette adresse.",
+  "Confirm Email": "Confirmer l'adresse e-mail"
 }

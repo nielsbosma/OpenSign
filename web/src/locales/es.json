@@ -695,5 +695,18 @@
   "“{title}”, completed {date}. The file is exactly as sealed.": "«{title}», completado el {date}. El archivo está exactamente como se selló.",
   "Update Link": "Enlace de actualización",
   "A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.": "Una página que instala una versión indicada como ref, como el enlace que configura Sliplane Deployer. Se usa cuando no hay un deploy hook.",
-  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "Actualizar ahora abre Sliplane Deployer. Inicia sesión en Sliplane y confirma; las migraciones se ejecutan cuando arranca la nueva versión."
+  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "Actualizar ahora abre Sliplane Deployer. Inicia sesión en Sliplane y confirma; las migraciones se ejecutan cuando arranca la nueva versión.",
+  "Generate Password": "Generar contraseña",
+  "To secure your account, turn on two-factor authentication or add a passkey under Settings once you are signed in.": "Para proteger tu cuenta, activa la autenticación en dos pasos o añade una clave de acceso en Configuración cuando hayas iniciado sesión.",
+  "Try calls in the {explorer} or read the {docs}.": "Prueba llamadas en el {explorer} o lee la {docs}.",
+  "API guide": "guía de la API",
+  "We sent a confirmation link to {email}. The email changes once it is opened.": "Enviamos un enlace de confirmación a {email}. El correo cambia cuando se abre.",
+  "Edit Details": "Editar datos",
+  "A new email is confirmed by a link sent to it before it is used to sign in.": "Un correo nuevo se confirma con un enlace enviado a él antes de usarse para iniciar sesión.",
+  "Email Changed": "Correo cambiado",
+  "You now sign in with {email}.": "Ahora inicias sesión con {email}.",
+  "Continue": "Continuar",
+  "Confirm Your New Email": "Confirma tu nuevo correo",
+  "Confirm to start signing in with this address.": "Confirma para empezar a iniciar sesión con esta dirección.",
+  "Confirm Email": "Confirmar correo"
 }

@@ -695,5 +695,18 @@
   "“{title}”, completed {date}. The file is exactly as sealed.": "«{title}», завершён {date}. Файл в точности такой, каким был запечатан.",
   "Update Link": "Ссылка для обновления",
   "A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.": "Страница, которая устанавливает выпуск, указанный в ref, например ссылка, заданная Sliplane Deployer. Используется, если нет deploy hook.",
-  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "«Обновить сейчас» открывает Sliplane Deployer. Войдите в Sliplane и подтвердите; миграции выполняются при запуске новой версии."
+  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "«Обновить сейчас» открывает Sliplane Deployer. Войдите в Sliplane и подтвердите; миграции выполняются при запуске новой версии.",
+  "Generate Password": "Сгенерировать пароль",
+  "To secure your account, turn on two-factor authentication or add a passkey under Settings once you are signed in.": "Чтобы защитить учётную запись, после входа включите двухфакторную аутентификацию или добавьте ключ доступа в настройках.",
+  "Try calls in the {explorer} or read the {docs}.": "Пробуйте запросы в {explorer} или прочитайте {docs}.",
+  "API guide": "руководство по API",
+  "We sent a confirmation link to {email}. The email changes once it is opened.": "Мы отправили ссылку для подтверждения на {email}. Адрес изменится, когда её откроют.",
+  "Edit Details": "Изменить данные",
+  "A new email is confirmed by a link sent to it before it is used to sign in.": "Новый адрес подтверждается по ссылке, отправленной на него, прежде чем им можно будет входить.",
+  "Email Changed": "Адрес изменён",
+  "You now sign in with {email}.": "Теперь вы входите с {email}.",
+  "Continue": "Продолжить",
+  "Confirm Your New Email": "Подтвердите новый адрес",
+  "Confirm to start signing in with this address.": "Подтвердите, чтобы входить с этим адресом.",
+  "Confirm Email": "Подтвердить адрес"
 }

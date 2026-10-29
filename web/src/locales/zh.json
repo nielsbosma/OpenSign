@@ -695,5 +695,18 @@
   "“{title}”, completed {date}. The file is exactly as sealed.": "“{title}”，完成于 {date}。该文件与封印时完全一致。",
   "Update Link": "更新链接",
   "A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.": "安装 ref 所指定版本的页面，例如 Sliplane Deployer 设置的链接。没有 deploy hook 时使用。",
-  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "“立即更新”会打开 Sliplane Deployer。登录 Sliplane 并确认；新版本启动时会运行迁移。"
+  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "“立即更新”会打开 Sliplane Deployer。登录 Sliplane 并确认；新版本启动时会运行迁移。",
+  "Generate Password": "生成密码",
+  "To secure your account, turn on two-factor authentication or add a passkey under Settings once you are signed in.": "为保护您的账户，请在登录后到“设置”中开启双重身份验证或添加通行密钥。",
+  "Try calls in the {explorer} or read the {docs}.": "在 {explorer} 中试用调用，或阅读 {docs}。",
+  "API guide": "API 指南",
+  "We sent a confirmation link to {email}. The email changes once it is opened.": "我们已向 {email} 发送确认链接。打开链接后邮箱才会更改。",
+  "Edit Details": "编辑信息",
+  "A new email is confirmed by a link sent to it before it is used to sign in.": "新邮箱需先通过发送到该地址的链接确认，才能用于登录。",
+  "Email Changed": "邮箱已更改",
+  "You now sign in with {email}.": "你现在使用 {email} 登录。",
+  "Continue": "继续",
+  "Confirm Your New Email": "确认你的新邮箱",
+  "Confirm to start signing in with this address.": "确认后即可使用此地址登录。",
+  "Confirm Email": "确认邮箱"
 }

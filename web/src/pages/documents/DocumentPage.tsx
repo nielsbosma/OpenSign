@@ -20,7 +20,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
-import { ConfirmButton, CopyButton, EmptyState, Spinner } from '@/components/common';
+import { ConfirmButton, CopyButton, EmptyState, Loading, Spinner } from '@/components/common';
 import { PdfLoading, PdfPages, usePdf } from '@/components/PdfPages';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -592,7 +592,7 @@ export function DocumentPage() {
     if (doc && placingFor === null) setPlacingFor(doc.parties.find((p) => p.role !== 'viewer')?.id ?? null);
   }, [doc?.parties.length]);
 
-  if (query.isPending) return <Spinner />;
+  if (query.isPending) return <Loading />;
   if (!doc)
     return (
       <EmptyState title={t('This document is not available')}>{t('It may have been deleted, or it was not shared with you.')}</EmptyState>

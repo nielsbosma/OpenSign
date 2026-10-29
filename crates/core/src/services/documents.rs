@@ -142,6 +142,53 @@ impl Service for List {
     }
 }
 
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CountsInput {
+    /// Matches the title, or an exact external id, as in documents.list.
+    pub search: Option<String>,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct StatusCounts {
+    pub all: i64,
+    /// Documents per status: draft, pending, completed, declined, canceled and expired. Missing means none.
+    pub by_status: std::collections::BTreeMap<String, i64>,
+}
+
+pub struct Counts;
+
+#[async_trait]
+impl Service for Counts {
+    type Input = CountsInput;
+    type Output = StatusCounts;
+    const META: Meta = Meta::query(
+        "documents.counts",
+        "Count the documents you can see, in total and per status, optionally matching a search on the title. Use it for an overview before listing.",
+        Access::Authenticated,
+    );
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CountsInput) -> Result<StatusCounts> {
+        let (read_all, user_id, can_create) = visibility(ctx)?;
+        let search = input.search.as_deref().map(str::trim).filter(|s| !s.is_empty());
+        let rows: Vec<(String, i64)> = sqlx::query_as(&format!(
+            "select d.status, count(*) from documents d
+             where {VISIBLE} and not d.is_template
+               and ($4::text is null or d.title ilike $5 escape '\\' or d.external_id = $4)
+             group by d.status"
+        ))
+        .bind(read_all)
+        .bind(user_id)
+        .bind(can_create)
+        .bind(search)
+        .bind(search.map(like_pattern))
+        .fetch_all(&mut *conn)
+        .await?;
+        Ok(StatusCounts { all: rows.iter().map(|(_, n)| n).sum(), by_status: rows.into_iter().collect() })
+    }
+}
+
 pub struct Get;
 
 #[async_trait]

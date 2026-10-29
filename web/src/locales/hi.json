@@ -695,5 +695,18 @@
   "“{title}”, completed {date}. The file is exactly as sealed.": "“{title}”, {date} को पूरा हुआ। फ़ाइल ठीक वैसी ही है जैसी मुहर लगते समय थी।",
   "Update Link": "अपडेट लिंक",
   "A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.": "एक पेज जो ref में दी गई रिलीज़ इंस्टॉल करता है, जैसे Sliplane Deployer द्वारा सेट किया गया लिंक। deploy hook न होने पर इस्तेमाल होता है।",
-  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "\"अभी अपडेट करें\" Sliplane Deployer खोलता है। Sliplane में साइन इन करें और पुष्टि करें; नया संस्करण शुरू होने पर माइग्रेशन चलते हैं।"
+  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "\"अभी अपडेट करें\" Sliplane Deployer खोलता है। Sliplane में साइन इन करें और पुष्टि करें; नया संस्करण शुरू होने पर माइग्रेशन चलते हैं।",
+  "Generate Password": "पासवर्ड बनाएं",
+  "To secure your account, turn on two-factor authentication or add a passkey under Settings once you are signed in.": "अपने खाते को सुरक्षित रखने के लिए, साइन इन करने के बाद सेटिंग्स में दो-चरणीय प्रमाणीकरण चालू करें या पासकी जोड़ें।",
+  "Try calls in the {explorer} or read the {docs}.": "{explorer} में कॉल आज़माएँ या {docs} पढ़ें।",
+  "API guide": "API गाइड",
+  "We sent a confirmation link to {email}. The email changes once it is opened.": "हमने {email} पर पुष्टि लिंक भेजा है। लिंक खोलने पर ईमेल बदल जाएगा।",
+  "Edit Details": "विवरण संपादित करें",
+  "A new email is confirmed by a link sent to it before it is used to sign in.": "नया ईमेल साइन इन के लिए उपयोग होने से पहले उस पर भेजे गए लिंक से पुष्ट किया जाता है।",
+  "Email Changed": "ईमेल बदल गया",
+  "You now sign in with {email}.": "अब आप {email} से साइन इन करते हैं।",
+  "Continue": "जारी रखें",
+  "Confirm Your New Email": "अपने नए ईमेल की पुष्टि करें",
+  "Confirm to start signing in with this address.": "इस पते से साइन इन शुरू करने के लिए पुष्टि करें।",
+  "Confirm Email": "ईमेल की पुष्टि करें"
 }

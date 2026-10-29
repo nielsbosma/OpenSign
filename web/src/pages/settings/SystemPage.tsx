@@ -1,6 +1,6 @@
 import { ArrowUpCircle, CheckCircle2, ExternalLink, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import { ConfirmButton, Spinner } from '@/components/common';
+import { ConfirmButton, Loading, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { useApi, useApiMutation } from '@/lib/api';
 import { formatDate, formatDateTime } from '@/lib/format';
@@ -20,7 +20,7 @@ function VersionCard() {
   const update = useApiMutation('system.update', {
     onSuccess: () => toast.success(t('Update started. OpenSign restarts on the new version in a minute or two.')),
   });
-  if (!version.data) return <Spinner />;
+  if (!version.data) return <Loading />;
   const v = check.data ?? version.data;
   const tag = v.latest?.version ?? 'latest';
   const released = v.latest?.publishedAt ? formatDate(v.latest.publishedAt) : null;
@@ -37,7 +37,7 @@ function VersionCard() {
             rel="noreferrer"
             className="text-primary hover:underline"
           >
-            GitHub
+            OpenSign GitHub
           </a>
         ),
       })}
@@ -165,7 +165,7 @@ export function SystemPage() {
           </SettingsCard>
         </>
       ) : (
-        <Spinner />
+        <Loading />
       )}
     </div>
   );

@@ -695,5 +695,18 @@
   "“{title}”, completed {date}. The file is exactly as sealed.": "”{title}“، {date} کو مکمل ہوئی۔ فائل بالکل ویسی ہی ہے جیسی مہر لگتے وقت تھی۔",
   "Update Link": "اپ ڈیٹ لنک",
   "A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.": "ایک صفحہ جو ref میں دیا گیا ریلیز انسٹال کرتا ہے، جیسے Sliplane Deployer کا مقرر کردہ لنک۔ جب کوئی deploy hook نہ ہو تو استعمال ہوتا ہے۔",
-  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "\"ابھی اپ ڈیٹ کریں\" Sliplane Deployer کھولتا ہے۔ Sliplane میں سائن ان کریں اور تصدیق کریں؛ نیا ورژن شروع ہونے پر مائیگریشنز چلتی ہیں۔"
+  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "\"ابھی اپ ڈیٹ کریں\" Sliplane Deployer کھولتا ہے۔ Sliplane میں سائن ان کریں اور تصدیق کریں؛ نیا ورژن شروع ہونے پر مائیگریشنز چلتی ہیں۔",
+  "Generate Password": "پاس ورڈ بنائیں",
+  "To secure your account, turn on two-factor authentication or add a passkey under Settings once you are signed in.": "اپنے اکاؤنٹ کو محفوظ رکھنے کے لیے، سائن اِن کرنے کے بعد ترتیبات میں دو مرحلہ تصدیق آن کریں یا پاس کی شامل کریں۔",
+  "Try calls in the {explorer} or read the {docs}.": "{explorer} میں کالز آزمائیں یا {docs} پڑھیں۔",
+  "API guide": "API گائیڈ",
+  "We sent a confirmation link to {email}. The email changes once it is opened.": "ہم نے {email} پر تصدیقی لنک بھیجا ہے۔ لنک کھلنے پر ای میل بدل جائے گی۔",
+  "Edit Details": "تفصیلات میں ترمیم",
+  "A new email is confirmed by a link sent to it before it is used to sign in.": "نئی ای میل سائن اِن کے لیے استعمال ہونے سے پہلے اس پر بھیجے گئے لنک سے تصدیق ہوتی ہے۔",
+  "Email Changed": "ای میل تبدیل ہو گئی",
+  "You now sign in with {email}.": "اب آپ {email} سے سائن اِن کرتے ہیں۔",
+  "Continue": "جاری رکھیں",
+  "Confirm Your New Email": "اپنی نئی ای میل کی تصدیق کریں",
+  "Confirm to start signing in with this address.": "اس پتے سے سائن اِن شروع کرنے کے لیے تصدیق کریں۔",
+  "Confirm Email": "ای میل کی تصدیق کریں"
 }

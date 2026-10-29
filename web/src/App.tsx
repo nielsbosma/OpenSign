@@ -6,6 +6,7 @@ import { useApi } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { ApiExplorerPage } from '@/pages/ApiExplorerPage';
+import { ConfirmEmailPage } from '@/pages/auth/ConfirmEmailPage';
 import { InvitePage } from '@/pages/auth/InvitePage';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { ForgotPasswordPage, ResetPasswordPage } from '@/pages/auth/PasswordPages';
@@ -64,6 +65,7 @@ export function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/confirm-email" element={<ConfirmEmailPage />} />
       <Route path="/invite" element={<InvitePage />} />
       <Route path="/sign" element={<SignPage />} />
       <Route path="/verify" element={<VerifyPage />} />

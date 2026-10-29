@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { toast } from 'sonner';
-import { ConfirmButton, Field, Logo, Spinner } from '@/components/common';
+import { ConfirmButton, Field, Loading, Logo, Spinner } from '@/components/common';
 import { SearchSelect } from '@/components/SearchSelect';
 import { Button } from '@/components/ui/button';
 import { FilePicker } from '@/components/ui/file-picker';
@@ -588,7 +588,7 @@ export function SettingsGroup({ group }: { group: Group }) {
     setCertFiles({});
   }, [group]);
 
-  if (current.isPending) return <Spinner />;
+  if (current.isPending) return <Loading />;
   const saved = (current.data?.values ?? {}) as Record<string, unknown>;
   const pinned = current.data?.pinned ?? [];
   const value = (key: string) => (key in draft ? draft[key] : saved[key]);
@@ -702,7 +702,7 @@ export function SettingsGroup({ group }: { group: Group }) {
                         />
                       )}
                       {isSet && !locked && (
-                        <Button type="button" variant="ghost" className="text-destructive" onClick={() => set(f.key, '')}>
+                        <Button type="button" variant="danger" onClick={() => set(f.key, '')}>
                           {t('Clear')}
                         </Button>
                       )}
@@ -738,7 +738,7 @@ export function SettingsGroup({ group }: { group: Group }) {
                         }}
                       />
                       {!!current && !locked && (
-                        <Button type="button" variant="ghost" className="text-destructive" onClick={() => set(f.key, '')}>
+                        <Button type="button" variant="danger" onClick={() => set(f.key, '')}>
                           {t('Clear')}
                         </Button>
                       )}

@@ -48,8 +48,9 @@ A document belongs to the person who created it. To let a colleague work on it, 
 
 In **Settings → Users** an admin can:
 
-- change someone's name or role. A role change signs them out everywhere, and also narrows or widens what their API keys can do, since a key never has more than its owner's role (see [REST API](api.md#api-keys)),
+- **edit details** to change someone's name or email. A new email is not used until someone opens the confirmation link sent to it within 24 hours; the old address then gets a notice that it changed,
+- change someone's role. A role change signs them out everywhere, and also narrows or widens what their API keys can do, since a key never has more than its owner's role (see [REST API](api.md#api-keys)),
 - **deactivate** an account, which signs the person out everywhere and revokes their API keys; **reactivate** it later if needed,
 - **reset two-factor** for someone who lost their phone. If two-factor is required, they set it up again at their next sign-in.
 
-Accounts are deactivated rather than deleted, so the audit trail always knows who did what. You cannot change your own role or deactivate yourself; ask another admin. Users can change their own password, two-factor and passkeys under **Settings → Account**, but not their name, email or role.
+Accounts are deactivated rather than deleted, so the audit trail always knows who did what. You cannot change your own role or deactivate yourself; ask another admin. Users can change their own password, two-factor and passkeys under **Settings → Account**. Admins can also edit their own name and email there; everyone else asks an admin.

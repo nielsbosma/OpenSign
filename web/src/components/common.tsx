@@ -12,6 +12,15 @@ export function Spinner({ className }: { className?: string }) {
   return <Loader2 className={cn('size-4 animate-spin text-muted-foreground', className)} aria-label={t('Loading')} />;
 }
 
+/** A spinner centred in the space the content will take. */
+export function Loading({ className }: { className?: string }) {
+  return (
+    <div className={cn('flex items-center justify-center py-16', className)}>
+      <Spinner className="size-5" />
+    </div>
+  );
+}
+
 export function safeColor(color?: string | null) {
   return color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : undefined;
 }
@@ -206,13 +215,7 @@ export function ConfirmButton({
           {icon}
         </IconButton>
       ) : (
-        <Button
-          type="button"
-          variant="ghost"
-          className="text-destructive hover:text-destructive"
-          onClick={() => setOpen(true)}
-          disabled={disabled}
-        >
+        <Button type="button" variant="danger" onClick={() => setOpen(true)} disabled={disabled}>
           {label}
         </Button>
       )}

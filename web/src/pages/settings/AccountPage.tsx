@@ -1,8 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { Pencil } from 'lucide-react';
 import QRCode from 'qrcode';
 import { type FormEvent, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { CopyButton, Field, Spinner } from '@/components/common';
+import { CopyButton, Field, Loading, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -14,6 +15,7 @@ import { createPasskey, passkeyCanceled, passkeysSupported } from '@/lib/passkey
 import { useSession } from '@/lib/session';
 import { FormError, PASSWORD_HINT } from '../auth/AuthLayout';
 import { SettingsCard } from './SettingsLayout';
+import { EditUserDialog } from './UsersPage';
 
 function PasswordCard() {
   const [current, setCurrent] = useState('');
@@ -281,7 +283,7 @@ function McpCard() {
         <CopyButton value={url} />
       </div>
       {connections.isPending ? (
-        <Spinner />
+        <Loading />
       ) : !connections.data?.length ? (
         <p className="text-muted-foreground">{t('No apps connected.')}</p>
       ) : (
@@ -295,7 +297,7 @@ function McpCard() {
                   {c.lastUsedAt ? ` · ${t('last used {date}', { date: formatDateTime(c.lastUsedAt) })}` : ''}
                 </div>
               </div>
-              <Button variant="ghost" className="text-destructive" onClick={() => revoke.mutate({ id: c.id })}>
+              <Button variant="danger" onClick={() => revoke.mutate({ id: c.id })}>
                 {t('Disconnect')}
               </Button>
             </li>
@@ -335,7 +337,8 @@ function LanguageCard() {
 }
 
 export function AccountPage() {
-  const { user } = useSession();
+  const { user, can } = useSession();
+  const [editing, setEditing] = useState(false);
   return (
     <div className="grid gap-6">
       <SettingsCard
@@ -343,8 +346,15 @@ export function AccountPage() {
         title={user?.name ?? t('You')}
         description={`${user?.email} · ${user ? (ROLE_LABELS[user.role] ?? user.role) : ''}`}
       >
-        <p className="text-muted-foreground">{t('Ask an Admin to change your name, email or role.')}</p>
+        {can('users.manage') ? (
+          <Button variant="outline" onClick={() => setEditing(true)}>
+            <Pencil /> {t('Edit Details')}
+          </Button>
+        ) : (
+          <p className="text-muted-foreground">{t('Ask an Admin to change your name, email or role.')}</p>
+        )}
       </SettingsCard>
+      <EditUserDialog user={editing && user ? user : null} onOpenChange={setEditing} />
       <LanguageCard />
       <PasskeysCard />
       <TwoFactorCard />
