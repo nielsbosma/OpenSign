@@ -54,7 +54,7 @@ export function DocumentsPage({ templates }: { templates: boolean }) {
       <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         {!templates && (
           <Tabs value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
-            <TabsList className="max-w-full justify-start overflow-x-auto">
+            <TabsList className="max-w-full scrollbar-none justify-start overflow-x-auto overflow-y-hidden">
               {FILTERS.map((f) => (
                 <TabsTrigger key={f} value={f}>
                   {f === 'all' ? 'All' : STATUS_LABELS[f]}

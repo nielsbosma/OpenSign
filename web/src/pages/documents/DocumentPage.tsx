@@ -1,7 +1,10 @@
 import {
   ArrowLeft,
+  ChevronDown,
+  ChevronUp,
   Download,
   HandHelping,
+  History,
   Link2,
   MoreHorizontal,
   Paperclip,
@@ -117,11 +120,17 @@ function PartyCard({
   attachments,
   onEdit,
   onRemove,
+  step,
+  onMove,
 }: {
   party: PartyView;
   parties: PartyView[];
   editable: boolean;
   pending: boolean;
+  /** The party's step when signing in order. */
+  step?: number;
+  /** Moves the party one step earlier (-1) or later (1); absent at that end of the list. */
+  onMove?: { up?: () => void; down?: () => void };
   documentId: string;
   attachments: AttachmentRequest[];
   onEdit: () => void;
@@ -134,7 +143,17 @@ function PartyCard({
   return (
     <div className="rounded-md border p-3">
       <div className="flex items-start gap-2.5">
-        <span className="mt-1 size-2.5 shrink-0 rounded-full" style={{ backgroundColor: partyColor(parties, party.id) }} />
+        {step ? (
+          <span
+            className="flex size-5 shrink-0 items-center justify-center rounded-full font-semibold text-[11px] text-white"
+            style={{ backgroundColor: partyColor(parties, party.id) }}
+            title={`Step ${step} in the signing order`}
+          >
+            {step}
+          </span>
+        ) : (
+          <span className="mt-1 size-2.5 shrink-0 rounded-full" style={{ backgroundColor: partyColor(parties, party.id) }} />
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate font-medium">{party.name}</span>
@@ -187,6 +206,30 @@ function PartyCard({
             </ul>
           )}
         </div>
+        {editable && onMove && (
+          <div className="-my-1 flex flex-col">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-5"
+              disabled={!onMove.up}
+              onClick={onMove.up}
+              aria-label={`Move ${party.name} earlier`}
+            >
+              <ChevronUp />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-5"
+              disabled={!onMove.down}
+              onClick={onMove.down}
+              aria-label={`Move ${party.name} later`}
+            >
+              <ChevronDown />
+            </Button>
+          </div>
+        )}
         {editable && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -393,13 +436,6 @@ function DetailsSection({ doc }: { doc: DocumentView }) {
           />
         </div>
       </div>
-      <label className="flex items-center justify-between gap-3">
-        <span>
-          <span className="block">Sign in Order</span>
-          <span className="block text-xs text-muted-foreground">Parties are invited one signing-order group at a time.</span>
-        </span>
-        <Switch checked={doc.sequential} onCheckedChange={(sequential) => update.mutate({ id: doc.id, sequential })} />
-      </label>
     </Section>
   );
 }
@@ -446,8 +482,10 @@ export function DocumentPage() {
   const [deleting, setDeleting] = useState(false);
   const [holding, setHolding] = useState(false);
   const [holdReason, setHoldReason] = useState('');
+  const [showActivity, setShowActivity] = useState(false);
 
   const setParties = useApiMutation('documents.set_parties', { invalidates: ['documents.'] });
+  const setSequential = useApiMutation('documents.update', { invalidates: ['documents.'] });
   const removeFile = useApiMutation('documents.remove_file', { invalidates: ['documents.'] });
   const remind = useApiMutation('documents.remind', { onSuccess: () => toast.success('Reminders sent') });
   const cancel = useApiMutation('documents.cancel', { invalidates: ['documents.'], onSuccess: () => setCanceling(false) });
@@ -488,6 +526,21 @@ export function DocumentPage() {
   useEffect(() => {
     if (doc && placingFor !== null && !doc.parties.some((p) => p.id === placingFor)) setPlacingFor(null);
   }, [doc, placingFor]);
+  useEffect(() => {
+    if (!draft || !selected) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return;
+      if (e.key === 'Escape') setSelected(null);
+      else if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        update(fields.filter((f) => f.key !== selected));
+        setSelected(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [draft, selected, fields, update]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: only when the parties change
   useEffect(() => {
     if (doc && placingFor === null) setPlacingFor(doc.parties.find((p) => p.role !== 'viewer')?.id ?? null);
@@ -498,6 +551,22 @@ export function DocumentPage() {
 
   const saveParties = (next: PartyInput[]) => setParties.mutate({ documentId: doc.id, parties: next });
   const allParties = () => doc.parties.map((p) => partyToInput(p));
+  const signers = doc.parties.filter((p) => p.role !== 'viewer');
+  const orderedParties = [...doc.parties].sort(
+    (a, b) => Number(a.role === 'viewer') - Number(b.role === 'viewer') || a.signOrder - b.signOrder,
+  );
+  // Parties sharing a number sign together, so steps count distinct numbers.
+  const steps = new Map([...new Set(signers.map((p) => p.signOrder))].sort((a, b) => a - b).map((order, i) => [order, i + 1]));
+  const moves = (id: string) => {
+    const order = orderedParties.filter((p) => p.role !== 'viewer').map((p) => p.id);
+    const i = order.indexOf(id);
+    const to = (j: number) => () => {
+      const next = [...order];
+      [next[i], next[j]] = [next[j]!, next[i]!];
+      saveParties(allParties().map((p) => (p.id && next.includes(p.id) ? { ...p, signOrder: next.indexOf(p.id) + 1 } : p)));
+    };
+    return { up: i > 0 ? to(i - 1) : undefined, down: i < order.length - 1 ? to(i + 1) : undefined };
+  };
 
   const place = (page: number, x: number, y: number, kind: FieldKind | null = armed) => {
     if (!draft) return;
@@ -602,6 +671,9 @@ export function DocumentPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setShowActivity(true)}>
+                <History /> Activity
+              </DropdownMenuItem>
               {doc.status !== 'draft' && (
                 <DropdownMenuItem onSelect={() => download('original')}>
                   <Download /> Original PDF
@@ -633,7 +705,7 @@ export function DocumentPage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">
           {draft && doc.files.length > 0 && (
-            <div className="sticky top-0 z-10 mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border bg-background/95 p-2 backdrop-blur">
+            <div className="sticky top-3 z-10 mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border bg-background/95 p-2 backdrop-blur">
               <select
                 aria-label="Fields for"
                 value={placingFor ?? ''}
@@ -728,12 +800,11 @@ export function DocumentPage() {
           )}
         </div>
 
-        <aside className="min-w-0">
+        <aside className="min-w-0 lg:sticky lg:top-3 lg:max-h-[calc(100svh-1.5rem)] lg:self-start lg:overflow-y-auto lg:pb-4 [scrollbar-width:thin]">
           <Tabs defaultValue="setup">
             <TabsList className="w-full">
               <TabsTrigger value="setup">{draft ? 'Setup' : 'Parties'}</TabsTrigger>
               <TabsTrigger value="review">Review</TabsTrigger>
-              <TabsTrigger value="activity">Activity</TabsTrigger>
             </TabsList>
             <TabsContent value="setup" className="mt-4 grid gap-6">
               <Section
@@ -747,8 +818,34 @@ export function DocumentPage() {
                 }
               >
                 {doc.parties.length === 0 && <p className="text-muted-foreground">Add the people who sign, approve or receive a copy.</p>}
-                {doc.parties.map((p) => (
+                {draft && signers.length > 1 && (
+                  <label className="flex items-center justify-between gap-3 rounded-md bg-muted/50 px-3 py-2">
+                    <span>
+                      <span className="block">Sign in Order</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {doc.sequential
+                          ? 'Each step is invited when the one before has signed. Use the arrows to reorder; give parties the same step under Edit to sign together.'
+                          : 'Everyone is invited at once. Turn on to invite one step at a time.'}
+                      </span>
+                    </span>
+                    <Switch
+                      checked={doc.sequential}
+                      onCheckedChange={(sequential) => {
+                        setSequential.mutate({ id: doc.id, sequential });
+                        // Everyone on the same step would still sign at once, so start from the listed order.
+                        if (sequential && steps.size === 1) {
+                          saveParties(
+                            allParties().map((p) => ({ ...p, signOrder: signers.findIndex((s) => s.id === p.id) + 1 || p.signOrder })),
+                          );
+                        }
+                      }}
+                    />
+                  </label>
+                )}
+                {(doc.sequential ? orderedParties : doc.parties).map((p) => (
                   <PartyCard
+                    step={doc.sequential && p.role !== 'viewer' ? steps.get(p.signOrder) : undefined}
+                    onMove={doc.sequential && p.role !== 'viewer' && signers.length > 1 ? moves(p.id) : undefined}
                     key={p.id}
                     party={p}
                     parties={doc.parties}
@@ -799,9 +896,6 @@ export function DocumentPage() {
             <TabsContent value="review" className="mt-4">
               <ReviewPanel documentId={doc.id} draft={draft} />
             </TabsContent>
-            <TabsContent value="activity" className="mt-4">
-              <ActivityPanel document={doc} />
-            </TabsContent>
           </Tabs>
         </aside>
       </div>
@@ -818,6 +912,17 @@ export function DocumentPage() {
       <SendDialog doc={doc} open={sending} onOpenChange={setSending} onSent={setLinks} />
       {doc.isTemplate && <BulkSendDialog templateId={doc.id} templateTitle={doc.title} open={bulkSending} onOpenChange={setBulkSending} />}
       <LinksDialog links={links} onClose={() => setLinks([])} />
+      <Dialog open={showActivity} onOpenChange={setShowActivity}>
+        <DialogContent className="flex max-h-[85svh] flex-col sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Activity</DialogTitle>
+            <DialogDescription>What happened to this document, and the full audit trail.</DialogDescription>
+          </DialogHeader>
+          <div className="-mx-6 min-h-0 overflow-y-auto px-6">
+            <ActivityPanel document={doc} />
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog open={canceling} onOpenChange={setCanceling}>
         <DialogContent>
           <DialogHeader>

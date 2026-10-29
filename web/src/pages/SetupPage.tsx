@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2 } from 'lucide-react';
+import { Check, CheckCircle2 } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { Field, Spinner } from '@/components/common';
@@ -9,17 +9,54 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { call, useApi } from '@/lib/api';
 import { useSession } from '@/lib/session';
+import { cn } from '@/lib/utils';
 import { AuthLayout, FormError, PASSWORD_HINT } from './auth/AuthLayout';
+
+const STEPS = ['Administrator', 'Email'];
 
 function Steps({ step }: { step: 1 | 2 }) {
   return (
-    <ol className="mb-5 flex gap-4 text-xs text-muted-foreground">
-      {['Administrator', 'Email'].map((label, i) => (
-        <li key={label} className={i + 1 === step ? 'font-medium text-foreground' : undefined}>
-          {i + 1}. {label}
-        </li>
-      ))}
+    <ol className="mb-6 flex items-center" aria-label="Setup progress">
+      {STEPS.map((label, i) => {
+        const n = i + 1;
+        const state = n < step ? 'done' : n === step ? 'current' : 'upcoming';
+        return (
+          <li
+            key={label}
+            className={cn('flex items-center', n < STEPS.length && 'flex-1')}
+            aria-current={state === 'current' ? 'step' : undefined}
+          >
+            <span
+              className={cn(
+                'flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors',
+                state === 'done' && 'border-primary bg-primary text-primary-foreground',
+                state === 'current' && 'border-primary bg-primary/10 text-primary ring-4 ring-primary/10',
+                state === 'upcoming' && 'border-border bg-background text-muted-foreground',
+              )}
+            >
+              {state === 'done' ? <Check className="size-3.5" strokeWidth={3} /> : n}
+            </span>
+            <span
+              className={cn(
+                'ml-2 text-sm whitespace-nowrap',
+                state === 'upcoming' ? 'text-muted-foreground' : 'font-medium text-foreground',
+              )}
+            >
+              {label}
+            </span>
+            {n < STEPS.length && <span className={cn('mx-3 h-px flex-1', n < step ? 'bg-primary' : 'bg-border')} aria-hidden />}
+          </li>
+        );
+      })}
     </ol>
+  );
+}
+
+function ExternalLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noreferrer" className="font-medium text-primary underline-offset-2 hover:underline">
+      {children}
+    </a>
   );
 }
 
@@ -245,7 +282,15 @@ function EmailStep() {
           <Field
             label="Resend API Key"
             htmlFor="apiKey"
-            hint={values.apiKey ? 'A key is saved. Leave empty to keep it.' : 'Create one at resend.com with permission to send email.'}
+            hint={
+              values.apiKey ? (
+                'A key is saved. Leave empty to keep it.'
+              ) : (
+                <>
+                  Create one in <ExternalLink href="https://resend.com/api-keys">Resend API Keys</ExternalLink> with permission to send email.
+                </>
+              )
+            }
           >
             <Input
               id="apiKey"
@@ -262,7 +307,15 @@ function EmailStep() {
           <Field
             label="From Address"
             htmlFor="fromAddress"
-            hint={smtp ? 'An address the server may send from.' : 'On a domain you verified in Resend.'}
+            hint={
+              smtp ? (
+                'An address the server may send from.'
+              ) : (
+                <>
+                  On a domain you <ExternalLink href="https://resend.com/domains">verified in Resend</ExternalLink>.
+                </>
+              )
+            }
           >
             <Input
               id="fromAddress"

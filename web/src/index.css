@@ -116,3 +116,10 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
