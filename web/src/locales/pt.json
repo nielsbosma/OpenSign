@@ -942,5 +942,8 @@
   "New parties: {names}. Add their details.": "Novas partes: {names}. Adicione os dados delas.",
   "Some tags or form fields in {file} were not used": "Algumas etiquetas ou campos de formulário em {file} não foram usados",
   "No places for new fields were found": "Nenhum local para novos campos foi encontrado",
-  "Add a signer first: signature and initials fields belong to a signer": "Adicione primeiro um signatário: campos de assinatura e iniciais pertencem a um signatário"
+  "Add a signer first: signature and initials fields belong to a signer": "Adicione primeiro um signatário: campos de assinatura e iniciais pertencem a um signatário",
+  "Export Data": "Exportar Dados",
+  "Download the values filled in on these documents": "Baixe os valores preenchidos nestes documentos",
+  "There are no documents to export": "Não há documentos para exportar"
 }

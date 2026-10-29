@@ -942,5 +942,8 @@
   "New parties: {names}. Add their details.": "新参与方：{names}。请补充他们的信息。",
   "Some tags or form fields in {file} were not used": "{file} 中的部分标签或表单字段未被使用",
   "No places for new fields were found": "未找到可放置新字段的位置",
-  "Add a signer first: signature and initials fields belong to a signer": "请先添加签署人：签名和姓名缩写字段属于签署人"
+  "Add a signer first: signature and initials fields belong to a signer": "请先添加签署人：签名和姓名缩写字段属于签署人",
+  "Export Data": "导出数据",
+  "Download the values filled in on these documents": "下载这些文档中填写的值",
+  "There are no documents to export": "没有可导出的文档"
 }

@@ -176,6 +176,8 @@ Once the last party has signed, OpenSign seals the document in the background, u
 
 Every download is recorded in the audit trail.
 
+To get what the parties filled in as data, choose **Export Data** in the **⋯** menu. See [Exporting filled-in data](data-export.md).
+
 ## Sharing with colleagues
 
 Documents belong to the person who created them. To let a colleague see one, share it with them, and optionally let them change it. Managers, auditors and admins can see every document without sharing. See [Users and roles](users-and-roles.md).

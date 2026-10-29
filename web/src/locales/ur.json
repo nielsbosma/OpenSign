@@ -942,5 +942,8 @@
   "New parties: {names}. Add their details.": "نئے فریق: {names}۔ ان کی تفصیلات شامل کریں۔",
   "Some tags or form fields in {file} were not used": "{file} کے کچھ ٹیگز یا فارم فیلڈز استعمال نہیں ہوئے",
   "No places for new fields were found": "نئے فیلڈز کے لیے کوئی جگہ نہیں ملی",
-  "Add a signer first: signature and initials fields belong to a signer": "پہلے ایک دستخط کنندہ شامل کریں: دستخط اور ابتدائی حروف کے فیلڈز دستخط کنندہ کے ہوتے ہیں"
+  "Add a signer first: signature and initials fields belong to a signer": "پہلے ایک دستخط کنندہ شامل کریں: دستخط اور ابتدائی حروف کے فیلڈز دستخط کنندہ کے ہوتے ہیں",
+  "Export Data": "ڈیٹا ایکسپورٹ کریں",
+  "Download the values filled in on these documents": "ان دستاویزات میں بھری گئی قدریں ڈاؤن لوڈ کریں",
+  "There are no documents to export": "ایکسپورٹ کرنے کے لیے کوئی دستاویز نہیں ہے"
 }
