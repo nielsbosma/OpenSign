@@ -109,7 +109,11 @@ export function WebhooksPage() {
   const test = useApiMutation('webhooks.test', { invalidates: ['webhooks.'], onSuccess: () => toast.success(t('Test event queued')) });
   const [creating, setCreating] = useState(false);
   return (
-    <SettingsCard title={t('Webhooks')} description={t('Tell your systems when documents are sent, signed, completed or stopped.')}>
+    <SettingsCard
+      help="webhooks"
+      title={t('Webhooks')}
+      description={t('Tell your systems when documents are sent, signed, completed or stopped.')}
+    >
       <Button className="mb-4" onClick={() => setCreating(true)}>
         <Plus /> {t('New Webhook')}
       </Button>
