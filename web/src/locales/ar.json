@@ -922,5 +922,6 @@
   "{name} changed": "تغيّر {name}",
   "{title} (copy)": "{title} (نسخة)",
   "{title}, version {number}": "{title}، الإصدار {number}",
-  "{title}: {files} files, {parties} parties, {fields} fields": "{title}: {files} ملفات، {parties} أطراف، {fields} حقول"
+  "1 document": "مستند واحد",
+  "{title} · Files: {files} · Parties: {parties} · Fields: {fields}": "{title} · الملفات: {files} · الأطراف: {parties} · الحقول: {fields}"
 }

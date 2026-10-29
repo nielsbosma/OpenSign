@@ -922,5 +922,6 @@
   "{name} changed": "{name} تبدیل ہوا",
   "{title} (copy)": "{title} (نقل)",
   "{title}, version {number}": "{title}، ورژن {number}",
-  "{title}: {files} files, {parties} parties, {fields} fields": "{title}: {files} فائلیں، {parties} فریق، {fields} فیلڈز"
+  "1 document": "1 دستاویز",
+  "{title} · Files: {files} · Parties: {parties} · Fields: {fields}": "{title} · فائلیں: {files} · فریق: {parties} · فیلڈز: {fields}"
 }

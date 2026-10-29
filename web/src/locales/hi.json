@@ -922,5 +922,6 @@
   "{name} changed": "{name} बदला गया",
   "{title} (copy)": "{title} (कॉपी)",
   "{title}, version {number}": "{title}, संस्करण {number}",
-  "{title}: {files} files, {parties} parties, {fields} fields": "{title}: {files} फ़ाइलें, {parties} पक्ष, {fields} फ़ील्ड"
+  "1 document": "1 दस्तावेज़",
+  "{title} · Files: {files} · Parties: {parties} · Fields: {fields}": "{title} · फ़ाइलें: {files} · पक्ष: {parties} · फ़ील्ड: {fields}"
 }

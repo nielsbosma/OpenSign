@@ -922,5 +922,6 @@
   "{name} changed": "{name} পরিবর্তিত",
   "{title} (copy)": "{title} (কপি)",
   "{title}, version {number}": "{title}, সংস্করণ {number}",
-  "{title}: {files} files, {parties} parties, {fields} fields": "{title}: {files}টি ফাইল, {parties}টি পক্ষ, {fields}টি ফিল্ড"
+  "1 document": "১টি নথি",
+  "{title} · Files: {files} · Parties: {parties} · Fields: {fields}": "{title} · ফাইল: {files} · পক্ষ: {parties} · ফিল্ড: {fields}"
 }

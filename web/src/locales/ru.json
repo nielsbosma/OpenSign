@@ -922,5 +922,6 @@
   "{name} changed": "{name}: изменено",
   "{title} (copy)": "{title} (копия)",
   "{title}, version {number}": "{title}, версия {number}",
-  "{title}: {files} files, {parties} parties, {fields} fields": "{title}: файлов {files}, сторон {parties}, полей {fields}"
+  "1 document": "1 документ",
+  "{title} · Files: {files} · Parties: {parties} · Fields: {fields}": "{title} · Файлы: {files} · Стороны: {parties} · Поля: {fields}"
 }

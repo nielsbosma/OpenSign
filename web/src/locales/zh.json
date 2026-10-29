@@ -922,5 +922,6 @@
   "{name} changed": "{name} 已更改",
   "{title} (copy)": "{title}（副本）",
   "{title}, version {number}": "{title}，版本 {number}",
-  "{title}: {files} files, {parties} parties, {fields} fields": "{title}：{files} 个文件，{parties} 个参与方，{fields} 个字段"
+  "1 document": "1 份文档",
+  "{title} · Files: {files} · Parties: {parties} · Fields: {fields}": "{title} · 文件：{files} · 参与方：{parties} · 字段：{fields}"
 }

@@ -922,5 +922,6 @@
   "{name} changed": "{name} alterado",
   "{title} (copy)": "{title} (cópia)",
   "{title}, version {number}": "{title}, versão {number}",
-  "{title}: {files} files, {parties} parties, {fields} fields": "{title}: {files} arquivos, {parties} partes, {fields} campos"
+  "1 document": "1 documento",
+  "{title} · Files: {files} · Parties: {parties} · Fields: {fields}": "{title} · Arquivos: {files} · Partes: {parties} · Campos: {fields}"
 }

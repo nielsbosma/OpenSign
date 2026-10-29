@@ -193,7 +193,7 @@ function VersionDetail({
       <section className="grid gap-2">
         <h4 className="font-medium">{t('Contents')}</h4>
         <p className="text-muted-foreground">
-          {t('{title}: {files} files, {parties} parties, {fields} fields', {
+          {t('{title} · Files: {files} · Parties: {parties} · Fields: {fields}', {
             title: v.content.title,
             files: v.content.files.length,
             parties: v.content.parties.length,
@@ -322,7 +322,9 @@ export function TemplateHistoryDialog({
                     <VersionMeta version={v} />
                     {v.note && <span className="block truncate text-xs">{v.note}</span>}
                     {v.documentCount > 0 && (
-                      <span className="block text-xs text-muted-foreground">{t('{count} documents', { count: v.documentCount })}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {v.documentCount === 1 ? t('1 document') : t('{count} documents', { count: v.documentCount })}
+                      </span>
                     )}
                   </button>
                 </li>
