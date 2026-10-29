@@ -581,6 +581,21 @@ export type Check = {
 
 export type DocumentsCheckOutput = Array<Check>;
 
+export type DocumentsCountsInput = {
+  /** Matches the title, or an exact external id, as in documents.list. */
+  search?: string | null;
+};
+
+export type DocumentsCountsOutput = StatusCounts;
+
+export type StatusCounts = {
+  all: number;
+  /** Documents per status: draft, pending, completed, declined, canceled and expired. Missing means none. */
+  byStatus: {
+    [key: string]: number;
+  };
+};
+
 export type DocumentsCreateInput = {
   /** Your own reference, e.g. a CRM id. Searchable. */
   externalId?: string | null;
@@ -1418,6 +1433,7 @@ export interface Services {
   "documents.auth_methods": { kind: "query"; input: DocumentsAuthMethodsInput; output: DocumentsAuthMethodsOutput };
   "documents.cancel": { kind: "mutation"; input: DocumentsCancelInput; output: DocumentsCancelOutput };
   "documents.check": { kind: "query"; input: DocumentsCheckInput; output: DocumentsCheckOutput };
+  "documents.counts": { kind: "query"; input: DocumentsCountsInput; output: DocumentsCountsOutput };
   "documents.create": { kind: "mutation"; input: DocumentsCreateInput; output: DocumentsCreateOutput };
   "documents.delete": { kind: "mutation"; input: DocumentsDeleteInput; output: DocumentsDeleteOutput };
   "documents.download": { kind: "query"; input: DocumentsDownloadInput; output: DocumentsDownloadOutput };

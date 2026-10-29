@@ -73,6 +73,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<admin::ListAudit>(),
         erase::<admin::VerifyAudit>(),
         erase::<documents::List>(),
+        erase::<documents::Counts>(),
         erase::<documents::Get>(),
         erase::<documents::Create>(),
         erase::<documents::Upload>(),
