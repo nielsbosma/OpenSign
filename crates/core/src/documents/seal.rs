@@ -372,7 +372,13 @@ pub async fn seal_document(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid
     notify::emit(
         conn,
         "document.completed",
-        json!({ "documentId": document.id, "title": document.title, "externalId": document.external_id, "sealedSha256": record.sha256 }),
+        json!({
+            "documentId": document.id,
+            "title": document.title,
+            "externalId": document.external_id,
+            "sealedSha256": record.sha256,
+            "valuesUrl": crate::services::exports::values_url(ctx, document.id),
+        }),
     )
     .await?;
     Ok(())

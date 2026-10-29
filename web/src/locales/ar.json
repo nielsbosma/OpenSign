@@ -810,5 +810,8 @@
   "Rename": "إعادة تسمية",
   "Folder": "مجلد",
   "Move to Folder": "النقل إلى مجلد",
-  "No Folder": "بلا مجلد"
+  "No Folder": "بلا مجلد",
+  "Export Data": "تصدير البيانات",
+  "Download the values filled in on these documents": "نزّل القيم المُدخلة في هذه المستندات",
+  "There are no documents to export": "لا توجد مستندات للتصدير"
 }

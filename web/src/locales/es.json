@@ -810,5 +810,8 @@
   "Rename": "Cambiar nombre",
   "Folder": "Carpeta",
   "Move to Folder": "Mover a carpeta",
-  "No Folder": "Sin carpeta"
+  "No Folder": "Sin carpeta",
+  "Export Data": "Exportar Datos",
+  "Download the values filled in on these documents": "Descarga los valores rellenados en estos documentos",
+  "There are no documents to export": "No hay documentos para exportar"
 }

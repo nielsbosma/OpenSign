@@ -810,5 +810,8 @@
   "Rename": "नाम बदलें",
   "Folder": "फ़ोल्डर",
   "Move to Folder": "फ़ोल्डर में ले जाएँ",
-  "No Folder": "कोई फ़ोल्डर नहीं"
+  "No Folder": "कोई फ़ोल्डर नहीं",
+  "Export Data": "डेटा निर्यात करें",
+  "Download the values filled in on these documents": "इन दस्तावेज़ों में भरे गए मान डाउनलोड करें",
+  "There are no documents to export": "निर्यात करने के लिए कोई दस्तावेज़ नहीं है"
 }

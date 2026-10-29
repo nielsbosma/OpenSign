@@ -42,7 +42,7 @@ Webhooks can also be managed with the [REST API](api.md), with an API key that h
 | `document.sent` | A draft is sent for signing | `documentId`, `title`, `externalId` |
 | `document.viewed` | A party opens their signing link for the first time (after identifying, if that is required to view) | `documentId`, `externalId`, `partyId`, `name` |
 | `document.signed` | A party signs or approves | `documentId`, `externalId`, `partyId`, `name` |
-| `document.completed` | Everyone has signed and the sealed PDF is ready | `documentId`, `title`, `externalId`, `sealedSha256` |
+| `document.completed` | Everyone has signed and the sealed PDF is ready | `documentId`, `title`, `externalId`, `sealedSha256`, `valuesUrl` |
 | `document.declined` | A party declines | `documentId`, `externalId`, `partyId`, `reason` |
 | `document.canceled` | The sender or a manager cancels | `documentId`, `externalId` |
 | `document.expired` | The deadline passes before everyone signed | `documentId` |
@@ -52,7 +52,7 @@ Webhooks can also be managed with the [REST API](api.md), with an API key that h
 
 A document that is signed by three parties fires `document.created` and `document.sent`, then `document.viewed` and `document.signed` once per party, then `document.completed` once the seal is done, usually seconds after the last signature.
 
-Webhooks carry ids and a few facts, never document contents or personal numbers. Fetch the document, its parties or the sealed PDF with the [REST API](api.md) when you need more.
+Webhooks carry ids and a few facts, never document contents, field values or personal numbers. Fetch the document, its parties or the sealed PDF with the [REST API](api.md) when you need more. `document.completed` includes `valuesUrl`, where an API key reads everything the parties filled in. See [Exporting filled-in data](data-export.md).
 
 ## The request
 
@@ -70,7 +70,8 @@ opensign-delivery: 019a2c4e-7b1f-7c3a-9e51-3f0d2a8b6c11
     "documentId": "019a2b11-5d0e-7a42-b6f3-1c9e0d7a4f28",
     "title": "Consulting agreement",
     "externalId": "crm-4711",
-    "sealedSha256": "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+    "sealedSha256": "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
+    "valuesUrl": "https://sign.example.com/api/v1/documents/019a2b11-5d0e-7a42-b6f3-1c9e0d7a4f28/values"
   }
 }
 ```

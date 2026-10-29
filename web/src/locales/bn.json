@@ -810,5 +810,8 @@
   "Rename": "নাম বদলান",
   "Folder": "ফোল্ডার",
   "Move to Folder": "ফোল্ডারে সরান",
-  "No Folder": "কোনো ফোল্ডার নেই"
+  "No Folder": "কোনো ফোল্ডার নেই",
+  "Export Data": "ডেটা রপ্তানি করুন",
+  "Download the values filled in on these documents": "এই নথিগুলিতে পূরণ করা মানগুলি ডাউনলোড করুন",
+  "There are no documents to export": "রপ্তানি করার মতো কোনো নথি নেই"
 }

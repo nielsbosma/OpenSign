@@ -41,6 +41,7 @@ At each request a key gets the **intersection** of its scopes and its owner's cu
 | `documents.create` | Upload documents and send them for signing |
 | `documents.read_all` | See every document |
 | `documents.manage_all` | Change, cancel and delete any document |
+| `documents.export` | Export filled-in values of many documents |
 | `documents.legal_hold` | Place and release legal holds |
 | `templates.manage` | Create and change shared templates |
 | `webhooks.manage` | Add and remove webhooks |
@@ -163,6 +164,8 @@ Send answers `{ "document": {…}, "links": [{ "partyId", "name", "url" }] }`. T
 | DELETE | `/documents/{id}/shares/{userId}` | Stop sharing |
 | POST | `/documents/{documentId}/parties/{partyId}/signing-link` | Issue a signing link to hand over. `rotate: true` revokes earlier links first; `redirectUrl` sends the party to your site afterwards (see [Embedded signing](embedding.md#redirect-after-signing)) |
 | PUT | `/documents/{id}/legal-hold` | Body `hold`, `reason`. See [Retention and legal hold](retention.md) |
+| GET | `/documents/{id}/values` | What the parties filled in, typed and keyed by field label. See [Exporting filled-in data](data-export.md#from-the-api) |
+| POST | `/exports` | Export many documents' values. Body: `format` (`csv`, `xlsx`, `json`), `ids`, `templateId`, `bulkId`, `status`, `search`, `folderId`, `archived`. Needs `documents.export` |
 | GET | `/documents/{id}/file` | The PDF. `version=signed` (sealed, completed only) or `original` (as sent) |
 | POST | `/documents/move` | Move documents or templates to a folder. Body: `ids`, `folderId` (`null` for none) |
 | POST | `/documents/archive` | Archive finished documents or templates, or restore them. Body: `ids`, `archived` |

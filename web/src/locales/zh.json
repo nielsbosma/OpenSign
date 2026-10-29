@@ -810,5 +810,8 @@
   "Rename": "重命名",
   "Folder": "文件夹",
   "Move to Folder": "移动到文件夹",
-  "No Folder": "无文件夹"
+  "No Folder": "无文件夹",
+  "Export Data": "导出数据",
+  "Download the values filled in on these documents": "下载这些文档中填写的值",
+  "There are no documents to export": "没有可导出的文档"
 }

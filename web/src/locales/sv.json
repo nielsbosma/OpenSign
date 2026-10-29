@@ -810,5 +810,8 @@
   "Rename": "Byt namn",
   "Folder": "Mapp",
   "Move to Folder": "Flytta till mapp",
-  "No Folder": "Ingen mapp"
+  "No Folder": "Ingen mapp",
+  "Export Data": "Exportera Data",
+  "Download the values filled in on these documents": "Ladda ner värdena som fyllts i på de här dokumenten",
+  "There are no documents to export": "Det finns inga dokument att exportera"
 }

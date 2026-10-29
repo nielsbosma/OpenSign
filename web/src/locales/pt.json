@@ -810,5 +810,8 @@
   "Rename": "Renomear",
   "Folder": "Pasta",
   "Move to Folder": "Mover para pasta",
-  "No Folder": "Sem pasta"
+  "No Folder": "Sem pasta",
+  "Export Data": "Exportar Dados",
+  "Download the values filled in on these documents": "Baixe os valores preenchidos nestes documentos",
+  "There are no documents to export": "Não há documentos para exportar"
 }

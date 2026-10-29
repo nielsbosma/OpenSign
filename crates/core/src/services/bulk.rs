@@ -500,7 +500,7 @@ impl Service for Start {
     }
 }
 
-async fn load(ctx: &Ctx, conn: &mut PgConnection, id: Uuid) -> Result<BulkSend> {
+pub(crate) async fn load(ctx: &Ctx, conn: &mut PgConnection, id: Uuid) -> Result<BulkSend> {
     let actor = ctx.actor()?;
     let mut bulk: BulkSend = sqlx::query_as(
         "select id, template_id, template_title, file_name, status, total, sent, failed, created_at, finished_at from bulk_sends
