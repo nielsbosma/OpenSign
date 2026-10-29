@@ -3,10 +3,11 @@ import { type ReactNode, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 export function Spinner({ className }: { className?: string }) {
-  return <Loader2 className={cn('size-4 animate-spin text-muted-foreground', className)} aria-label="Loading" />;
+  return <Loader2 className={cn('size-4 animate-spin text-muted-foreground', className)} aria-label={t('Loading')} />;
 }
 
 export function Logo({ className }: { className?: string }) {
@@ -31,7 +32,7 @@ export function HelpLink({ page, className }: { page: string; className?: string
   return (
     <Button asChild variant="ghost" size="sm" className={cn('text-muted-foreground', className)}>
       <a href={`/docs/${page}`} target="_blank" rel="noreferrer">
-        <BookOpen /> Docs
+        <BookOpen /> {t('Docs')}
       </a>
     </Button>
   );
@@ -99,7 +100,7 @@ export function EmptyState({ icon, title, children }: { icon?: ReactNode; title:
   );
 }
 
-export function CopyButton({ value, label = 'Copy' }: { value: string; label?: string }) {
+export function CopyButton({ value, label }: { value: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <Button
@@ -113,7 +114,7 @@ export function CopyButton({ value, label = 'Copy' }: { value: string; label?: s
       }}
     >
       {copied ? <Check /> : <Copy />}
-      {copied ? 'Copied' : label}
+      {copied ? t('Copied') : (label ?? t('Copy'))}
     </Button>
   );
 }
@@ -159,7 +160,7 @@ export function ConfirmButton({
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
+              {t('Cancel')}
             </Button>
             <Button
               variant="destructive"

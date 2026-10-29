@@ -37,7 +37,8 @@ Instructions for coding agents and people. Read the README and SECURITY.md first
 - React, Tailwind and shadcn/ui components in `web/src/components/ui`. Data: `useApi(name, input)` and `useApiMutation(name, { invalidates })`; errors toast unless `silent`.
 - The CSP allows no inline script and no external origins: no CDNs, no inline `<script>`, no `eval`.
 - **Labels use AP-style Title Case** (headings, buttons, tabs, field labels, menu items): "Send for Signing", "Add a Party". Descriptions, hints, placeholders and toasts are sentence case.
-- Neutral greys, one indigo accent, subtle borders, light and dark. English only.
+- Neutral greys, one indigo accent, subtle borders, light and dark.
+- **Every text a person reads is translated** into en, zh, hi, es, fr, ar, bn, pt, ru, ur and sv. Write it in English with `t('Text {name}', { name })` from `@/lib/i18n`; use `msg()` where a text is defined in a table and `t()` where it is shown, `tx()` for links or code inside a sentence. Add the translation to every `web/src/locales/*.json` (the locales test fails otherwise). Use logical classes (`ms-`, `pe-`, `start-`, `text-start`) so Arabic and Urdu lay out right to left. The signing page has its own texts in `web/src/pages/sign`, emails in `crates/core/src/i18n.rs`.
 
 ## Checks before you finish
 

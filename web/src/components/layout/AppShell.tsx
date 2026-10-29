@@ -8,6 +8,8 @@ import {
   LogOut,
   Menu,
   Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -29,6 +31,8 @@ import {
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { call, useApi } from '@/lib/api';
+import { ROLE_LABELS } from '@/lib/format';
+import { isRtl, t, useLanguage } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { useTheme } from '@/lib/theme';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -53,7 +57,7 @@ function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" className="flex h-10 w-full items-center gap-2.5 rounded-md px-2 text-left hover:bg-sidebar-accent">
+        <button type="button" className="flex h-10 w-full items-center gap-2.5 rounded-md px-2 text-start hover:bg-sidebar-accent">
           <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
             {user?.name.slice(0, 1).toUpperCase()}
           </span>
@@ -64,58 +68,77 @@ function UserMenu() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-56">
-        <DropdownMenuLabel className="font-normal text-muted-foreground capitalize">{user?.role}</DropdownMenuLabel>
+        <DropdownMenuLabel className="font-normal text-muted-foreground">
+          {user && t(ROLE_LABELS[user.role] ?? user.role)}
+        </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={toggle}>
-          {theme === 'dark' ? <Sun /> : <Moon />} {theme === 'dark' ? 'Light Theme' : 'Dark Theme'}
+          {theme === 'dark' ? <Sun /> : <Moon />} {theme === 'dark' ? t('Light Theme') : t('Dark Theme')}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => navigate('/settings/account')}>
-          <Settings /> Your Account
+        <DropdownMenuItem onSelect={() => navigate('/settings')}>
+          <Settings /> {t('Settings')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={signOut}>
-          <LogOut /> Sign Out
+          <LogOut /> {t('Sign Out')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
-  const { can } = useSession();
+const SIDEBAR_KEY = 'opensign-sidebar';
+
+function storedCollapsed() {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === 'collapsed';
+  } catch {
+    return false;
+  }
+}
+
+function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onClose: () => void }) {
+  const { user, can } = useSession();
   const version = useApi('system.version', { refresh: false }, { enabled: can('settings.manage'), staleTime: 60 * 60_000 });
   return (
     <div className="flex h-full flex-col bg-sidebar">
       <div className="flex h-14 shrink-0 items-center gap-2.5 px-3">
         <Logo />
         <span className="text-sm font-semibold">OpenSign</span>
+        {user?.version && <span className="text-[11px] text-muted-foreground tabular-nums">{user.version}</span>}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          aria-label={t('Close Sidebar')}
+          className="ms-auto size-8 text-muted-foreground"
+        >
+          <PanelLeftClose />
+        </Button>
       </div>
-      <nav className="flex flex-1 flex-col gap-0.5 px-2 py-1" aria-label="Main">
+      <nav className="flex flex-1 flex-col gap-0.5 px-2 py-1" aria-label={t('Main')}>
         <NavLink to="/documents" className={linkClass} onClick={onNavigate}>
-          <FileText className="size-4 opacity-80" /> Documents
+          <FileText className="size-4 opacity-80" /> {t('Documents')}
         </NavLink>
         {can('documents.create') && (
           <NavLink to="/templates" className={linkClass} onClick={onNavigate}>
-            <FileStack className="size-4 opacity-80" /> Templates
+            <FileStack className="size-4 opacity-80" /> {t('Templates')}
           </NavLink>
         )}
-        <NavLink to="/api-explorer" className={linkClass} onClick={onNavigate}>
-          <Braces className="size-4 opacity-80" /> API Explorer
-        </NavLink>
+        <a href="/api-explorer" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
+          <Braces className="size-4 opacity-80" /> {t('API Explorer')}
+        </a>
         <a href="/verify" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
-          <ShieldCheck className="size-4 opacity-80" /> Verify a Document
+          <ShieldCheck className="size-4 opacity-80" /> {t('Verify a Document')}
         </a>
         <a href="/docs" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
-          <BookOpen className="size-4 opacity-80" /> Documentation
+          <BookOpen className="size-4 opacity-80" /> {t('Documentation')}
         </a>
       </nav>
       <div className="grid gap-0.5 border-t border-sidebar-border px-2 py-2">
-        <NavLink to="/settings" className={linkClass} onClick={onNavigate}>
-          <Settings className="size-4 opacity-80" /> Settings
-        </NavLink>
         {version.data?.updateAvailable && (
           <NavLink to="/settings/system" className={linkClass} onClick={onNavigate}>
-            <ArrowUpCircle className="size-4 text-primary" /> Update to {version.data.latest?.version}
+            <ArrowUpCircle className="size-4 text-primary" /> {t('Update to {version}', { version: version.data.latest?.version ?? '' })}
           </NavLink>
         )}
         <UserMenu />
@@ -128,71 +151,87 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 export function AppShell() {
   const docked = useMediaQuery('(min-width: 1024px)');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(storedCollapsed);
+  const setSidebar = (value: boolean) => {
+    setCollapsed(value);
+    try {
+      localStorage.setItem(SIDEBAR_KEY, value ? 'collapsed' : 'open');
+    } catch {}
+  };
+  const showSidebar = docked && !collapsed;
   const [chatOpen, setChatOpen] = useState(false);
   const ai = useApi('ai.status', undefined, { staleTime: 5 * 60_000 });
   const assistant = !!ai.data?.configured && ai.data.canUse;
+  const rtl = isRtl(useLanguage().language);
 
   return (
     <div className="flex h-svh overflow-hidden">
       {docked ? (
-        <aside className="w-60 shrink-0 border-r border-sidebar-border">
-          <Sidebar />
-        </aside>
+        showSidebar && (
+          <aside className="w-60 shrink-0 border-e border-sidebar-border">
+            <Sidebar onClose={() => setSidebar(true)} />
+          </aside>
+        )
       ) : (
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-          <SheetContent side="left" className="w-72 p-0 [&>button]:hidden">
-            <SheetTitle className="sr-only">Navigation</SheetTitle>
-            <Sidebar onNavigate={() => setDrawerOpen(false)} />
+          <SheetContent side={rtl ? 'right' : 'left'} className="w-72 p-0 [&>button]:hidden">
+            <SheetTitle className="sr-only">{t('Navigation')}</SheetTitle>
+            <Sidebar onNavigate={() => setDrawerOpen(false)} onClose={() => setDrawerOpen(false)} />
           </SheetContent>
         </Sheet>
       )}
 
       <main className="relative min-w-0 flex-1 overflow-y-auto">
-        {!docked && (
-          <div className="absolute top-2.5 left-3 z-10">
+        {!showSidebar && (
+          <div className="absolute start-3 top-2.5 z-10">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setDrawerOpen(true)}
-              aria-label="Open Navigation"
+              onClick={() => (docked ? setSidebar(false) : setDrawerOpen(true))}
+              aria-label={t('Open Navigation')}
               className="text-muted-foreground"
             >
-              <Menu />
+              {docked ? <PanelLeftOpen className="rtl:rotate-180" /> : <Menu />}
             </Button>
           </div>
         )}
         {assistant && !chatOpen && (
-          <div className="absolute top-2.5 right-3 z-10">
+          <div className="absolute end-3 top-2.5 z-10">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => setChatOpen(true)}
-                  aria-label="Assistant"
+                  aria-label={t('Assistant')}
                   className="text-muted-foreground"
                 >
                   <Sparkles />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Assistant</TooltipContent>
+              <TooltipContent>{t('Assistant')}</TooltipContent>
             </Tooltip>
           </div>
         )}
-        <div className={cn('mx-auto w-full max-w-6xl pt-3.5 pb-10 pr-14 sm:pr-16', docked ? 'pl-4 sm:pl-6 lg:pl-8' : 'pl-14 sm:pl-16')}>
+        <div
+          className={cn(
+            'mx-auto w-full max-w-6xl pt-6 pb-10 lg:pt-10 pe-14 sm:pe-16',
+            showSidebar ? 'ps-4 sm:ps-6 lg:ps-8' : 'ps-14 sm:ps-16',
+          )}
+        >
           <Outlet />
         </div>
       </main>
 
       {assistant && chatOpen && docked && (
-        <aside className="flex w-[380px] shrink-0 border-l xl:w-[420px]" aria-label="Assistant">
+        <aside className="flex w-[380px] shrink-0 border-s xl:w-[420px]" aria-label={t('Assistant')}>
           <AssistantPanel onClose={() => setChatOpen(false)} />
         </aside>
       )}
       {assistant && !docked && (
         <Sheet open={chatOpen} onOpenChange={setChatOpen}>
-          <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-md [&>button]:hidden">
-            <SheetTitle className="sr-only">Assistant</SheetTitle>
+          <SheetContent side={rtl ? 'left' : 'right'} className="w-full gap-0 p-0 sm:max-w-md [&>button]:hidden">
+            <SheetTitle className="sr-only">{t('Assistant')}</SheetTitle>
             <AssistantPanel onClose={() => setChatOpen(false)} />
           </SheetContent>
         </Sheet>

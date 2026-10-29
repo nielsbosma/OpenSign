@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useApi, useApiMutation } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
+import { labels, msg, t } from '@/lib/i18n';
 
 const ROW_TONES: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   sent: 'default',
@@ -12,8 +13,13 @@ const ROW_TONES: Record<string, 'default' | 'secondary' | 'destructive' | 'outli
   queued: 'outline',
   canceled: 'secondary',
 };
-const ROW_LABELS: Record<string, string> = { sent: 'Sent', failed: 'Failed', queued: 'Waiting', canceled: 'Skipped' };
-const STATUS_LABELS: Record<string, string> = { queued: 'Waiting to Start', running: 'Sending', done: 'Finished', canceled: 'Canceled' };
+const ROW_LABELS = labels({ sent: msg('Sent'), failed: msg('Failed'), queued: msg('Waiting'), canceled: msg('Skipped') });
+const STATUS_LABELS = labels({
+  queued: msg('Waiting to Start'),
+  running: msg('Sending'),
+  done: msg('Finished'),
+  canceled: msg('Canceled'),
+});
 
 export function BulkSendPage() {
   const { id = '' } = useParams();
@@ -32,19 +38,19 @@ export function BulkSendPage() {
   return (
     <>
       <Link to="/templates" className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="size-4" /> Templates
+        <ArrowLeft className="size-4 rtl:rotate-180" /> {t('Templates')}
       </Link>
       <PageHeader
-        title={`Bulk Send: ${b.templateTitle}`}
-        description={`${b.fileName} · started ${formatDateTime(b.createdAt)}`}
+        title={t('Bulk Send: {template}', { template: b.templateTitle })}
+        description={`${b.fileName} · ${t('started {date}', { date: formatDateTime(b.createdAt) })}`}
         help="bulk-send"
         actions={
           active && (
             <ConfirmButton
-              label="Stop"
-              title="Stop this bulk send?"
-              description="Rows not sent yet are skipped. Documents already sent stay out for signing."
-              confirmLabel="Stop Sending"
+              label={t('Stop')}
+              title={t('Stop this bulk send?')}
+              description={t('Rows not sent yet are skipped. Documents already sent stay out for signing.')}
+              confirmLabel={t('Stop Sending')}
               onConfirm={() => cancel.mutate({ id: b.id })}
             />
           )
@@ -54,7 +60,7 @@ export function BulkSendPage() {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
           <span className="font-medium">{STATUS_LABELS[b.status] ?? b.status}</span>
           <span className="tabular text-muted-foreground">
-            {handled} of {b.total} handled · {b.sent} sent · {b.failed} failed
+            {handled} of {b.total} handled · {b.sent} sent · {b.failed} {t('failed')}
           </span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-muted">
@@ -65,10 +71,10 @@ export function BulkSendPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-16">Row</TableHead>
-              <TableHead>Recipient</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Document</TableHead>
+              <TableHead className="w-16">{t('Row')}</TableHead>
+              <TableHead>{t('Recipient')}</TableHead>
+              <TableHead>{t('Status')}</TableHead>
+              <TableHead>{t('Document')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -83,7 +89,7 @@ export function BulkSendPage() {
                 <TableCell>
                   {r.documentId && (
                     <Link to={`/documents/${r.documentId}`} className="underline">
-                      Open
+                      {t('Open')}
                     </Link>
                   )}
                 </TableCell>
@@ -102,7 +108,7 @@ export function RecentBulkSends() {
   if (!list.data?.length) return null;
   return (
     <section className="mt-8 grid gap-2">
-      <h2 className="font-medium">Bulk Sends</h2>
+      <h2 className="font-medium">{t('Bulk Sends')}</h2>
       <div className="rounded-lg border">
         <Table>
           <TableBody>
@@ -115,9 +121,10 @@ export function RecentBulkSends() {
                   <div className="text-xs text-muted-foreground">{b.fileName}</div>
                 </TableCell>
                 <TableCell className="tabular text-muted-foreground">
-                  {b.sent} of {b.total} sent{b.failed ? ` · ${b.failed} failed` : ''}
+                  {t('{sent} of {total} sent', { sent: b.sent, total: b.total })}
+                  {b.failed ? ` · ${t('{count} failed', { count: b.failed })}` : ''}
                 </TableCell>
-                <TableCell className="text-right text-muted-foreground">{formatDateTime(b.createdAt)}</TableCell>
+                <TableCell className="text-end text-muted-foreground">{formatDateTime(b.createdAt)}</TableCell>
               </TableRow>
             ))}
           </TableBody>

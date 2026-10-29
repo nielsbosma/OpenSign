@@ -30,7 +30,7 @@ OpenSign is one container image plus Postgres, an S3-compatible bucket and (for 
 | `APP_URL` | The public https address |
 | `CONVERTER_URL` | Gotenberg, on a private network (optional; without it only PDFs are accepted) |
 
-Everything else (Resend, SMS, eID, AI, security rules, branding) is set in the browser.
+Everything else (email through Resend or SMTP, SMS, eID, AI, security rules, branding) is set in the browser.
 
 ### On Sliplane
 
@@ -65,7 +65,7 @@ The image is distroless, runs as a non-root user, works with a read-only root fi
 
 1. The container log prints a **setup code**, so nobody else can claim a fresh install.
 2. Create the first admin.
-3. Enter a **Resend** API key and sender address. OpenSign sends a test email and only continues once Resend accepted it; documents cannot go out by email until then.
+3. Choose how email goes out: a **Resend** API key, or your own **SMTP** server (host, port, STARTTLS or TLS, and optionally a username and password). OpenSign sends a test email and only continues once it was accepted; documents cannot go out by email until then.
 4. Optionally set up SMS, eID, your seal certificate and AI in **Admin settings**.
 
 Any admin setting can be pinned with an environment variable, `OPENSIGN_<GROUP>_<FIELD>`, for example `OPENSIGN_EMAIL_API_KEY` or `OPENSIGN_SECURITY_ENFORCE_TWO_FACTOR=true`. Pinned fields are locked in the UI.
@@ -117,7 +117,7 @@ In Claude, add a custom connector with `https://<your-install>/mcp` (also shown 
  browser ─▶│ React app ─ RPC ──┐                                      │
  REST/API ▶│ REST, Scrive,     ├─▶ services (permissions, audit, ──▶ Postgres
  Claude  ─▶│ DocuSign, MCP ────┤   settings, encryption)          ──▶ S3 (encrypted files)
- signer  ─▶│ signing page ─────┘   worker: email, SMS, sealing,   ──▶ Resend, SMS, eID, TSA, LLM
+ signer  ─▶│ signing page ─────┘   worker: email, SMS, sealing,   ──▶ Resend/SMTP, SMS, eID, TSA, LLM
            │                       webhooks, reminders            ──▶ Gotenberg (private)
            └──────────────────────────────────────────────────────────┘
 ```
@@ -145,7 +145,9 @@ Email in development goes to Mailpit at http://localhost:8026. See [CLAUDE.md](C
 
 ## Releasing
 
-Bump `version` in `Cargo.toml`, move the **Unreleased** notes in `CHANGELOG.md` under it, merge to `main`, then publish a GitHub Release named `vX.Y.Z`. CI runs every check, builds amd64 and arm64, and pushes `ghcr.io/nielsbosma/opensign:X.Y.Z`, `:X.Y` and `:latest`. Make the package public once after the first publish (GitHub → Packages → opensign → Package settings).
+Bump `version` in `Cargo.toml`, move the **Unreleased** notes in `CHANGELOG.md` under it, merge to `main`, then publish a GitHub Release named `vX.Y.Z`. CI runs every check, builds amd64 and arm64, and pushes `ghcr.io/nielsbosma/opensign:X.Y.Z`, `:X.Y` and `:latest`.
+
+On Windows, `./deploy/release.ps1` does the release and the deploy step by step: it checks that `main` is green, publishes the release with its changelog notes, follows the image build, then installs on Sliplane or calls the deploy hook. It saves the Sliplane token and deploy hook encrypted for your Windows account (`-ForgetCredentials` removes them).
 
 ## License
 

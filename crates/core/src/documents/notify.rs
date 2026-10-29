@@ -60,7 +60,7 @@ pub async fn notify_party(ctx: &Ctx, conn: &mut PgConnection, party_id: Uuid, re
     let sender = owner(conn, &document).await?.map(|(name, _)| name).unwrap_or_else(|| org_name(&org).to_string());
     let url = signer_url(ctx, ctx.keys(), &party);
     let approve = party.role() == PartyRole::Approver;
-    let lang = Lang::of(&document.language);
+    let lang = party.lang(&document);
     match delivery {
         Delivery::Email => {
             let to = party
@@ -87,6 +87,7 @@ pub async fn notify_party(ctx: &Ctx, conn: &mut PgConnection, party_id: Uuid, re
                     button: Some((lang.open_button(approve).into(), url)),
                     footer: Some(lang.personal_link().into()),
                     attachments: vec![],
+                    lang,
                 },
             )
             .await?;
@@ -189,7 +190,7 @@ pub async fn notify_completed(ctx: &Ctx, conn: &mut PgConnection, document_id: U
         if record.size_bytes <= ATTACHMENT_LIMIT { Some(read_file(&ctx.app.storage, ctx.keys(), &record).await?) } else { None };
     let org: OrgSettings = settings(ctx, conn).await?;
     let email_settings: EmailSettings = settings(ctx, conn).await?;
-    let lang = Lang::of(&document.language);
+    let lang = party.as_ref().map_or_else(|| Lang::of(&document.language), |p| p.lang(&document));
     let mut paragraphs = vec![lang.completed(&document.title)];
     let button = match (&attachment, &party) {
         (Some(_), _) => {
@@ -212,6 +213,7 @@ pub async fn notify_completed(ctx: &Ctx, conn: &mut PgConnection, document_id: U
             button,
             footer: None,
             attachments: attachment.into_iter().map(|content| Attachment { filename: filename.clone(), content }).collect(),
+            lang,
         },
     )
     .await
@@ -242,6 +244,7 @@ pub async fn notify_declined(ctx: &Ctx, conn: &mut PgConnection, document_id: Uu
             button: Some(("Open Document".into(), format!("{}/documents/{}", ctx.app.public_url(), document.id))),
             footer: None,
             attachments: vec![],
+            lang: Lang::En,
         };
         email::send(&ctx.app, &email_settings, &org, &message).await?;
     }
@@ -275,7 +278,7 @@ pub async fn notify_stopped(ctx: &Ctx, conn: &mut PgConnection, document_id: Uui
         (status::CANCELED, _) => Stopped::Canceled,
         _ => return Ok(()),
     };
-    let lang = Lang::of(&document.language);
+    let lang = p.lang(&document);
     let org: OrgSettings = settings(ctx, conn).await?;
     let email_settings: EmailSettings = settings(ctx, conn).await?;
     let message = Message {
@@ -286,6 +289,7 @@ pub async fn notify_stopped(ctx: &Ctx, conn: &mut PgConnection, document_id: Uui
         button: None,
         footer: None,
         attachments: vec![],
+        lang,
     };
     email::send(&ctx.app, &email_settings, &org, &message).await
 }

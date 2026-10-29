@@ -7,20 +7,21 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { type Permission, useApi, useApiMutation } from '@/lib/api';
 import { formatDate, formatDateTime } from '@/lib/format';
+import { msg, t, tx } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { FormError } from '../auth/AuthLayout';
 import { SettingsCard } from './SettingsLayout';
 
 const PERMISSIONS: [Permission, string][] = [
-  ['documents.read', 'Read your documents'],
-  ['documents.create', 'Create, send and manage your documents'],
-  ['documents.read_all', 'Read every document'],
-  ['documents.manage_all', 'Manage every document'],
-  ['templates.manage', 'Manage templates'],
-  ['users.read', 'List users'],
-  ['audit.read', 'Read the audit trail'],
-  ['webhooks.manage', 'Manage webhooks'],
-  ['org.read', 'Read organisation details'],
+  ['documents.read', msg('Read your documents')],
+  ['documents.create', msg('Create, send and manage your documents')],
+  ['documents.read_all', msg('Read every document')],
+  ['documents.manage_all', msg('Manage every document')],
+  ['templates.manage', msg('Manage templates')],
+  ['users.read', msg('List users')],
+  ['audit.read', msg('Read the audit trail')],
+  ['webhooks.manage', msg('Manage webhooks')],
+  ['org.read', msg('Read organisation details')],
 ];
 
 function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -62,39 +63,42 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
         {key ? (
           <div className="grid gap-4">
             <DialogHeader>
-              <DialogTitle>Copy Your Key</DialogTitle>
-              <DialogDescription>This is the only time it is shown. Only a hash is stored.</DialogDescription>
+              <DialogTitle>{t('Copy Your Key')}</DialogTitle>
+              <DialogDescription>{t('This is the only time it is shown. Only a hash is stored.')}</DialogDescription>
             </DialogHeader>
             <div className="flex gap-2">
               <Input readOnly value={key} className="font-mono text-xs" onFocus={(e) => e.target.select()} />
               <CopyButton value={key} />
             </div>
             <p className="text-xs text-muted-foreground">
-              Send it as <code>Authorization: Bearer …</code>. The API is documented at{' '}
-              <a href="/api/v1/openapi.json" className="underline">
-                /api/v1/openapi.json
-              </a>
-              .
+              {tx('Send it as {header}. The API is documented at {link}.', {
+                header: <code>Authorization: Bearer …</code>,
+                link: (
+                  <a href="/api/v1/openapi.json" className="underline">
+                    /api/v1/openapi.json
+                  </a>
+                ),
+              })}
             </p>
             <DialogFooter>
-              <Button onClick={() => close(false)}>Done</Button>
+              <Button onClick={() => close(false)}>{t('Done')}</Button>
             </DialogFooter>
           </div>
         ) : (
           <form onSubmit={submit} className="grid gap-4">
             <DialogHeader>
-              <DialogTitle>New API Key</DialogTitle>
+              <DialogTitle>{t('New API Key')}</DialogTitle>
               <DialogDescription>
-                A key acts as you, limited to what you tick here. It never gets more than your role allows.
+                {t('A key acts as you, limited to what you tick here. It never gets more than your role allows.')}
               </DialogDescription>
             </DialogHeader>
             <FormError message={error} />
-            <Field label="Name" htmlFor="key-name">
+            <Field label={t('Name')} htmlFor="key-name">
               <Input
                 id="key-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="CRM integration"
+                placeholder={t('CRM integration')}
                 required
                 autoFocus
               />
@@ -106,15 +110,15 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
                     checked={permissions.includes(p)}
                     onCheckedChange={(c) => setPermissions(c ? [...permissions, p] : permissions.filter((x) => x !== p))}
                   />
-                  <span>{label}</span>
+                  <span>{t(label)}</span>
                 </label>
               ))}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Expires After (Days)" htmlFor="key-days" hint="Empty for no expiry">
+              <Field label={t('Expires After (Days)')} htmlFor="key-days" hint={t('Empty for no expiry')}>
                 <Input id="key-days" type="number" min={1} max={3650} value={days} onChange={(e) => setDays(e.target.value)} />
               </Field>
-              <Field label="Allowed IPs" htmlFor="key-ips" hint="Addresses or CIDR ranges; empty for any">
+              <Field label={t('Allowed IPs')} htmlFor="key-ips" hint={t('Addresses or CIDR ranges; empty for any')}>
                 <Input
                   id="key-ips"
                   value={ips}
@@ -126,10 +130,10 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => close(false)}>
-                Cancel
+                {t('Cancel')}
               </Button>
               <Button type="submit" disabled={create.isPending || !permissions.length}>
-                Create Key
+                {t('Create Key')}
               </Button>
             </DialogFooter>
           </form>
@@ -145,21 +149,23 @@ export function ApiKeysPage() {
   const [creating, setCreating] = useState(false);
   return (
     <SettingsCard
-      title="API Keys"
-      description={
-        <>
-          For your own integrations. OpenSign speaks its own REST API at <code>/api/v1</code>, and drop-in compatible Scrive (
-          <code>/scrive/api/v2</code>) and DocuSign (<code>/docusign/restapi/v2.1</code>) APIs.
-        </>
-      }
+      title={t('API Keys')}
+      description={tx(
+        'For your own integrations. OpenSign speaks its own REST API at {rest}, and drop-in compatible Scrive ({scrive}) and DocuSign ({docusign}) APIs.',
+        {
+          rest: <code>/api/v1</code>,
+          scrive: <code>/scrive/api/v2</code>,
+          docusign: <code>/docusign/restapi/v2.1</code>,
+        },
+      )}
     >
       <Button className="mb-4" onClick={() => setCreating(true)}>
-        <Plus /> New Key
+        <Plus /> {t('New Key')}
       </Button>
       {keys.isPending ? (
         <Spinner />
       ) : !keys.data?.length ? (
-        <EmptyState icon={<KeyRound />} title="No API keys" />
+        <EmptyState icon={<KeyRound />} title={t('No API keys')} />
       ) : (
         <ul className="grid gap-2">
           {keys.data.map((k) => (
@@ -170,14 +176,15 @@ export function ApiKeysPage() {
                   <code className="text-xs text-muted-foreground">{k.prefix}…</code>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {k.permissions.join(', ')} · {k.lastUsedAt ? `last used ${formatDateTime(k.lastUsedAt)}` : 'never used'}
-                  {k.expiresAt ? ` · expires ${formatDate(k.expiresAt)}` : ''}
+                  {k.permissions.join(', ')} ·{' '}
+                  {k.lastUsedAt ? t('last used {date}', { date: formatDateTime(k.lastUsedAt) }) : t('never used')}
+                  {k.expiresAt ? ` · ${t('expires {date}', { date: formatDate(k.expiresAt) })}` : ''}
                 </div>
               </div>
               <ConfirmButton
-                label="Revoke"
-                title={`Revoke “${k.name}”?`}
-                description="Anything using this key stops working at once."
+                label={t('Revoke')}
+                title={t('Revoke “{name}”?', { name: k.name })}
+                description={t('Anything using this key stops working at once.')}
                 onConfirm={() => revoke.mutate({ id: k.id })}
               />
             </li>

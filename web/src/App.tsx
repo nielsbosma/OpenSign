@@ -1,8 +1,9 @@
-import { lazy, type ReactNode, Suspense } from 'react';
+import { lazy, type ReactNode, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router';
 import { Spinner } from '@/components/common';
 import { AppShell } from '@/components/layout/AppShell';
 import { useApi } from '@/lib/api';
+import { useLanguage } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { ApiExplorerPage } from '@/pages/ApiExplorerPage';
 import { InvitePage } from '@/pages/auth/InvitePage';
@@ -41,6 +42,10 @@ function RequireSession({ children }: { children: ReactNode }) {
   const { user, loading, can } = useSession();
   const setup = useApi('setup.status', undefined, { staleTime: 60_000 });
   const location = useLocation();
+  const { language, setLanguage } = useLanguage();
+  useEffect(() => {
+    if (user?.language && user.language !== language) setLanguage(user.language);
+  }, [user?.language, language, setLanguage]);
   if (loading || setup.isPending) return <FullPageSpinner />;
   if (!user) {
     if (setup.data?.needsSetup) return <Navigate to="/setup" replace />;
@@ -62,6 +67,14 @@ export function App() {
       <Route path="/invite" element={<InvitePage />} />
       <Route path="/sign" element={<SignPage />} />
       <Route path="/verify" element={<VerifyPage />} />
+      <Route
+        path="/api-explorer"
+        element={
+          <RequireSession>
+            <ApiExplorerPage />
+          </RequireSession>
+        }
+      />
       <Route
         path="/docs/*"
         element={
@@ -90,7 +103,6 @@ export function App() {
         <Route path="/templates" element={<DocumentsPage templates />} />
         <Route path="/documents/:id" element={<DocumentPage />} />
         <Route path="/bulk/:id" element={<BulkSendPage />} />
-        <Route path="/api-explorer" element={<ApiExplorerPage />} />
         <Route path="/settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="/settings/account" replace />} />
           <Route path="account" element={<AccountPage />} />

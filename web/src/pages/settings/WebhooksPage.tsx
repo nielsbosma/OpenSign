@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useApi, useApiMutation } from '@/lib/api';
+import { t, tx } from '@/lib/i18n';
 import { FormError } from '../auth/AuthLayout';
 import { SettingsCard } from './SettingsLayout';
 
@@ -38,9 +39,11 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
         {secret ? (
           <div className="grid gap-4">
             <DialogHeader>
-              <DialogTitle>Signing Secret</DialogTitle>
+              <DialogTitle>{t('Signing Secret')}</DialogTitle>
               <DialogDescription>
-                Check the <code>OpenSign-Signature</code> header of every delivery with this secret. It is shown only now.
+                {tx('Check the {header} header of every delivery with this secret. It is shown only now.', {
+                  header: <code>OpenSign-Signature</code>,
+                })}
               </DialogDescription>
             </DialogHeader>
             <div className="flex gap-2">
@@ -48,14 +51,14 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
               <CopyButton value={secret} />
             </div>
             <DialogFooter>
-              <Button onClick={() => close(false)}>Done</Button>
+              <Button onClick={() => close(false)}>{t('Done')}</Button>
             </DialogFooter>
           </div>
         ) : (
           <form onSubmit={submit} className="grid gap-4">
             <DialogHeader>
-              <DialogTitle>New Webhook</DialogTitle>
-              <DialogDescription>OpenSign posts signed JSON events to a public https address, with retries.</DialogDescription>
+              <DialogTitle>{t('New Webhook')}</DialogTitle>
+              <DialogDescription>{t('OpenSign posts signed JSON events to a public https address, with retries.')}</DialogDescription>
             </DialogHeader>
             <FormError message={error} />
             <Field label="URL" htmlFor="hook-url">
@@ -72,11 +75,11 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
             <div className="grid gap-2">
               <label className="flex items-center gap-2.5">
                 <Checkbox checked={all} onCheckedChange={(c) => setEvents(c ? ['*'] : [])} />
-                <span>All events</span>
+                <span>{t('All events')}</span>
               </label>
               {!all &&
                 EVENTS.map((ev) => (
-                  <label key={ev} className="flex items-center gap-2.5 pl-6">
+                  <label key={ev} className="flex items-center gap-2.5 ps-6">
                     <Checkbox
                       checked={events.includes(ev)}
                       onCheckedChange={(c) => setEvents(c ? [...events, ev] : events.filter((x) => x !== ev))}
@@ -87,10 +90,10 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => close(false)}>
-                Cancel
+                {t('Cancel')}
               </Button>
               <Button type="submit" disabled={create.isPending || !events.length}>
-                Create Webhook
+                {t('Create Webhook')}
               </Button>
             </DialogFooter>
           </form>
@@ -103,17 +106,17 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
 export function WebhooksPage() {
   const hooks = useApi('webhooks.list');
   const remove = useApiMutation('webhooks.delete', { invalidates: ['webhooks.'] });
-  const test = useApiMutation('webhooks.test', { invalidates: ['webhooks.'], onSuccess: () => toast.success('Test event queued') });
+  const test = useApiMutation('webhooks.test', { invalidates: ['webhooks.'], onSuccess: () => toast.success(t('Test event queued')) });
   const [creating, setCreating] = useState(false);
   return (
-    <SettingsCard title="Webhooks" description="Tell your systems when documents are sent, signed, completed or stopped.">
+    <SettingsCard title={t('Webhooks')} description={t('Tell your systems when documents are sent, signed, completed or stopped.')}>
       <Button className="mb-4" onClick={() => setCreating(true)}>
-        <Plus /> New Webhook
+        <Plus /> {t('New Webhook')}
       </Button>
       {hooks.isPending ? (
         <Spinner />
       ) : !hooks.data?.length ? (
-        <EmptyState icon={<Webhook />} title="No webhooks" />
+        <EmptyState icon={<Webhook />} title={t('No webhooks')} />
       ) : (
         <ul className="grid gap-2">
           {hooks.data.map((h) => (
@@ -123,16 +126,16 @@ export function WebhooksPage() {
                 <div className="truncate font-mono text-xs">{h.url}</div>
                 <div className="truncate text-xs text-muted-foreground">
                   {h.events.join(', ')}
-                  {h.lastError ? ` · ${h.lastError}` : h.lastStatus ? ` · last ${h.lastStatus}` : ''}
+                  {h.lastError ? ` · ${h.lastError}` : h.lastStatus ? ` · ${t('last {status}', { status: h.lastStatus })}` : ''}
                 </div>
               </div>
               <Button variant="ghost" size="sm" onClick={() => test.mutate({ id: h.id })}>
-                Test
+                {t('Test')}
               </Button>
               <ConfirmButton
-                label="Delete"
-                title="Delete this webhook?"
-                description="Deliveries to it stop at once."
+                label={t('Delete')}
+                title={t('Delete this webhook?')}
+                description={t('Deliveries to it stop at once.')}
                 onConfirm={() => remove.mutate({ id: h.id })}
               />
             </li>

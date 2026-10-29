@@ -160,6 +160,10 @@ async fn setup_login_lockout_two_factor_and_api_keys() {
     let sven = signed_in(&app, call::<auth::Login>(&anon, login("sven@example.com", PASSWORD)).await.unwrap()).await;
     assert_eq!(kind(call::<users::List>(&web(&app), Empty {}).await), ErrorKind::Unauthorized);
     assert!(call::<users::List>(&sven, Empty {}).await.is_ok());
+    call::<auth::SetLanguage>(&sven, auth::SetLanguageInput { language: Some("ar".into()) }).await.unwrap();
+    assert_eq!(call::<auth::WhoAmI>(&sven, Empty {}).await.unwrap().language.as_deref(), Some("ar"));
+    assert_eq!(kind(call::<auth::SetLanguage>(&sven, auth::SetLanguageInput { language: Some("xx".into()) }).await), ErrorKind::BadRequest);
+    assert_eq!(kind(call::<auth::SetLanguage>(&web(&app), auth::SetLanguageInput { language: None }).await), ErrorKind::Unauthorized);
     assert_eq!(
         kind(call::<users::Invite>(&sven, users::InviteInput { email: "x@example.com".into(), name: None, role: Role::Admin }).await),
         ErrorKind::Forbidden

@@ -33,11 +33,15 @@ export type AccountMeOutput = Me;
 export type Me = {
   email: string;
   id: string;
+  /** The language the app is shown in, if the user chose one. */
+  language?: string | null;
   mustEnableTwoFactor: boolean;
   name: string;
   permissions: Array<Permission>;
   role: Role;
   twoFactorEnabled: boolean;
+  /** The running OpenSign version. */
+  version: string;
 };
 
 export type AccountPasskeyAddInput = {
@@ -90,6 +94,13 @@ export type AccountRevokeMcpConnectionInput = {
 
 export type AccountRevokeMcpConnectionOutput = Ok_;
 
+export type AccountSetLanguageInput = {
+  /** en, zh, hi, es, fr, ar, bn, pt, ru, ur or sv. Leave out to follow the browser. */
+  language?: string | null;
+};
+
+export type AccountSetLanguageOutput = Ok_;
+
 export type AccountTwoFactorBeginInput = Record<string, unknown>;
 
 export type AccountTwoFactorBeginOutput = TwoFactorSetup;
@@ -133,6 +144,22 @@ export type ChatOutput = {
   actions: Array<Action>;
   reply: string;
 };
+
+export type AiModelsInput = {
+  /** A key typed but not saved yet. Empty means none. */
+  apiKey?: string | null;
+  /** Unsaved base URL from the settings form; the saved one if left out. */
+  baseUrl?: string | null;
+  /** Unsaved provider from the settings form; the saved one if left out. */
+  provider?: string | null;
+};
+
+export type Model = {
+  id: string;
+  name: string;
+};
+
+export type AiModelsOutput = Array<Model>;
 
 export type AiStatusInput = Record<string, unknown>;
 
@@ -371,7 +398,7 @@ export type RowProblem = {
 export type Target = {
   /** The template party it belongs to, or "Document". */
   group: string;
-  /** `party.<n>.<name|email|phone|company|personalNumber>`, `field.<label>`, `title` or `externalId`. */
+  /** `party.<n>.<name|email|phone|company|personalNumber|language>`, `field.<label>`, `title` or `externalId`. */
   key: string;
   label: string;
 };
@@ -467,6 +494,8 @@ export type PartyView = {
   delivery: string;
   email?: string | null;
   id: string;
+  /** What this party reads, if not the document's language. */
+  language?: string | null;
   name: string;
   notifiedAt?: string | null;
   personalNumber?: string | null;
@@ -508,6 +537,8 @@ export type DocumentView = {
   pageCount?: number | null;
   parties: Array<PartyView>;
   reminderDays?: number | null;
+  /** Signers may share a read-only copy with their own AI agent. */
+  reviewLinks: boolean;
   sealedSha256?: string | null;
   /** Whether the seal carries a time stamp from the time stamp authority; unset until sealed. */
   sealedWithTimestamp?: boolean | null;
@@ -537,7 +568,7 @@ export type DocumentsCreateInput = {
   externalId?: string | null;
   /** Create a reusable template instead of a document. */
   isTemplate?: boolean;
-  /** What signers see and receive: `en` or `sv`. Defaults to the template's, then the organisation's. */
+  /** What signers see and receive unless a party has its own: en, zh, hi, es, fr, ar, bn, pt, ru, ur or sv. Defaults to the template's, then the organisation's. */
   language?: string | null;
   message?: string | null;
   metadata?: unknown;
@@ -726,6 +757,8 @@ export type PartyInput = {
   email?: string | null;
   /** Keep an existing party (and its fields) by passing its id. */
   id?: string | null;
+  /** The language of this party's emails, SMS and signing page, if not the document's: en, zh, hi, es, fr, ar, bn, pt, ru, ur or sv. Leave out to use the document's. */
+  language?: string | null;
   name: string;
   /** A national id number to match against the eID result, e.g. a Swedish personnummer. Stored encrypted. Leave it out (or send the masked value) to keep the stored one; send "" to remove it. */
   personalNumber?: string | null;
@@ -746,6 +779,13 @@ export type DocumentsSetPartiesInput = {
 };
 
 export type DocumentsSetPartiesOutput = Array<PartyView>;
+
+export type DocumentsSetReviewLinksInput = {
+  enabled: boolean;
+  id: string;
+};
+
+export type DocumentsSetReviewLinksOutput = Ok_;
 
 export type DocumentsShareInput = {
   canEdit?: boolean;
@@ -770,6 +810,68 @@ export type DocumentsSigningLinkInput = {
 };
 
 export type DocumentsSigningLinkOutput = SignerLink;
+
+export type DocumentsSigningPreviewInput = {
+  documentId: string;
+  partyId: string;
+};
+
+export type ActiveReviewLink = {
+  createdAt: string;
+  expiresAt: string;
+  lastUsedAt?: string | null;
+  /** How many times an agent has fetched it. */
+  uses: number;
+};
+
+export type ReviewLinkState = {
+  active?: ActiveReviewLink | null;
+  /** The party may create a review link now. */
+  available: boolean;
+};
+
+export type SignerDocument = {
+  brandColor: string;
+  id: string;
+  language: string;
+  message?: string | null;
+  organisation: string;
+  pageCount?: number | null;
+  sender?: string | null;
+  status: string;
+  title: string;
+};
+
+export type SignerParty = {
+  company?: string | null;
+  email?: string | null;
+  id: string;
+  /** The party signs on the sender's device, which is handed over to them. */
+  inPerson: boolean;
+  name: string;
+  role: string;
+  signedAt?: string | null;
+  status: string;
+};
+
+export type DocumentsSigningPreviewOutput = SignerView;
+
+export type SignerView = {
+  /** Files the party is asked to upload before signing. */
+  attachments: Array<AttachmentRequest>;
+  canDownload: boolean;
+  document: SignerDocument;
+  /** The party's own fields, and the sender's prefilled text for context. */
+  fields: Array<FieldRow>;
+  /** Set when the party must identify before seeing the document; nothing else is filled in. */
+  needsAuthentication?: AuthMethod | null;
+  party: SignerParty;
+  /** Sharing a read-only copy with the party's own AI agent; unset until they have identified. */
+  review?: ReviewLinkState | null;
+  /** Set when the party must identify before signing. */
+  signAuthentication?: AuthMethod | null;
+  yourTurn: boolean;
+};
 
 export type DocumentsUnshareInput = {
   id: string;
@@ -948,6 +1050,19 @@ export type SetupStatus = {
   needsSetup: boolean;
 };
 
+export type SigningCreateReviewLinkInput = {
+  session?: string | null;
+  token: string;
+};
+
+export type SigningCreateReviewLinkOutput = CreatedReviewLink;
+
+export type CreatedReviewLink = {
+  expiresAt: string;
+  /** Shown once: only a hash is stored. */
+  url: string;
+};
+
 export type SigningDeclineInput = {
   reason?: string | null;
   session?: string | null;
@@ -1009,46 +1124,7 @@ export type SigningOpenInput = {
   token: string;
 };
 
-export type SignerDocument = {
-  brandColor: string;
-  id: string;
-  language: string;
-  message?: string | null;
-  organisation: string;
-  pageCount?: number | null;
-  sender?: string | null;
-  status: string;
-  title: string;
-};
-
-export type SignerParty = {
-  company?: string | null;
-  email?: string | null;
-  id: string;
-  /** The party signs on the sender's device, which is handed over to them. */
-  inPerson: boolean;
-  name: string;
-  role: string;
-  signedAt?: string | null;
-  status: string;
-};
-
 export type SigningOpenOutput = SignerView;
-
-export type SignerView = {
-  /** Files the party is asked to upload before signing. */
-  attachments: Array<AttachmentRequest>;
-  canDownload: boolean;
-  document: SignerDocument;
-  /** The party's own fields, and the sender's prefilled text for context. */
-  fields: Array<FieldRow>;
-  /** Set when the party must identify before seeing the document; nothing else is filled in. */
-  needsAuthentication?: AuthMethod | null;
-  party: SignerParty;
-  /** Set when the party must identify before signing. */
-  signAuthentication?: AuthMethod | null;
-  yourTurn: boolean;
-};
 
 export type SigningRemoveAttachmentInput = {
   /** The attachment request whose upload to remove. */
@@ -1071,6 +1147,13 @@ export type CodeSent = {
   /** The last digits of the number the code went to. */
   phoneHint: string;
 };
+
+export type SigningRevokeReviewLinkInput = {
+  session?: string | null;
+  token: string;
+};
+
+export type SigningRevokeReviewLinkOutput = Ok_;
 
 export type FieldValue = {
   fieldId: string;
@@ -1284,9 +1367,11 @@ export interface Services {
   "account.passkey_remove": { kind: "mutation"; input: AccountPasskeyRemoveInput; output: AccountPasskeyRemoveOutput };
   "account.passkeys": { kind: "query"; input: AccountPasskeysInput; output: AccountPasskeysOutput };
   "account.revoke_mcp_connection": { kind: "mutation"; input: AccountRevokeMcpConnectionInput; output: AccountRevokeMcpConnectionOutput };
+  "account.set_language": { kind: "mutation"; input: AccountSetLanguageInput; output: AccountSetLanguageOutput };
   "account.two_factor_begin": { kind: "mutation"; input: AccountTwoFactorBeginInput; output: AccountTwoFactorBeginOutput };
   "account.two_factor_confirm": { kind: "mutation"; input: AccountTwoFactorConfirmInput; output: AccountTwoFactorConfirmOutput };
   "ai.chat": { kind: "mutation"; input: AiChatInput; output: AiChatOutput };
+  "ai.models": { kind: "mutation"; input: AiModelsInput; output: AiModelsOutput };
   "ai.status": { kind: "query"; input: AiStatusInput; output: AiStatusOutput };
   "ai.test": { kind: "mutation"; input: AiTestInput; output: AiTestOutput };
   "ai.usage": { kind: "query"; input: AiUsageInput; output: AiUsageOutput };
@@ -1323,9 +1408,11 @@ export interface Services {
   "documents.send": { kind: "mutation"; input: DocumentsSendInput; output: DocumentsSendOutput };
   "documents.set_fields": { kind: "mutation"; input: DocumentsSetFieldsInput; output: DocumentsSetFieldsOutput };
   "documents.set_parties": { kind: "mutation"; input: DocumentsSetPartiesInput; output: DocumentsSetPartiesOutput };
+  "documents.set_review_links": { kind: "mutation"; input: DocumentsSetReviewLinksInput; output: DocumentsSetReviewLinksOutput };
   "documents.share": { kind: "mutation"; input: DocumentsShareInput; output: DocumentsShareOutput };
   "documents.sign_in_person": { kind: "mutation"; input: DocumentsSignInPersonInput; output: DocumentsSignInPersonOutput };
   "documents.signing_link": { kind: "mutation"; input: DocumentsSigningLinkInput; output: DocumentsSigningLinkOutput };
+  "documents.signing_preview": { kind: "query"; input: DocumentsSigningPreviewInput; output: DocumentsSigningPreviewOutput };
   "documents.unshare": { kind: "mutation"; input: DocumentsUnshareInput; output: DocumentsUnshareOutput };
   "documents.update": { kind: "mutation"; input: DocumentsUpdateInput; output: DocumentsUpdateOutput };
   "documents.upload": { kind: "mutation"; input: DocumentsUploadInput; output: DocumentsUploadOutput };
@@ -1341,6 +1428,7 @@ export interface Services {
   "settings.update": { kind: "mutation"; input: SettingsUpdateInput; output: SettingsUpdateOutput };
   "setup.create_first_admin": { kind: "mutation"; input: SetupCreateFirstAdminInput; output: SetupCreateFirstAdminOutput };
   "setup.status": { kind: "query"; input: SetupStatusInput; output: SetupStatusOutput };
+  "signing.create_review_link": { kind: "mutation"; input: SigningCreateReviewLinkInput; output: SigningCreateReviewLinkOutput };
   "signing.decline": { kind: "mutation"; input: SigningDeclineInput; output: SigningDeclineOutput };
   "signing.eid_cancel": { kind: "mutation"; input: SigningEidCancelInput; output: SigningEidCancelOutput };
   "signing.eid_start": { kind: "mutation"; input: SigningEidStartInput; output: SigningEidStartOutput };
@@ -1348,6 +1436,7 @@ export interface Services {
   "signing.open": { kind: "mutation"; input: SigningOpenInput; output: SigningOpenOutput };
   "signing.remove_attachment": { kind: "mutation"; input: SigningRemoveAttachmentInput; output: SigningRemoveAttachmentOutput };
   "signing.request_code": { kind: "mutation"; input: SigningRequestCodeInput; output: SigningRequestCodeOutput };
+  "signing.revoke_review_link": { kind: "mutation"; input: SigningRevokeReviewLinkInput; output: SigningRevokeReviewLinkOutput };
   "signing.sign": { kind: "mutation"; input: SigningSignInput; output: SigningSignOutput };
   "signing.verify_code": { kind: "mutation"; input: SigningVerifyCodeInput; output: SigningVerifyCodeOutput };
   "system.status": { kind: "query"; input: SystemStatusInput; output: SystemStatusOutput };
