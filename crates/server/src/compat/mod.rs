@@ -65,7 +65,7 @@ impl Api {
         let doc = self.document(id).await?;
         let version = if doc["status"] == "completed" { "signed" } else { "original" };
         if doc["status"] == "draft" {
-            return opensign_core::services::documents::preview_pdf(&self.ctx, id).await;
+            return opensign_core::services::documents::preview_pdf(&self.ctx, id, None).await;
         }
         let out = self.call("documents.download", json!({ "id": id, "version": version })).await?;
         let bytes = B64.decode(out["contentBase64"].as_str().unwrap_or_default()).map_err(AppError::internal)?;
