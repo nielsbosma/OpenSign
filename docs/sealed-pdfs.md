@@ -9,9 +9,9 @@ When the last party has signed, OpenSign turns the document into one sealed PDF.
    - the document title, its id and your organisation,
    - each party: name, email, role, how they identified (for example "Swedish BankID, personal number 19xxxxxx-1234"), when they signed, and their IP address,
    - the events from the audit trail: sent, opened, identified, signed, and so on, with times,
-   - the attachments signers uploaded, with their SHA-256 hashes,
+   - the attachments signers uploaded and any [webcam photos](identification.md#webcam-photo), with their SHA-256 hashes,
    - the SHA-256 hash of the original PDF, and where to verify the document.
-3. **Embedded files**: a JSON evidence attachment with the same facts in machine-readable form, and the [signer attachments](attachments.md).
+3. **Embedded files**: a JSON evidence attachment with the same facts in machine-readable form, and the [signer attachments](attachments.md) and webcam photos.
 4. **The seal**: a PAdES signature over the whole file in your organisation's name, with an RFC 3161 time stamp.
 5. **Long-term validation data** and an archive time stamp (see below).
 

@@ -31,6 +31,10 @@ Then choose **Sign In with a Passkey** on the sign-in page. A passkey always ver
 
 An admin can turn on **Require two-factor authentication for everyone** in **Settings → Security**. Anyone without an authenticator app or a passkey is then asked to set one up before they can do anything else. MCP clients signed in as such an account are refused until they do. We recommend turning this on.
 
+## Language
+
+Under **Settings → Account and Security**, pick the language OpenSign is shown in for you: English, Chinese (Simplified), Hindi, Spanish, French, Arabic, Bengali, Portuguese, Russian, Urdu or Swedish. Before you sign in, the app follows your browser, and the sign-in page has a picker. This does not change what signers see; they get the language set on their document or party. Some messages from the server are still in English.
+
 ## Sessions
 
 Sessions are browser cookies that scripts cannot read, bound to your install, and stored on the server only as a keyed hash. In **Settings → Security** an admin sets:

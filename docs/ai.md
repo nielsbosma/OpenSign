@@ -9,17 +9,15 @@ In **Settings → AI**:
 | Field | |
 | --- | --- |
 | Provider | Anthropic, OpenAI, Berget AI (EU), Opper (EU), a LiteLLM proxy, or any other OpenAI-compatible server. |
-| Model | The model to use, such as `claude-sonnet-5-5`. |
 | API Key | The provider's key. Stored encrypted. |
 | Base URL | Only for LiteLLM and other compatible servers. |
 | Allow document text to be sent for reviews | Off by default. See [What leaves the server](#what-leaves-the-server). |
 | Monthly Token Budget | Tokens per calendar month across everyone. 0 means no limit. |
+| Model | Once the provider accepts your key, a searchable list of the chat models it offers, newest first. If the list cannot be fetched, type the model name, such as `claude-sonnet-5-5`, and the field shows the provider's error. |
 
 The same page has a test button that sends a tiny request to check the provider, model and key, and shows how many tokens were used this month.
 
 Using the AI features needs the **ai.use** permission (admins, managers and senders).
-
-> **Coming soon.** The Model field becomes a searchable list of the models your key can use, fetched from the provider.
 
 ## The assistant
 
@@ -52,6 +50,10 @@ The latest review is kept with the document. Reviews need **Allow document text 
 - Bulk send's AI matching always sends the column names.
 
 Pick a provider and region that fit your data protection needs. Berget AI and Opper run in the EU, and a LiteLLM proxy lets you route to a model you host yourself. A LiteLLM or other OpenAI-compatible endpoint is the one outbound address an admin may point at a private network.
+
+## Signers' own AI
+
+Separately from these features, signers can give their own assistant a read-only copy of the document. That needs no provider and sends nothing from your install to an AI service. See [The signing page](signing-page.md#review-with-your-ai).
 
 ## Budget
 
