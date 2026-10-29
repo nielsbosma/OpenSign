@@ -46,7 +46,7 @@ The latest review is kept with the document. Reviews need **Allow document text 
 ## What leaves the server
 
 - With **Allow document text** off, the text of your documents never leaves the server. The assistant still works, but only with what its tools return, such as titles, statuses and party names.
-- With it on, reviews send the document's text (up to about 180,000 characters), and bulk send's AI column matching may include a few sample rows.
+- With it on, reviews send the document's text (up to about 180,000 characters), [Detect Fields with AI](text-tags.md#with-ai) sends the pages' text with positions (up to 30 pages and about 40,000 characters), and bulk send's AI column matching may include a few sample rows.
 - Bulk send's AI matching always sends the column names.
 
 Pick a provider and region that fit your data protection needs. Berget AI and Opper run in the EU, and a LiteLLM proxy lets you route to a model you host yourself. A LiteLLM or other OpenAI-compatible endpoint is the one outbound address an admin may point at a private network.
