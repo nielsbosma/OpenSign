@@ -1,5 +1,6 @@
 import { KeyRound, Pencil, Plus, Trash2 } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
+import { Link } from 'react-router';
 import { ConfirmButton, CopyButton, EmptyState, Field, IconButton, Loading } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -235,14 +236,30 @@ export function ApiKeysPage() {
   return (
     <SettingsCard
       title={t('API Keys')}
-      description={tx(
-        'For your own integrations. OpenSign speaks its own REST API at {rest}, and drop-in compatible Scrive ({scrive}) and DocuSign ({docusign}) APIs.',
-        {
-          rest: <code>/api/v1</code>,
-          scrive: <code>/scrive/api/v2</code>,
-          docusign: <code>/docusign/restapi/v2.1</code>,
-        },
-      )}
+      description={
+        <>
+          {tx(
+            'For your own integrations. OpenSign speaks its own REST API at {rest}, and drop-in compatible Scrive ({scrive}) and DocuSign ({docusign}) APIs.',
+            {
+              rest: <code>/api/v1</code>,
+              scrive: <code>/scrive/api/v2</code>,
+              docusign: <code>/docusign/restapi/v2.1</code>,
+            },
+          )}{' '}
+          {tx('Try calls in the {explorer} or read the {docs}.', {
+            explorer: (
+              <a href="/api-explorer" target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                {t('API Explorer')}
+              </a>
+            ),
+            docs: (
+              <Link to="/docs/api" className="text-primary hover:underline">
+                {t('API guide')}
+              </Link>
+            ),
+          })}
+        </>
+      }
     >
       <Button className="mb-4" onClick={() => setCreating(true)}>
         <Plus /> {t('New Key')}
