@@ -3,6 +3,7 @@ import { Navigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmButton, Field, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
+import { FilePicker } from '@/components/ui/file-picker';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
@@ -340,15 +341,20 @@ export function AdminSettingsPage() {
   const spec = GROUPS[group as Group];
   const current = useApi('settings.get', { group: group as Group }, { enabled: !!spec });
   const [draft, setDraft] = useState<Record<string, unknown>>({});
+  const [certFiles, setCertFiles] = useState<Record<string, File>>({});
   const save = useApiMutation('settings.update', {
     invalidates: ['settings.', 'ai.', 'setup.'],
     onSuccess: () => {
       setDraft({});
+      setCertFiles({});
       toast.success('Saved');
     },
   });
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new group starts with no unsaved changes
-  useEffect(() => setDraft({}), [group]);
+  useEffect(() => {
+    setDraft({});
+    setCertFiles({});
+  }, [group]);
 
   if (!spec) return <Navigate to="/settings" replace />;
   if (current.isPending) return <Spinner />;
@@ -408,14 +414,19 @@ export function AdminSettingsPage() {
                   <Field key={f.key} label={f.label} htmlFor={id} hint={hint ?? (isSet ? 'Saved. Leave empty to keep it.' : undefined)}>
                     <div className="flex gap-2">
                       {f.type === 'file' ? (
-                        <Input
+                        <FilePicker
                           id={id}
-                          type="file"
+                          className="flex-1"
                           accept=".pem,.crt,.cer,.key,.p12,.pfx"
                           disabled={locked}
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (file) set(f.key, await readCertificate(file));
+                          hint=".pem, .crt, .cer, .key, .p12 or .pfx"
+                          files={certFiles[f.key] ? [certFiles[f.key]!] : []}
+                          onChange={async ([file]) => {
+                            setCertFiles((c) => {
+                              const { [f.key]: _, ...rest } = c;
+                              return file ? { ...rest, [f.key]: file } : rest;
+                            });
+                            set(f.key, file ? await readCertificate(file) : undefined);
                           }}
                         />
                       ) : (
@@ -494,7 +505,14 @@ export function AdminSettingsPage() {
               Save
             </Button>
             {Object.keys(draft).length > 0 && (
-              <Button type="button" variant="ghost" onClick={() => setDraft({})}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setDraft({});
+                  setCertFiles({});
+                }}
+              >
                 Discard
               </Button>
             )}
