@@ -1,52 +1,143 @@
+<div align="center">
+
+<img src="web/public/favicon.svg" width="72" height="72" alt="OpenSign logo">
+
 # OpenSign
 
-An open source electronic signing service you run yourself. Upload a Word or PDF document, place fields, send it, and get back a sealed PDF that any PDF reader can verify, with an evidence report of who signed, when, and how they proved who they were.
+**Electronic signatures you run yourself.**<br>
+Send a PDF or Word document, collect signatures with email, SMS or BankID, and get back a sealed PDF that any PDF reader can verify.
 
-- **Signing flows**: signers, approvers and viewers, in order or all at once; email, SMS or link delivery, or in person on your own device; reminders, expiry, decline with a reason; templates. Signers can be asked for attachments (an ID copy, a certificate), which are cleaned and sealed into the signed PDF. Signers see everything in English or Swedish.
-- **Bulk send**: send a template to every row of a CSV or Excel file. Columns are matched to parties and fields by name (Swedish or English), optionally with AI, and every row is checked before anything is sent.
-- **Identification**: email link, SMS code (46elks or Twilio), Swedish BankID (with your own agreement or through TIC Identity), Freja eID, and other Nordic eIDs through an OpenID Connect broker (Idura/Criipto, Signicat). With a personal number on the party, only that person can sign.
-- **Sealed PDFs**: PAdES B-LTA: a seal over the whole file with an RFC 3161 time stamp, the certificates and OCSP or CRL answers needed to validate it offline, and an archive time stamp over everything. Evidence pages, and a verify page and API that check any OpenSign document and flag any change made after a signature other than validation data.
-- **Word and PDF uploads**: Word, ODT and RTF are converted by Gotenberg on a private network; every PDF is sanitized (no JavaScript, forms actions, embedded files or XFA) before anyone sees it.
-- **APIs**: a REST API with OpenAPI, plus drop-in compatible endpoints for **Scrive** (`/scrive/api/v2`) and **DocuSign** eSignature (`/docusign/restapi/v2.1`), signed webhooks, and idempotency keys.
-- **MCP**: everything you can do in the app is available to Claude and other MCP clients, with your permissions and in the audit trail.
-- **AI (optional)**: an assistant over your own tools, and an LLM review of a document before you send it. Off until an admin picks a provider; document text is only sent if an admin allows it.
-- **Retention and legal hold**: rules in Settings delete signed, ended and draft documents with their files after set periods; a legal hold keeps a document until it is released.
-- **Multi-user with roles**: admin, manager, sender, auditor and viewer; passkeys or an authenticator app for two-factor. One organisation per install.
-- **Security first**: see [SECURITY.md](SECURITY.md) for the threat model and the controls.
+[![CI](https://github.com/nielsbosma/OpenSign/actions/workflows/ci.yml/badge.svg)](https://github.com/nielsbosma/OpenSign/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-4f46e5.svg)](LICENSE)
+[![Image](https://img.shields.io/badge/ghcr.io-nielsbosma%2Fopensign-2496ed?logo=docker&logoColor=white)](https://github.com/nielsbosma/OpenSign/pkgs/container/opensign)
+[![Rust](https://img.shields.io/badge/Rust-axum%20%2B%20sqlx-b7410e?logo=rust)](crates)
+[![PAdES B-LTA](https://img.shields.io/badge/seal-PAdES%20B--LTA-16a34a)](docs/sealed-pdfs.md)
 
-## Documentation
+[Documentation](docs/index.md) · [Quick start](docs/quick-start.md) · [Deploy](#deploy-in-five-minutes) · [API](docs/api.md) · [Security](SECURITY.md)
 
-The full documentation is in [`docs/`](docs/index.md), and every install serves it at `/docs`, without signing in. It covers sending and signing, identification, sealed PDFs, administration, the APIs, and deployment.
+<br>
 
-## Running it
+<img src="docs/images/signing-page.png" alt="The signing page: the document on the left, the signature pad and consent on the right" width="900">
 
-OpenSign is one container image plus Postgres, an S3-compatible bucket and (for Word files) Gotenberg.
+</div>
 
-| Variable | |
-| --- | --- |
-| `DATABASE_URL` | Postgres 15 or later |
-| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION` | The bucket; documents are encrypted before they reach it |
-| `APP_SECRET` | 32+ random characters, e.g. `openssl rand -base64 48`. Every key derives from it: keep it safe and never change it |
-| `APP_URL` | The public https address |
-| `CONVERTER_URL` | Gotenberg, on a private network (optional; without it only PDFs are accepted) |
+## Why OpenSign
 
-Everything else (email through Resend or SMTP, SMS, eID, AI, security rules, branding) is set in the browser.
+Hosted e-signature services charge per user or per envelope, keep your contracts on their servers, and lock your integrations to their API. OpenSign is one container you deploy next to your own database and bucket:
+
+- **Your documents stay yours.** Files are encrypted before they reach your S3 bucket, and nothing leaves your install unless you turn it on.
+- **Drop-in for Scrive and DocuSign.** Point an existing integration at OpenSign by swapping the base URL. No rewrite.
+- **Evidence that holds up.** Every signed PDF carries a PAdES B-LTA seal, an RFC 3161 time stamp and evidence pages, and can be checked in any PDF reader without OpenSign.
+- **Nordic identification built in.** Swedish BankID, Freja eID and other Nordic eIDs through an OpenID Connect broker, plus SMS codes.
+- **Free and open.** MIT licensed. Pay only for the server it runs on.
+
+|  | OpenSign | Hosted e-signature services |
+| --- | --- | --- |
+| Where documents live | Your Postgres and S3 bucket, encrypted | The vendor's cloud |
+| Pricing | Free, MIT licensed | Per user or per envelope |
+| Integrations | Own REST API, plus Scrive v2 and DocuSign v2.1 compatible endpoints | One vendor's API |
+| Without internet | Runs fully on your own network | Needs the vendor's cloud |
+| AI | Bring your own model, off by default, MCP server for Claude | Vendor's choice |
+| Source code | Open, auditable, [threat model](SECURITY.md) included | Closed |
+
+## Features
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### Prepare and send
+Upload PDF or Word files, drag fields onto the page and pick who fills what. Signers, approvers and viewers, in order or all at once. Delivery by email, SMS, a link you hand over, or in person on your own device. Reminders, expiry, templates and [bulk send](docs/bulk-send.md) from CSV or Excel.
+
+</td>
+<td width="50%" valign="top">
+
+<img src="docs/images/editor.png" alt="The document editor with signature, name and date fields placed for two parties">
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+<img src="docs/images/signing-page-mobile.png" alt="The signing page on a phone" width="260">
+
+</td>
+<td width="50%" valign="top">
+
+### Sign anywhere, in any language
+No account and no app needed. Draw or type a signature on desktop or phone, upload requested attachments such as an ID copy, or decline with a reason. Signers can [identify](docs/identification.md) with an email link, SMS code, BankID, Freja or a broker eID. With a personal number on the party, only that person can sign.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### Sealed, verifiable PDFs
+When everyone has signed, OpenSign stamps the signatures, adds evidence pages of who signed, when and how, and seals the file. Anyone can drop it on the public [verify page](docs/verification.md) to confirm it is genuine and unchanged.
+
+</td>
+<td width="50%" valign="top">
+
+<img src="docs/images/verify.png" alt="The verify page confirming a sealed document is exactly as sealed">
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+<img src="docs/images/audit-trail.png" alt="The audit trail settings page listing hash-chained events">
+
+</td>
+<td width="50%" valign="top">
+
+### A tamper-evident trail
+Every change, sign-in and signature is written to an append-only, hash-chained audit log that you can verify from Settings. Retention rules delete old documents on schedule, and a [legal hold](docs/retention.md) keeps the ones that matter.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### Built for developers
+A REST API with OpenAPI and a built-in API Explorer that sends live requests and writes curl, JavaScript or Python. Signed webhooks, idempotency keys, and an [MCP server](docs/mcp.md) so Claude can work with your documents under your permissions.
+
+</td>
+<td width="50%" valign="top">
+
+<img src="docs/images/api-explorer.png" alt="The API Explorer showing POST /documents with its request body">
+
+</td>
+</tr>
+</table>
+
+### And more
+
+- **11 languages** for the app, emails and signing page: English, Swedish, Chinese, Hindi, Spanish, French, Arabic, Bengali, Portuguese, Russian and Urdu, with right-to-left layouts.
+- **Teams and roles**: admin, manager, sender, auditor and viewer, with passkeys or an authenticator app for two-factor sign-in.
+- **Optional AI**: an assistant over your own tools and a review of a document before you send it, with the provider and model of your choice. Signers can also share a read-only link with their own AI.
+- **Light and dark**, on every screen.
+- **Painless updates**: Settings shows when a release is out, Sliplane installs the update in one click, and migrations apply safely on start.
+
+<p align="center">
+  <img src="docs/images/documents.png" alt="The documents list in light mode" width="49%">
+  <img src="docs/images/documents-dark.png" alt="The documents list in dark mode" width="49%">
+</p>
+<p align="center">
+  <img src="docs/images/signed-document.png" alt="A signed document with both parties marked as signed and the seal" width="49%">
+  <img src="docs/images/signing-page-arabic.png" alt="The signing page in Arabic, laid out right to left" width="49%">
+</p>
+
+## Deploy in five minutes
+
+OpenSign is one container image plus Postgres, an S3-compatible bucket and, for Word files, Gotenberg.
 
 ### On Sliplane
 
 [![Deploy to Sliplane](https://sliplane.opendeploy.cloud/button.svg)](https://sliplane.opendeploy.cloud/?repo=https://github.com/nielsbosma/OpenSign)
 
-The button reads [sliplane.yaml](sliplane.yaml): it asks for your Resend key (and optionally an AI provider), shows what it will create and what it costs, and sets up a managed Postgres, a bucket, Gotenberg on the private network and OpenSign with a fresh `APP_SECRET`. The deployed app links to its own updates.
+The button reads [sliplane.yaml](sliplane.yaml): it asks for your Resend key (and optionally an AI provider), shows what it will create and what it costs, and sets up a managed Postgres, a bucket, Gotenberg on the private network and OpenSign with a fresh `APP_SECRET`. From a terminal, `SLIPLANE_TOKEN=api_rw_org_... ./deploy/sliplane.sh` does the same over the Sliplane API.
 
-From a terminal, the same thing over the [Sliplane API](https://ctrl.sliplane.io):
-
-```sh
-SLIPLANE_TOKEN=api_rw_org_... ./deploy/sliplane.sh
-```
-
-Run it again to update (`OPENSIGN_TAG=0.2.0` for a release). See the top of the script for options, such as bringing your own database.
-
-### Anywhere else
+### With Docker
 
 ```sh
 docker run -d --name opensign -p 3000:3000 \
@@ -59,58 +150,44 @@ docker run -d --name opensign -p 3000:3000 \
   ghcr.io/nielsbosma/opensign:latest
 ```
 
+| Variable | |
+| --- | --- |
+| `DATABASE_URL` | Postgres 15 or later |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION` | The bucket; documents are encrypted before they reach it |
+| `APP_SECRET` | 32+ random characters. Every key derives from it: keep it safe and never change it |
+| `APP_URL` | The public https address |
+| `CONVERTER_URL` | Gotenberg, on a private network (optional; without it only PDFs are accepted) |
+
 The image is distroless, runs as a non-root user, works with a read-only root file system, and is multi-arch (amd64, arm64). Tags: `:latest`, `:1.2.3` and `:1.2` for releases, `:edge` for `main`.
 
 ### First run
 
-1. The container log prints a **setup code**, so nobody else can claim a fresh install.
-2. Create the first admin.
-3. Choose how email goes out: a **Resend** API key, or your own **SMTP** server (host, port, STARTTLS or TLS, and optionally a username and password). OpenSign sends a test email and only continues once it was accepted; documents cannot go out by email until then.
-4. Optionally set up SMS, eID, your seal certificate and AI in **Admin settings**.
+The container log prints a **setup code**, so nobody else can claim a fresh install. Enter it, create the first admin, and connect email through **Resend** or your own **SMTP** server. Everything else (SMS, BankID and eID, your seal certificate, AI, security rules, branding) is set in the browser, and any setting can be pinned with an environment variable such as `OPENSIGN_SECURITY_ENFORCE_TWO_FACTOR=true`.
 
-Any admin setting can be pinned with an environment variable, `OPENSIGN_<GROUP>_<FIELD>`, for example `OPENSIGN_EMAIL_API_KEY` or `OPENSIGN_SECURITY_ENFORCE_TWO_FACTOR=true`. Pinned fields are locked in the UI.
+Read more in [Deployment](docs/deployment.md), [First-run setup](docs/setup.md), [Identification](docs/identification.md) and [Updates](docs/updates.md).
 
-### Updating
+## Use the API
 
-**Settings → System** shows the running version, the latest release on GitHub, the database migrations and the job queue. Admins with an update waiting also see **Update to X** in the sidebar.
-
-Every start applies pending database migrations before serving, under a lock so only one container migrates. A build refuses to start against a database migrated by a newer one. So updating is only ever "run the newer image":
-
-- **From the app**: put your Sliplane deploy hook (Sliplane → service → Settings → Deploy hook) in **Settings → Updates**, then press **Update Now** on the System page. The hook redeploys the service's image tag, so run `:latest` or a release series such as `:1.2`, not an exact version.
-- **Sliplane from your machine**: `OPENSIGN_TAG=1.2.0 ./deploy/sliplane.sh`.
-- **Docker Compose**: `docker compose pull && docker compose up -d`.
-
-Back up the database before a major version. Turn off the GitHub check in **Settings → Updates** for installs without internet access.
-
-### eID providers
-
-- **Swedish BankID**: turn it on with **Use the BankID test environment** and it works right away with BankID's public test certificate and a [test BankID](https://developers.bankid.com/test-portal). For production, upload the `.p12` your bank gives you and type its password; BankID's server root is built in.
-- **Freja eID**: upload the `.pfx` from Freja with its password, and Freja's result-signing certificate. Results whose signature does not check out are refused.
-- **Broker**: issuer URL, client id and secret. Register `https://<your-install>/api/eid/callback` as the redirect URI. `acr_values` picks a specific eID.
-- **BankID through [TIC Identity](https://id.tic.io)**: for BankID without an agreement with a bank. Turn on OIDC for your tenant in TIC's portal, register `https://<your-install>/api/eid/callback` as the redirect URI, and enter the tenant name, client id and secret. Parties still choose Swedish BankID; it goes through TIC whenever BankID with your own certificate is off.
-
-## Using the API
-
-Create an API key under **Settings → API Keys**, then:
+Create a key under **Settings → API Keys**, then:
 
 ```sh
 curl -H "Authorization: Bearer osk_..." https://sign.example.com/api/v1/documents
 ```
 
-The **API Explorer** in the sidebar lists every endpoint with its parameters and schemas, sends live requests as you or with a pasted API key, and writes the same call as curl, JavaScript or Python. The OpenAPI document behind it is at `/api/v1/openapi.json`. Existing Scrive or DocuSign integrations can point at OpenSign by swapping the base URL and using an OpenSign API key as the bearer token (Scrive's OAuth header takes it as `oauth_token`):
+Coming from Scrive or DocuSign? Swap the base URL and use an OpenSign API key as the bearer token (Scrive's OAuth header takes it as `oauth_token`):
 
 | API | Vendor base URL | OpenSign base URL |
 | --- | --- | --- |
 | Scrive v2 | `https://scrive.com/api/v2` | `https://sign.example.com/scrive/api/v2` |
 | DocuSign eSignature v2.1 | `https://demo.docusign.net/restapi/v2.1` | `https://sign.example.com/docusign/restapi/v2.1` |
 
-The older `/api/v2` and `/restapi/v2.1` paths still work as aliases.
+To connect Claude, add a custom connector with `https://<your-install>/mcp` and approve it. See [REST API](docs/api.md), [Webhooks](docs/webhooks.md), [Scrive](docs/scrive.md), [DocuSign](docs/docusign.md) and [MCP](docs/mcp.md).
 
-## Connecting Claude
+## Security first
 
-In Claude, add a custom connector with `https://<your-install>/mcp` (also shown under **Settings → Account**), sign in and approve. It uses OAuth 2.1 with dynamic client registration and PKCE, over Streamable HTTP.
+Security is the product. Documents and secrets are encrypted at rest with keys derived per purpose, every uploaded PDF is sanitized before anyone sees it, signer links are stored only as MACs, outbound requests to configurable addresses cannot reach private networks, the web app runs under a strict CSP, and every service checks permissions on the server. [SECURITY.md](SECURITY.md) has the full threat model and controls; please report vulnerabilities privately through GitHub's security advisories.
 
-## Architecture
+## How it fits together
 
 ```
            ┌──────────────── one container ───────────────────────────┐
@@ -122,34 +199,24 @@ In Claude, add a custom connector with `https://<your-install>/mcp` (also shown 
            └──────────────────────────────────────────────────────────┘
 ```
 
-Rust (axum, sqlx) in `crates/`: `crypto` (keys, encryption, tokens; no I/O), `db` (migrations), `pdf` (sanitizing, stamping, evidence, PAdES), `core` (services, eID, email, worker) and `server` (HTTP, REST, compatibility APIs, MCP). The web app is React, Vite and Tailwind in `web/`.
+Rust (axum, sqlx) in `crates/`: `crypto` (keys, encryption, tokens; no I/O), `db` (migrations), `pdf` (sanitizing, stamping, evidence, PAdES), `core` (services, eID, email, worker) and `server` (HTTP, REST, compatibility APIs, MCP). The web app is React, Vite and Tailwind in `web/`. Every feature is a service, so the web app, REST, the compatibility APIs, MCP and the AI assistant all go through the same permission checks and audit trail.
 
-## Development
+## Documentation
+
+The full documentation is in [`docs/`](docs/index.md), and every install serves it at `/docs` without signing in. It covers sending and signing, identification, sealed PDFs, administration, the APIs and deployment.
+
+## Contributing
+
+Issues and pull requests are welcome. Run it locally with:
 
 ```sh
 pnpm install
 pnpm infra:up            # Postgres, S3, Mailpit and Gotenberg in Docker
 cp .env.example .env
-pnpm dev                 # server on :3000, web app on http://localhost:5173
+pnpm dev                 # web app on http://localhost:5173
 ```
 
-| Command | |
-| --- | --- |
-| `pnpm lint` | Biome and Clippy |
-| `pnpm typecheck` | The web app |
-| `pnpm test` | Rust tests (set `TEST_DATABASE_URL`) and web tests |
-| `pnpm api:types` | Regenerate the web app's typed client after changing a service |
-| `docker compose --profile prod up -d --build` | The production image at http://localhost:8090 |
-
-Email in development goes to Mailpit at http://localhost:8026. See [CLAUDE.md](CLAUDE.md) for conventions and [CONTRIBUTING.md](CONTRIBUTING.md) for how to contribute.
-
-## Releasing
-
-Bump `version` in `Cargo.toml`, move the **Unreleased** notes in `CHANGELOG.md` under it, merge to `main`, then publish a GitHub Release named `vX.Y.Z`. CI runs every check, builds amd64 and arm64, and pushes `ghcr.io/nielsbosma/opensign:X.Y.Z`, `:X.Y` and `:latest`.
-
-To deploy every release automatically, run `./deploy/Connect-Github.ps1` once (Windows, needs the GitHub CLI). It stores your Sliplane deploy hook as the `SLIPLANE_DEPLOY_HOOK` repository secret, and CI calls it after pushing the release image. The Sliplane service must run `:latest` or a release series such as `:0.1`.
-
-On Windows, `./deploy/release.ps1` does the release and the deploy step by step: it checks that `main` is green, publishes the release with its changelog notes, follows the image build, then installs on Sliplane or calls the deploy hook. It saves the Sliplane token and deploy hook encrypted for your Windows account (`-ForgetCredentials` removes them).
+[CONTRIBUTING.md](CONTRIBUTING.md) has the commands, checks and release process, and [CLAUDE.md](CLAUDE.md) the conventions.
 
 ## License
 
