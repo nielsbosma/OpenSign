@@ -207,7 +207,9 @@ impl Service for Set {
             }
             let email: EmailSettings = settings(ctx, conn).await?;
             if !ctx.app.env.development && !email::is_configured(&email) {
-                return Err(bad_request("Email is not set up. Share links confirm each visitor's email address, so an admin connects email first."));
+                return Err(bad_request(
+                    "Email is not set up. Share links confirm each visitor's email address, so an admin connects email first.",
+                ));
             }
         } else if let Some(id) = input.party_id
             && !all.iter().any(|p| p.id == id)
@@ -353,7 +355,8 @@ pub struct Open;
 impl Service for Open {
     type Input = SlugInput;
     type Output = PublicShareLink;
-    const META: Meta = Meta::query("share_links.open", "Open a public share link: what the visitor is asked to sign, and by whom.", Access::Public);
+    const META: Meta =
+        Meta::query("share_links.open", "Open a public share link: what the visitor is asked to sign, and by whom.", Access::Public);
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SlugInput) -> Result<PublicShareLink> {
         let Active { template, party, .. } = active(ctx, conn, &input.slug, false).await?;
@@ -473,7 +476,8 @@ impl Service for RequestCode {
             },
         )
         .await?;
-        audit(ctx, conn, Entry::new("share_link.code_sent", "document", template.id).metadata(json!({ "email": email, "name": name }))).await?;
+        audit(ctx, conn, Entry::new("share_link.code_sent", "document", template.id).metadata(json!({ "email": email, "name": name })))
+            .await?;
         Ok(CodeRequested { request_id: id, expires_at })
     }
 }

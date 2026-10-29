@@ -127,6 +127,17 @@ pub fn document(state: &AppState, server: &str) -> Value {
         } }),
     );
     paths.insert(
+        "/documents/{id}/files/{file}/replace".into(),
+        json!({ "post": {
+            "operationId": "documents_replace_file", "tags": ["documents"],
+            "summary": "Replace one of a draft's or template's files with a new PDF or Word file. Fields keep their positions; any on pages the new file lacks are moved to its last page and listed in `moved`.",
+            "parameters": [id[0], { "name": "file", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+            "requestBody": { "required": true, "content": { "multipart/form-data": { "schema": {
+                "type": "object", "required": ["file"], "properties": { "file": { "type": "string", "format": "binary" } } } } } },
+            "responses": { "200": { "description": "The new file and any fields that were moved" }, "4XX": error_response("Refused") }
+        } }),
+    );
+    paths.insert(
         "/documents/{id}/file".into(),
         json!({ "get": {
             "operationId": "documents_file", "tags": ["documents"],

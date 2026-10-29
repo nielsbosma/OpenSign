@@ -99,14 +99,14 @@ async fn text_tags_become_fields_and_leave_the_page() {
     assert_eq!(fields[5].options, json!(["None", "Garage", "Street"]));
     assert!(fields.iter().all(|f| f.page == 0 && f.x >= 0.0 && f.x + f.width <= 1.0 && f.y + f.height <= 1.0));
 
-    let (_, pdf) = docs::preview_pdf(&ctx, id).await.unwrap();
+    let (_, pdf) = docs::preview_pdf(&ctx, id, None).await.unwrap();
     let text = lopdf::Document::load_mem(&pdf).unwrap().extract_text(&[1]).unwrap();
     assert!(!text.contains("type=signature;role=Tenant") && text.contains("house rules"), "{text}");
 
     let kept = draft(&ctx, json!([])).await;
     let out = upload(&ctx, kept, WORD_TAGS, Some(false)).await;
     assert_eq!((out.fields.text_tags, out.fields.parties_added.len()), (0, 0));
-    let (_, pdf) = docs::preview_pdf(&ctx, kept).await.unwrap();
+    let (_, pdf) = docs::preview_pdf(&ctx, kept, None).await.unwrap();
     assert!(lopdf::Document::load_mem(&pdf).unwrap().extract_text(&[1]).unwrap().contains("type=signature"));
 }
 

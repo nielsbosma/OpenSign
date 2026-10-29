@@ -208,7 +208,10 @@ async fn signing_myself_makes_me_the_only_signer_and_records_my_sign_in() {
     roles.sort();
     assert_eq!(roles, vec![("Sam Self", "signer"), ("Vera", "viewer")], "signers and approvers are replaced, copies kept");
     assert!(doc.fields.iter().all(|f| f.party_id == Some(started.party_id)), "their fields become mine");
-    assert_eq!(kind(call::<docs::SignMyself>(&sam, docs::SignMyselfInput { id, auth_to_sign: AuthMethod::Standard }).await), ErrorKind::Conflict);
+    assert_eq!(
+        kind(call::<docs::SignMyself>(&sam, docs::SignMyselfInput { id, auth_to_sign: AuthMethod::Standard }).await),
+        ErrorKind::Conflict
+    );
 
     let resumed = call::<docs::SignInPerson>(&sam, docs::InPersonInput { document_id: id, party_id: started.party_id }).await.unwrap();
     assert!(resumed.session.is_some(), "starting again on my own party keeps my sign-in as identification");
@@ -260,7 +263,10 @@ async fn share_links_confirm_the_email_before_making_a_document() {
     let template = with_file(&manager, "Membership", true).await;
     let saved = call::<docs::SetParties>(
         &manager,
-        docs::SetPartiesInput { document_id: template, parties: vec![party("Member", PartyRole::Signer), party("Club", PartyRole::Signer)] },
+        docs::SetPartiesInput {
+            document_id: template,
+            parties: vec![party("Member", PartyRole::Signer), party("Club", PartyRole::Signer)],
+        },
     )
     .await
     .unwrap();
@@ -297,7 +303,8 @@ async fn share_links_confirm_the_email_before_making_a_document() {
     let request = call::<share_links::RequestCode>(&visitor, ask(&slug, "Lisa Larsson", "Lisa@Example.org")).await.unwrap();
     let wrong = share_links::ConfirmInput { slug: slug.clone(), request_id: request.request_id, code: "000000".into() };
     assert_eq!(kind(call::<share_links::Confirm>(&visitor, wrong).await), ErrorKind::BadRequest);
-    let documents: i64 = sqlx::query_scalar("select count(*) from documents where share_link_id is not null").fetch_one(&app.db).await.unwrap();
+    let documents: i64 =
+        sqlx::query_scalar("select count(*) from documents where share_link_id is not null").fetch_one(&app.db).await.unwrap();
     assert_eq!(documents, 0, "nothing is made before the email is confirmed");
 
     let started = confirm_with(&visitor, &app, &slug, request.request_id).await.unwrap();
@@ -338,9 +345,12 @@ async fn share_links_limit_codes_per_address() {
     let Some(app) = app().await else { return };
     let manager = user(&app, "Moa Manager", Role::Manager).await;
     let template = with_file(&manager, "Waiver", true).await;
-    let saved = call::<docs::SetParties>(&manager, docs::SetPartiesInput { document_id: template, parties: vec![party("Guest", PartyRole::Signer)] })
-        .await
-        .unwrap();
+    let saved = call::<docs::SetParties>(
+        &manager,
+        docs::SetPartiesInput { document_id: template, parties: vec![party("Guest", PartyRole::Signer)] },
+    )
+    .await
+    .unwrap();
     let input = share_links::SetInput {
         template_id: template,
         enabled: true,
@@ -358,5 +368,9 @@ async fn share_links_limit_codes_per_address() {
     assert_eq!(kind(call::<share_links::RequestCode>(&visitor, ask(&slug, "Gus", "gus@example.org")).await), ErrorKind::TooManyRequests);
     let r = call::<share_links::RequestCode>(&visitor, ask(&slug, "Hed", "hed@example.org")).await.unwrap();
     confirm_with(&visitor, &app, &slug, r.request_id).await.unwrap();
-    assert_eq!(kind(call::<share_links::Open>(&visitor, share_links::SlugInput { slug }).await), ErrorKind::NotFound, "the total limit is reached");
+    assert_eq!(
+        kind(call::<share_links::Open>(&visitor, share_links::SlugInput { slug }).await),
+        ErrorKind::NotFound,
+        "the total limit is reached"
+    );
 }

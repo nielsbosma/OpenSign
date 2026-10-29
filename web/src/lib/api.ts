@@ -62,6 +62,18 @@ export async function uploadFile(documentId: string, file: File): Promise<Output
   return parse(response);
 }
 
+/** Replaces one of a draft's or template's files, keeping its fields. */
+export async function replaceFile(documentId: string, fileId: string, file: File): Promise<Output<'documents.replace_file'>> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  const response = await fetch(`/api/documents/${documentId}/files/${fileId}/replace`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    body: form,
+  });
+  return parse(response);
+}
+
 /** A file the party was asked for, uploaded through their signing link. */
 export async function uploadAttachment(
   token: string,

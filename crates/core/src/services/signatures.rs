@@ -48,12 +48,11 @@ async fn stored(conn: &mut PgConnection, user_id: Uuid) -> Result<Stored> {
 }
 
 async fn load(ctx: &Ctx, conn: &mut PgConnection, user_id: Uuid) -> Result<SavedSignature> {
-    let row: Stored = sqlx::query_as(
-        "select signature_file_id, signature_typed, signature_initials, signature_updated_at from users where id = $1",
-    )
-    .bind(user_id)
-    .fetch_one(&mut *conn)
-    .await?;
+    let row: Stored =
+        sqlx::query_as("select signature_file_id, signature_typed, signature_initials, signature_updated_at from users where id = $1")
+            .bind(user_id)
+            .fetch_one(&mut *conn)
+            .await?;
     let image = match row.signature_file_id {
         Some(id) => {
             let record = file_record(conn, id).await?;
@@ -153,8 +152,9 @@ impl Service for Set {
         audit(
             ctx,
             conn,
-            Entry::new("account.signature_saved", "user", user_id)
-                .metadata(json!({ "drawn": png.is_some(), "initials": initials.is_some(), "sha256": file.as_ref().map(|f| f.sha256.clone()) })),
+            Entry::new("account.signature_saved", "user", user_id).metadata(
+                json!({ "drawn": png.is_some(), "initials": initials.is_some(), "sha256": file.as_ref().map(|f| f.sha256.clone()) }),
+            ),
         )
         .await?;
         load(ctx, conn, user_id).await
@@ -167,8 +167,8 @@ pub struct Remove;
 impl Service for Remove {
     type Input = super::Empty;
     type Output = super::Ok_;
-    const META: Meta = Meta::mutation("account.remove_signature", "Delete your saved signature and initials.", Access::Authenticated)
-        .not_a_tool();
+    const META: Meta =
+        Meta::mutation("account.remove_signature", "Delete your saved signature and initials.", Access::Authenticated).not_a_tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: super::Empty) -> Result<super::Ok_> {
         let user_id = ctx.actor()?.user_id;

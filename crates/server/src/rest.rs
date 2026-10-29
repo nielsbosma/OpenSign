@@ -72,6 +72,11 @@ pub const ROUTES: &[Route] = &[
     route(Method::GET, "/templates/{templateId}/share-link", "share_links.get"),
     route(Method::PUT, "/templates/{templateId}/share-link", "share_links.set"),
     action("/templates/{templateId}/share-link/rotate", "share_links.rotate"),
+    route(Method::GET, "/templates/{templateId}/versions", "templates.versions"),
+    route(Method::POST, "/templates/{templateId}/versions", "templates.save_version"),
+    route(Method::GET, "/templates/{templateId}/versions/{number}", "templates.version"),
+    route(Method::POST, "/templates/{templateId}/versions/{number}/restore", "templates.restore"),
+    route(Method::GET, "/templates/{templateId}/compare", "templates.compare"),
     route(Method::GET, "/folders", "folders.list"),
     route(Method::POST, "/folders", "folders.create"),
     route(Method::PUT, "/folders/{id}", "folders.update"),
@@ -184,7 +189,8 @@ fn input_for(
         }
     }
     for (key, value) in params {
-        input.insert(key, Value::String(value));
+        let value = typed(&schema, &key, &value)?;
+        input.insert(key, value);
     }
     for (key, value) in route.fixed {
         input.insert((*key).to_string(), Value::Bool(*value));
@@ -346,6 +352,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
     let mut router = Router::new()
         .route("/openapi.json", get(openapi))
         .route("/documents/{id}/files", post(files::upload).layer(axum::extract::DefaultBodyLimit::max(110 * 1024 * 1024)))
+        .route("/documents/{id}/files/{file}/replace", post(files::replace).layer(axum::extract::DefaultBodyLimit::max(110 * 1024 * 1024)))
         .route("/documents/{id}/file", get(files::document_file))
         .route("/documents/{id}/attachments/{request}", get(files::document_attachment))
         .route("/verify", post(files::verify));

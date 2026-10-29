@@ -19,9 +19,8 @@ use crate::documents::attachments::{self, AttachmentRequestInput};
 use crate::documents::logic::{self, Condition, Owner};
 use crate::documents::values::{self, Spec, Validation};
 use crate::documents::{
-    AuthMethod, Delivery, DocumentRow, DocumentView, FieldKind, Need, PartyRole, PartyRow, PartyView, VISIBLE, current_turn,
-    decrypt_personal_number, files, load_document, notify, parties, personal_number_context, signer_url, status, tags, upload, view,
-    visibility,
+    AuthMethod, Delivery, DocumentRow, DocumentView, FieldKind, Need, PartyRole, PartyRow, PartyView, VISIBLE, current_turn, files,
+    load_document, notify, parties, personal_number_context, signer_url, status, tags, upload, versions, view, visibility,
 };
 use crate::error::{AppError, ErrorKind, Result, bad_request, conflict, forbidden, not_found};
 use crate::i18n::{LANGUAGES, Lang};
@@ -311,35 +310,39 @@ pub(crate) async fn create(
     input: CreateInput,
     origin: Origin,
 ) -> Result<(DocumentView, std::collections::HashMap<Uuid, Uuid>)> {
-        if input.is_template && !ctx.can(Permission::TemplatesManage) {
-            return Err(forbidden());
-        }
-        let template = match input.template_id {
-            Some(id) => {
-                let t = load_document(ctx, conn, id, Need::Read).await?;
-                if !t.is_template {
-                    return Err(bad_request("That document is not a template"));
-                }
-                if t.archived_at.is_some() {
-                    return Err(conflict("That template is archived. Restore it before using it."));
-                }
-                Some(t)
+    if input.is_template && !ctx.can(Permission::TemplatesManage) {
+        return Err(forbidden());
+    }
+    let template = match input.template_id {
+        Some(id) => {
+            let t = load_document(ctx, conn, id, Need::Read).await?;
+            if !t.is_template {
+                return Err(bad_request("That document is not a template"));
             }
-            None => None,
-        };
-        if let Some(folder_id) = input.folder_id {
-            super::folders::check_folder(conn, folder_id, input.is_template).await?;
+            if t.archived_at.is_some() {
+                return Err(conflict("That template is archived. Restore it before using it."));
+            }
+            Some(t)
         }
-        let org: crate::settings::OrgSettings = settings(ctx, conn).await?;
-        let id = Uuid::now_v7();
-        let message = match (&input.message, &template) {
-            (Some(m), _) => clean_text(m, "The message", 4000)?,
-            (None, Some(t)) => t.message.clone(),
-            (None, None) => String::new(),
-        };
-        sqlx::query(
-            "insert into documents (id, title, is_template, template_id, owner_id, message, language, sequential, reminder_days, external_id, metadata, review_links, folder_id)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+        None => None,
+    };
+    if let Some(folder_id) = input.folder_id {
+        super::folders::check_folder(conn, folder_id, input.is_template).await?;
+    }
+    let org: crate::settings::OrgSettings = settings(ctx, conn).await?;
+    let id = Uuid::now_v7();
+    let version = match &template {
+        Some(t) => Some(super::templates::current_version(ctx, conn, t.id).await?),
+        None => None,
+    };
+    let message = match (&input.message, &template) {
+        (Some(m), _) => clean_text(m, "The message", 4000)?,
+        (None, Some(t)) => t.message.clone(),
+        (None, None) => String::new(),
+    };
+    sqlx::query(
+            "insert into documents (id, title, is_template, template_id, owner_id, message, language, sequential, reminder_days, external_id, metadata, review_links, folder_id, template_version)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
         )
         .bind(id)
         .bind(title(&input.title)?)
@@ -357,104 +360,44 @@ pub(crate) async fn create(
         .bind(metadata(input.metadata)?)
         .bind(template.as_ref().is_none_or(|t| t.review_links))
         .bind(input.folder_id)
+        .bind(version.as_ref().map(|(number, _)| *number))
         .execute(&mut *conn)
         .await?;
-        let share_link = match origin {
-            Origin::ShareLink(link) => Some(link),
-            _ => None,
-        };
-        if share_link.is_some() {
-            sqlx::query("update documents set share_link_id = $2 where id = $1").bind(id).bind(share_link).execute(&mut *conn).await?;
-        }
-        let party_ids = match &template {
-            Some(t) => copy_template(ctx, conn, t.id, id).await?,
-            None => Default::default(),
-        };
-        audit(
-            ctx,
+    let share_link = match origin {
+        Origin::ShareLink(link) => Some(link),
+        _ => None,
+    };
+    if share_link.is_some() {
+        sqlx::query("update documents set share_link_id = $2 where id = $1").bind(id).bind(share_link).execute(&mut *conn).await?;
+    }
+    let mut party_ids = std::collections::HashMap::new();
+    if let (Some(t), Some((_, content))) = (&template, &version) {
+        let new_ids = versions::apply(ctx, conn, content, id).await?;
+        party_ids.extend(parties(conn, t.id).await?.iter().map(|p| p.id).zip(new_ids));
+    }
+    audit(
+        ctx,
+        conn,
+        Entry::new("document.created", "document", id).metadata(json!({
+            "template": input.template_id, "templateVersion": version.as_ref().map(|(n, _)| n), "isTemplate": input.is_template,
+            "folder": input.folder_id, "shareLink": share_link,
+        })),
+    )
+    .await?;
+    if !input.is_template {
+        let document = reload(ctx, conn, id).await?;
+        notify::emit(
             conn,
-            Entry::new("document.created", "document", id).metadata(json!({
-                "template": input.template_id, "isTemplate": input.is_template, "folder": input.folder_id, "shareLink": share_link,
-            })),
+            "document.created",
+            json!({
+                "documentId": id, "title": document.document.title, "externalId": document.document.external_id,
+                "templateId": input.template_id, "source": origin.as_str(), "shareLinkId": share_link,
+            }),
         )
         .await?;
-        if !input.is_template {
-            let document = reload(ctx, conn, id).await?;
-            notify::emit(
-                conn,
-                "document.created",
-                json!({
-                    "documentId": id, "title": document.document.title, "externalId": document.document.external_id,
-                    "templateId": input.template_id, "source": origin.as_str(), "shareLinkId": share_link,
-                }),
-            )
-            .await?;
-            return Ok((document, party_ids));
-        }
-        Ok((reload(ctx, conn, id).await?, party_ids))
-}
-
-async fn copy_template(ctx: &Ctx, conn: &mut PgConnection, from: Uuid, to: Uuid) -> Result<std::collections::HashMap<Uuid, Uuid>> {
-    sqlx::query("insert into document_files (document_id, file_id, position) select $2, file_id, position from document_files where document_id = $1")
-        .bind(from)
-        .bind(to)
-        .execute(&mut *conn)
-        .await?;
-    let mut ids = std::collections::HashMap::new();
-    for p in parties(conn, from).await? {
-        let new_id = Uuid::now_v7();
-        ids.insert(p.id, new_id);
-        let personal_number = decrypt_personal_number(ctx.keys(), &p)
-            .map(|n| ctx.keys().encrypt_str(KeyPurpose::Settings, &personal_number_context(new_id), &n));
-        sqlx::query(
-            "insert into parties (id, document_id, role, name, email, phone, personal_number, company, sign_order, delivery, auth_to_view, auth_to_sign, language)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
-        )
-        .bind(new_id)
-        .bind(to)
-        .bind(&p.role)
-        .bind(&p.name)
-        .bind(&p.email)
-        .bind(&p.phone)
-        .bind(personal_number)
-        .bind(&p.company)
-        .bind(p.sign_order)
-        .bind(&p.delivery)
-        .bind(&p.auth_to_view)
-        .bind(&p.auth_to_sign)
-        .bind(&p.language)
-        .execute(&mut *conn)
-        .await?;
+        return Ok((document, party_ids));
     }
-    attachments::copy(conn, to, &ids, from).await?;
-    for f in crate::documents::fields(conn, from).await? {
-        sqlx::query(
-            "insert into fields (id, document_id, party_id, kind, page, x, y, width, height, required, label, value, options, validation, format, group_key, read_only, conditions, formula)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)",
-        )
-        .bind(Uuid::now_v7())
-        .bind(to)
-        .bind(f.party_id.and_then(|p| ids.get(&p).copied()))
-        .bind(&f.kind)
-        .bind(f.page)
-        .bind(f.x)
-        .bind(f.y)
-        .bind(f.width)
-        .bind(f.height)
-        .bind(f.required)
-        .bind(&f.label)
-        .bind(f.file_id.is_none().then_some(f.value.as_ref()).flatten())
-        .bind(&f.options)
-        .bind(&f.validation)
-        .bind(&f.format)
-        .bind(&f.group_key)
-        .bind(f.read_only)
-        .bind(&f.conditions)
-        .bind(&f.formula)
-        .execute(&mut *conn)
-        .await?;
-    }
-    Ok(ids)
+    Ok((reload(ctx, conn, id).await?, party_ids))
 }
 
 #[derive(Deserialize, JsonSchema, Default)]
@@ -616,17 +559,8 @@ fn pdf_name(name: &str) -> String {
     format!("{}.pdf", notify::sanitize_filename(stem))
 }
 
-/// Converts and sanitizes an upload, then attaches it to a draft. Conversion happens before the
-/// transaction so a slow converter holds no locks.
-pub async fn add_file(ctx: &Ctx, document_id: Uuid, name: &str, bytes: Vec<u8>, options: FileOptions) -> Result<UploadOutput> {
-    let mut conn = ctx.db().acquire().await?;
-    let document = load_document(ctx, &mut conn, document_id, Need::Edit).await?;
-    require_draft(&document)?;
-    let security: SecuritySettings = settings(ctx, &mut conn).await?;
-    let earlier = files(&mut conn, document_id).await?;
-    drop(conn);
-    let original_sha256 = sha256_hex(&bytes);
-    let mut clean = upload::prepare(&ctx.app, bytes, security.max_upload_mb).await?;
+/// Takes text tags out of a cleaned upload and reads its form fields, as fields still to be placed.
+async fn scan_upload(clean: &mut opensign_pdf::Sanitized, options: FileOptions) -> Result<(Vec<(tags::Found, bool)>, FieldsFromFile)> {
     let mut fields_out = FieldsFromFile::default();
     let mut found: Vec<(tags::Found, bool)> = Vec::new();
     if options.text_tags {
@@ -655,6 +589,21 @@ pub async fn add_file(ctx: &Ctx, document_id: Uuid, name: &str, bytes: Vec<u8>, 
     if options.form_fields {
         found.extend(clean.form.iter().map(|f| (tags::from_form(f), false)));
     }
+    Ok((found, fields_out))
+}
+
+/// Converts and sanitizes an upload, then attaches it to a draft. Conversion happens before the
+/// transaction so a slow converter holds no locks.
+pub async fn add_file(ctx: &Ctx, document_id: Uuid, name: &str, bytes: Vec<u8>, options: FileOptions) -> Result<UploadOutput> {
+    let mut conn = ctx.db().acquire().await?;
+    let document = load_document(ctx, &mut conn, document_id, Need::Edit).await?;
+    require_draft(&document)?;
+    let security: SecuritySettings = settings(ctx, &mut conn).await?;
+    let earlier = files(&mut conn, document_id).await?;
+    drop(conn);
+    let original_sha256 = sha256_hex(&bytes);
+    let mut clean = upload::prepare(&ctx.app, bytes, security.max_upload_mb).await?;
+    let (found, mut fields_out) = scan_upload(&mut clean, options).await?;
     let mut page_offset = 0;
     if !found.is_empty() {
         for record in &earlier {
@@ -733,6 +682,174 @@ impl Service for Upload {
             form_fields: input.form_fields.unwrap_or(defaults.form_fields),
         };
         add_file(ctx, input.document_id, &input.name, bytes, options).await
+    }
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MovedField {
+    pub id: Uuid,
+    pub kind: String,
+    pub label: String,
+    /// The page it is on now, from 0.
+    pub page: i32,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceOutput {
+    pub file: FileRecord,
+    pub pages: usize,
+    /// Active content taken out of the file, e.g. "JavaScript".
+    pub removed: Vec<String>,
+    /// Fields that were on pages the new file does not have. They were moved to its last page; check them.
+    pub moved: Vec<MovedField>,
+    /// When the new file has text tags, they replace the old file's fields; this says what they made.
+    pub fields: FieldsFromFile,
+}
+
+async fn page_count(ctx: &Ctx, record: &FileRecord) -> Result<i32> {
+    let body = read_file(&ctx.app.storage, ctx.keys(), record).await?;
+    let sizes = tokio::task::spawn_blocking(move || opensign_pdf::page_sizes(&body))
+        .await
+        .map_err(AppError::internal)?
+        .map_err(upload::pdf_failure)?;
+    Ok(sizes.len() as i32)
+}
+
+/// Swaps one of a draft's files for a new upload in the same place. Fields keep their positions:
+/// those on later files follow their pages, and those on pages the new file lacks go to its last
+/// page and are reported. When the new file has text tags, they win: the old file's fields are
+/// dropped and the tags placed instead. A template's state is saved as a version first, so the old
+/// file stays in its history.
+pub async fn replace_file(ctx: &Ctx, document_id: Uuid, file_id: Uuid, name: &str, bytes: Vec<u8>) -> Result<ReplaceOutput> {
+    let mut conn = ctx.db().acquire().await?;
+    let document = load_document(ctx, &mut conn, document_id, Need::Edit).await?;
+    require_draft(&document)?;
+    let security: SecuritySettings = settings(ctx, &mut conn).await?;
+    let records = files(&mut conn, document_id).await?;
+    drop(conn);
+    let Some(index) = records.iter().position(|f| f.id == file_id) else { return Err(not_found("File")) };
+    let mut start = 0;
+    for record in &records[..index] {
+        start += page_count(ctx, record).await?;
+    }
+    let old_pages = page_count(ctx, &records[index]).await?;
+    let original_sha256 = sha256_hex(&bytes);
+    let mut clean = upload::prepare(&ctx.app, bytes, security.max_upload_mb).await?;
+    let new_pages = clean.pages.len() as i32;
+    let (found, mut fields_out) = scan_upload(&mut clean, FileOptions::default()).await?;
+    let tagged = found.iter().any(|(_, tag)| *tag);
+
+    let mut tx = ctx.db().begin().await?;
+    let state: Option<String> =
+        sqlx::query_scalar("select status from documents where id = $1 for update").bind(document_id).fetch_optional(&mut *tx).await?;
+    if state.as_deref() != Some(status::DRAFT) {
+        return Err(conflict("Only drafts can be changed"));
+    }
+    let now: Vec<Uuid> = files(&mut tx, document_id).await?.iter().map(|f| f.id).collect();
+    if now != records.iter().map(|f| f.id).collect::<Vec<_>>() {
+        return Err(conflict("The files changed while the new one was uploading. Try again."));
+    }
+    if document.is_template {
+        super::templates::current_version(ctx, &mut tx, document_id).await?;
+    }
+    let name = pdf_name(name);
+    let file = store_file(
+        &mut tx,
+        &ctx.app.storage,
+        ctx.keys(),
+        NewFile {
+            kind: "document",
+            name: &name,
+            content_type: "application/pdf",
+            body: &clean.pdf,
+            uploaded_by: ctx.actor.as_ref().map(|a| a.user_id),
+        },
+    )
+    .await?;
+    sqlx::query("update document_files set file_id = $3 where document_id = $1 and file_id = $2")
+        .bind(document_id)
+        .bind(file_id)
+        .bind(file.id)
+        .execute(&mut *tx)
+        .await?;
+    if tagged {
+        sqlx::query("delete from fields where document_id = $1 and page >= $2 and page < $2 + $3")
+            .bind(document_id)
+            .bind(start)
+            .bind(old_pages)
+            .execute(&mut *tx)
+            .await?;
+    }
+    let moved: Vec<MovedField> = sqlx::query_as::<_, (Uuid, String, String, i32)>(
+        "update fields set page = $2 + $4 - 1 where document_id = $1 and page >= $2 + $4 and page < $2 + $3
+         returning id, kind, label, page",
+    )
+    .bind(document_id)
+    .bind(start)
+    .bind(old_pages)
+    .bind(new_pages)
+    .fetch_all(&mut *tx)
+    .await?
+    .into_iter()
+    .map(|(id, kind, label, page)| MovedField { id, kind, label, page })
+    .collect();
+    sqlx::query("update fields set page = page + $3 where document_id = $1 and page >= $2")
+        .bind(document_id)
+        .bind(start + old_pages)
+        .bind(new_pages - old_pages)
+        .execute(&mut *tx)
+        .await?;
+    if tagged {
+        add_found_fields(&mut tx, document_id, start, found, &mut fields_out).await?;
+    }
+    sqlx::query("update documents set updated_at = now() where id = $1").bind(document_id).execute(&mut *tx).await?;
+    audit(
+        ctx,
+        &mut tx,
+        Entry::new("document.file_replaced", "document", document_id).metadata(json!({
+            "file": file.id, "replaced": file_id, "name": name, "uploadSha256": original_sha256, "sha256": file.sha256,
+            "removed": clean.removed, "pages": new_pages, "movedFields": moved.len(), "textTags": fields_out.text_tags,
+            "partiesAdded": fields_out.parties_added,
+        })),
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(ReplaceOutput { file, pages: clean.pages.len(), removed: clean.removed, moved, fields: fields_out })
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceFileInput {
+    pub document_id: Uuid,
+    /// The file to replace.
+    pub file_id: Uuid,
+    /// The new file's name, e.g. "Lease 2027.docx".
+    pub name: String,
+    /// The new file's bytes, base64. PDF, .docx, .doc, .odt or .rtf.
+    pub content_base64: String,
+}
+
+pub struct ReplaceFile;
+
+#[async_trait]
+impl Service for ReplaceFile {
+    type Input = ReplaceFileInput;
+    type Output = ReplaceOutput;
+    const META: Meta = Meta::mutation(
+        "documents.replace_file",
+        "Replace one of a draft's or template's files with a new version (PDF or Word, base64) without redoing its fields: fields keep their positions, and any on pages the new file lacks are moved to its last page and listed. If the new file has text tags, they replace that file's fields instead. A template's previous state is kept in its version history.",
+        Access::Permission(Permission::DocumentsCreate),
+    )
+    .without_transaction();
+
+    async fn run(ctx: &Ctx, _conn: &mut PgConnection, input: ReplaceFileInput) -> Result<ReplaceOutput> {
+        if input.content_base64.len() > 140 * 1024 * 1024 {
+            return Err(bad_request("The file is too large"));
+        }
+        let bytes = B64.decode(input.content_base64.trim()).map_err(|_| bad_request("contentBase64 is not valid base64"))?;
+        replace_file(ctx, input.document_id, input.file_id, &input.name, bytes).await
     }
 }
 
@@ -1797,15 +1914,21 @@ impl Service for Download {
 
 /// The PDF to show in the editor: the sent document once there is one, otherwise the draft's files
 /// combined the way sending will combine them.
-pub async fn preview_pdf(ctx: &Ctx, id: Uuid) -> Result<(String, Vec<u8>)> {
+/// The combined PDF of a draft or template, or of a template as it was in one of its versions.
+pub async fn preview_pdf(ctx: &Ctx, id: Uuid, version: Option<i32>) -> Result<(String, Vec<u8>)> {
     let mut conn = ctx.db().acquire().await?;
     let document = load_document(ctx, &mut conn, id, Need::Read).await?;
     let name = format!("{}.pdf", notify::sanitize_filename(&document.title));
-    if let Some(file_id) = document.sealed_file_id.or(document.source_file_id) {
-        let record = file_record(&mut conn, file_id).await?;
-        return Ok((name, read_file(&ctx.app.storage, ctx.keys(), &record).await?));
-    }
-    let records = files(&mut conn, document.id).await?;
+    let records = match version {
+        Some(number) => super::templates::version_files(ctx, &mut conn, &document, number).await?,
+        None => {
+            if let Some(file_id) = document.sealed_file_id.or(document.source_file_id) {
+                let record = file_record(&mut conn, file_id).await?;
+                return Ok((name, read_file(&ctx.app.storage, ctx.keys(), &record).await?));
+            }
+            files(&mut conn, document.id).await?
+        }
+    };
     if records.is_empty() {
         return Err(not_found("File"));
     }
