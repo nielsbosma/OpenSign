@@ -30,6 +30,8 @@ import {
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { call, useApi } from '@/lib/api';
+import { ROLE_LABELS } from '@/lib/format';
+import { isRtl, t, useLanguage } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { useTheme } from '@/lib/theme';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -54,7 +56,7 @@ function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" className="flex h-10 w-full items-center gap-2.5 rounded-md px-2 text-left hover:bg-sidebar-accent">
+        <button type="button" className="flex h-10 w-full items-center gap-2.5 rounded-md px-2 text-start hover:bg-sidebar-accent">
           <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
             {user?.name.slice(0, 1).toUpperCase()}
           </span>
@@ -65,17 +67,19 @@ function UserMenu() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-56">
-        <DropdownMenuLabel className="font-normal text-muted-foreground capitalize">{user?.role}</DropdownMenuLabel>
+        <DropdownMenuLabel className="font-normal text-muted-foreground">
+          {user && t(ROLE_LABELS[user.role] ?? user.role)}
+        </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={toggle}>
-          {theme === 'dark' ? <Sun /> : <Moon />} {theme === 'dark' ? 'Light Theme' : 'Dark Theme'}
+          {theme === 'dark' ? <Sun /> : <Moon />} {theme === 'dark' ? t('Light Theme') : t('Dark Theme')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => navigate('/settings')}>
-          <Settings /> Settings
+          <Settings /> {t('Settings')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={signOut}>
-          <LogOut /> Sign Out
+          <LogOut /> {t('Sign Out')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -101,30 +105,36 @@ function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onClose: ()
         <Logo />
         <span className="text-sm font-semibold">OpenSign</span>
         {user?.version && <span className="text-[11px] text-muted-foreground tabular-nums">{user.version}</span>}
-        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close Sidebar" className="ml-auto size-8 text-muted-foreground">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          aria-label={t('Close Sidebar')}
+          className="ms-auto size-8 text-muted-foreground"
+        >
           <PanelLeftClose />
         </Button>
       </div>
-      <nav className="flex flex-1 flex-col gap-0.5 px-2 py-1" aria-label="Main">
+      <nav className="flex flex-1 flex-col gap-0.5 px-2 py-1" aria-label={t('Main')}>
         <NavLink to="/documents" className={linkClass} onClick={onNavigate}>
-          <FileText className="size-4 opacity-80" /> Documents
+          <FileText className="size-4 opacity-80" /> {t('Documents')}
         </NavLink>
         {can('documents.create') && (
           <NavLink to="/templates" className={linkClass} onClick={onNavigate}>
-            <FileStack className="size-4 opacity-80" /> Templates
+            <FileStack className="size-4 opacity-80" /> {t('Templates')}
           </NavLink>
         )}
         <a href="/api-explorer" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
-          <Braces className="size-4 opacity-80" /> API Explorer
+          <Braces className="size-4 opacity-80" /> {t('API Explorer')}
         </a>
         <a href="/verify" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
-          <ShieldCheck className="size-4 opacity-80" /> Verify a Document
+          <ShieldCheck className="size-4 opacity-80" /> {t('Verify a Document')}
         </a>
       </nav>
       <div className="grid gap-0.5 border-t border-sidebar-border px-2 py-2">
         {version.data?.updateAvailable && (
           <NavLink to="/settings/system" className={linkClass} onClick={onNavigate}>
-            <ArrowUpCircle className="size-4 text-primary" /> Update to {version.data.latest?.version}
+            <ArrowUpCircle className="size-4 text-primary" /> {t('Update to {version}', { version: version.data.latest?.version ?? '' })}
           </NavLink>
         )}
         <UserMenu />
@@ -148,19 +158,20 @@ export function AppShell() {
   const [chatOpen, setChatOpen] = useState(false);
   const ai = useApi('ai.status', undefined, { staleTime: 5 * 60_000 });
   const assistant = !!ai.data?.configured && ai.data.canUse;
+  const rtl = isRtl(useLanguage().language);
 
   return (
     <div className="flex h-svh overflow-hidden">
       {docked ? (
         showSidebar && (
-          <aside className="w-60 shrink-0 border-r border-sidebar-border">
+          <aside className="w-60 shrink-0 border-e border-sidebar-border">
             <Sidebar onClose={() => setSidebar(true)} />
           </aside>
         )
       ) : (
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-          <SheetContent side="left" className="w-72 p-0 [&>button]:hidden">
-            <SheetTitle className="sr-only">Navigation</SheetTitle>
+          <SheetContent side={rtl ? 'right' : 'left'} className="w-72 p-0 [&>button]:hidden">
+            <SheetTitle className="sr-only">{t('Navigation')}</SheetTitle>
             <Sidebar onNavigate={() => setDrawerOpen(false)} onClose={() => setDrawerOpen(false)} />
           </SheetContent>
         </Sheet>
@@ -168,40 +179,40 @@ export function AppShell() {
 
       <main className="relative min-w-0 flex-1 overflow-y-auto">
         {!showSidebar && (
-          <div className="absolute top-2.5 left-3 z-10">
+          <div className="absolute start-3 top-2.5 z-10">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => (docked ? setSidebar(false) : setDrawerOpen(true))}
-              aria-label="Open Navigation"
+              aria-label={t('Open Navigation')}
               className="text-muted-foreground"
             >
-              {docked ? <PanelLeftOpen /> : <Menu />}
+              {docked ? <PanelLeftOpen className="rtl:rotate-180" /> : <Menu />}
             </Button>
           </div>
         )}
         {assistant && !chatOpen && (
-          <div className="absolute top-2.5 right-3 z-10">
+          <div className="absolute end-3 top-2.5 z-10">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => setChatOpen(true)}
-                  aria-label="Assistant"
+                  aria-label={t('Assistant')}
                   className="text-muted-foreground"
                 >
                   <Sparkles />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Assistant</TooltipContent>
+              <TooltipContent>{t('Assistant')}</TooltipContent>
             </Tooltip>
           </div>
         )}
         <div
           className={cn(
-            'mx-auto w-full max-w-6xl pt-6 pb-10 lg:pt-10 pr-14 sm:pr-16',
-            showSidebar ? 'pl-4 sm:pl-6 lg:pl-8' : 'pl-14 sm:pl-16',
+            'mx-auto w-full max-w-6xl pt-6 pb-10 lg:pt-10 pe-14 sm:pe-16',
+            showSidebar ? 'ps-4 sm:ps-6 lg:ps-8' : 'ps-14 sm:ps-16',
           )}
         >
           <Outlet />
@@ -209,14 +220,14 @@ export function AppShell() {
       </main>
 
       {assistant && chatOpen && docked && (
-        <aside className="flex w-[380px] shrink-0 border-l xl:w-[420px]" aria-label="Assistant">
+        <aside className="flex w-[380px] shrink-0 border-s xl:w-[420px]" aria-label={t('Assistant')}>
           <AssistantPanel onClose={() => setChatOpen(false)} />
         </aside>
       )}
       {assistant && !docked && (
         <Sheet open={chatOpen} onOpenChange={setChatOpen}>
-          <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-md [&>button]:hidden">
-            <SheetTitle className="sr-only">Assistant</SheetTitle>
+          <SheetContent side={rtl ? 'left' : 'right'} className="w-full gap-0 p-0 sm:max-w-md [&>button]:hidden">
+            <SheetTitle className="sr-only">{t('Assistant')}</SheetTitle>
             <AssistantPanel onClose={() => setChatOpen(false)} />
           </SheetContent>
         </Sheet>

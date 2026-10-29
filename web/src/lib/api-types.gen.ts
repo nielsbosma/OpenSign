@@ -33,6 +33,8 @@ export type AccountMeOutput = Me;
 export type Me = {
   email: string;
   id: string;
+  /** The language the app is shown in, if the user chose one. */
+  language?: string | null;
   mustEnableTwoFactor: boolean;
   name: string;
   permissions: Array<Permission>;
@@ -91,6 +93,13 @@ export type AccountRevokeMcpConnectionInput = {
 };
 
 export type AccountRevokeMcpConnectionOutput = Ok_;
+
+export type AccountSetLanguageInput = {
+  /** en, zh, hi, es, fr, ar, bn, pt, ru, ur or sv. Leave out to follow the browser. */
+  language?: string | null;
+};
+
+export type AccountSetLanguageOutput = Ok_;
 
 export type AccountTwoFactorBeginInput = Record<string, unknown>;
 
@@ -1358,6 +1367,7 @@ export interface Services {
   "account.passkey_remove": { kind: "mutation"; input: AccountPasskeyRemoveInput; output: AccountPasskeyRemoveOutput };
   "account.passkeys": { kind: "query"; input: AccountPasskeysInput; output: AccountPasskeysOutput };
   "account.revoke_mcp_connection": { kind: "mutation"; input: AccountRevokeMcpConnectionInput; output: AccountRevokeMcpConnectionOutput };
+  "account.set_language": { kind: "mutation"; input: AccountSetLanguageInput; output: AccountSetLanguageOutput };
   "account.two_factor_begin": { kind: "mutation"; input: AccountTwoFactorBeginInput; output: AccountTwoFactorBeginOutput };
   "account.two_factor_confirm": { kind: "mutation"; input: AccountTwoFactorConfirmInput; output: AccountTwoFactorConfirmOutput };
   "ai.chat": { kind: "mutation"; input: AiChatInput; output: AiChatOutput };

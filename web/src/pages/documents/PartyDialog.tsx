@@ -7,9 +7,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { AttachmentRequest, AttachmentRequestInput, AuthMethod, Delivery, PartyInput, PartyRole, PartyView } from '@/lib/api';
-import { AUTH_LABELS, DELIVERY_LABELS, LANGUAGES, languageName } from '@/lib/format';
+import { AUTH_LABELS, DELIVERY_LABELS, languageName, languages } from '@/lib/format';
+import { labels, msg, t } from '@/lib/i18n';
 
-const ROLES: Record<PartyRole, string> = { signer: 'Signs', approver: 'Approves', viewer: 'Receives a copy' };
+const ROLES = labels({ signer: msg('Signs'), approver: msg('Approves'), viewer: msg('Receives a copy') }) as Record<PartyRole, string>;
 const VIEW_AUTH: AuthMethod[] = ['none', 'sms_pin', 'se_bankid', 'freja', 'broker'];
 const SIGN_AUTH: AuthMethod[] = ['standard', 'sms_pin', 'se_bankid', 'freja', 'broker'];
 const EID: AuthMethod[] = ['se_bankid', 'freja', 'broker'];
@@ -39,7 +40,7 @@ function AttachmentRequests({ value, onChange }: { value: AttachmentRequestInput
   return (
     <div className="grid gap-2 sm:col-span-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">Ask for Attachments</span>
+        <span className="text-sm font-medium">{t('Ask for Attachments')}</span>
         <Button
           type="button"
           variant="ghost"
@@ -47,35 +48,35 @@ function AttachmentRequests({ value, onChange }: { value: AttachmentRequestInput
           disabled={value.length >= 10}
           onClick={() => onChange([...value, { name: '', description: '', required: true }])}
         >
-          <Plus /> Add
+          <Plus /> {t('Add')}
         </Button>
       </div>
       {value.length === 0 && (
-        <p className="text-xs text-muted-foreground">For example a copy of an ID or a certificate. PDF, JPEG or PNG.</p>
+        <p className="text-xs text-muted-foreground">{t('For example a copy of an ID or a certificate. PDF, JPEG or PNG.')}</p>
       )}
       {value.map((r, i) => (
         <div key={i} className="grid gap-2 rounded-md border p-2 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-center">
           <Input
-            aria-label="Attachment name"
-            placeholder="Copy of ID"
+            aria-label={t('Attachment name')}
+            placeholder={t('Copy of ID')}
             value={r.name}
             required
             onChange={(e) => update(i, { name: e.target.value })}
           />
           <Input
-            aria-label="Attachment description"
-            placeholder="Description (optional)"
+            aria-label={t('Attachment description')}
+            placeholder={t('Description (optional)')}
             value={r.description ?? ''}
             onChange={(e) => update(i, { description: e.target.value })}
           />
           <label className="flex items-center gap-1.5 text-xs">
-            <Checkbox checked={r.required ?? true} onCheckedChange={(c) => update(i, { required: c === true })} /> Required
+            <Checkbox checked={r.required ?? true} onCheckedChange={(c) => update(i, { required: c === true })} /> {t('Required')}
           </label>
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label="Remove attachment"
+            aria-label={t('Remove attachment')}
             onClick={() => onChange(value.filter((_, j) => j !== i))}
           >
             <Trash2 />
@@ -86,7 +87,7 @@ function AttachmentRequests({ value, onChange }: { value: AttachmentRequestInput
   );
 }
 
-const NOT_SET_UP = 'Not set up yet. An admin adds it in Settings.';
+const NOT_SET_UP = msg('Not set up yet. An admin adds it in Settings.');
 
 function Choice<T extends string>({
   value,
@@ -106,7 +107,12 @@ function Choice<T extends string>({
       </SelectTrigger>
       <SelectContent>
         {options.map(([v, label]) => (
-          <SelectItem key={v} value={v} disabled={unavailable.includes(v)} description={unavailable.includes(v) ? NOT_SET_UP : undefined}>
+          <SelectItem
+            key={v}
+            value={v}
+            disabled={unavailable.includes(v)}
+            description={unavailable.includes(v) ? t(NOT_SET_UP) : undefined}
+          >
             {label}
           </SelectItem>
         ))}
@@ -159,30 +165,30 @@ export function PartyDialog({
       <DialogContent className="sm:max-w-xl">
         <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
-            <DialogTitle>{party ? 'Edit Party' : 'Add Party'}</DialogTitle>
-            <DialogDescription>Who takes part, how they get their link and how they prove who they are.</DialogDescription>
+            <DialogTitle>{party ? t('Edit Party') : t('Add Party')}</DialogTitle>
+            <DialogDescription>{t('Who takes part, how they get their link and how they prove who they are.')}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Name" htmlFor="party-name">
+            <Field label={t('Name')} htmlFor="party-name">
               <Input id="party-name" value={p.name} onChange={(e) => set({ name: e.target.value })} required autoFocus />
             </Field>
-            <Field label="Role">
+            <Field label={t('Role')}>
               <Choice
                 value={p.role ?? 'signer'}
                 onChange={(role) => set({ role })}
                 options={Object.entries(ROLES) as [PartyRole, string][]}
               />
             </Field>
-            <Field label="Email" htmlFor="party-email">
+            <Field label={t('Email')} htmlFor="party-email">
               <Input id="party-email" type="email" value={p.email ?? ''} onChange={(e) => set({ email: e.target.value })} />
             </Field>
-            <Field label="Mobile" htmlFor="party-phone" hint="With country code, e.g. +46 70 123 45 67">
+            <Field label={t('Mobile')} htmlFor="party-phone" hint={t('With country code, e.g. +46 70 123 45 67')}>
               <Input id="party-phone" type="tel" value={p.phone ?? ''} onChange={(e) => set({ phone: e.target.value })} />
             </Field>
-            <Field label="Company" htmlFor="party-company">
+            <Field label={t('Company')} htmlFor="party-company">
               <Input id="party-company" value={p.company ?? ''} onChange={(e) => set({ company: e.target.value })} />
             </Field>
-            <Field label="Send Link By">
+            <Field label={t('Send Link By')}>
               <Choice
                 value={p.delivery ?? 'email'}
                 onChange={(delivery) => set({ delivery })}
@@ -190,7 +196,7 @@ export function PartyDialog({
                 unavailable={unavailableDelivery}
               />
             </Field>
-            <Field label="Identify to View">
+            <Field label={t('Identify to View')}>
               <Choice
                 value={p.authToView ?? 'none'}
                 onChange={(authToView) => set({ authToView })}
@@ -198,7 +204,7 @@ export function PartyDialog({
                 unavailable={unavailableAuth}
               />
             </Field>
-            <Field label="Identify to Sign">
+            <Field label={t('Identify to Sign')}>
               <Choice
                 value={p.authToSign ?? 'standard'}
                 onChange={(authToSign) => set({ authToSign })}
@@ -206,18 +212,22 @@ export function PartyDialog({
                 unavailable={unavailableAuth}
               />
             </Field>
-            <Field label="Language" hint="Their emails, SMS and signing page.">
+            <Field label={t('Language')} hint={t('Their emails, SMS and signing page.')}>
               <Choice
                 value={p.language ?? 'document'}
                 onChange={(language) => set({ language: language === 'document' ? null : language })}
-                options={[['document', `Same as Document (${languageName(documentLanguage)})`], ...LANGUAGES]}
+                options={[['document', t('Same as Document ({language})', { language: languageName(documentLanguage) })], ...languages()]}
               />
             </Field>
             {needsNumber && (
               <Field
-                label="Personal Number"
+                label={t('Personal Number')}
                 htmlFor="party-pnr"
-                hint={maskedNumber ? `Stored: ${maskedNumber}. Leave empty to keep it.` : 'The eID must belong to this person.'}
+                hint={
+                  maskedNumber
+                    ? t('Stored: {number}. Leave empty to keep it.', { number: maskedNumber })
+                    : t('The eID must belong to this person.')
+                }
               >
                 <Input
                   id="party-pnr"
@@ -230,7 +240,11 @@ export function PartyDialog({
               </Field>
             )}
             {sequential && (
-              <Field label="Signing Order" htmlFor="party-order" hint="Lower numbers go first; equal numbers sign at the same time.">
+              <Field
+                label={t('Signing Order')}
+                htmlFor="party-order"
+                hint={t('Lower numbers go first; equal numbers sign at the same time.')}
+              >
                 <Input
                   id="party-order"
                   type="number"
@@ -247,9 +261,9 @@ export function PartyDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t('Cancel')}
             </Button>
-            <Button type="submit">{party ? 'Save' : 'Add'}</Button>
+            <Button type="submit">{party ? t('Save') : t('Add')}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

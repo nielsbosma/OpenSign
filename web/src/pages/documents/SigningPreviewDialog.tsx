@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { DocumentView } from '@/lib/api';
+import { t } from '@/lib/i18n';
 import { SigningPreview } from '../sign/SignPage';
 
 export function SigningPreviewDialog({
@@ -35,10 +36,10 @@ export function SigningPreviewDialog({
       >
         <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b bg-background px-4 py-2.5 shadow-sm">
           <Eye className="size-4 text-muted-foreground" />
-          <DialogTitle className="text-sm font-semibold">Preview</DialogTitle>
+          <DialogTitle className="text-sm font-semibold">{t('Preview')}</DialogTitle>
           {doc.parties.length > 1 && party && (
             <Select value={party.id} onValueChange={setPartyId}>
-              <SelectTrigger size="sm" className="w-56" aria-label="Party">
+              <SelectTrigger size="sm" className="w-56" aria-label={t('Party')}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -51,9 +52,11 @@ export function SigningPreviewDialog({
             </Select>
           )}
           <DialogDescription className="min-w-0 flex-1 text-xs">
-            How {party?.name ?? 'the party'} will see the signing page. Nothing can be signed or sent from here.
+            {party
+              ? t('How {name} will see the signing page. Nothing can be signed or sent from here.', { name: party.name })
+              : t('How the party will see the signing page. Nothing can be signed or sent from here.')}
           </DialogDescription>
-          <Button variant="ghost" size="icon" aria-label="Close" onClick={() => onOpenChange(false)}>
+          <Button variant="ghost" size="icon" aria-label={t('Close')} onClick={() => onOpenChange(false)}>
             <X />
           </Button>
         </div>

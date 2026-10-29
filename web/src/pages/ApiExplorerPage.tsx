@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { t } from '@/lib/i18n';
 import {
   type Endpoint,
   endpoints,
@@ -70,7 +71,7 @@ function SchemaRows({
     return depth === 0 ? <p className="text-muted-foreground text-sm">{typeLabel(spec, schema)}</p> : null;
   }
   return (
-    <ul className={cn('grid', depth > 0 && 'mt-1 ml-3 border-l pl-3')}>
+    <ul className={cn('grid', depth > 0 && 'mt-1 ms-3 border-s ps-3')}>
       {properties.map(([name, prop]) => {
         const name_ = refName(prop) ?? refName(variants(spec, resolve(spec, prop))[0]);
         const inner = resolve(spec, variants(spec, resolve(spec, prop))[0]);
@@ -93,13 +94,13 @@ function SchemaRows({
             {nested && depth < 4 && !recursive ? (
               <details className="group">
                 <summary className="flex cursor-pointer list-none items-start gap-1 [&::-webkit-details-marker]:hidden">
-                  <ChevronRight className="mt-2.5 size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
+                  <ChevronRight className="mt-2.5 size-3.5 shrink-0 text-muted-foreground transition-transform rtl:rotate-180 group-open:rotate-90" />
                   <div className="min-w-0 flex-1">{row}</div>
                 </summary>
                 <SchemaRows spec={spec} schema={prop} depth={depth + 1} seen={name_ ? [...seen, name_] : seen} />
               </details>
             ) : (
-              <div className="pl-4.5">{row}</div>
+              <div className="ps-4.5">{row}</div>
             )}
           </li>
         );
@@ -179,9 +180,9 @@ function EndpointView({ spec, endpoint }: { spec: OpenApi; endpoint: Endpoint })
   const send = async () => {
     setProblem(null);
     const missing = pathParams.find((p) => !values.params[p.name]);
-    if (missing) return setProblem(`Fill in ${missing.name}.`);
-    if (auth === 'key' && !apiKey.trim()) return setProblem('Paste an API key, or use your session.');
-    if (kind && kind !== 'application/json' && !file) return setProblem('Choose a file to send.');
+    if (missing) return setProblem(t('Fill in {name}.', { name: missing.name }));
+    if (auth === 'key' && !apiKey.trim()) return setProblem(t('Paste an API key, or use your session.'));
+    if (kind && kind !== 'application/json' && !file) return setProblem(t('Choose a file to send.'));
     const headers: Record<string, string> = {};
     if (auth === 'key') headers.Authorization = `Bearer ${apiKey.trim()}`;
     let body: BodyInit | undefined;
@@ -189,7 +190,7 @@ function EndpointView({ spec, endpoint }: { spec: OpenApi; endpoint: Endpoint })
       try {
         body = JSON.stringify(JSON.parse(values.body));
       } catch {
-        return setProblem('The body is not valid JSON.');
+        return setProblem(t('The body is not valid JSON.'));
       }
       headers['Content-Type'] = 'application/json';
     } else if (kind === 'multipart/form-data' && file) {
@@ -231,7 +232,7 @@ function EndpointView({ spec, endpoint }: { spec: OpenApi; endpoint: Endpoint })
         setResult({ status: response.status, ms, contentType, replayed, body: pretty });
       }
     } catch (e) {
-      setProblem(e instanceof Error ? e.message : 'The request failed.');
+      setProblem(e instanceof Error ? e.message : t('The request failed.'));
     } finally {
       setSending(false);
     }
@@ -254,32 +255,32 @@ function EndpointView({ spec, endpoint }: { spec: OpenApi; endpoint: Endpoint })
           </div>
           {endpoint.summary && <p className="text-[15px] leading-relaxed">{endpoint.summary}</p>}
           <p className="text-muted-foreground text-xs">
-            Operation <code className="font-mono">{endpoint.operationId}</code>
-            {endpoint.security?.length === 0 && ' · No API key needed'}
+            {t('Operation')} <code className="font-mono">{endpoint.operationId}</code>
+            {endpoint.security?.length === 0 && ` · ${t('No API key needed')}`}
           </p>
         </div>
         {parameters.length > 0 && (
-          <Section title="Parameters">
+          <Section title={t('Parameters')}>
             <ParameterRows spec={spec} parameters={parameters} />
           </Section>
         )}
         {kind && (
-          <Section title={`Request Body · ${kind}`}>
+          <Section title={`${t('Request Body')} · ${kind}`}>
             {kind === 'application/json' ? (
               <SchemaRows spec={spec} schema={endpoint.requestBody?.content[kind]?.schema} />
             ) : (
               <p className="text-muted-foreground text-sm">
-                {kind === 'application/pdf' ? 'The PDF itself.' : 'A form with the file in `file`.'}
+                {kind === 'application/pdf' ? t('The PDF itself.') : t('A form with the file in `file`.')}
               </p>
             )}
           </Section>
         )}
-        <Section title="Response">
+        <Section title={t('Response')}>
           {responseSchema ? (
             <SchemaRows spec={spec} schema={responseSchema} />
           ) : (
             <p className="text-muted-foreground text-sm">
-              {Object.values(endpoint.responses ?? {})[0]?.description ?? 'See the status code.'}
+              {Object.values(endpoint.responses ?? {})[0]?.description ?? t('See the status code.')}
             </p>
           )}
           <p className="text-muted-foreground text-xs">
@@ -291,14 +292,14 @@ function EndpointView({ spec, endpoint }: { spec: OpenApi; endpoint: Endpoint })
       <div className="grid min-w-0 content-start gap-4 2xl:sticky 2xl:top-0" onKeyDown={onKeyDown}>
         <div className="grid gap-4 rounded-lg border bg-card p-4">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="mr-auto font-semibold">Try It</h3>
+            <h3 className="me-auto font-semibold">{t('Try It')}</h3>
             <Select value={auth} onValueChange={(v) => setAuth(v as 'session' | 'key')}>
               <SelectTrigger size="sm" className="w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="session">As {user?.name ?? 'You'}</SelectItem>
-                <SelectItem value="key">With an API Key</SelectItem>
+                <SelectItem value="session">{t('As {name}', { name: user?.name ?? t('You') })}</SelectItem>
+                <SelectItem value="key">{t('With an API Key')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -308,7 +309,7 @@ function EndpointView({ spec, endpoint }: { spec: OpenApi; endpoint: Endpoint })
               autoComplete="off"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="osk_… (kept in this tab only)"
+              placeholder={`osk_… (${t('kept in this tab only')})`}
               className="font-mono"
             />
           )}
@@ -325,14 +326,14 @@ function EndpointView({ spec, endpoint }: { spec: OpenApi; endpoint: Endpoint })
           {kind === 'application/json' && (
             <div className="grid gap-1">
               <div className="flex items-center justify-between">
-                <span className="text-sm">Body</span>
+                <span className="text-sm">{t('Body')}</span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setValues({ ...values, body: initialValues(spec, endpoint).body })}
                   className="h-7 text-muted-foreground"
                 >
-                  <RotateCcw /> Reset
+                  <RotateCcw /> {t('Reset')}
                 </Button>
               </div>
               <Textarea
@@ -348,10 +349,10 @@ function EndpointView({ spec, endpoint }: { spec: OpenApi; endpoint: Endpoint })
           )}
           <div className="flex flex-wrap items-center gap-3">
             <Button onClick={send} disabled={sending}>
-              {sending ? <Spinner className="text-primary-foreground" /> : <Play />} Send Request
+              {sending ? <Spinner className="text-primary-foreground" /> : <Play />} {t('Send Request')}
             </Button>
             <span className="text-muted-foreground text-xs">
-              {endpoint.method === 'get' ? 'Ctrl+Enter sends.' : 'This changes real data. Ctrl+Enter sends.'}
+              {endpoint.method === 'get' ? t('Ctrl+Enter sends.') : t('This changes real data. Ctrl+Enter sends.')}
             </span>
           </div>
           {problem && <p className="text-destructive text-sm">{problem}</p>}
@@ -370,16 +371,16 @@ function EndpointView({ spec, endpoint }: { spec: OpenApi; endpoint: Endpoint })
                 {result.status}
               </Badge>
               <span className="text-muted-foreground">{result.ms} ms</span>
-              {result.replayed && <Badge variant="secondary">Idempotent Replay</Badge>}
-              <span className="ml-auto">{!result.blobUrl && result.body && <CopyButton value={result.body} />}</span>
+              {result.replayed && <Badge variant="secondary">{t('Idempotent Replay')}</Badge>}
+              <span className="ms-auto">{!result.blobUrl && result.body && <CopyButton value={result.body} />}</span>
             </div>
             {result.blobUrl ? (
               <a href={result.blobUrl} download="document.pdf" className="inline-flex items-center gap-1.5 text-primary text-sm">
-                <Download className="size-4" /> Download the PDF ({result.body})
+                <Download className="size-4" /> {t('Download the PDF ({size})', { size: result.body })}
               </a>
             ) : (
               <pre className="max-h-[28rem] overflow-auto rounded-md bg-muted/50 p-3 font-mono text-xs leading-relaxed">
-                {result.body || '(empty body)'}
+                {result.body || t('(empty body)')}
               </pre>
             )}
           </div>
@@ -454,7 +455,7 @@ function ParameterInput({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {!parameter.required && <SelectItem value="__unset">Not set</SelectItem>}
+          {!parameter.required && <SelectItem value="__unset">{t('Not set')}</SelectItem>}
           {options.map((o) => (
             <SelectItem key={String(o)} value={String(o)}>
               {String(o)}
@@ -480,7 +481,7 @@ export function ApiExplorerPage() {
     queryKey: ['openapi'],
     queryFn: async () => {
       const response = await fetch(`${BASE}/openapi.json`, { credentials: 'same-origin' });
-      if (!response.ok) throw new Error('The API description could not be loaded');
+      if (!response.ok) throw new Error(t('The API description could not be loaded'));
       return (await response.json()) as OpenApi;
     },
     staleTime: 10 * 60_000,
@@ -489,7 +490,7 @@ export function ApiExplorerPage() {
   const [search, setSearch] = useState('');
   const all = useMemo(() => (spec.data ? endpoints(spec.data) : []), [spec.data]);
   const needle = search.trim().toLowerCase();
-  const shown = all.filter((e) => [e.method, e.path, e.summary, e.operationId].some((t) => t?.toLowerCase().includes(needle)));
+  const shown = all.filter((e) => [e.method, e.path, e.summary, e.operationId].some((s) => s?.toLowerCase().includes(needle)));
   const groups = [...new Set(shown.map((e) => e.tag))].map((tag) => [tag, shown.filter((e) => e.tag === tag)] as const);
   const selected = all.find((e) => e.operationId === params.get('op')) ?? all[0];
   const { theme, toggle } = useTheme();
@@ -503,13 +504,13 @@ export function ApiExplorerPage() {
             <span className="font-semibold text-sm">OpenSign</span>
           </Link>
           <span className="text-muted-foreground text-sm">/ API</span>
-          <div className="ml-auto flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={toggle} aria-label={theme === 'dark' ? 'Light Theme' : 'Dark Theme'}>
+          <div className="ms-auto flex items-center gap-1">
+            <Button variant="ghost" size="icon" onClick={toggle} aria-label={theme === 'dark' ? t('Light Theme') : t('Dark Theme')}>
               {theme === 'dark' ? <Sun /> : <Moon />}
             </Button>
             <Button variant="ghost" asChild>
               <Link to="/documents">
-                <ArrowLeft /> Back to OpenSign
+                <ArrowLeft className="rtl:rotate-180" /> {t('Back to OpenSign')}
               </Link>
             </Button>
           </div>
@@ -517,18 +518,18 @@ export function ApiExplorerPage() {
       </header>
       <main className="mx-auto w-full max-w-7xl px-4 pt-6 pb-10 sm:px-6 lg:px-8">
         <PageHeader
-          title="API Explorer"
-          description="Every REST endpoint, with live calls and code to copy. Calls run as you, or with an API key you paste."
+          title={t('API Explorer')}
+          description={t('Every REST endpoint, with live calls and code to copy. Calls run as you, or with an API key you paste.')}
           actions={
             <div className="flex gap-2">
               <Button variant="outline" asChild>
                 <a href={`${BASE}/openapi.json`} download="opensign-openapi.json">
-                  <Download /> OpenAPI Document
+                  <Download /> {t('OpenAPI Document')}
                 </a>
               </Button>
               <Button variant="outline" asChild>
                 <Link to="/settings/api-keys">
-                  <KeyRound /> API Keys
+                  <KeyRound /> {t('API Keys')}
                 </Link>
               </Button>
             </div>
@@ -537,15 +538,15 @@ export function ApiExplorerPage() {
         {spec.isPending ? (
           <Spinner />
         ) : !spec.data ? (
-          <EmptyState title="The API description could not be loaded">Reload the page to try again.</EmptyState>
+          <EmptyState title={t('The API description could not be loaded')}>{t('Reload the page to try again.')}</EmptyState>
         ) : (
           <div className="grid gap-8 lg:grid-cols-[300px_minmax(0,1fr)]">
-            <nav className="grid min-w-0 content-start gap-4 self-start lg:sticky lg:top-20" aria-label="Endpoints">
+            <nav className="grid min-w-0 content-start gap-4 self-start lg:sticky lg:top-20" aria-label={t('Endpoints')}>
               <div className="relative">
-                <Search className="absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
-                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search endpoints" className="pl-8" />
+                <Search className="absolute top-2.5 start-2.5 size-4 text-muted-foreground" />
+                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('Search endpoints')} className="ps-8" />
               </div>
-              {groups.length === 0 && <p className="text-muted-foreground text-sm">No endpoint matches.</p>}
+              {groups.length === 0 && <p className="text-muted-foreground text-sm">{t('No endpoint matches.')}</p>}
               {groups.map(([tag, list]) => (
                 <div key={tag} className="grid min-w-0 gap-0.5">
                   <h2 className="px-2 pb-1 font-semibold text-muted-foreground text-xs uppercase tracking-wide">{tag}</h2>
@@ -556,7 +557,7 @@ export function ApiExplorerPage() {
                       onClick={() => setParams({ op: e.operationId }, { replace: true })}
                       title={e.summary}
                       className={cn(
-                        'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted',
+                        'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-start hover:bg-muted',
                         e === selected && 'bg-muted',
                       )}
                     >
@@ -567,9 +568,14 @@ export function ApiExplorerPage() {
                 </div>
               ))}
               <p className="break-words px-2 text-muted-foreground text-xs leading-relaxed">
-                Writes accept an <code className="font-mono">Idempotency-Key</code> header, so a retry never acts twice. Scrive and DocuSign
-                clients can use <code className="font-mono">/scrive/api/v2</code> and{' '}
-                <code className="font-mono">/docusign/restapi/v2.1</code>.
+                {t(
+                  'Writes accept an {header} header, so a retry never acts twice. Scrive and DocuSign clients can use {scrive} and {docusign}.',
+                  {
+                    header: 'Idempotency-Key',
+                    scrive: '/scrive/api/v2',
+                    docusign: '/docusign/restapi/v2.1',
+                  },
+                )}
               </p>
             </nav>
             {selected && <EndpointView key={selected.operationId} spec={spec.data} endpoint={selected} />}

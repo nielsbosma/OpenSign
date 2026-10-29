@@ -8,14 +8,15 @@ import { Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { type ChatMessage, useApiMutation } from '@/lib/api';
+import { msg, t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 type Turn = ChatMessage & { actions?: { tool: string; ok: boolean }[] };
 
 const SUGGESTIONS = [
-  'Which documents are waiting for signatures?',
-  'Remind everyone who has not signed this week',
-  'Create a draft NDA for Bo Berg',
+  msg('Which documents are waiting for signatures?'),
+  msg('Remind everyone who has not signed this week'),
+  msg('Create a draft NDA for Bo Berg'),
 ];
 
 /** The optional assistant. It acts as you, with your permissions, through the same services as the app. */
@@ -27,7 +28,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
   const end = useRef<HTMLDivElement>(null);
   const chat = useApiMutation('ai.chat', {
     onSuccess: async (output) => {
-      setTurns((t) => [...t, { role: 'assistant', content: output.reply, actions: output.actions }]);
+      setTurns((prev) => [...prev, { role: 'assistant', content: output.reply, actions: output.actions }]);
       if (output.actions.some((a) => a.ok)) await queryClient.invalidateQueries();
     },
   });
@@ -51,8 +52,8 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
     <div className="flex h-full w-full flex-col bg-background">
       <div className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
         <Sparkles className="size-4 text-primary" />
-        <span className="flex-1 text-sm font-semibold">Assistant</span>
-        <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close Assistant">
+        <span className="flex-1 text-sm font-semibold">{t('Assistant')}</span>
+        <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label={t('Close Assistant')}>
           <X />
         </Button>
       </div>
@@ -60,11 +61,11 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
         {turns.length === 0 && (
           <div className="grid gap-2">
             <p className="mb-2 text-muted-foreground">
-              Ask about your documents, or have it do things for you. It can only do what you can.
+              {t('Ask about your documents, or have it do things for you. It can only do what you can.')}
             </p>
             {SUGGESTIONS.map((s) => (
-              <button key={s} type="button" onClick={() => send(s)} className="rounded-md border px-3 py-2 text-left hover:bg-accent">
-                {s}
+              <button key={s} type="button" onClick={() => send(t(s))} className="rounded-md border px-3 py-2 text-start hover:bg-accent">
+                {t(s)}
               </button>
             ))}
           </div>
@@ -75,7 +76,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
               <div
                 className={cn(
                   'max-w-[90%] rounded-lg px-3 py-2',
-                  turn.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted [&_p+p]:mt-2 [&_ul]:list-disc [&_ul]:pl-4',
+                  turn.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted [&_p+p]:mt-2 [&_ul]:list-disc [&_ul]:ps-4',
                 )}
               >
                 {turn.role === 'user' ? turn.content : <Markdown remarkPlugins={[remarkGfm]}>{turn.content}</Markdown>}
@@ -112,10 +113,10 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
             }
           }}
           rows={2}
-          placeholder="Ask or tell the assistant…"
+          placeholder={t('Ask or tell the assistant…')}
           className="min-h-0 resize-none"
         />
-        <Button type="submit" size="icon" disabled={!text.trim() || chat.isPending} aria-label="Send">
+        <Button type="submit" size="icon" disabled={!text.trim() || chat.isPending} aria-label={t('Send')}>
           <ArrowUp />
         </Button>
       </form>

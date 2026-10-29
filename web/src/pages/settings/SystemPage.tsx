@@ -4,6 +4,7 @@ import { ConfirmButton, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { useApi, useApiMutation } from '@/lib/api';
 import { formatDate, formatDateTime } from '@/lib/format';
+import { t, tx } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { SettingsGroup } from './AdminSettingsPage';
 import { SettingsCard } from './SettingsLayout';
@@ -17,18 +18,18 @@ function VersionCard() {
   const version = useApi('system.version', { refresh: false });
   const check = useApiMutation('system.version', { invalidates: ['system.version'] });
   const update = useApiMutation('system.update', {
-    onSuccess: () => toast.success('Update started. OpenSign restarts on the new version in a minute or two.'),
+    onSuccess: () => toast.success(t('Update started. OpenSign restarts on the new version in a minute or two.')),
   });
   if (!version.data) return <Spinner />;
   const v = check.data ?? version.data;
   const tag = v.latest?.version ?? 'latest';
+  const released = v.latest?.publishedAt ? formatDate(v.latest.publishedAt) : null;
 
   return (
     <SettingsCard
-      title="Version"
-      description={
-        <>
-          OpenSign checks{' '}
+      title={t('Version')}
+      description={tx('OpenSign checks {link} for new releases at most every six hours. Only the version is sent.', {
+        link: (
           <a
             href="https://github.com/nielsbosma/OpenSign/releases"
             target="_blank"
@@ -36,37 +37,41 @@ function VersionCard() {
             className="text-primary hover:underline"
           >
             GitHub
-          </a>{' '}
-          for new releases at most every six hours. Only the version is sent.
-        </>
-      }
+          </a>
+        ),
+      })}
     >
       <div className="grid gap-4">
         <div className="flex flex-wrap items-center gap-3">
           {v.updateAvailable ? <ArrowUpCircle className="size-5 text-primary" /> : <CheckCircle2 className="size-5 text-success" />}
           <div className="grid">
             <span className="font-medium">
-              Running {v.current}
-              {v.development && ' (development build)'}
+              {v.development
+                ? t('Running {version} (development build)', { version: v.current })
+                : t('Running {version}', { version: v.current })}
             </span>
             <span className="text-muted-foreground text-sm">
               {v.checkProblem ??
                 (v.latest
                   ? v.updateAvailable
-                    ? `Version ${v.latest.version} is available${v.latest.publishedAt ? `, released ${formatDate(v.latest.publishedAt)}` : ''}.`
-                    : 'This is the latest release.'
-                  : 'No release has been published yet.')}
+                    ? released
+                      ? t('Version {version} is available, released {date}.', { version: v.latest.version, date: released })
+                      : t('Version {version} is available.', { version: v.latest.version })
+                    : t('This is the latest release.')
+                  : t('No release has been published yet.'))}
             </span>
           </div>
-          <div className="ml-auto flex gap-2">
+          <div className="ms-auto flex gap-2">
             <Button variant="outline" onClick={() => check.mutate({ refresh: true })} disabled={check.isPending}>
-              {check.isPending ? <Spinner /> : <RefreshCw />} Check Now
+              {check.isPending ? <Spinner /> : <RefreshCw />} {t('Check Now')}
             </Button>
             {v.updateAvailable && v.canUpdate && can('settings.manage') && (
               <ConfirmButton
-                label="Update Now"
-                title={`Update to ${tag}?`}
-                description="OpenSign redeploys through the deploy hook. Database migrations run when the new version starts, and signing links keep working. Expect a minute or two of downtime."
+                label={t('Update Now')}
+                title={t('Update to {version}?', { version: tag })}
+                description={t(
+                  'OpenSign redeploys through the deploy hook. Database migrations run when the new version starts, and signing links keep working. Expect a minute or two of downtime.',
+                )}
                 onConfirm={() => update.mutate({})}
                 disabled={update.isPending}
               />
@@ -75,13 +80,13 @@ function VersionCard() {
         </div>
         {v.latest?.url && (
           <a href={v.latest.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary text-sm">
-            Release notes for {v.latest.version} <ExternalLink className="size-3.5" />
+            {t('Release notes for {version}', { version: v.latest.version })} <ExternalLink className="size-3.5" />
           </a>
         )}
         {v.updateAvailable && !v.canUpdate && (
           <div className="grid gap-2 text-sm">
             <p className="text-muted-foreground">
-              To update from here, add a deploy hook under Updates below. Or redeploy yourself; migrations run on start:
+              {t('To update from here, add a deploy hook under Updates below. Or redeploy yourself; migrations run on start:')}
             </p>
             <Command>{`OPENSIGN_TAG=${tag} ./deploy/sliplane.sh`}</Command>
             <Command>{'docker compose pull && docker compose up -d'}</Command>
@@ -103,15 +108,15 @@ export function SystemPage() {
       {s ? (
         <>
           <SettingsCard
-            title="Database"
-            description="Migrations run automatically when OpenSign starts, so a new version brings its database changes with it."
+            title={t('Database')}
+            description={t('Migrations run automatically when OpenSign starts, so a new version brings its database changes with it.')}
           >
             <div className="grid gap-3 text-sm">
               <div>
                 PostgreSQL {s.database} ·{' '}
                 {s.pendingMigrations === 0
-                  ? `${s.migrations.length} migrations applied, none pending.`
-                  : `${s.pendingMigrations} migrations pending; they run at the next start.`}
+                  ? t('{count} migrations applied, none pending.', { count: s.migrations.length })
+                  : t('{count} migrations pending; they run at the next start.', { count: s.pendingMigrations })}
               </div>
               <ul className="grid gap-1 text-muted-foreground">
                 {s.migrations.slice(0, 5).map((m) => (
@@ -124,17 +129,20 @@ export function SystemPage() {
               </ul>
             </div>
           </SettingsCard>
-          <SettingsCard title="Background Jobs" description="Emails, reminders, sealing and webhooks waiting or done in the last day.">
+          <SettingsCard
+            title={t('Background Jobs')}
+            description={t('Emails, reminders, sealing and webhooks waiting or done in the last day.')}
+          >
             {s.jobs.length === 0 ? (
-              <p className="text-muted-foreground text-sm">Nothing queued.</p>
+              <p className="text-muted-foreground text-sm">{t('Nothing queued.')}</p>
             ) : (
               <ul className="grid gap-1.5 text-sm">
                 {s.jobs.map((j) => (
                   <li key={j.kind} className="grid gap-0.5">
                     <div className="flex gap-3">
                       <span className="flex-1 font-mono">{j.kind}</span>
-                      <span className="text-muted-foreground">{j.waiting} waiting</span>
-                      {j.failing > 0 && <span className="text-destructive">{j.failing} retrying</span>}
+                      <span className="text-muted-foreground">{t('{count} waiting', { count: j.waiting })}</span>
+                      {j.failing > 0 && <span className="text-destructive">{t('{count} retrying', { count: j.failing })}</span>}
                     </div>
                     {j.lastError && <span className="truncate text-destructive text-xs">{j.lastError}</span>}
                   </li>

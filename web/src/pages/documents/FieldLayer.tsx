@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { useRef } from 'react';
 import type { PartyView } from '@/lib/api';
+import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { clamp, type EditableField, kindLabel, partyColor } from './fields';
 
@@ -64,7 +65,11 @@ export function FieldLayer({
               key={f.key}
               role={editable ? 'button' : undefined}
               tabIndex={editable ? 0 : undefined}
-              title={`${kindLabel(f.kind)} for ${party?.name ?? 'the sender'}`}
+              title={
+                party
+                  ? t('{field} for {name}', { field: kindLabel(f.kind), name: party.name })
+                  : t('{field} for the sender', { field: kindLabel(f.kind) })
+              }
               onPointerDown={(e) => start(e, f, 'move')}
               onPointerMove={(e) => move(e)}
               onPointerUp={(e) => move(e, true)}
@@ -91,7 +96,7 @@ export function FieldLayer({
                 <>
                   <button
                     type="button"
-                    aria-label="Remove Field"
+                    aria-label={t('Remove Field')}
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={() => onRemove(f.key)}
                     className="absolute top-0 right-0 flex size-3.5 items-center justify-center bg-white/80"

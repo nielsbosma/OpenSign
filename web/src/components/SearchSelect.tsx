@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { t } from '@/lib/i18n';
 import type { Option } from '@/lib/regions';
 import { cn } from '@/lib/utils';
 
@@ -12,8 +13,8 @@ export function SearchSelect({
   value,
   onChange,
   options,
-  placeholder = 'Choose…',
-  searchPlaceholder = 'Search…',
+  placeholder,
+  searchPlaceholder,
   disabled,
 }: {
   id?: string;
@@ -44,16 +45,16 @@ export function SearchSelect({
               {selected.detail && <span className="text-xs text-muted-foreground">{selected.detail}</span>}
             </span>
           ) : (
-            <span className="truncate text-muted-foreground">{value || placeholder}</span>
+            <span className="truncate text-muted-foreground">{value || placeholder || t('Choose…')}</span>
           )}
           <ChevronsUpDown className="opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
         <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+          <CommandInput placeholder={searchPlaceholder ?? t('Search…')} />
           <CommandList>
-            <CommandEmpty>Nothing found.</CommandEmpty>
+            <CommandEmpty>{t('Nothing found.')}</CommandEmpty>
             {options.map((o) => (
               <CommandItem
                 key={o.value}

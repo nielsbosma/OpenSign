@@ -229,6 +229,8 @@ pub struct Me {
     pub must_enable_two_factor: bool,
     /// The running OpenSign version.
     pub version: String,
+    /// The language the app is shown in, if the user chose one.
+    pub language: Option<String>,
 }
 
 pub struct WhoAmI;
@@ -252,7 +254,33 @@ impl Service for WhoAmI {
             two_factor_enabled: user.totp_enabled_at.is_some(),
             must_enable_two_factor: actor.must_enable_two_factor,
             version: crate::env::app_version().to_string(),
+            language: user.language,
         })
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SetLanguageInput {
+    /// en, zh, hi, es, fr, ar, bn, pt, ru, ur or sv. Leave out to follow the browser.
+    pub language: Option<String>,
+}
+
+pub struct SetLanguage;
+
+#[async_trait]
+impl Service for SetLanguage {
+    type Input = SetLanguageInput;
+    type Output = Ok_;
+    const META: Meta = Meta::mutation("account.set_language", "Choose the language the app is shown in for you.", Access::Authenticated)
+        .before_two_factor();
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SetLanguageInput) -> Result<Ok_> {
+        let user_id = ctx.actor()?.user_id;
+        let language = input.language.as_deref().map(|l| crate::services::documents::language(Some(l))).transpose()?;
+        sqlx::query("update users set language = $2 where id = $1").bind(user_id).bind(&language).execute(&mut *conn).await?;
+        audit(ctx, conn, Entry::new("account.language_set", "user", user_id).metadata(serde_json::json!({ "language": language }))).await?;
+        Ok(Ok_::default())
     }
 }
 

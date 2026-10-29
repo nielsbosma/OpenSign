@@ -1,19 +1,20 @@
 import type { FieldInput, FieldKind, FieldRow, PartyView } from '@/lib/api';
+import { msg, t } from '@/lib/i18n';
 
 export type EditableField = FieldInput & { key: string };
 
 export const FIELD_KINDS: { kind: FieldKind; label: string; width: number; height: number }[] = [
-  { kind: 'signature', label: 'Signature', width: 0.26, height: 0.06 },
-  { kind: 'initials', label: 'Initials', width: 0.09, height: 0.045 },
-  { kind: 'name', label: 'Name', width: 0.24, height: 0.032 },
-  { kind: 'date', label: 'Date', width: 0.16, height: 0.032 },
-  { kind: 'text', label: 'Text', width: 0.24, height: 0.032 },
-  { kind: 'email', label: 'Email', width: 0.24, height: 0.032 },
-  { kind: 'company', label: 'Company', width: 0.24, height: 0.032 },
-  { kind: 'checkbox', label: 'Checkbox', width: 0.028, height: 0.02 },
+  { kind: 'signature', label: msg('Signature'), width: 0.26, height: 0.06 },
+  { kind: 'initials', label: msg('Initials'), width: 0.09, height: 0.045 },
+  { kind: 'name', label: msg('Name'), width: 0.24, height: 0.032 },
+  { kind: 'date', label: msg('Date'), width: 0.16, height: 0.032 },
+  { kind: 'text', label: msg('Text'), width: 0.24, height: 0.032 },
+  { kind: 'email', label: msg('Email'), width: 0.24, height: 0.032 },
+  { kind: 'company', label: msg('Company'), width: 0.24, height: 0.032 },
+  { kind: 'checkbox', label: msg('Checkbox'), width: 0.028, height: 0.02 },
 ];
 
-export const kindLabel = (kind: string) => FIELD_KINDS.find((k) => k.kind === kind)?.label ?? kind;
+export const kindLabel = (kind: string) => t(FIELD_KINDS.find((k) => k.kind === kind)?.label ?? kind);
 
 /** One color per party, stable by position. The sender's own fields are grey. */
 const PALETTE = ['#4f46e5', '#0891b2', '#c026d3', '#ea580c', '#16a34a', '#db2777', '#ca8a04', '#2563eb'];
