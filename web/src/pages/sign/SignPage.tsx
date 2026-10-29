@@ -17,31 +17,37 @@ import { FormError } from '../auth/AuthLayout';
 import { AiReview } from './AiReview';
 import { AttachmentUploads } from './AttachmentUploads';
 import { EidIdentify } from './EidIdentify';
+import { framed, notifyHost, redirectAfter } from './embed';
 import { type Signature, SignaturePad } from './SignaturePad';
 import { isRtl, LanguageContext, languageFor, SIGNER_LANGUAGES, TextsContext, textsFor, useTexts } from './texts';
 import { WebcamPhoto } from './WebcamPhoto';
 
+const REDIRECT_KEY = 'opensign-sign-redirect';
+
 /**
  * The page behind a signing link. The token lives in the URL fragment, so it never reaches a server log or a Referer
- * header; we read it once and take it out of the address bar.
+ * header; we read it once and take it out of the address bar, with the `redirect` an embedding site may have added.
  */
-function useSigningToken() {
-  const [token] = useState(() => {
+function useSigningLink() {
+  const [link] = useState(() => {
     const value = decodeURIComponent(window.location.hash.slice(1));
     if (value) {
+      const redirect = new URLSearchParams(window.location.search).get('redirect');
       try {
         sessionStorage.setItem('opensign-sign', value);
+        if (redirect) sessionStorage.setItem(REDIRECT_KEY, redirect);
+        else sessionStorage.removeItem(REDIRECT_KEY);
       } catch {}
       history.replaceState(null, '', window.location.pathname);
-      return value;
+      return { token: value, redirect };
     }
     try {
-      return sessionStorage.getItem('opensign-sign') ?? '';
+      return { token: sessionStorage.getItem('opensign-sign') ?? '', redirect: sessionStorage.getItem(REDIRECT_KEY) };
     } catch {
-      return '';
+      return { token: '', redirect: null };
     }
   });
-  return token;
+  return link;
 }
 
 /** The eID broker sends the browser back with `?eid=<id>`; we take it once and clean the address bar. */
@@ -144,6 +150,11 @@ function Shell({ view, children }: { view?: SignerView; children: React.ReactNod
           </div>
         </header>
         <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
+        {framed && (
+          <footer className="flex items-center justify-center gap-1.5 pb-4 text-xs text-muted-foreground">
+            <ShieldCheck className="size-3.5" /> {t.securedBy}
+          </footer>
+        )}
       </div>
     </Direction.Provider>
   );
@@ -239,7 +250,7 @@ function Identify({
 }
 
 export function SignPage() {
-  const token = useSigningToken();
+  const { token, redirect } = useSigningLink();
   const [language, setLanguage] = useState<string>();
   const [chosen, choose] = useChosenLanguage(token);
   const code = languageFor(chosen ?? language);
@@ -247,13 +258,13 @@ export function SignPage() {
   return (
     <LanguageContext.Provider value={choice}>
       <TextsContext.Provider value={textsFor(code)}>
-        <SigningFlow token={token} onLanguage={setLanguage} />
+        <SigningFlow token={token} redirect={redirect} onLanguage={setLanguage} />
       </TextsContext.Provider>
     </LanguageContext.Provider>
   );
 }
 
-function SigningFlow({ token, onLanguage }: { token: string; onLanguage: (language: string) => void }) {
+function SigningFlow({ token, redirect, onLanguage }: { token: string; redirect: string | null; onLanguage: (language: string) => void }) {
   const t = useTexts();
   const resume = useEidResume();
   const [session, setSession] = useSignerSession(token);
@@ -264,13 +275,35 @@ function SigningFlow({ token, onLanguage }: { token: string; onLanguage: (langua
 
   useEffect(() => {
     if (!token) return;
-    call('signing.open', { token, session })
+    call('signing.open', { token, session, redirectUrl: redirect })
       .then((v) => {
         setView(v);
         onLanguage(v.document.language);
       })
       .catch((e) => setError(errorMessage(e)));
-  }, [token, session, onLanguage]);
+  }, [token, session, redirect, onLanguage]);
+
+  const origins = view?.embed?.origins;
+  const documentId = view?.document.id;
+  const partyId = view?.party.id;
+  useEffect(() => {
+    if (documentId && partyId) notifyHost(origins, 'loaded', { documentId, partyId });
+  }, [origins, documentId, partyId]);
+  useEffect(() => {
+    if (!token && resume) window.close();
+  }, [token, resume]);
+
+  const finish = (outcome: 'signed' | 'completed' | 'declined') => {
+    setResult(outcome);
+    if (!view) return;
+    const ids = { documentId: view.document.id, partyId: view.party.id };
+    if (outcome === 'declined') notifyHost(view.embed?.origins, 'declined', ids);
+    else notifyHost(view.embed?.origins, 'signed', { ...ids, completed: outcome === 'completed' });
+    if (view.embed?.redirectUrl) redirectAfter(view.embed.redirectUrl, outcome === 'declined');
+  };
+  const failed = (message: string) => {
+    if (view) notifyHost(view.embed?.origins, 'error', { documentId: view.document.id, partyId: view.party.id, message });
+  };
 
   const locked = !!view?.needsAuthentication;
   const loader = useMemo(
@@ -278,6 +311,13 @@ function SigningFlow({ token, onLanguage }: { token: string; onLanguage: (langua
     [view, locked, token, session],
   );
   const pdf = usePdf(loader, `${!!view}:${locked}:${session}`);
+  if (!token && resume) {
+    return (
+      <Message icon={<CheckCircle2 className="size-10 text-success" />} title={t.eidWindowDone}>
+        {t.eidWindowDoneNote}
+      </Message>
+    );
+  }
   if (!token) return <Message icon={<XCircle className="size-10 text-destructive" />} title={t.linkIncomplete} />;
   if (error) {
     return (
@@ -294,6 +334,15 @@ function SigningFlow({ token, onLanguage }: { token: string; onLanguage: (langua
         <div className="flex justify-center pt-20">
           <Spinner className="size-6" />
         </div>
+      </Shell>
+    );
+  }
+  if (framed && !view.embed) {
+    return (
+      <Shell>
+        <Message icon={<XCircle className="size-10 text-destructive" />} title={t.embedRefused}>
+          {t.embedRefusedNote}
+        </Message>
       </Shell>
     );
   }
@@ -362,7 +411,16 @@ function SigningFlow({ token, onLanguage }: { token: string; onLanguage: (langua
 
   return (
     <Shell view={view}>
-      <SignerScreen view={view} pdf={pdf} token={token} session={session} resume={resume} onSession={setSession} onResult={setResult} />
+      <SignerScreen
+        view={view}
+        pdf={pdf}
+        token={token}
+        session={session}
+        resume={resume}
+        onSession={setSession}
+        onResult={finish}
+        onError={failed}
+      />
     </Shell>
   );
 }
@@ -379,6 +437,7 @@ function SignerScreen({
   resume,
   onSession = () => {},
   onResult = () => {},
+  onError = () => {},
 }: {
   view: SignerView;
   pdf: Pdf;
@@ -388,6 +447,7 @@ function SignerScreen({
   resume?: string;
   onSession?: (session: string) => void;
   onResult?: (result: 'signed' | 'completed' | 'declined') => void;
+  onError?: (message: string) => void;
 }) {
   const t = useTexts();
   const [values, setValues] = useState<Record<string, string>>({});
@@ -420,6 +480,7 @@ function SignerScreen({
       onResult(out.completed ? 'completed' : 'signed');
     } catch (e) {
       setSignError(errorMessage(e));
+      onError(errorMessage(e));
       if (e instanceof ApiError && e.status === 401) onSession('');
     } finally {
       setBusy(false);
@@ -432,6 +493,7 @@ function SignerScreen({
       onResult('declined');
     } catch (e) {
       setSignError(errorMessage(e));
+      onError(errorMessage(e));
       if (e instanceof ApiError && e.status === 401) onSession('');
     } finally {
       setBusy(false);

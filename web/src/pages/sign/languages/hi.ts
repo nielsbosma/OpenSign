@@ -94,5 +94,12 @@ export const hi: Texts = {
   reviewSafety: (date) =>
     `यह लिंक कुछ भी हस्ताक्षर नहीं कर सकता। यह ${date} को काम करना बंद कर देगा, हर उपयोग दर्ज होता है और आप इसे कभी भी रद्द कर सकते हैं।`,
   revokeLink: 'लिंक रद्द करें',
+  securedBy: 'OpenSign द्वारा सुरक्षित',
+  embedRefused: 'यह पेज यहाँ नहीं दिखाया जा सकता',
+  embedRefusedNote: 'इसके बजाय अपना हस्ताक्षर लिंक सीधे अपने ब्राउज़र में खोलें।',
+  eidPopup: (label) => `खुली हुई विंडो में ${label} से पहचान पूरी करें।`,
+  eidPopupBlocked: 'इस साइट के लिए पॉप-अप की अनुमति दें, फिर दोबारा कोशिश करें।',
+  eidWindowDone: 'पहचान पूरी हुई',
+  eidWindowDoneNote: 'आप यह विंडो बंद करके हस्ताक्षर पेज पर लौट सकते हैं।',
   methods: { sms_pin: 'SMS कोड', se_bankid: 'BankID', freja: 'Freja eID', broker: 'ई-आईडी' },
 };

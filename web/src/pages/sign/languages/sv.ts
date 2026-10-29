@@ -95,5 +95,12 @@ export const sv: Texts = {
   reviewSafety: (date) =>
     `Länken kan inte signera något. Den slutar fungera ${date}, varje användning loggas och du kan återkalla den när som helst.`,
   revokeLink: 'Återkalla länken',
+  securedBy: 'Skyddas av OpenSign',
+  embedRefused: 'Sidan kan inte visas här',
+  embedRefusedNote: 'Öppna din signeringslänk direkt i webbläsaren i stället.',
+  eidPopup: (label) => `Slutför identifieringen med ${label} i fönstret som öppnades.`,
+  eidPopupBlocked: 'Tillåt popupfönster för den här webbplatsen och försök igen.',
+  eidWindowDone: 'Identifieringen är klar',
+  eidWindowDoneNote: 'Du kan stänga det här fönstret och gå tillbaka till signeringssidan.',
   methods: { sms_pin: 'SMS-kod', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-legitimation' },
 };

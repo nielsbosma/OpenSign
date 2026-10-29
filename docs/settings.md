@@ -70,6 +70,8 @@ See [Sign-in, passkeys and two-factor](account-security.md).
 | Signing Links Expire After (Days) | `OPENSIGN_SECURITY_SIGNER_LINK_DAYS` | 30. Used when a document has no expiry date. |
 | Largest Upload (MB) | `OPENSIGN_SECURITY_MAX_UPLOAD_MB` | 25 |
 | AI Review Links Expire After (Days) | `OPENSIGN_SECURITY_REVIEW_LINK_DAYS` | 7. 0 turns signers' AI review links off; at most 30. See [The signing page](signing-page.md#review-with-your-ai). |
+| Allow Embedded Signing | `OPENSIGN_SECURITY_EMBED_SIGNING` | Off. Lets the sites below show the signing page in a frame. See [Embedded signing](embedding.md). |
+| Sites Allowed to Embed | `OPENSIGN_SECURITY_EMBED_ORIGINS` | None. Exact https origins, one per line; in the variable, separated by spaces or commas. |
 
 ## Updates
 

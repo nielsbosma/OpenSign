@@ -104,6 +104,10 @@ pub struct SecuritySettings {
     pub max_upload_mb: u32,
     /// How long a signer's AI review link works; 0 turns review links off.
     pub review_link_days: u32,
+    /// Lets the sites in `embed_origins` show the signing page in a frame. Off, no site can.
+    pub embed_signing: bool,
+    /// Origins such as `https://app.example.com`, exact, without paths or wildcards.
+    pub embed_origins: Vec<String>,
 }
 
 impl Default for SecuritySettings {
@@ -115,12 +119,48 @@ impl Default for SecuritySettings {
             signer_link_days: 30,
             max_upload_mb: 25,
             review_link_days: 7,
+            embed_signing: false,
+            embed_origins: Vec::new(),
         }
     }
 }
 
 impl SettingsGroup for SecuritySettings {
     const NAME: &'static str = "security";
+}
+
+impl SecuritySettings {
+    /// The sites that may frame the signing page: none unless embedding is on. Pinned values skip
+    /// validation, so anything that is not a plain origin is dropped here too.
+    pub fn embed_origins(&self) -> Vec<String> {
+        if !self.embed_signing {
+            return Vec::new();
+        }
+        self.embed_origins.iter().filter(|o| canonical_origin(o).as_deref() == Some(o.as_str())).cloned().collect()
+    }
+
+    /// Where a signer may be sent after signing: only to a site allowed to embed.
+    pub fn allows_redirect(&self, url: &str) -> bool {
+        let Ok(parsed) = reqwest::Url::parse(url) else { return false };
+        parsed.username().is_empty()
+            && parsed.password().is_none()
+            && url.len() <= 2000
+            && self.embed_origins().contains(&parsed.origin().ascii_serialization())
+    }
+}
+
+/// `scheme://host[:port]` for an https origin (or http on localhost, for development), or `None`
+/// when the text is anything more or less than an origin.
+pub fn canonical_origin(text: &str) -> Option<String> {
+    let text = text.trim().trim_end_matches('/');
+    if text.contains('*') || text.contains('@') {
+        return None;
+    }
+    let url = reqwest::Url::parse(text).ok()?;
+    let local = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
+    let scheme_ok = url.scheme() == "https" || (url.scheme() == "http" && local);
+    let bare = url.path() == "/" && url.query().is_none() && url.fragment().is_none();
+    (scheme_ok && bare && url.host().is_some()).then(|| url.origin().ascii_serialization())
 }
 
 /// Release checks and in-app updates.
@@ -309,6 +349,9 @@ impl SettingsCache {
                         .ok()
                         .or_else(|| raw.parse::<f64>().ok().and_then(serde_json::Number::from_f64).map(Value::Number))
                         .unwrap_or(default),
+                    Value::Array(_) => {
+                        Value::Array(raw.split([',', ' ', '\n']).filter(|s| !s.is_empty()).map(|s| Value::String(s.into())).collect())
+                    }
                     _ => Value::String(raw.clone()),
                 };
                 values.insert(field, value);
@@ -447,5 +490,55 @@ mod tests {
         let v = public_view(&s);
         assert_eq!(v["apiKey"], Value::Bool(true));
         assert_eq!(v["fromAddress"], "a@b.c");
+    }
+
+    #[test]
+    fn origins_are_exact() {
+        assert_eq!(canonical_origin("https://App.Example.com/"), Some("https://app.example.com".into()));
+        assert_eq!(canonical_origin("https://app.example.com:8443"), Some("https://app.example.com:8443".into()));
+        assert_eq!(canonical_origin("http://localhost:3000"), Some("http://localhost:3000".into()));
+        for bad in [
+            "http://app.example.com",
+            "https://*.example.com",
+            "https://app.example.com/path",
+            "https://app.example.com?x=1",
+            "https://user@app.example.com",
+            "javascript:alert(1)",
+            "https://a.example.com https://b.example.com",
+            "app.example.com",
+            "",
+        ] {
+            assert_eq!(canonical_origin(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn embedding_needs_the_switch() {
+        let mut s = SecuritySettings {
+            embed_origins: vec!["https://app.example.com".into(), "https://evil.example/x".into()],
+            ..Default::default()
+        };
+        assert!(s.embed_origins().is_empty());
+        assert!(!s.allows_redirect("https://app.example.com/done"));
+        s.embed_signing = true;
+        assert_eq!(s.embed_origins(), ["https://app.example.com"]);
+        assert!(s.allows_redirect("https://app.example.com/done?x=1"));
+        assert!(!s.allows_redirect("https://app.example.com.evil.example/done"));
+        assert!(!s.allows_redirect("http://app.example.com/done"));
+    }
+
+    #[test]
+    fn list_pins_split() {
+        let cache = SettingsCache::from_env(
+            [
+                ("OPENSIGN_SECURITY_EMBED_SIGNING".to_string(), "true".to_string()),
+                ("OPENSIGN_SECURITY_EMBED_ORIGINS".into(), "https://a.example.com, https://b.example.com".into()),
+            ]
+            .into_iter(),
+        );
+        let mut values = Map::new();
+        cache.apply_pins::<SecuritySettings>(&mut values);
+        let s: SecuritySettings = serde_json::from_value(Value::Object(values)).expect("valid");
+        assert_eq!(s.embed_origins(), ["https://a.example.com", "https://b.example.com"]);
     }
 }

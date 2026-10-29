@@ -121,8 +121,9 @@ async fn signers_share_a_read_only_copy_with_their_agent() {
     let (id, token) = sent_document(&app, &sender).await;
     let signer = Ctx::new(app.clone(), Surface::Signer);
     let input = || TokenInput { token: token.clone(), session: None };
+    let open = || signing::OpenInput { token: token.clone(), session: None, redirect_url: None };
 
-    let view = call::<signing::Open>(&signer, input()).await.unwrap();
+    let view = call::<signing::Open>(&signer, open()).await.unwrap();
     let state = view.review.unwrap();
     assert!(state.available && state.active.is_none());
 
@@ -145,10 +146,11 @@ async fn signers_share_a_read_only_copy_with_their_agent() {
     let forged = format!("{}x", review_token);
     assert_eq!(kind(review::markdown(&signer, &mut conn, &forged).await), ErrorKind::NotFound);
     assert_eq!(kind(review::markdown(&signer, &mut conn, "not-a-token").await), ErrorKind::NotFound);
-    let as_signing = call::<signing::Open>(&signer, TokenInput { token: review_token.clone(), session: None }).await;
+    let as_signing =
+        call::<signing::Open>(&signer, signing::OpenInput { token: review_token.clone(), session: None, redirect_url: None }).await;
     assert_eq!(kind(as_signing), ErrorKind::NotFound, "a review link opens nothing on the signing side");
 
-    let active = call::<signing::Open>(&signer, input()).await.unwrap().review.unwrap().active.unwrap();
+    let active = call::<signing::Open>(&signer, open()).await.unwrap().review.unwrap().active.unwrap();
     assert_eq!(active.uses, 2);
 
     let replaced = call::<review::CreateLink>(&signer, input()).await.unwrap();
@@ -158,7 +160,7 @@ async fn signers_share_a_read_only_copy_with_their_agent() {
 
     call::<review::RevokeLink>(&signer, input()).await.unwrap();
     assert_eq!(kind(review::markdown(&signer, &mut conn, &current).await), ErrorKind::NotFound);
-    assert!(call::<signing::Open>(&signer, input()).await.unwrap().review.unwrap().active.is_none());
+    assert!(call::<signing::Open>(&signer, open()).await.unwrap().review.unwrap().active.is_none());
 
     let current = token_of(&call::<review::CreateLink>(&signer, input()).await.unwrap().url);
     sqlx::query("update review_links set uses = $1").bind(MAX_USES).execute(&mut *conn).await.unwrap();
@@ -167,16 +169,19 @@ async fn signers_share_a_read_only_copy_with_their_agent() {
     let current = token_of(&call::<review::CreateLink>(&signer, input()).await.unwrap().url);
     let party_id = parties(&mut conn, id).await.unwrap()[0].id;
     let rotated =
-        call::<docs::IssueSigningLink>(&sender, docs::SigningLinkInput { document_id: id, party_id, rotate: true }).await.unwrap();
+        call::<docs::IssueSigningLink>(&sender, docs::SigningLinkInput { document_id: id, party_id, rotate: true, redirect_url: None })
+            .await
+            .unwrap();
     assert_eq!(kind(review::markdown(&signer, &mut conn, &current).await), ErrorKind::NotFound, "a new signing link revokes it");
     let token = token_of(&rotated.url.replace('#', "/"));
     let input = || TokenInput { token: token.clone(), session: None };
+    let open = || signing::OpenInput { token: token.clone(), session: None, redirect_url: None };
 
     let current = token_of(&call::<review::CreateLink>(&signer, input()).await.unwrap().url);
     call::<review::SetReviewLinks>(&sender, review::SetReviewLinksInput { id, enabled: false }).await.unwrap();
     assert_eq!(kind(review::markdown(&signer, &mut conn, &current).await), ErrorKind::NotFound, "the sender turned it off");
     assert_eq!(kind(call::<review::CreateLink>(&signer, input()).await), ErrorKind::Forbidden);
-    assert!(!call::<signing::Open>(&signer, input()).await.unwrap().review.unwrap().available);
+    assert!(!call::<signing::Open>(&signer, open()).await.unwrap().review.unwrap().available);
 
     call::<review::SetReviewLinks>(&sender, review::SetReviewLinksInput { id, enabled: true }).await.unwrap();
     let off = SecuritySettings { review_link_days: 0, ..SecuritySettings::default() };
@@ -191,4 +196,41 @@ async fn signers_share_a_read_only_copy_with_their_agent() {
     for action in ["party.review_link_created", "party.review_link_used", "party.review_link_revoked", "document.review_links_changed"] {
         assert!(actions.iter().any(|a| a == action), "{action} missing from {actions:?}");
     }
+}
+
+#[tokio::test]
+async fn embedding_only_for_listed_sites_and_handed_over_links() {
+    let Some(app) = app().await else { return };
+    let sender = sender(&app).await;
+    let (id, token) = sent_document(&app, &sender).await;
+    let signer = Ctx::new(app.clone(), Surface::Signer);
+    let open = |redirect: Option<&str>| signing::OpenInput { token: token.clone(), session: None, redirect_url: redirect.map(Into::into) };
+    let party_id = call::<signing::Open>(&signer, open(None)).await.unwrap().party.id;
+    let link = |redirect: &str| docs::SigningLinkInput { document_id: id, party_id, rotate: false, redirect_url: Some(redirect.into()) };
+
+    assert!(call::<signing::Open>(&signer, open(None)).await.unwrap().embed.is_none(), "off by default");
+    assert_eq!(kind(call::<docs::IssueSigningLink>(&sender, link("https://app.example.com/done")).await), ErrorKind::BadRequest);
+
+    let mut conn = app.db.acquire().await.unwrap();
+    let security = SecuritySettings { embed_signing: true, embed_origins: vec!["https://app.example.com".into()], ..Default::default() };
+    app.settings.save(&mut conn, &app.keys, &security, None).await.unwrap();
+
+    let embed = call::<signing::Open>(&signer, open(Some("https://app.example.com/done"))).await.unwrap().embed.unwrap();
+    assert_eq!(embed.origins, ["https://app.example.com"]);
+    assert_eq!(embed.redirect_url.as_deref(), Some("https://app.example.com/done"));
+    for elsewhere in ["https://evil.example/done", "javascript:alert(1)", "https://app.example.com.evil.example/"] {
+        let embed = call::<signing::Open>(&signer, open(Some(elsewhere))).await.unwrap().embed.unwrap();
+        assert!(embed.redirect_url.is_none(), "{elsewhere}");
+        assert_eq!(kind(call::<docs::IssueSigningLink>(&sender, link(elsewhere)).await), ErrorKind::BadRequest, "{elsewhere}");
+    }
+    let issued = call::<docs::IssueSigningLink>(&sender, link("https://app.example.com/done?id=42")).await.unwrap();
+    assert!(issued.url.contains("/sign?redirect=https%3A%2F%2Fapp.example.com%2Fdone%3Fid%3D42#"), "{}", issued.url);
+    assert_eq!(issued.url.rsplit('#').next(), Some(token.as_str()), "the token stays in the fragment");
+
+    sqlx::query("update parties set delivery = 'email', email = 'anna@example.com' where id = $1")
+        .bind(party_id)
+        .execute(&mut *conn)
+        .await
+        .unwrap();
+    assert!(call::<signing::Open>(&signer, open(None)).await.unwrap().embed.is_none(), "links sent by email are not for frames");
 }
