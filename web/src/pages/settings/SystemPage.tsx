@@ -36,7 +36,7 @@ function VersionCard() {
             rel="noreferrer"
             className="text-primary hover:underline"
           >
-            GitHub
+            OpenSign GitHub
           </a>
         ),
       })}
