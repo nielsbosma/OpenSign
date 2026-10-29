@@ -222,8 +222,8 @@ impl Service for Create {
             (None, None) => String::new(),
         };
         sqlx::query(
-            "insert into documents (id, title, is_template, template_id, owner_id, message, language, sequential, reminder_days, external_id, metadata)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+            "insert into documents (id, title, is_template, template_id, owner_id, message, language, sequential, reminder_days, external_id, metadata, review_links)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
         )
         .bind(id)
         .bind(title(&input.title)?)
@@ -236,6 +236,7 @@ impl Service for Create {
         .bind(template.as_ref().and_then(|t| t.reminder_days))
         .bind(input.external_id.as_deref().map(|e| clean_text(e, "The external id", 200)).transpose()?.filter(|e| !e.is_empty()))
         .bind(metadata(input.metadata)?)
+        .bind(template.as_ref().is_none_or(|t| t.review_links))
         .execute(&mut *conn)
         .await?;
         if let Some(t) = &template {

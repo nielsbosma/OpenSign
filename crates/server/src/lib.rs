@@ -126,8 +126,13 @@ pub fn router(state: AppState) -> Router {
         compat::scrive::router().fallback(api_not_found).layer(middleware::from_fn_with_state(state.clone(), security::general_limit));
     let docusign =
         || compat::docusign::router().fallback(api_not_found).layer(middleware::from_fn_with_state(state.clone(), security::general_limit));
+    let review = Router::new()
+        .route("/review/{token}", get(files::review_text))
+        .route("/review/{token}/document.pdf", get(files::review_pdf))
+        .layer(middleware::from_fn_with_state(state.clone(), security::general_limit));
     let mut app = Router::new()
         .nest("/api", api)
+        .merge(review)
         .nest("/scrive/api/v2", scrive)
         .nest("/docusign/restapi/v2.1", docusign())
         .nest("/restapi/v2.1", docusign())

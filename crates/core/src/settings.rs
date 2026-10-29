@@ -71,11 +71,20 @@ pub struct SecuritySettings {
     pub idle_minutes: u32,
     pub signer_link_days: u32,
     pub max_upload_mb: u32,
+    /// How long a signer's AI review link works; 0 turns review links off.
+    pub review_link_days: u32,
 }
 
 impl Default for SecuritySettings {
     fn default() -> Self {
-        Self { enforce_two_factor: false, session_hours: 12, idle_minutes: 60, signer_link_days: 30, max_upload_mb: 25 }
+        Self {
+            enforce_two_factor: false,
+            session_hours: 12,
+            idle_minutes: 60,
+            signer_link_days: 30,
+            max_upload_mb: 25,
+            review_link_days: 7,
+        }
     }
 }
 
