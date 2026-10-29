@@ -975,5 +975,8 @@
   "Draw or type it once. When you sign a document yourself, it is offered on the signing page, never applied by itself.": "Dibújela o escríbala una vez. Cuando firme un documento usted mismo, se le ofrecerá en la página de firma, nunca se aplicará sola.",
   "Save Signature": "Guardar firma",
   "Initials: {initials}": "Iniciales: {initials}",
-  "Add Signature": "Añadir firma"
+  "Add Signature": "Añadir firma",
+  "Export Data": "Exportar Datos",
+  "Download the values filled in on these documents": "Descarga los valores rellenados en estos documentos",
+  "There are no documents to export": "No hay documentos para exportar"
 }

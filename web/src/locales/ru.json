@@ -975,5 +975,8 @@
   "Draw or type it once. When you sign a document yourself, it is offered on the signing page, never applied by itself.": "Нарисуйте или введите её один раз. Когда вы сами подписываете документ, она предлагается на странице подписания, но никогда не ставится автоматически.",
   "Save Signature": "Сохранить подпись",
   "Initials: {initials}": "Инициалы: {initials}",
-  "Add Signature": "Добавить подпись"
+  "Add Signature": "Добавить подпись",
+  "Export Data": "Экспорт данных",
+  "Download the values filled in on these documents": "Скачать значения, заполненные в этих документах",
+  "There are no documents to export": "Нет документов для экспорта"
 }

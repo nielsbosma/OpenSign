@@ -76,6 +76,7 @@ import { cn } from '@/lib/utils';
 import { ActivityPanel } from './ActivityPanel';
 import { BulkSendDialog } from './BulkSendDialog';
 import { StatusBadge } from './DocumentsPage';
+import { ExportDataSubmenu } from './ExportData';
 import { FieldLayer } from './FieldLayer';
 import { FieldSettings } from './FieldSettings';
 import { folderPath, MoveToSubmenu } from './Folders';
@@ -1020,6 +1021,9 @@ export function DocumentPage() {
                 <DropdownMenuItem onSelect={() => download('original')}>
                   <Download /> {t('Original PDF')}
                 </DropdownMenuItem>
+              )}
+              {can('documents.export') && (
+                <ExportDataSubmenu filter={doc.isTemplate ? { templateId: doc.id, archived: null } : { ids: [doc.id], archived: null }} />
               )}
               {pending && doc.canEdit && (
                 <DropdownMenuItem onSelect={() => setCanceling(true)} className="text-destructive">

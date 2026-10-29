@@ -24,7 +24,7 @@ export type AccountMcpConnectionsOutput = Array<Connection>;
 
 export type AccountMeInput = Record<string, unknown>;
 
-export type Permission = "org.read" | "users.read" | "users.manage" | "settings.manage" | "audit.read" | "documents.read" | "documents.create" | "documents.read_all" | "documents.manage_all" | "documents.legal_hold" | "templates.manage" | "api_keys.manage" | "webhooks.manage" | "ai.use" | "system.read";
+export type Permission = "org.read" | "users.read" | "users.manage" | "settings.manage" | "audit.read" | "documents.read" | "documents.create" | "documents.read_all" | "documents.manage_all" | "documents.export" | "documents.legal_hold" | "templates.manage" | "api_keys.manage" | "webhooks.manage" | "ai.use" | "system.read";
 
 export type Role = "admin" | "manager" | "sender" | "auditor" | "viewer";
 
@@ -800,6 +800,89 @@ export type DownloadOutput = {
   sha256: string;
 };
 
+export type ExportFormat = "csv" | "xlsx" | "json";
+
+export type DocumentsExportInput = {
+  /** true for archived documents only, false to leave them out. Leave out for both. */
+  archived?: boolean | null;
+  /** Only documents a bulk send created. */
+  bulkId?: string | null;
+  /** Only documents directly in this folder. */
+  folderId?: string | null;
+  /** csv (the default), xlsx for Excel, or json. */
+  format?: ExportFormat;
+  /** Only these documents. */
+  ids?: Array<string> | null;
+  /** Matches the title, or an exact external id, as in documents.list. */
+  search?: string | null;
+  /** draft, pending, completed, declined, canceled or expired. */
+  status?: string | null;
+  /** Only documents made from this template. */
+  templateId?: string | null;
+};
+
+export type DocumentData = {
+  archivedAt?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
+  externalId?: string | null;
+  /** Every field in page order, with its value. Signature fields are left out: `signedAt` on the party says when they signed. */
+  fields: Array<FieldData>;
+  folderId?: string | null;
+  id: string;
+  parties: Array<PartyData>;
+  sentAt?: string | null;
+  status: string;
+  templateId?: string | null;
+  /** The template version the document was made from. */
+  templateVersion?: number | null;
+  title: string;
+  /** The same values keyed by `key`, for quick lookups. */
+  values: {
+    [key: string]: unknown;
+  };
+};
+
+export type FieldData = {
+  /** The field, or every button of a radio group. */
+  fieldIds: Array<string>;
+  /** The field's label, made unique in the document: a label used by several parties gets the party's slot, such as "Name (Party 2)". The column name in exports. */
+  key: string;
+  kind: string;
+  label: string;
+  partyId?: string | null;
+  /** Numbers as numbers, checkboxes as true or false, several choices as a list, dates as YYYY-MM-DD, uploads by file name. Null while nothing is filled in. */
+  value?: unknown;
+};
+
+export type PartyData = {
+  company?: string | null;
+  declinedAt?: string | null;
+  email?: string | null;
+  id: string;
+  name: string;
+  phone?: string | null;
+  role: string;
+  signedAt?: string | null;
+  /** "Party 1", "Party 2" and so on, in signing order. Field keys and export columns use it. */
+  slot: string;
+  status: string;
+};
+
+export type DocumentsExportOutput = ExportOutput;
+
+export type ExportOutput = {
+  /** The CSV or Excel file, base64. Not set for json. */
+  contentBase64?: string | null;
+  contentType: string;
+  /** How many documents are in it. */
+  count: number;
+  /** The documents with their values. Only for json. */
+  documents?: Array<DocumentData> | null;
+  /** A file name for the export. */
+  name: string;
+};
+
 export type DocumentsGetInput = {
   id: string;
 };
@@ -1233,6 +1316,12 @@ export type UploadOutput = {
   /** Active content taken out of the file, e.g. "JavaScript". */
   removed: Array<string>;
 };
+
+export type DocumentsValuesInput = {
+  id: string;
+};
+
+export type DocumentsValuesOutput = DocumentData;
 
 export type DocumentsVerifyInput = {
   /** A PDF, base64. */
@@ -2154,6 +2243,7 @@ export interface Services {
   "documents.delete": { kind: "mutation"; input: DocumentsDeleteInput; output: DocumentsDeleteOutput };
   "documents.detect_fields": { kind: "mutation"; input: DocumentsDetectFieldsInput; output: DocumentsDetectFieldsOutput };
   "documents.download": { kind: "query"; input: DocumentsDownloadInput; output: DocumentsDownloadOutput };
+  "documents.export": { kind: "query"; input: DocumentsExportInput; output: DocumentsExportOutput };
   "documents.get": { kind: "query"; input: DocumentsGetInput; output: DocumentsGetOutput };
   "documents.latest_review": { kind: "query"; input: DocumentsLatestReviewInput; output: DocumentsLatestReviewOutput };
   "documents.legal_hold": { kind: "mutation"; input: DocumentsLegalHoldInput; output: DocumentsLegalHoldOutput };
@@ -2175,6 +2265,7 @@ export interface Services {
   "documents.unshare": { kind: "mutation"; input: DocumentsUnshareInput; output: DocumentsUnshareOutput };
   "documents.update": { kind: "mutation"; input: DocumentsUpdateInput; output: DocumentsUpdateOutput };
   "documents.upload": { kind: "mutation"; input: DocumentsUploadInput; output: DocumentsUploadOutput };
+  "documents.values": { kind: "query"; input: DocumentsValuesInput; output: DocumentsValuesOutput };
   "documents.verify": { kind: "query"; input: DocumentsVerifyInput; output: DocumentsVerifyOutput };
   "folders.create": { kind: "mutation"; input: FoldersCreateInput; output: FoldersCreateOutput };
   "folders.delete": { kind: "mutation"; input: FoldersDeleteInput; output: FoldersDeleteOutput };

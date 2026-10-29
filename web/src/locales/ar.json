@@ -975,5 +975,8 @@
   "Draw or type it once. When you sign a document yourself, it is offered on the signing page, never applied by itself.": "ارسمه أو اكتبه مرة واحدة. عندما توقّع مستندًا بنفسك، يُعرض عليك في صفحة التوقيع ولا يُستخدم تلقائيًا أبدًا.",
   "Save Signature": "حفظ التوقيع",
   "Initials: {initials}": "الأحرف الأولى: {initials}",
-  "Add Signature": "إضافة توقيع"
+  "Add Signature": "إضافة توقيع",
+  "Export Data": "تصدير البيانات",
+  "Download the values filled in on these documents": "نزّل القيم المُدخلة في هذه المستندات",
+  "There are no documents to export": "لا توجد مستندات للتصدير"
 }

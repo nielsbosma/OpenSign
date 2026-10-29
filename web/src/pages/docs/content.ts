@@ -19,6 +19,7 @@ const NAV: { group: string; slugs: string[] }[] = [
       'attachments',
       'in-person',
       'bulk-send',
+      'data-export',
     ],
   },
   { group: 'Signing', slugs: ['signing-page', 'sealed-pdfs', 'verification'] },

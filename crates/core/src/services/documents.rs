@@ -108,7 +108,7 @@ pub struct DocumentSummary {
     pub archived_at: Option<DateTime<Utc>>,
 }
 
-fn like_pattern(search: &str) -> String {
+pub(crate) fn like_pattern(search: &str) -> String {
     let escaped = search.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
     format!("%{escaped}%")
 }

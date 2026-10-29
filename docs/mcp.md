@@ -40,7 +40,7 @@ Each tool is a service the connected user's role allows, named with underscores 
 
 | Area | Tools |
 | --- | --- |
-| Documents | `documents_list`, `documents_get`, `documents_create`, `documents_upload`, `documents_replace_file`, `documents_remove_file`, `documents_update`, `documents_set_parties`, `documents_set_fields`, `documents_detect_fields`, `documents_check`, `documents_auth_methods`, `documents_send`, `documents_remind`, `documents_cancel`, `documents_delete`, `documents_share`, `documents_unshare`, `documents_signing_link`, `documents_download`, `documents_verify`, `documents_legal_hold`, `documents_move`, `documents_archive` |
+| Documents | `documents_list`, `documents_get`, `documents_create`, `documents_upload`, `documents_replace_file`, `documents_remove_file`, `documents_update`, `documents_set_parties`, `documents_set_fields`, `documents_detect_fields`, `documents_check`, `documents_auth_methods`, `documents_send`, `documents_remind`, `documents_cancel`, `documents_delete`, `documents_share`, `documents_unshare`, `documents_signing_link`, `documents_download`, `documents_verify`, `documents_legal_hold`, `documents_move`, `documents_archive`, `documents_values`, `documents_export` |
 | Templates | `templates_versions`, `templates_version`, `templates_compare`, `templates_save_version`, `templates_restore` |
 | Folders | `folders_list`, `folders_create`, `folders_update`, `folders_delete` |
 | Share links | `share_links_get`, `share_links_set`, `share_links_rotate` |

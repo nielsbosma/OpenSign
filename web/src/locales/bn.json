@@ -975,5 +975,8 @@
   "Draw or type it once. When you sign a document yourself, it is offered on the signing page, never applied by itself.": "একবার আঁকুন বা টাইপ করুন। আপনি নিজে কোনো নথিতে স্বাক্ষর করলে স্বাক্ষরের পৃষ্ঠায় এটি দেখানো হয়, কখনও নিজে থেকে বসানো হয় না।",
   "Save Signature": "স্বাক্ষর সংরক্ষণ করুন",
   "Initials: {initials}": "আদ্যক্ষর: {initials}",
-  "Add Signature": "স্বাক্ষর যোগ করুন"
+  "Add Signature": "স্বাক্ষর যোগ করুন",
+  "Export Data": "ডেটা রপ্তানি করুন",
+  "Download the values filled in on these documents": "এই নথিগুলিতে পূরণ করা মানগুলি ডাউনলোড করুন",
+  "There are no documents to export": "রপ্তানি করার মতো কোনো নথি নেই"
 }

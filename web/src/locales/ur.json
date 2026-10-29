@@ -975,5 +975,8 @@
   "Draw or type it once. When you sign a document yourself, it is offered on the signing page, never applied by itself.": "انہیں ایک بار بنائیں یا ٹائپ کریں۔ جب آپ خود کسی دستاویز پر دستخط کرتے ہیں تو یہ دستخط کے صفحے پر پیش کیے جاتے ہیں، کبھی خود سے نہیں لگتے۔",
   "Save Signature": "دستخط محفوظ کریں",
   "Initials: {initials}": "ابتدائی حروف: {initials}",
-  "Add Signature": "دستخط شامل کریں"
+  "Add Signature": "دستخط شامل کریں",
+  "Export Data": "ڈیٹا ایکسپورٹ کریں",
+  "Download the values filled in on these documents": "ان دستاویزات میں بھری گئی قدریں ڈاؤن لوڈ کریں",
+  "There are no documents to export": "ایکسپورٹ کرنے کے لیے کوئی دستاویز نہیں ہے"
 }

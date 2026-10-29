@@ -38,6 +38,7 @@ permissions! {
     DocumentsCreate = "documents.create": "Upload documents and send them for signing",
     DocumentsReadAll = "documents.read_all": "See every document, not only your own and those shared with you",
     DocumentsManageAll = "documents.manage_all": "Change, cancel and delete any document",
+    DocumentsExport = "documents.export": "Export the values filled in on documents you can see as CSV, Excel or JSON",
     DocumentsLegalHold = "documents.legal_hold": "Place documents on legal hold so nobody can delete them, and release holds",
     TemplatesManage = "templates.manage": "Create and change shared templates",
     ApiKeysManage = "api_keys.manage": "Create API keys that act with your permissions",
@@ -98,6 +99,7 @@ impl Role {
                     DocumentsCreate,
                     DocumentsReadAll,
                     DocumentsManageAll,
+                    DocumentsExport,
                     DocumentsLegalHold,
                     TemplatesManage,
                     ApiKeysManage,
@@ -108,12 +110,12 @@ impl Role {
             Role::Sender => RoleInfo {
                 label: "Sender",
                 description: "Sends documents and sees their own and those shared with them",
-                permissions: &[OrgRead, UsersRead, DocumentsRead, DocumentsCreate, ApiKeysManage, AiUse],
+                permissions: &[OrgRead, UsersRead, DocumentsRead, DocumentsCreate, DocumentsExport, ApiKeysManage, AiUse],
             },
             Role::Auditor => RoleInfo {
                 label: "Auditor",
                 description: "Reads every document and the audit log, changes nothing",
-                permissions: &[OrgRead, UsersRead, DocumentsRead, DocumentsReadAll, AuditRead, SystemRead],
+                permissions: &[OrgRead, UsersRead, DocumentsRead, DocumentsReadAll, DocumentsExport, AuditRead, SystemRead],
             },
             Role::Viewer => RoleInfo {
                 label: "Viewer",
