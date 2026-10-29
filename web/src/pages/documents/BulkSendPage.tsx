@@ -6,6 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useApi, useApiMutation } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { labels, msg, t } from '@/lib/i18n';
+import { useSession } from '@/lib/session';
+import { ExportDataButton } from './ExportData';
 
 const ROW_TONES: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   sent: 'default',
@@ -23,6 +25,7 @@ const STATUS_LABELS = labels({
 
 export function BulkSendPage() {
   const { id = '' } = useParams();
+  const { can } = useSession();
   const bulk = useApi(
     'bulk.get',
     { id },
@@ -45,15 +48,18 @@ export function BulkSendPage() {
         description={`${b.fileName} · ${t('started {date}', { date: formatDateTime(b.createdAt) })}`}
         help="bulk-send"
         actions={
-          active && (
-            <ConfirmButton
-              label={t('Stop')}
-              title={t('Stop this bulk send?')}
-              description={t('Rows not sent yet are skipped. Documents already sent stay out for signing.')}
-              confirmLabel={t('Stop Sending')}
-              onConfirm={() => cancel.mutate({ id: b.id })}
-            />
-          )
+          <>
+            {b.sent > 0 && can('documents.export') && <ExportDataButton filter={{ bulkId: b.id, archived: null }} />}
+            {active && (
+              <ConfirmButton
+                label={t('Stop')}
+                title={t('Stop this bulk send?')}
+                description={t('Rows not sent yet are skipped. Documents already sent stay out for signing.')}
+                confirmLabel={t('Stop Sending')}
+                onConfirm={() => cancel.mutate({ id: b.id })}
+              />
+            )}
+          </>
         }
       />
       <div className="mb-4 grid gap-2">

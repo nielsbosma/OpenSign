@@ -22,6 +22,8 @@ A template stays a template; there is no "send" step.
 - **Many documents**: use [Bulk send](bulk-send.md) to send the template to every row of a spreadsheet.
 - **From the API**: `POST /api/v1/documents` with `templateId`, then set the parties and send. Scrive's `newfromtemplate` endpoint does the same. See [REST API](api.md).
 
+To collect what people filled in on every document made from a template, choose **Export Data** in the template's **⋯** menu. See [Exporting filled-in data](data-export.md).
+
 A document made from a template is independent of it: changing the template later does not change documents already made from it. The template's files are shared, not copied, so they take no extra storage.
 
 Each document shows which template and version it came from under its title, such as "From Lease, version 3".

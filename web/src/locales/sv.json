@@ -942,5 +942,8 @@
   "New parties: {names}. Add their details.": "Nya parter: {names}. Fyll i deras uppgifter.",
   "Some tags or form fields in {file} were not used": "Vissa taggar eller formulärfält i {file} användes inte",
   "No places for new fields were found": "Inga ställen för nya fält hittades",
-  "Add a signer first: signature and initials fields belong to a signer": "Lägg till en undertecknare först: signatur- och initialfält hör till en undertecknare"
+  "Add a signer first: signature and initials fields belong to a signer": "Lägg till en undertecknare först: signatur- och initialfält hör till en undertecknare",
+  "Export Data": "Exportera Data",
+  "Download the values filled in on these documents": "Ladda ner värdena som fyllts i på de här dokumenten",
+  "There are no documents to export": "Det finns inga dokument att exportera"
 }

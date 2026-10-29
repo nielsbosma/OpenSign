@@ -942,5 +942,8 @@
   "New parties: {names}. Add their details.": "Новые участники: {names}. Укажите их данные.",
   "Some tags or form fields in {file} were not used": "Некоторые теги или поля формы в {file} не использованы",
   "No places for new fields were found": "Мест для новых полей не найдено",
-  "Add a signer first: signature and initials fields belong to a signer": "Сначала добавьте подписанта: поля подписи и инициалов принадлежат подписанту"
+  "Add a signer first: signature and initials fields belong to a signer": "Сначала добавьте подписанта: поля подписи и инициалов принадлежат подписанту",
+  "Export Data": "Экспорт данных",
+  "Download the values filled in on these documents": "Скачать значения, заполненные в этих документах",
+  "There are no documents to export": "Нет документов для экспорта"
 }

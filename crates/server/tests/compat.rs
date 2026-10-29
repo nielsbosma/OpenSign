@@ -255,6 +255,13 @@ async fn docusign_compatible_api() {
     assert_eq!(recipients["carbonCopies"][0]["recipientId"], "2");
     assert_eq!(recipients["recipientCount"], "2");
 
+    let (response, form) = send(&router, with("GET", &format!("{base}/envelopes/{id}/form_data"), &bearer, None, vec![])).await;
+    assert_eq!(response.status(), StatusCode::OK, "{form}");
+    assert!(form["formData"].as_array().unwrap().contains(&json!({ "name": "Plan", "value": "Pro" })), "{form}");
+    assert_eq!(form["recipientFormData"][0]["recipientId"], "1");
+    let (_, values) = send(&router, with("GET", &format!("/api/v1/documents/{id}/values"), &bearer, None, vec![])).await;
+    assert_eq!(values["values"]["Plan"], "Pro", "{values}");
+
     let view = json!({ "returnUrl": "https://crm.example/done", "authenticationMethod": "none", "email": "bo@example.com", "userName": "Bo Berg", "clientUserId": "crm-7" });
     let (response, view) =
         send(&router, with("POST", &format!("{base}/envelopes/{id}/views/recipient"), &bearer, json_ct, view.to_string().into_bytes()))

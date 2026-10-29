@@ -6,6 +6,7 @@ pub mod bulk;
 pub mod detect;
 pub mod documents;
 pub mod eid;
+pub mod exports;
 pub mod folders;
 pub mod oauth;
 pub mod passkeys;
@@ -97,6 +98,8 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<documents::Cancel>(),
         erase::<documents::Remind>(),
         erase::<documents::Delete>(),
+        erase::<exports::Values>(),
+        erase::<exports::Export>(),
         erase::<templates::Versions>(),
         erase::<templates::GetVersion>(),
         erase::<templates::Compare>(),

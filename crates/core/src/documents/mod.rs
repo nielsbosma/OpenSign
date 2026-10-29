@@ -1,6 +1,7 @@
 //! Documents, their parties and fields: shared types, who may see what, and signer links.
 
 pub mod attachments;
+pub mod export;
 pub mod logic;
 pub mod ltv;
 pub mod notify;

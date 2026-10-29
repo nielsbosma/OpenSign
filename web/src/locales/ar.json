@@ -942,5 +942,8 @@
   "New parties: {names}. Add their details.": "أطراف جديدة: {names}. أضف بياناتهم.",
   "Some tags or form fields in {file} were not used": "لم تُستخدم بعض الوسوم أو حقول النموذج في {file}",
   "No places for new fields were found": "لم يُعثر على أماكن لحقول جديدة",
-  "Add a signer first: signature and initials fields belong to a signer": "أضف موقّعًا أولًا: حقول التوقيع والأحرف الأولى تخص الموقّع"
+  "Add a signer first: signature and initials fields belong to a signer": "أضف موقّعًا أولًا: حقول التوقيع والأحرف الأولى تخص الموقّع",
+  "Export Data": "تصدير البيانات",
+  "Download the values filled in on these documents": "نزّل القيم المُدخلة في هذه المستندات",
+  "There are no documents to export": "لا توجد مستندات للتصدير"
 }

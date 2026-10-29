@@ -942,5 +942,8 @@
   "New parties: {names}. Add their details.": "নতুন পক্ষ: {names}। তাদের বিবরণ যোগ করুন।",
   "Some tags or form fields in {file} were not used": "{file}-এর কিছু ট্যাগ বা ফর্ম ফিল্ড ব্যবহার করা হয়নি",
   "No places for new fields were found": "নতুন ফিল্ডের জন্য কোনো জায়গা পাওয়া যায়নি",
-  "Add a signer first: signature and initials fields belong to a signer": "আগে একজন স্বাক্ষরকারী যোগ করুন: স্বাক্ষর ও আদ্যক্ষর ফিল্ড স্বাক্ষরকারীর"
+  "Add a signer first: signature and initials fields belong to a signer": "আগে একজন স্বাক্ষরকারী যোগ করুন: স্বাক্ষর ও আদ্যক্ষর ফিল্ড স্বাক্ষরকারীর",
+  "Export Data": "ডেটা রপ্তানি করুন",
+  "Download the values filled in on these documents": "এই নথিগুলিতে পূরণ করা মানগুলি ডাউনলোড করুন",
+  "There are no documents to export": "রপ্তানি করার মতো কোনো নথি নেই"
 }
