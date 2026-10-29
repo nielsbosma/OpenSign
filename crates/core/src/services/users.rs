@@ -123,6 +123,7 @@ impl Service for Invite {
                 button: Some(("Accept Invitation".into(), format!("{}/invite#{token}", ctx.app.public_url()))),
                 footer: None,
                 attachments: vec![],
+                lang: crate::i18n::Lang::En,
             },
         )
         .await?;

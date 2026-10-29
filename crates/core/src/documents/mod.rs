@@ -109,7 +109,7 @@ pub mod status {
 
 pub const DOCUMENT_COLUMNS: &str = "id, title, status, is_template, template_id, owner_id, message, language, sequential, expires_at, reminder_days, \
      source_file_id, sealed_file_id, original_sha256, sealed_sha256, page_count, external_id, metadata, sent_at, completed_at, canceled_at, created_at, updated_at, \
-     legal_hold, legal_hold_reason, legal_hold_at";
+     legal_hold, legal_hold_reason, legal_hold_at, review_links";
 
 #[derive(Debug, Clone, Serialize, JsonSchema, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -145,10 +145,12 @@ pub struct DocumentRow {
     pub legal_hold: bool,
     pub legal_hold_reason: Option<String>,
     pub legal_hold_at: Option<DateTime<Utc>>,
+    /// Signers may share a read-only copy with their own AI agent.
+    pub review_links: bool,
 }
 
 pub const PARTY_COLUMNS: &str = "id, document_id, role, name, email, phone, personal_number, company, sign_order, delivery, auth_to_view, auth_to_sign, \
-     status, link_version, link_expires_at, notified_at, viewed_at, signed_at, declined_at, decline_reason, signature, evidence";
+     status, link_version, link_expires_at, notified_at, viewed_at, signed_at, declined_at, decline_reason, signature, evidence, language";
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct PartyRow {
@@ -174,6 +176,7 @@ pub struct PartyRow {
     pub decline_reason: Option<String>,
     pub signature: Option<Value>,
     pub evidence: Option<Value>,
+    pub language: Option<String>,
 }
 
 impl PartyRow {
@@ -192,6 +195,10 @@ impl PartyRow {
     /// Signers and approvers; viewers only receive the result.
     pub fn must_act(&self) -> bool {
         self.role() != PartyRole::Viewer
+    }
+
+    pub fn lang(&self, document: &DocumentRow) -> crate::i18n::Lang {
+        crate::i18n::Lang::for_party(self.language.as_deref(), &document.language)
     }
 }
 
@@ -216,6 +223,8 @@ pub struct PartyView {
     pub signed_at: Option<DateTime<Utc>>,
     pub declined_at: Option<DateTime<Utc>>,
     pub decline_reason: Option<String>,
+    /// What this party reads, if not the document's language.
+    pub language: Option<String>,
 }
 
 pub fn personal_number_context(party_id: Uuid) -> String {
@@ -284,6 +293,7 @@ impl PartyView {
             signed_at: row.signed_at,
             declined_at: row.declined_at,
             decline_reason: row.decline_reason.clone(),
+            language: row.language.clone(),
         }
     }
 }

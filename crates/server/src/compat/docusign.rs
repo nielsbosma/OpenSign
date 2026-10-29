@@ -13,6 +13,7 @@ use axum::routing::{get, post};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
 use opensign_core::error::{AppError, ErrorKind, bad_request};
+use opensign_core::i18n::Lang;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -263,6 +264,7 @@ async fn fill(api: &Api, id: Uuid, body: &Value) -> Result<(), AppError> {
                 "delivery": if embedded { "link" } else { "email" },
                 "authToView": if sms { "sms_pin" } else { "none" },
                 "authToSign": if sms { "sms_pin" } else { "standard" },
+                "language": r["emailNotification"]["supportedLanguage"].as_str().and_then(Lang::parse).map(Lang::code),
             }));
             ids.push(r["recipientId"].as_str().map(str::to_string).unwrap_or_else(|| r["recipientId"].to_string()));
             tab_sets.push(tabs_of(r));

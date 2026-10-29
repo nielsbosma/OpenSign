@@ -118,10 +118,13 @@ async fn update<G: SettingsGroup>(ctx: &Ctx, conn: &mut PgConnection, patch: &Va
     if G::NAME == "email"
         && let Value::Object(changes) = &mut patch
     {
-        // Only a successful test email marks email as working; a new key or sender needs a new test.
+        // Only a successful test email marks email as working; a new provider, server, key or sender needs a new test.
         changes.remove("verifiedAt");
         let changed = |field: &str| changes.get(field).is_some_and(|v| !v.is_null() && !v.is_boolean() && Some(v) != base.get(field));
-        if changed("apiKey") || changed("fromAddress") {
+        if ["provider", "apiKey", "smtpHost", "smtpPort", "smtpSecurity", "smtpUsername", "smtpPassword", "fromAddress"]
+            .iter()
+            .any(|f| changed(f))
+        {
             changes.insert("verifiedAt".into(), Value::Null);
         }
     }
@@ -165,7 +168,7 @@ async fn update<G: SettingsGroup>(ctx: &Ctx, conn: &mut PgConnection, patch: &Va
     Ok(GroupView { values: after, pinned })
 }
 
-fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
+pub(crate) fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
     let value = serde_json::to_value(group).map_err(AppError::internal)?;
     let url = |field: &str| -> Result<()> {
         if let Some(u) = value.get(field).and_then(Value::as_str).filter(|u| !u.is_empty()) {
@@ -223,10 +226,26 @@ fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
             Ok(())
         }
         "email" => {
-            if let Some(from) = value.get("fromAddress").and_then(Value::as_str).filter(|s| !s.is_empty()) {
-                crate::auth::normalize_email(from)?;
+            let email: EmailSettings = serde_json::from_value(value.clone()).map_err(AppError::internal)?;
+            for address in [&email.from_address, &email.reply_to].into_iter().filter(|s| !s.is_empty()) {
+                crate::auth::normalize_email(address)?;
             }
-            Ok(())
+            match email.provider.as_str() {
+                "resend" => Ok(()),
+                "smtp" => {
+                    if !email.smtp_host.is_empty() && !email::valid_smtp_host(email.smtp_host.trim()) {
+                        return Err(bad_request("Enter the SMTP server's host name only, such as smtp.example.com"));
+                    }
+                    if email.smtp_port == 0 {
+                        return Err(bad_request("Enter the SMTP server's port, usually 587 or 465"));
+                    }
+                    if !matches!(email.smtp_security.as_str(), "starttls" | "tls") {
+                        return Err(bad_request("SMTP security must be STARTTLS or TLS"));
+                    }
+                    Ok(())
+                }
+                _ => Err(bad_request("Choose Resend or SMTP")),
+            }
         }
         _ => Ok(()),
     }
@@ -284,7 +303,7 @@ impl Service for SendTestEmail {
     type Output = Ok_;
     const META: Meta = Meta::mutation(
         "settings.send_test_email",
-        "Send a test email through Resend. A successful test marks email as set up.",
+        "Send a test email through the configured provider, Resend or SMTP. A successful test marks email as set up.",
         Access::Permission(Permission::SettingsManage),
     );
 
@@ -307,11 +326,13 @@ impl Service for SendTestEmail {
                 button: None,
                 footer: None,
                 attachments: vec![],
+                lang: crate::i18n::Lang::En,
             },
         )
         .await?;
         email_settings.verified_at = Some(ctx.now);
         email_settings.api_key = None;
+        email_settings.smtp_password = None;
         ctx.app.settings.save(conn, ctx.keys(), &email_settings, Some(ctx.actor()?.user_id)).await?;
         audit(ctx, conn, Entry::new("settings.email_verified", "settings", "email").metadata(serde_json::json!({ "to": to }))).await?;
         Ok(Ok_::default())

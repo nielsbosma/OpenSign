@@ -13,6 +13,7 @@ use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{get, post};
 use chrono::{Duration, Utc};
 use opensign_core::error::{AppError, ErrorKind, bad_request};
+use opensign_core::i18n::Lang;
 use serde_json::{Map, Value, json};
 use uuid::Uuid;
 
@@ -450,7 +451,7 @@ async fn update(State(state): State<AppState>, Path(id): Path<String>, request: 
             patch.insert("message".into(), json!(message));
         }
         if let Some(lang) = str_of(&input, "lang") {
-            patch.insert("language".into(), json!(if lang == "sv" { "sv" } else { "en" }));
+            patch.insert("language".into(), json!(Lang::of(lang).code()));
         }
         if let Some(days) = input.get("days_to_sign").and_then(Value::as_i64) {
             patch.insert("expiresAt".into(), json!(Utc::now() + Duration::days(days.clamp(1, 365))));

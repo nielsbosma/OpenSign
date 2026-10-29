@@ -20,7 +20,6 @@ use crate::eid::bankid::{self, BankId, Collected};
 use crate::eid::freja::{self, Freja, Outcome, User};
 use crate::eid::{Identity, bankid_via_tic, oidc, same_person, se_personal_number, tic};
 use crate::error::{AppError, ErrorKind, Result, bad_request, conflict, not_found, too_many};
-use crate::i18n::Lang;
 use crate::service::{Access, Meta, Service};
 use crate::settings::{EidSettings, OrgSettings};
 
@@ -453,7 +452,7 @@ impl Service for Status {
                 session: None,
                 expires_at: Some(row.expires_at),
             };
-            let lang = Lang::of(&document.language);
+            let lang = party.lang(&document);
             let eid: EidSettings = settings(ctx, conn).await?;
             let reference = row.reference.clone().unwrap_or_default();
             let (identity, evidence) = match row.provider.as_str() {
@@ -471,10 +470,7 @@ impl Service for Status {
                 },
                 "freja" => match Freja::from_settings(&eid)?.result(&reference).await? {
                     Outcome::Pending => {
-                        return Ok(pending(
-                            if lang == Lang::Sv { "Bekräfta i Freja eID-appen." } else { "Confirm in the Freja eID app." },
-                            None,
-                        ));
+                        return Ok(pending(lang.freja_confirm(), None));
                     }
                     Outcome::Failed(message) => return fail(conn, row.id, message).await,
                     Outcome::Complete { identity, evidence } => (identity, evidence),

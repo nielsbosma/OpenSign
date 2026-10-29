@@ -3,7 +3,9 @@ import {
   ChevronDown,
   ChevronUp,
   Download,
+  Eye,
   HandHelping,
+  History,
   Link2,
   MoreHorizontal,
   Paperclip,
@@ -54,10 +56,12 @@ import {
   formatBytes,
   formatDate,
   formatDateTime,
-  LANGUAGES,
+  languageName,
+  languages,
   PARTY_STATUS_LABELS,
   saveBytes,
 } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
 import { ActivityPanel } from './ActivityPanel';
@@ -68,6 +72,7 @@ import { clamp, type EditableField, FIELD_KINDS, partyColor, toEditable, toInput
 import { FileDrop } from './NewDocumentDialog';
 import { PartyDialog, partyToInput } from './PartyDialog';
 import { Checks, ReviewPanel } from './ReviewPanel';
+import { SigningPreviewDialog } from './SigningPreviewDialog';
 
 function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -98,7 +103,10 @@ function useFields(doc: DocumentView | undefined, editable: boolean) {
     (next: EditableField[]) => {
       if (!doc || !editable) return;
       clearTimeout(timer.current);
-      timer.current = setTimeout(() => save.mutate({ documentId: doc.id, fields: toInput(next) }), 500);
+      timer.current = setTimeout(() => {
+        timer.current = undefined;
+        save.mutate({ documentId: doc.id, fields: toInput(next) });
+      }, 500);
     },
     [doc, editable, save],
   );
@@ -107,7 +115,13 @@ function useFields(doc: DocumentView | undefined, editable: boolean) {
     if (persist) commit(next);
   };
   const reload = (doc: DocumentView) => setFields(toEditable(doc.fields));
-  return { fields, update, reload, saving: save.isPending };
+  const flush = () => {
+    if (!timer.current || !doc || !editable) return;
+    clearTimeout(timer.current);
+    timer.current = undefined;
+    save.mutate({ documentId: doc.id, fields: toInput(fields) });
+  };
+  return { fields, update, reload, flush, saving: save.isPending };
 }
 
 function PartyCard({
@@ -159,7 +173,7 @@ function PartyCard({
             {!editable && (
               <span
                 className={cn(
-                  'ml-auto shrink-0 text-xs',
+                  'ms-auto shrink-0 text-xs',
                   party.status === 'signed' ? 'text-success' : party.status === 'declined' ? 'text-destructive' : 'text-muted-foreground',
                 )}
               >
@@ -168,12 +182,13 @@ function PartyCard({
             )}
           </div>
           <div className="truncate text-xs text-muted-foreground">
-            {[party.email, party.phone, party.company].filter(Boolean).join(' · ') || 'No contact details'}
+            {[party.email, party.phone, party.company].filter(Boolean).join(' · ') || t('No contact details')}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
-            {party.role === 'viewer' ? 'Receives a copy' : party.role === 'approver' ? 'Approves' : 'Signs'} ·{' '}
-            {DELIVERY_LABELS[party.delivery]?.replace(/ \(.*\)$/, '')} · {AUTH_LABELS[party.authToSign]}
-            {party.authToView !== 'none' && ` · ${AUTH_LABELS[party.authToView]} to view`}
+            {party.role === 'viewer' ? t('Receives a copy') : party.role === 'approver' ? t('Approves') : t('Signs')} ·{' '}
+            {DELIVERY_LABELS[party.delivery]?.replace(/ \(.*\)$/, '').replace(/（.*）$/, '')} · {AUTH_LABELS[party.authToSign]}
+            {party.authToView !== 'none' && ` · ${t('{method} to view', { method: AUTH_LABELS[party.authToView] ?? party.authToView })}`}
+            {party.language && ` · ${languageName(party.language)}`}
           </div>
           {party.declineReason && <div className="mt-1 text-xs text-destructive">“{party.declineReason}”</div>}
           {attachments.length > 0 && (
@@ -183,22 +198,22 @@ function PartyCard({
                   <Paperclip className="size-3 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 truncate">
                     {a.name}
-                    {!a.required && <span className="text-muted-foreground"> (optional)</span>}
+                    {!a.required && <span className="text-muted-foreground"> {t('(optional)')}</span>}
                   </span>
                   {a.fileId ? (
                     <button
                       type="button"
-                      className="ml-auto shrink-0 underline"
+                      className="ms-auto shrink-0 underline"
                       onClick={() =>
                         fetchPdf(`/api/documents/${documentId}/attachments/${a.id}`)
                           .then((bytes) => saveBytes(bytes, a.fileName ?? 'attachment', a.contentType ?? 'application/octet-stream'))
                           .catch((e) => toast.error(errorMessage(e)))
                       }
                     >
-                      Download
+                      {t('Download')}
                     </button>
                   ) : (
-                    <span className="ml-auto shrink-0 text-muted-foreground">Not uploaded</span>
+                    <span className="ms-auto shrink-0 text-muted-foreground">{t('Not uploaded')}</span>
                   )}
                 </li>
               ))}
@@ -232,16 +247,16 @@ function PartyCard({
         {editable && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label={`Options for ${party.name}`}>
+              <Button variant="ghost" size="icon-sm" aria-label={t('Options for {name}', { name: party.name })}>
                 <MoreHorizontal />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={onEdit}>
-                <Pencil /> Edit
+                <Pencil /> {t('Edit')}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={onRemove} className="text-destructive">
-                <Trash2 /> Remove
+                <Trash2 /> {t('Remove')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -253,9 +268,9 @@ function PartyCard({
             <div className="grid w-full gap-1.5">
               <Input readOnly value={link.url} className="font-mono text-xs" onFocus={(e) => e.target.select()} />
               <div className="flex gap-2">
-                <CopyButton value={link.url} label="Copy Link" />
+                <CopyButton value={link.url} label={t('Copy Link')} />
                 <Button variant="ghost" size="sm" onClick={() => setLink(null)}>
-                  Hide
+                  {t('Hide')}
                 </Button>
               </div>
             </div>
@@ -263,7 +278,7 @@ function PartyCard({
             <>
               {party.delivery === 'in_person' && (
                 <Button size="sm" disabled={inPerson.isPending} onClick={() => inPerson.mutate({ documentId, partyId: party.id })}>
-                  <HandHelping /> Sign in Person
+                  <HandHelping /> {t('Sign in Person')}
                 </Button>
               )}
               <Button
@@ -272,13 +287,15 @@ function PartyCard({
                 disabled={signingLink.isPending}
                 onClick={() => signingLink.mutate({ documentId, partyId: party.id, rotate: false })}
               >
-                <Link2 /> Signing Link
+                <Link2 /> {t('Signing Link')}
               </Button>
               <ConfirmButton
-                label="New Link"
-                title="Replace the signing link?"
-                description={`${party.name}'s earlier links stop working. Use this when a link reached the wrong person.`}
-                confirmLabel="Replace Link"
+                label={t('New Link')}
+                title={t('Replace the signing link?')}
+                description={t('The earlier links for {name} stop working. Use this when a link reached the wrong person.', {
+                  name: party.name,
+                })}
+                confirmLabel={t('Replace Link')}
                 onConfirm={() => signingLink.mutate({ documentId, partyId: party.id, rotate: true })}
               />
             </>
@@ -307,7 +324,7 @@ function SendDialog({
     onSuccess: (out) => {
       onOpenChange(false);
       onSent(out.links);
-      toast.success('Sent for signing');
+      toast.success(t('Sent for signing'));
     },
   });
   const blocked = checks.data?.some((c) => c.severity === 'error');
@@ -315,15 +332,16 @@ function SendDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Send for Signing</DialogTitle>
+          <DialogTitle>{t('Send for Signing')}</DialogTitle>
           <DialogDescription>
-            The document is locked once sent. Parties who get their link by email or SMS are notified
-            {doc.sequential ? ' in signing order' : ' now'}.
+            {doc.sequential
+              ? t('The document is locked once sent. Parties who get their link by email or SMS are notified in signing order.')
+              : t('The document is locked once sent. Parties who get their link by email or SMS are notified now.')}
           </DialogDescription>
         </DialogHeader>
         {checks.data ? <Checks checks={checks.data} /> : <Spinner />}
         <div className="grid gap-2">
-          <Label htmlFor="expires">Expires</Label>
+          <Label htmlFor="expires">{t('Expires')}</Label>
           <Input
             id="expires"
             type="date"
@@ -331,17 +349,17 @@ function SendDialog({
             onChange={(e) => setExpires(e.target.value)}
             min={new Date().toISOString().slice(0, 10)}
           />
-          <p className="text-xs text-muted-foreground">Leave empty for the default from Settings.</p>
+          <p className="text-xs text-muted-foreground">{t('Leave empty for the default from Settings.')}</p>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button
             disabled={blocked || send.isPending || !checks.data}
             onClick={() => send.mutate({ id: doc.id, expiresAt: expires ? new Date(`${expires}T23:59:59`).toISOString() : null })}
           >
-            {send.isPending ? <Spinner className="text-primary-foreground" /> : <Send />} Send
+            {send.isPending ? <Spinner className="text-primary-foreground" /> : <Send />} {t('Send')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -354,9 +372,9 @@ function LinksDialog({ links, onClose }: { links: SignerLink[]; onClose: () => v
     <Dialog open={links.length > 0} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Hand Over the Signing Links</DialogTitle>
+          <DialogTitle>{t('Hand Over the Signing Links')}</DialogTitle>
           <DialogDescription>
-            These parties get their link from you. Each link works only for that person; send it privately.
+            {t('These parties get their link from you. Each link works only for that person; send it privately.')}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
@@ -371,7 +389,7 @@ function LinksDialog({ links, onClose }: { links: SignerLink[]; onClose: () => v
           ))}
         </div>
         <DialogFooter>
-          <Button onClick={onClose}>Done</Button>
+          <Button onClick={onClose}>{t('Done')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -384,27 +402,27 @@ function DetailsSection({ doc }: { doc: DocumentView }) {
   const [externalId, setExternalId] = useState(doc.externalId ?? '');
   const [reminder, setReminder] = useState(String(doc.reminderDays ?? 0));
   return (
-    <Section title="Details">
+    <Section title={t('Details')}>
       <div className="grid gap-1.5">
-        <Label htmlFor="message">Message to Parties</Label>
+        <Label htmlFor="message">{t('Message to Parties')}</Label>
         <Textarea
           id="message"
           rows={3}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onBlur={() => message !== doc.message && update.mutate({ id: doc.id, message })}
-          placeholder="Shown in the invitation and on the signing page"
+          placeholder={t('Shown in the invitation and on the signing page')}
         />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="grid gap-1.5">
-          <Label htmlFor="language">Language for Signers</Label>
+          <Label htmlFor="language">{t('Language for Signers')}</Label>
           <Select value={doc.language} onValueChange={(language) => update.mutate({ id: doc.id, language })}>
             <SelectTrigger id="language" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {LANGUAGES.map(([code, name]) => (
+              {languages().map(([code, name]) => (
                 <SelectItem key={code} value={code}>
                   {name}
                 </SelectItem>
@@ -413,7 +431,7 @@ function DetailsSection({ doc }: { doc: DocumentView }) {
           </Select>
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="reminders">Remind Every (Days)</Label>
+          <Label htmlFor="reminders">{t('Remind Every (Days)')}</Label>
           <Input
             id="reminders"
             type="number"
@@ -425,7 +443,7 @@ function DetailsSection({ doc }: { doc: DocumentView }) {
           />
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="external">Your Reference</Label>
+          <Label htmlFor="external">{t('Your Reference')}</Label>
           <Input
             id="external"
             value={externalId}
@@ -446,7 +464,7 @@ function EditableTitle({ doc, editable }: { doc: DocumentView; editable: boolean
   if (!editable) return <h1 className="truncate text-xl font-semibold tracking-tight">{doc.title}</h1>;
   return (
     <input
-      aria-label="Title"
+      aria-label={t('Title')}
       value={title}
       onChange={(e) => setTitle(e.target.value)}
       onBlur={() => title.trim() && title !== doc.title && update.mutate({ id: doc.id, title: title.trim() })}
@@ -458,6 +476,25 @@ function EditableTitle({ doc, editable }: { doc: DocumentView; editable: boolean
 
 const FIELD_DRAG_TYPE = 'application/x-opensign-field';
 
+function AiReviewSection({ doc }: { doc: DocumentView }) {
+  const set = useApiMutation('documents.set_review_links', { invalidates: ['documents.'] });
+  return (
+    <Section title={t('AI Review by Signers')}>
+      <label className="flex items-center justify-between gap-3 rounded-md bg-muted/50 px-3 py-2">
+        <span>
+          <span className="block">{t('Let Signers Share With Their AI')}</span>
+          <span className="block text-xs text-muted-foreground">
+            {t(
+              'A read-only link for their own assistant, such as ChatGPT or Claude. It cannot sign, expires within days and every use is recorded in the audit trail. Turning this off revokes links already shared.',
+            )}
+          </span>
+        </span>
+        <Switch checked={doc.reviewLinks} disabled={set.isPending} onCheckedChange={(enabled) => set.mutate({ id: doc.id, enabled })} />
+      </label>
+    </Section>
+  );
+}
+
 export function DocumentPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
@@ -466,7 +503,7 @@ export function DocumentPage() {
   const doc = query.data;
   const draft = !!doc && doc.status === 'draft' && doc.canEdit;
   const pending = !!doc && doc.status === 'pending';
-  const { fields, update, saving } = useFields(doc, draft);
+  const { fields, update, flush, saving } = useFields(doc, draft);
   const [selected, setSelected] = useState<string | null>(null);
   const [armed, setArmed] = useState<FieldKind | null>(null);
   const [placingFor, setPlacingFor] = useState<string | null>(null);
@@ -481,11 +518,13 @@ export function DocumentPage() {
   const [deleting, setDeleting] = useState(false);
   const [holding, setHolding] = useState(false);
   const [holdReason, setHoldReason] = useState('');
+  const [showActivity, setShowActivity] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
 
   const setParties = useApiMutation('documents.set_parties', { invalidates: ['documents.'] });
   const setSequential = useApiMutation('documents.update', { invalidates: ['documents.'] });
   const removeFile = useApiMutation('documents.remove_file', { invalidates: ['documents.'] });
-  const remind = useApiMutation('documents.remind', { onSuccess: () => toast.success('Reminders sent') });
+  const remind = useApiMutation('documents.remind', { onSuccess: () => toast.success(t('Reminders sent')) });
   const cancel = useApiMutation('documents.cancel', { invalidates: ['documents.'], onSuccess: () => setCanceling(false) });
   const remove = useApiMutation('documents.delete', {
     invalidates: ['documents.list'],
@@ -497,7 +536,7 @@ export function DocumentPage() {
     onSuccess: (out) => {
       setHolding(false);
       setHoldReason('');
-      toast.success(out.legalHold ? 'The document is on legal hold' : 'The legal hold is released');
+      toast.success(out.legalHold ? t('The document is on legal hold') : t('The legal hold is released'));
     },
   });
 
@@ -524,13 +563,31 @@ export function DocumentPage() {
   useEffect(() => {
     if (doc && placingFor !== null && !doc.parties.some((p) => p.id === placingFor)) setPlacingFor(null);
   }, [doc, placingFor]);
+  useEffect(() => {
+    if (!draft || !selected) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return;
+      if (e.key === 'Escape') setSelected(null);
+      else if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        update(fields.filter((f) => f.key !== selected));
+        setSelected(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [draft, selected, fields, update]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: only when the parties change
   useEffect(() => {
     if (doc && placingFor === null) setPlacingFor(doc.parties.find((p) => p.role !== 'viewer')?.id ?? null);
   }, [doc?.parties.length]);
 
   if (query.isPending) return <Spinner />;
-  if (!doc) return <EmptyState title="This document is not available">It may have been deleted, or it was not shared with you.</EmptyState>;
+  if (!doc)
+    return (
+      <EmptyState title={t('This document is not available')}>{t('It may have been deleted, or it was not shared with you.')}</EmptyState>
+    );
 
   const saveParties = (next: PartyInput[]) => setParties.mutate({ documentId: doc.id, parties: next });
   const allParties = () => doc.parties.map((p) => partyToInput(p));
@@ -577,7 +634,7 @@ export function DocumentPage() {
     try {
       for (const file of files) {
         const out = await uploadFile(doc.id, file);
-        if (out.removed.length) toast.warning(`Removed from ${file.name}: ${out.removed.join(', ')}`);
+        if (out.removed.length) toast.warning(t('Removed from {file}: {items}', { file: file.name, items: out.removed.join(', ') }));
       }
       await query.refetch();
     } catch (e) {
@@ -601,79 +658,99 @@ export function DocumentPage() {
   return (
     <div className="grid gap-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <Button asChild variant="ghost" size="icon" aria-label="Back">
+        <Button asChild variant="ghost" size="icon" aria-label={t('Back')}>
           <Link to={doc.isTemplate ? '/templates' : '/documents'}>
-            <ArrowLeft />
+            <ArrowLeft className="rtl:rotate-180" />
           </Link>
         </Button>
         <div className="min-w-0 flex-1">
           <EditableTitle doc={doc} editable={doc.canEdit && (draft || doc.isTemplate)} />
           <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
             {!doc.isTemplate && <StatusBadge status={doc.status} />}
-            <span>{doc.sentAt ? `Sent ${formatDateTime(doc.sentAt)}` : `Created ${formatDateTime(doc.createdAt)}`}</span>
+            <span>
+              {doc.sentAt
+                ? t('Sent {date}', { date: formatDateTime(doc.sentAt) })
+                : t('Created {date}', { date: formatDateTime(doc.createdAt) })}
+            </span>
             {doc.expiresAt && pending && <span>· Expires {formatDateTime(doc.expiresAt)}</span>}
             {doc.legalHold && (
               <span className="inline-flex items-center gap-1 font-medium text-warning" title={doc.legalHoldReason ?? undefined}>
-                · <Scale className="size-3.5" /> Legal Hold
+                · <Scale className="size-3.5" /> {t('Legal Hold')}
               </span>
             )}
             {doc.deletesAt && <span>· Kept until {formatDate(doc.deletesAt)}</span>}
-            {saving && <span>· Saving…</span>}
+            {saving && <span>{t('· Saving…')}</span>}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
           {doc.isTemplate && (
             <Button onClick={() => fromTemplate.mutate({ title: doc.title, templateId: doc.id })} disabled={fromTemplate.isPending}>
-              <Plus /> Use Template
+              <Plus /> {t('Use Template')}
             </Button>
           )}
           {doc.isTemplate && can('documents.create') && (
             <Button variant="outline" onClick={() => setBulkSending(true)}>
-              <Users /> Bulk Send
+              <Users /> {t('Bulk Send')}
+            </Button>
+          )}
+          {doc.files.length > 0 && doc.status !== 'completed' && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                flush();
+                setPreviewing(true);
+              }}
+              disabled={!doc.parties.length}
+              title={doc.parties.length ? t('See the signing page as a party will') : t('Add a party to preview the signing page')}
+            >
+              <Eye /> {t('Preview')}
             </Button>
           )}
           {draft && !doc.isTemplate && (
             <Button onClick={() => setSending(true)} disabled={!doc.files.length}>
-              <Send /> Send
+              <Send /> {t('Send')}
             </Button>
           )}
           {pending && doc.canEdit && (
             <Button variant="outline" onClick={() => remind.mutate({ id: doc.id })} disabled={remind.isPending}>
-              Remind
+              {t('Remind')}
             </Button>
           )}
           {doc.status === 'completed' && (
             <Button onClick={() => download('signed')}>
-              <Download /> Signed PDF
+              <Download /> {t('Signed PDF')}
             </Button>
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" aria-label="More">
+              <Button variant="outline" size="icon" aria-label={t('More')}>
                 <MoreHorizontal />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setShowActivity(true)}>
+                <History /> {t('Activity')}
+              </DropdownMenuItem>
               {doc.status !== 'draft' && (
                 <DropdownMenuItem onSelect={() => download('original')}>
-                  <Download /> Original PDF
+                  <Download /> {t('Original PDF')}
                 </DropdownMenuItem>
               )}
               {pending && doc.canEdit && (
                 <DropdownMenuItem onSelect={() => setCanceling(true)} className="text-destructive">
-                  Cancel Signing
+                  {t('Cancel Signing')}
                 </DropdownMenuItem>
               )}
               {!doc.isTemplate && can('documents.legal_hold') && (
                 <DropdownMenuItem onSelect={() => (doc.legalHold ? legalHold.mutate({ id: doc.id, hold: false }) : setHolding(true))}>
-                  <Scale /> {doc.legalHold ? 'Release Legal Hold' : 'Place on Legal Hold'}
+                  <Scale /> {doc.legalHold ? t('Release Legal Hold') : t('Place on Legal Hold')}
                 </DropdownMenuItem>
               )}
               {doc.canEdit && !pending && !doc.legalHold && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={() => setDeleting(true)} className="text-destructive">
-                    <Trash2 /> Delete
+                    <Trash2 /> {t('Delete')}
                   </DropdownMenuItem>
                 </>
               )}
@@ -685,9 +762,9 @@ export function DocumentPage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">
           {draft && doc.files.length > 0 && (
-            <div className="sticky top-0 z-10 mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border bg-background/95 p-2 backdrop-blur">
+            <div className="sticky top-3 z-10 mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border bg-background/95 p-2 backdrop-blur">
               <select
-                aria-label="Fields for"
+                aria-label={t('Fields for')}
                 value={placingFor ?? ''}
                 onChange={(e) => setPlacingFor(e.target.value || null)}
                 className="h-8 rounded-md border bg-background px-2 text-[13px]"
@@ -699,7 +776,7 @@ export function DocumentPage() {
                       {p.name}
                     </option>
                   ))}
-                <option value="">Me, now (prefilled)</option>
+                <option value="">{t('Me, now (prefilled)')}</option>
               </select>
               {FIELD_KINDS.filter((k) => placingFor || ['text', 'date', 'checkbox', 'name', 'company', 'email'].includes(k.kind)).map(
                 (k) => (
@@ -720,15 +797,15 @@ export function DocumentPage() {
                   </Button>
                 ),
               )}
-              <span className="ml-auto text-xs text-muted-foreground">
-                {armed ? 'Click on the page to place it' : 'Drag a field onto the page, or pick one and click'}
+              <span className="ms-auto text-xs text-muted-foreground">
+                {armed ? t('Click on the page to place it') : t('Drag a field onto the page, or pick one and click')}
               </span>
             </div>
           )}
           {draft && selectedField && !selectedField.partyId && (
             <div className="mb-3 flex items-center gap-2">
               <Label htmlFor="prefill" className="shrink-0">
-                Prefilled Value
+                {t('Prefilled Value')}
               </Label>
               <Input
                 id="prefill"
@@ -741,7 +818,7 @@ export function DocumentPage() {
             draft || doc.isTemplate ? (
               <FileDrop onFiles={upload} busy={uploading} />
             ) : (
-              <EmptyState title="No files" />
+              <EmptyState title={t('No files')} />
             )
           ) : pdf.pages ? (
             <div className={cn(armed && '[&_canvas]:cursor-crosshair')}>
@@ -780,33 +857,36 @@ export function DocumentPage() {
           )}
         </div>
 
-        <aside className="min-w-0">
+        <aside className="min-w-0 lg:sticky lg:top-3 lg:max-h-[calc(100svh-1.5rem)] lg:self-start lg:overflow-y-auto lg:pb-4 [scrollbar-width:thin]">
           <Tabs defaultValue="setup">
             <TabsList className="w-full">
-              <TabsTrigger value="setup">{draft ? 'Setup' : 'Parties'}</TabsTrigger>
-              <TabsTrigger value="review">Review</TabsTrigger>
-              <TabsTrigger value="activity">Activity</TabsTrigger>
+              <TabsTrigger value="setup">{draft ? t('Setup') : t('Parties')}</TabsTrigger>
+              <TabsTrigger value="review">{t('Review')}</TabsTrigger>
             </TabsList>
             <TabsContent value="setup" className="mt-4 grid gap-6">
               <Section
-                title="Parties"
+                title={t('Parties')}
                 action={
                   draft && (
                     <Button variant="ghost" size="sm" onClick={() => setPartyDialog({ open: true, party: null })}>
-                      <UserPlus /> Add
+                      <UserPlus /> {t('Add')}
                     </Button>
                   )
                 }
               >
-                {doc.parties.length === 0 && <p className="text-muted-foreground">Add the people who sign, approve or receive a copy.</p>}
+                {doc.parties.length === 0 && (
+                  <p className="text-muted-foreground">{t('Add the people who sign, approve or receive a copy.')}</p>
+                )}
                 {draft && signers.length > 1 && (
                   <label className="flex items-center justify-between gap-3 rounded-md bg-muted/50 px-3 py-2">
                     <span>
-                      <span className="block">Sign in Order</span>
+                      <span className="block">{t('Sign in Order')}</span>
                       <span className="block text-xs text-muted-foreground">
                         {doc.sequential
-                          ? 'Each step is invited when the one before has signed. Use the arrows to reorder; give parties the same step under Edit to sign together.'
-                          : 'Everyone is invited at once. Turn on to invite one step at a time.'}
+                          ? t(
+                              'Each step is invited when the one before has signed. Use the arrows to reorder; give parties the same step under Edit to sign together.',
+                            )
+                          : t('Everyone is invited at once. Turn on to invite one step at a time.')}
                       </span>
                     </span>
                     <Switch
@@ -840,7 +920,7 @@ export function DocumentPage() {
                 ))}
               </Section>
               {(draft || doc.isTemplate) && doc.files.length > 0 && (
-                <Section title="Files">
+                <Section title={t('Files')}>
                   <ul className="grid gap-1">
                     {doc.files.map((f) => (
                       <li key={f.id} className="flex items-center gap-2">
@@ -849,7 +929,7 @@ export function DocumentPage() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          aria-label={`Remove ${f.name}`}
+                          aria-label={t('Remove {name}', { name: f.name })}
                           onClick={() => removeFile.mutate({ documentId: doc.id, fileId: f.id })}
                         >
                           <Trash2 />
@@ -861,10 +941,13 @@ export function DocumentPage() {
                 </Section>
               )}
               {draft && <DetailsSection key={doc.id} doc={doc} />}
+              {(draft || (pending && doc.canEdit)) && <AiReviewSection doc={doc} />}
               {doc.status === 'completed' && doc.sealedSha256 && (
-                <Section title="Seal">
+                <Section title={t('Seal')}>
                   <p className="text-muted-foreground">
-                    Sealed by OpenSign{doc.sealedWithTimestamp ? ' with a trusted timestamp' : ''}. Anyone can check the file at{' '}
+                    {doc.sealedWithTimestamp
+                      ? t('Sealed by OpenSign with a trusted timestamp. Anyone can check the file at')
+                      : t('Sealed by OpenSign. Anyone can check the file at')}{' '}
                     <a href="/verify" className="underline">
                       /verify
                     </a>
@@ -877,9 +960,6 @@ export function DocumentPage() {
             <TabsContent value="review" className="mt-4">
               <ReviewPanel documentId={doc.id} draft={draft} />
             </TabsContent>
-            <TabsContent value="activity" className="mt-4">
-              <ActivityPanel document={doc} />
-            </TabsContent>
           </Tabs>
         </aside>
       </div>
@@ -891,32 +971,47 @@ export function DocumentPage() {
         maskedNumber={partyDialog.party?.personalNumber}
         sequential={doc.sequential}
         available={authMethods.data?.available ?? ['none', 'standard']}
+        documentLanguage={doc.language}
         onSave={(p) => saveParties(partyDialog.party ? allParties().map((x) => (x.id === p.id ? p : x)) : [...allParties(), p])}
       />
       <SendDialog doc={doc} open={sending} onOpenChange={setSending} onSent={setLinks} />
+      <SigningPreviewDialog doc={doc} open={previewing} onOpenChange={setPreviewing} />
       {doc.isTemplate && <BulkSendDialog templateId={doc.id} templateTitle={doc.title} open={bulkSending} onOpenChange={setBulkSending} />}
       <LinksDialog links={links} onClose={() => setLinks([])} />
+      <Dialog open={showActivity} onOpenChange={setShowActivity}>
+        <DialogContent className="flex max-h-[85svh] flex-col sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{t('Activity')}</DialogTitle>
+            <DialogDescription>{t('What happened to this document, and the full audit trail.')}</DialogDescription>
+          </DialogHeader>
+          <div className="-mx-6 min-h-0 overflow-y-auto px-6">
+            <ActivityPanel document={doc} />
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog open={canceling} onOpenChange={setCanceling}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cancel Signing?</DialogTitle>
-            <DialogDescription>Signing links stop working and parties who were notified are told. This cannot be undone.</DialogDescription>
+            <DialogTitle>{t('Cancel Signing?')}</DialogTitle>
+            <DialogDescription>
+              {t('Signing links stop working and parties who were notified are told. This cannot be undone.')}
+            </DialogDescription>
           </DialogHeader>
           <Textarea
             value={cancelReason}
             onChange={(e) => setCancelReason(e.target.value)}
-            placeholder="Reason (optional, kept in the activity log)"
+            placeholder={t('Reason (optional, kept in the activity log)')}
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => setCanceling(false)}>
-              Keep Signing
+              {t('Keep Signing')}
             </Button>
             <Button
               variant="destructive"
               disabled={cancel.isPending}
               onClick={() => cancel.mutate({ id: doc.id, reason: cancelReason.trim() || null })}
             >
-              Cancel Signing
+              {t('Cancel Signing')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -924,26 +1019,30 @@ export function DocumentPage() {
       <Dialog open={holding} onOpenChange={setHolding}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Place on Legal Hold?</DialogTitle>
+            <DialogTitle>{t('Place on Legal Hold?')}</DialogTitle>
             <DialogDescription>
-              Nobody can delete “{doc.title}” and no retention rule touches it until the hold is released. Both are recorded in the audit
-              trail.
+              {t(
+                'Nobody can delete “{title}” and no retention rule touches it until the hold is released. Both are recorded in the audit trail.',
+                {
+                  title: doc.title,
+                },
+              )}
             </DialogDescription>
           </DialogHeader>
           <Textarea
             value={holdReason}
             onChange={(e) => setHoldReason(e.target.value)}
-            placeholder="Reason, such as a case or matter reference"
+            placeholder={t('Reason, such as a case or matter reference')}
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => setHolding(false)}>
-              Cancel
+              {t('Cancel')}
             </Button>
             <Button
               disabled={legalHold.isPending || !holdReason.trim()}
               onClick={() => legalHold.mutate({ id: doc.id, hold: true, reason: holdReason.trim() })}
             >
-              Place Hold
+              {t('Place Hold')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -951,15 +1050,15 @@ export function DocumentPage() {
       <Dialog open={deleting} onOpenChange={setDeleting}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete {doc.isTemplate ? 'Template' : 'Document'}?</DialogTitle>
-            <DialogDescription>“{doc.title}” is deleted for everyone. This cannot be undone.</DialogDescription>
+            <DialogTitle>{doc.isTemplate ? t('Delete Template?') : t('Delete Document?')}</DialogTitle>
+            <DialogDescription>{t('“{title}” is deleted for everyone. This cannot be undone.', { title: doc.title })}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleting(false)}>
-              Keep It
+              {t('Keep It')}
             </Button>
             <Button variant="destructive" disabled={remove.isPending} onClick={() => remove.mutate({ id: doc.id })}>
-              Delete
+              {t('Delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

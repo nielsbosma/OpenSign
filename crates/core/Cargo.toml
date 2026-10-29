@@ -34,6 +34,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 url = "2"
+lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls-tls"] }
 x509-cert = { version = "0.2", features = ["pem"] }
 p12-keystore = "0.2"
 png = "0.17"

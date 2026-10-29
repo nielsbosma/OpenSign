@@ -1,5 +1,6 @@
-import { CheckCircle2, Download, FileSignature, HandHelping, ShieldCheck, XCircle } from 'lucide-react';
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, Download, FileSignature, HandHelping, Languages, ShieldCheck, XCircle } from 'lucide-react';
+import { Direction } from 'radix-ui';
+import { type FormEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Logo, Spinner } from '@/components/common';
 import { PdfLoading, PdfPages, usePdf } from '@/components/PdfPages';
 import { Button } from '@/components/ui/button';
@@ -7,15 +8,17 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiError, type AttachmentRequest, type AuthMethod, call, errorMessage, fetchPdf, type SignerView } from '@/lib/api';
 import { saveBytes } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { FormError } from '../auth/AuthLayout';
+import { AiReview } from './AiReview';
 import { AttachmentUploads } from './AttachmentUploads';
 import { EidIdentify } from './EidIdentify';
 import { type Signature, SignaturePad } from './SignaturePad';
-import { TextsContext, textsFor, useTexts } from './texts';
+import { isRtl, LanguageContext, languageFor, SIGNER_LANGUAGES, TextsContext, textsFor, useTexts } from './texts';
 
 /**
  * The page behind a signing link. The token lives in the URL fragment, so it never reaches a server log or a Referer
@@ -75,24 +78,77 @@ function safeColor(color?: string) {
   return color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : undefined;
 }
 
+const LANGUAGE_KEY = 'opensign-sign-language';
+
+/** A language the signer picked on this page, for this tab and this link only. */
+function useChosenLanguage(token: string) {
+  const [chosen, setChosen] = useState<string | null>(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(LANGUAGE_KEY) ?? 'null') as { token: string; code: string } | null;
+      return saved?.token === token ? saved.code : null;
+    } catch {
+      return null;
+    }
+  });
+  const choose = useCallback(
+    (code: string) => {
+      setChosen(code);
+      try {
+        sessionStorage.setItem(LANGUAGE_KEY, JSON.stringify({ token, code }));
+      } catch {}
+    },
+    [token],
+  );
+  return [chosen, choose] as const;
+}
+
+function LanguagePicker() {
+  const t = useTexts();
+  const { code, choose } = useContext(LanguageContext);
+  return (
+    <Select value={code} onValueChange={choose}>
+      <SelectTrigger size="sm" aria-label={t.language}>
+        <Languages />
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {SIGNER_LANGUAGES.map(([c, name]) => (
+          <SelectItem key={c} value={c} lang={c} dir={isRtl(c) ? 'rtl' : 'ltr'}>
+            {name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function Shell({ view, children }: { view?: SignerView; children: React.ReactNode }) {
   const t = useTexts();
+  const { code } = useContext(LanguageContext);
+  const dir = isRtl(code) ? 'rtl' : 'ltr';
+  useEffect(() => {
+    document.documentElement.lang = code;
+    document.documentElement.dir = dir;
+  }, [code, dir]);
   return (
-    <div className="min-h-svh bg-muted/40" lang={view?.document.language}>
-      <header className="border-b bg-background">
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4">
-          <Logo className="size-6" />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold">{view?.document.title ?? 'OpenSign'}</div>
-            {view && (
-              <div className="truncate text-xs text-muted-foreground">{t.from(view.document.sender, view.document.organisation)}</div>
-            )}
+    <Direction.Provider dir={dir}>
+      <div className="min-h-svh bg-muted/40" lang={code} dir={dir}>
+        <header className="border-b bg-background">
+          <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4">
+            <Logo className="size-6" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold">{view?.document.title ?? 'OpenSign'}</div>
+              {view && (
+                <div className="truncate text-xs text-muted-foreground">{t.from(view.document.sender, view.document.organisation)}</div>
+              )}
+            </div>
+            <LanguagePicker />
+            <ShieldCheck className="size-4 shrink-0 text-success" aria-label={t.secureConnection} />
           </div>
-          <ShieldCheck className="size-4 text-success" aria-label={t.secureConnection} />
-        </div>
-      </header>
-      <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
-    </div>
+        </header>
+        <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
+      </div>
+    </Direction.Provider>
   );
 }
 
@@ -186,30 +242,27 @@ function Identify({
 }
 
 export function SignPage() {
+  const token = useSigningToken();
   const [language, setLanguage] = useState<string>();
+  const [chosen, choose] = useChosenLanguage(token);
+  const code = languageFor(chosen ?? language);
+  const choice = useMemo(() => ({ code, choose }), [code, choose]);
   return (
-    <TextsContext.Provider value={textsFor(language)}>
-      <SigningFlow onLanguage={setLanguage} />
-    </TextsContext.Provider>
+    <LanguageContext.Provider value={choice}>
+      <TextsContext.Provider value={textsFor(code)}>
+        <SigningFlow token={token} onLanguage={setLanguage} />
+      </TextsContext.Provider>
+    </LanguageContext.Provider>
   );
 }
 
-function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void }) {
+function SigningFlow({ token, onLanguage }: { token: string; onLanguage: (language: string) => void }) {
   const t = useTexts();
-  const token = useSigningToken();
   const resume = useEidResume();
   const [session, setSession] = useSignerSession(token);
   const [view, setView] = useState<SignerView>();
   const [error, setError] = useState<string>();
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [signature, setSignature] = useState<Signature | null>(null);
-  const [consent, setConsent] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [signError, setSignError] = useState<string>();
   const [result, setResult] = useState<'signed' | 'completed' | 'declined' | null>(null);
-  const [declining, setDeclining] = useState(false);
-  const [reason, setReason] = useState('');
-  const [attachments, setAttachments] = useState<AttachmentRequest[]>([]);
   const [handedOver, setHandedOver] = useState(false);
 
   useEffect(() => {
@@ -217,7 +270,6 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
     call('signing.open', { token, session })
       .then((v) => {
         setView(v);
-        setAttachments(v.attachments);
         onLanguage(v.document.language);
       })
       .catch((e) => setError(errorMessage(e)));
@@ -229,8 +281,6 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
     [view, locked, token, session],
   );
   const pdf = usePdf(loader, `${!!view}:${locked}:${session}`);
-  const brand = safeColor(view?.document.brandColor);
-
   if (!token) return <Message icon={<XCircle className="size-10 text-destructive" />} title={t.linkIncomplete} />;
   if (error) {
     return (
@@ -313,8 +363,48 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
     );
   }
 
+  return (
+    <Shell view={view}>
+      <SignerScreen view={view} pdf={pdf} token={token} session={session} resume={resume} onSession={setSession} onResult={setResult} />
+    </Shell>
+  );
+}
+
+type Pdf = ReturnType<typeof usePdf>;
+
+/** The document and the signing panel. In a preview everything is shown but nothing reaches the server. */
+function SignerScreen({
+  view,
+  pdf,
+  preview,
+  token = '',
+  session = null,
+  resume,
+  onSession = () => {},
+  onResult = () => {},
+}: {
+  view: SignerView;
+  pdf: Pdf;
+  preview?: boolean;
+  token?: string;
+  session?: string | null;
+  resume?: string;
+  onSession?: (session: string) => void;
+  onResult?: (result: 'signed' | 'completed' | 'declined') => void;
+}) {
+  const t = useTexts();
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [signature, setSignature] = useState<Signature | null>(null);
+  const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [signError, setSignError] = useState<string>();
+  const [declining, setDeclining] = useState(false);
+  const [reason, setReason] = useState('');
+  const [attachments, setAttachments] = useState<AttachmentRequest[]>(view.attachments);
+  const brand = safeColor(view.document.brandColor);
+
   const done = view.party.status === 'signed' || view.party.status === 'declined';
-  const canAct = view.yourTurn && !done && view.party.role !== 'viewer' && view.document.status === 'pending';
+  const canAct = view.party.role !== 'viewer' && (preview || (view.yourTurn && !done && view.document.status === 'pending'));
   const own = view.fields.filter((f) => f.partyId === view.party.id);
   const inputs = own.filter((f) => ['text', 'initials', 'company', 'checkbox'].includes(f.kind));
   const isSigner = view.party.role === 'signer';
@@ -330,10 +420,10 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
         signature: isSigner ? signature : null,
         values: Object.entries(values).map(([fieldId, value]) => ({ fieldId, value })),
       });
-      setResult(out.completed ? 'completed' : 'signed');
+      onResult(out.completed ? 'completed' : 'signed');
     } catch (e) {
       setSignError(errorMessage(e));
-      if (e instanceof ApiError && e.status === 401) setSession('');
+      if (e instanceof ApiError && e.status === 401) onSession('');
     } finally {
       setBusy(false);
     }
@@ -342,10 +432,10 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
     setBusy(true);
     try {
       await call('signing.decline', { token, session, reason: reason.trim() || null });
-      setResult('declined');
+      onResult('declined');
     } catch (e) {
       setSignError(errorMessage(e));
-      if (e instanceof ApiError && e.status === 401) setSession('');
+      if (e instanceof ApiError && e.status === 401) onSession('');
     } finally {
       setBusy(false);
       setDeclining(false);
@@ -360,78 +450,83 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
   };
 
   return (
-    <Shell view={view}>
+    <>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
           {view.document.message && (
-            <div className="mb-4 rounded-lg border bg-background p-4 whitespace-pre-line">{view.document.message}</div>
+            <div dir="auto" className="mb-4 rounded-lg border bg-background p-4 whitespace-pre-line">
+              {view.document.message}
+            </div>
           )}
-          {pdf.pages ? (
-            <PdfPages
-              pages={pdf.pages}
-              overlay={(page) => (
-                <div className="pointer-events-none absolute inset-0">
-                  {view.fields
-                    .filter((f) => f.page === page)
-                    .map((f) => {
-                      const mine = f.partyId === view.party.id;
-                      const style = {
-                        left: `${f.x * 100}%`,
-                        top: `${f.y * 100}%`,
-                        width: `${f.width * 100}%`,
-                        height: `${f.height * 100}%`,
-                      };
-                      if (!mine) return null;
-                      if (canAct && f.kind === 'checkbox') {
-                        return (
-                          <label key={f.id} className="pointer-events-auto absolute flex items-center justify-center" style={style}>
-                            <Checkbox
-                              checked={values[f.id] === 'true'}
-                              onCheckedChange={(c) => setValues({ ...values, [f.id]: c ? 'true' : 'false' })}
-                              aria-label={f.label || t.checkbox}
+          <div dir="ltr">
+            {pdf.pages ? (
+              <PdfPages
+                pages={pdf.pages}
+                overlay={(page) => (
+                  <div className="pointer-events-none absolute inset-0">
+                    {view.fields
+                      .filter((f) => f.page === page)
+                      .map((f) => {
+                        const mine = f.partyId === view.party.id;
+                        const style = {
+                          left: `${f.x * 100}%`,
+                          top: `${f.y * 100}%`,
+                          width: `${f.width * 100}%`,
+                          height: `${f.height * 100}%`,
+                        };
+                        if (!mine) return null;
+                        if (canAct && f.kind === 'checkbox') {
+                          return (
+                            <label key={f.id} className="pointer-events-auto absolute flex items-center justify-center" style={style}>
+                              <Checkbox
+                                checked={values[f.id] === 'true'}
+                                onCheckedChange={(c) => setValues({ ...values, [f.id]: c ? 'true' : 'false' })}
+                                aria-label={f.label || t.checkbox}
+                              />
+                            </label>
+                          );
+                        }
+                        if (canAct && ['text', 'initials', 'company'].includes(f.kind)) {
+                          return (
+                            <input
+                              key={f.id}
+                              dir="auto"
+                              aria-label={f.label || f.kind}
+                              placeholder={f.label || (f.kind === 'initials' ? t.initials : f.kind === 'company' ? t.company : t.text)}
+                              value={values[f.id] ?? (f.kind === 'company' ? (view.party.company ?? '') : '')}
+                              onChange={(e) => setValues({ ...values, [f.id]: e.target.value })}
+                              className="pointer-events-auto absolute rounded-[3px] border border-primary bg-primary/10 px-1 text-[11px] text-zinc-900 outline-none focus:bg-white"
+                              style={style}
                             />
-                          </label>
-                        );
-                      }
-                      if (canAct && ['text', 'initials', 'company'].includes(f.kind)) {
+                          );
+                        }
                         return (
-                          <input
+                          <div
                             key={f.id}
-                            aria-label={f.label || f.kind}
-                            placeholder={f.label || (f.kind === 'initials' ? t.initials : f.kind === 'company' ? t.company : t.text)}
-                            value={values[f.id] ?? (f.kind === 'company' ? (view.party.company ?? '') : '')}
-                            onChange={(e) => setValues({ ...values, [f.id]: e.target.value })}
-                            className="pointer-events-auto absolute rounded-[3px] border border-primary bg-primary/10 px-1 text-[11px] text-zinc-900 outline-none focus:bg-white"
+                            className={cn(
+                              'absolute flex items-center rounded-[3px] border px-1 text-[10px] text-zinc-700',
+                              canAct ? 'border-primary bg-primary/10' : 'border-transparent',
+                            )}
                             style={style}
-                          />
+                          >
+                            {canAct &&
+                              (f.kind === 'signature'
+                                ? t.yourSignature
+                                : f.kind === 'name'
+                                  ? view.party.name
+                                  : f.kind === 'date'
+                                    ? t.dateOfSigning
+                                    : f.kind)}
+                          </div>
                         );
-                      }
-                      return (
-                        <div
-                          key={f.id}
-                          className={cn(
-                            'absolute flex items-center rounded-[3px] border px-1 text-[10px] text-zinc-700',
-                            canAct ? 'border-primary bg-primary/10' : 'border-transparent',
-                          )}
-                          style={style}
-                        >
-                          {canAct &&
-                            (f.kind === 'signature'
-                              ? t.yourSignature
-                              : f.kind === 'name'
-                                ? view.party.name
-                                : f.kind === 'date'
-                                  ? t.dateOfSigning
-                                  : f.kind)}
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-            />
-          ) : (
-            <PdfLoading error={pdf.error} />
-          )}
+                      })}
+                  </div>
+                )}
+              />
+            ) : (
+              <PdfLoading error={pdf.error} />
+            )}
+          </div>
         </div>
         <aside className="lg:sticky lg:top-6 lg:self-start">
           <div className="grid gap-4 rounded-lg border bg-background p-5">
@@ -441,7 +536,26 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
                 {view.party.role === 'viewer' ? t.roleViewer : view.party.role === 'approver' ? t.roleApprover : t.roleSigner}
               </p>
             </div>
-            {view.document.status === 'completed' && view.canDownload ? (
+            {preview ? (
+              <>
+                {view.signAuthentication && <IdentifyPreview method={view.signAuthentication} />}
+                {inputs.length > 0 && <p className="text-xs text-muted-foreground">{t.fillFields}</p>}
+                {attachments.length > 0 && (
+                  <AttachmentUploads token="" session={null} requests={attachments} onChange={() => {}} disabled />
+                )}
+                {isSigner && <SignaturePad defaultName={view.party.name} onChange={setSignature} />}
+                <label className="flex items-start gap-2.5">
+                  <Checkbox checked={consent} onCheckedChange={(c) => setConsent(c === true)} className="mt-0.5" />
+                  <span>{t.consent(isSigner)}</span>
+                </label>
+                <Button disabled style={brand ? { backgroundColor: brand } : undefined} size="lg">
+                  <FileSignature /> {isSigner ? t.sign : t.approve}
+                </Button>
+                <Button variant="ghost" disabled>
+                  {t.decline}
+                </Button>
+              </>
+            ) : view.document.status === 'completed' && view.canDownload ? (
               <Button onClick={downloadSigned}>
                 <Download /> {t.downloadSigned}
               </Button>
@@ -456,7 +570,7 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
                 method={view.signAuthentication}
                 purpose="sign"
                 resume={resume !== 'invalid' ? resume : undefined}
-                onSession={setSession}
+                onSession={onSession}
               />
             ) : (
               <>
@@ -485,6 +599,11 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
             )}
             {!canAct && signError && <FormError message={signError} />}
           </div>
+          {view.review && view.document.status === 'pending' && (
+            <div className="mt-4 grid">
+              <AiReview token={token} session={session} state={view.review} language={view.document.language} />
+            </div>
+          )}
           <p className="mt-3 px-1 text-xs text-muted-foreground">{t.auditNote}</p>
         </aside>
       </div>
@@ -508,6 +627,64 @@ function SigningFlow({ onLanguage }: { onLanguage: (language: string) => void })
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Shell>
+    </>
+  );
+}
+
+/** What the party is asked to do before signing, as they will see it, with nothing that can be pressed. */
+function IdentifyPreview({ method }: { method: AuthMethod }) {
+  const t = useTexts();
+  const label = t.methods[method] ?? method;
+  return (
+    <div className="grid gap-3">
+      <p>{method === 'sms_pin' ? t.smsIntro(false) : t.eidIntro(false, label)}</p>
+      <Button disabled>{method === 'sms_pin' ? t.textMe : t.identifyWith(label)}</Button>
+    </div>
+  );
+}
+
+/** The signing page as a party will see it, for the sender. Read-only: it never calls a signing service. */
+export function SigningPreview({ documentId, partyId }: { documentId: string; partyId: string }) {
+  const [view, setView] = useState<SignerView>();
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    setView(undefined);
+    setError(undefined);
+    call('documents.signing_preview', { documentId, partyId })
+      .then(setView)
+      .catch((e) => setError(errorMessage(e)));
+  }, [documentId, partyId]);
+  const loader = useMemo(() => () => fetchPdf(`/api/documents/${documentId}/preview`), [documentId]);
+  const pdf = usePdf(loader, documentId);
+
+  return (
+    <TextsContext.Provider value={textsFor(view?.document.language)}>
+      <Shell view={view}>
+        {error ? (
+          <Message icon={<XCircle className="size-10 text-destructive" />} title="The preview could not be shown">
+            {error}
+          </Message>
+        ) : view ? (
+          <>
+            {view.needsAuthentication && <OpenGatePreview method={view.needsAuthentication} />}
+            <SignerScreen key={view.party.id} view={view} pdf={pdf} preview />
+          </>
+        ) : (
+          <div className="flex justify-center pt-20">
+            <Spinner className="size-6" />
+          </div>
+        )}
+      </Shell>
+    </TextsContext.Provider>
+  );
+}
+
+function OpenGatePreview({ method }: { method: AuthMethod }) {
+  const t = useTexts();
+  return (
+    <div className="mb-4 flex items-center gap-2 rounded-lg border border-dashed bg-background p-3 text-muted-foreground">
+      <ShieldCheck className="size-4 shrink-0" />
+      {method === 'sms_pin' ? t.smsIntro(true) : t.eidIntro(true, t.methods[method] ?? method)}
+    </div>
   );
 }

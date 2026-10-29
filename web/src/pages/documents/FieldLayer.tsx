@@ -1,12 +1,13 @@
 import { X } from 'lucide-react';
 import { useRef } from 'react';
 import type { PartyView } from '@/lib/api';
+import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { clamp, type EditableField, kindLabel, partyColor } from './fields';
 
 type Drag = { key: string; mode: 'move' | 'resize'; startX: number; startY: number; field: EditableField; rect: DOMRect };
 
-/** The fields on one page. Editable fields drag to move and resize from the corner; Delete removes the selected one. */
+/** The fields on one page. Editable fields drag to move and resize from the corner; Delete removes the selected one (handled by the page). */
 export function FieldLayer({
   page,
   fields,
@@ -64,13 +65,14 @@ export function FieldLayer({
               key={f.key}
               role={editable ? 'button' : undefined}
               tabIndex={editable ? 0 : undefined}
-              title={`${kindLabel(f.kind)} for ${party?.name ?? 'the sender'}`}
+              title={
+                party
+                  ? t('{field} for {name}', { field: kindLabel(f.kind), name: party.name })
+                  : t('{field} for the sender', { field: kindLabel(f.kind) })
+              }
               onPointerDown={(e) => start(e, f, 'move')}
               onPointerMove={(e) => move(e)}
               onPointerUp={(e) => move(e, true)}
-              onKeyDown={(e) => {
-                if (editable && (e.key === 'Delete' || e.key === 'Backspace')) onRemove(f.key);
-              }}
               className={cn(
                 'pointer-events-auto absolute flex items-center overflow-hidden rounded-[3px] border text-[10px] leading-none select-none',
                 editable && 'cursor-move touch-none',
@@ -94,7 +96,7 @@ export function FieldLayer({
                 <>
                   <button
                     type="button"
-                    aria-label="Remove Field"
+                    aria-label={t('Remove Field')}
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={() => onRemove(f.key)}
                     className="absolute top-0 right-0 flex size-3.5 items-center justify-center bg-white/80"

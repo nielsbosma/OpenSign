@@ -27,6 +27,7 @@ pub struct UserRow {
     pub locked_until: Option<DateTime<Utc>>,
     pub last_login_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    pub language: Option<String>,
     pub has_passkey: bool,
 }
 

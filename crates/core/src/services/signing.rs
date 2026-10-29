@@ -154,6 +154,57 @@ pub struct SignerView {
     pub can_download: bool,
     /// Files the party is asked to upload before signing.
     pub attachments: Vec<AttachmentRequest>,
+    /// Sharing a read-only copy with the party's own AI agent; unset until they have identified.
+    pub review: Option<super::review::ReviewLinkState>,
+}
+
+/// What a party sees, without the parts that depend on their link and session.
+pub(crate) async fn signer_view(
+    ctx: &Ctx,
+    conn: &mut PgConnection,
+    document: &DocumentRow,
+    party: &PartyRow,
+    locked: bool,
+) -> Result<SignerView> {
+    let org: OrgSettings = settings(ctx, conn).await?;
+    let sender: Option<String> = match document.owner_id {
+        Some(id) => sqlx::query_scalar("select name from users where id = $1").bind(id).fetch_optional(&mut *conn).await?,
+        None => None,
+    };
+    Ok(SignerView {
+        document: SignerDocument {
+            id: document.id,
+            title: document.title.clone(),
+            message: (!locked).then(|| document.message.clone()),
+            status: document.status.clone(),
+            page_count: (!locked).then_some(document.page_count).flatten(),
+            organisation: if org.name.is_empty() { "OpenSign".into() } else { org.name.clone() },
+            brand_color: org.brand_color.clone(),
+            sender,
+            language: party.lang(document).code().to_string(),
+        },
+        party: SignerParty {
+            id: party.id,
+            name: party.name.clone(),
+            email: party.email.clone(),
+            company: party.company.clone(),
+            role: party.role.clone(),
+            status: party.status.clone(),
+            signed_at: party.signed_at,
+            in_person: party.delivery == Delivery::InPerson.as_str(),
+        },
+        needs_authentication: None,
+        sign_authentication: None,
+        fields: if locked {
+            Vec::new()
+        } else {
+            fields(conn, document.id).await?.into_iter().filter(|f| f.party_id == Some(party.id) || f.party_id.is_none()).collect()
+        },
+        your_turn: false,
+        can_download: false,
+        attachments: if locked { Vec::new() } else { attachments::for_party(conn, party.id).await? },
+        review: None,
+    })
 }
 
 pub struct Open;
@@ -166,47 +217,15 @@ impl Service for Open {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: TokenInput) -> Result<SignerView> {
         let Resolved { party, document, session } = resolve(ctx, conn, &input.token, input.session.as_deref()).await?;
-        let org: OrgSettings = settings(ctx, conn).await?;
-        let sender: Option<String> = match document.owner_id {
-            Some(id) => sqlx::query_scalar("select name from users where id = $1").bind(id).fetch_optional(&mut *conn).await?,
-            None => None,
-        };
         let locked = !satisfied(party.auth_to_view(), session.as_ref());
         let all = parties(conn, document.id).await?;
         let your_turn = document.status == status::PENDING && current_turn(&document, &all).contains(&party.id);
-        let view = SignerView {
-            document: SignerDocument {
-                id: document.id,
-                title: document.title.clone(),
-                message: (!locked).then(|| document.message.clone()),
-                status: document.status.clone(),
-                page_count: (!locked).then_some(document.page_count).flatten(),
-                organisation: if org.name.is_empty() { "OpenSign".into() } else { org.name.clone() },
-                brand_color: org.brand_color.clone(),
-                sender,
-                language: document.language.clone(),
-            },
-            party: SignerParty {
-                id: party.id,
-                name: party.name.clone(),
-                email: party.email.clone(),
-                company: party.company.clone(),
-                role: party.role.clone(),
-                status: party.status.clone(),
-                signed_at: party.signed_at,
-                in_person: party.delivery == Delivery::InPerson.as_str(),
-            },
-            needs_authentication: locked.then(|| party.auth_to_view()),
-            sign_authentication: (!satisfied(party.auth_to_sign(), session.as_ref())).then(|| party.auth_to_sign()),
-            fields: if locked {
-                Vec::new()
-            } else {
-                fields(conn, document.id).await?.into_iter().filter(|f| f.party_id == Some(party.id) || f.party_id.is_none()).collect()
-            },
-            your_turn,
-            can_download: !locked && document.status == status::COMPLETED,
-            attachments: if locked { Vec::new() } else { attachments::for_party(conn, party.id).await? },
-        };
+        let mut view = signer_view(ctx, conn, &document, &party, locked).await?;
+        view.needs_authentication = locked.then(|| party.auth_to_view());
+        view.sign_authentication = (!satisfied(party.auth_to_sign(), session.as_ref())).then(|| party.auth_to_sign());
+        view.your_turn = your_turn;
+        view.can_download = !locked && document.status == status::COMPLETED;
+        view.review = if locked { None } else { Some(super::review::state(ctx, conn, &document, &party).await?) };
         if !locked && party.viewed_at.is_none() && document.status == status::PENDING {
             sqlx::query("update parties set viewed_at = $2, status = case when status in ('waiting', 'notified') then 'viewed' else status end, updated_at = now() where id = $1")
                 .bind(party.id)
@@ -277,8 +296,7 @@ impl Service for RequestCode {
         let org: OrgSettings = settings(ctx, conn).await?;
         let sms: SmsSettings = settings(ctx, conn).await?;
         let org_name = if org.name.is_empty() { "OpenSign" } else { org.name.as_str() };
-        crate::sms::send(&ctx.app, &sms, &phone, &crate::i18n::Lang::of(&document.language).code_sms(&code, &document.title, org_name))
-            .await?;
+        crate::sms::send(&ctx.app, &sms, &phone, &party.lang(&document).code_sms(&code, &document.title, org_name)).await?;
         audit(ctx, conn, Entry::new("party.code_sent", "document", document.id).metadata(json!({ "party": party.id, "name": party.name })))
             .await?;
         let hint: String = phone.chars().rev().take(3).collect::<Vec<_>>().into_iter().rev().collect();
