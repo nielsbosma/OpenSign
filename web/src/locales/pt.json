@@ -485,7 +485,6 @@
   "Sent for signing": "Enviado para assinatura",
   "Sent {date}": "Enviado em {date}",
   "Session Length (Hours)": "Duração da sessão (horas)",
-  "Sessions, sign-in and uploads.": "Sessões, login e envios.",
   "Set It Up Now": "Configurar agora",
   "Set Password": "Definir senha",
   "Set Up": "Configurar",
@@ -708,5 +707,10 @@
   "Continue": "Continuar",
   "Confirm Your New Email": "Confirme seu novo e-mail",
   "Confirm to start signing in with this address.": "Confirme para começar a entrar com este endereço.",
-  "Confirm Email": "Confirmar e-mail"
+  "Confirm Email": "Confirmar e-mail",
+  "Sessions, sign-in, uploads and embedded signing.": "Sessões, login, envios e assinatura incorporada.",
+  "Allow Embedded Signing": "Permitir assinatura incorporada",
+  "Lets the sites listed below show the signing page inside their own app. Off, no site can frame OpenSign.": "Permite que os sites listados abaixo mostrem a página de assinatura dentro do próprio app. Desligado, nenhum site pode incorporar o OpenSign.",
+  "Sites Allowed to Embed": "Sites autorizados a incorporar",
+  "One per line, with https and without a path. Only links you hand over yourself can be signed in a frame.": "Um por linha, com https e sem caminho. Só links que você mesmo entrega podem ser assinados em um quadro."
 }

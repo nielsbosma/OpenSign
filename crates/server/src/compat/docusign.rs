@@ -491,8 +491,9 @@ async fn document_pdf(
     }
 }
 
-/// Embedded signing: the recipient must have been added with a clientUserId. `returnUrl` is not
-/// followed; the signing page shows its own confirmation.
+/// Embedded signing: the recipient must have been added with a clientUserId. `returnUrl` is
+/// followed only when its site is allowed to embed; otherwise the signing page shows its own
+/// confirmation.
 async fn recipient_view(State(state): State<AppState>, Path((_account, id)): Path<(String, String)>, request: Request) -> Response {
     let (api, request) = match start(&state, request).await {
         Ok(v) => v,
@@ -524,7 +525,12 @@ async fn recipient_view(State(state): State<AppState>, Path((_account, id)): Pat
         if party["delivery"] != "link" {
             return Err(bad_request("The recipient is not embedded; add them with a clientUserId"));
         }
-        let link = api.call("documents.signing_link", json!({ "documentId": id, "partyId": party["id"] })).await?;
+        let return_url = str_of(&body, "returnUrl");
+        let input = |redirect: Option<&str>| json!({ "documentId": id, "partyId": party["id"], "redirectUrl": redirect });
+        let link = match api.call("documents.signing_link", input(return_url)).await {
+            Err(e) if return_url.is_some() && e.kind == ErrorKind::BadRequest => api.call("documents.signing_link", input(None)).await?,
+            other => other?,
+        };
         Ok(json!({ "url": link["url"] }))
     }
     .await;

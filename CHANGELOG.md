@@ -10,6 +10,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
+- Embedded signing, off by default: under Settings → Security an admin lists the sites allowed to show the signing page in a frame (exact https origins, `frame-ancestors` on the signing page only). `embed.js` defines an `<opensign-signing>` element that fires loaded, signed, declined and error events; React and Vue wrappers are in `packages/`. Signing links take an optional `redirectUrl` on a listed site, and the DocuSign API follows `returnUrl` the same way.
 - Company logo in Settings → Organisation, shown in the app, on signing and verification pages, in emails and on the evidence page of sealed PDFs. PNG or JPEG only, re-encoded on upload and stored encrypted; SVG is refused. The brand color picker is a round swatch, and the color now tints the OpenSign mark when there is no logo.
 - Documentation at `/docs` on every install, public and searchable, rendered from the Markdown in `docs/`. The app links to it from the sidebar, settings pages, the document list and the party dialog.
 - SMTP as an alternative to Resend, in setup and Admin settings: host, port, STARTTLS or TLS (certificates verified, never plain text), optional sign-in with the password stored encrypted, and the same test email before anything is sent.

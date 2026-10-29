@@ -485,7 +485,6 @@
   "Sent for signing": "已发起签署",
   "Sent {date}": "发送于 {date}",
   "Session Length (Hours)": "会话时长（小时）",
-  "Sessions, sign-in and uploads.": "会话、登录和上传。",
   "Set It Up Now": "立即设置",
   "Set Password": "设置密码",
   "Set Up": "设置",
@@ -708,5 +707,10 @@
   "Continue": "继续",
   "Confirm Your New Email": "确认你的新邮箱",
   "Confirm to start signing in with this address.": "确认后即可使用此地址登录。",
-  "Confirm Email": "确认邮箱"
+  "Confirm Email": "确认邮箱",
+  "Sessions, sign-in, uploads and embedded signing.": "会话、登录、上传和嵌入式签署。",
+  "Allow Embedded Signing": "允许嵌入式签署",
+  "Lets the sites listed below show the signing page inside their own app. Off, no site can frame OpenSign.": "允许下列网站在其应用中显示签署页面。关闭时，任何网站都无法嵌入 OpenSign。",
+  "Sites Allowed to Embed": "允许嵌入的网站",
+  "One per line, with https and without a path. Only links you hand over yourself can be signed in a frame.": "每行一个，使用 https 且不带路径。只有您自己交付的链接才能在框架中签署。"
 }

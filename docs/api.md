@@ -161,7 +161,7 @@ Send answers `{ "document": {…}, "links": [{ "partyId", "name", "url" }] }`. T
 | POST | `/documents/{id}/remind` | Remind parties whose turn it is |
 | POST | `/documents/{id}/shares` | Share with a colleague. Body: `userId`, `canEdit` |
 | DELETE | `/documents/{id}/shares/{userId}` | Stop sharing |
-| POST | `/documents/{documentId}/parties/{partyId}/signing-link` | Issue a signing link to hand over. `rotate: true` revokes earlier links first |
+| POST | `/documents/{documentId}/parties/{partyId}/signing-link` | Issue a signing link to hand over. `rotate: true` revokes earlier links first; `redirectUrl` sends the party to your site afterwards (see [Embedded signing](embedding.md#redirect-after-signing)) |
 | PUT | `/documents/{id}/legal-hold` | Body `hold`, `reason`. See [Retention and legal hold](retention.md) |
 | GET | `/documents/{id}/file` | The PDF. `version=signed` (sealed, completed only) or `original` (as sent) |
 

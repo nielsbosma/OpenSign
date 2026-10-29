@@ -485,7 +485,6 @@
   "Sent for signing": "স্বাক্ষরের জন্য পাঠানো হয়েছে",
   "Sent {date}": "{date}-এ পাঠানো",
   "Session Length (Hours)": "সেশনের দৈর্ঘ্য (ঘণ্টা)",
-  "Sessions, sign-in and uploads.": "সেশন, সাইন-ইন ও আপলোড।",
   "Set It Up Now": "এখনই সেট আপ করুন",
   "Set Password": "পাসওয়ার্ড সেট করুন",
   "Set Up": "সেট আপ করুন",
@@ -708,5 +707,10 @@
   "Continue": "চালিয়ে যান",
   "Confirm Your New Email": "আপনার নতুন ইমেল নিশ্চিত করুন",
   "Confirm to start signing in with this address.": "এই ঠিকানা দিয়ে সাইন ইন শুরু করতে নিশ্চিত করুন।",
-  "Confirm Email": "ইমেল নিশ্চিত করুন"
+  "Confirm Email": "ইমেল নিশ্চিত করুন",
+  "Sessions, sign-in, uploads and embedded signing.": "সেশন, সাইন-ইন, আপলোড ও এমবেড করা স্বাক্ষর।",
+  "Allow Embedded Signing": "এমবেড করা স্বাক্ষর চালু করুন",
+  "Lets the sites listed below show the signing page inside their own app. Off, no site can frame OpenSign.": "নিচের সাইটগুলোকে তাদের নিজস্ব অ্যাপে স্বাক্ষর পৃষ্ঠা দেখাতে দেয়। বন্ধ থাকলে কোনো সাইট OpenSign ফ্রেমে দেখাতে পারে না।",
+  "Sites Allowed to Embed": "যেসব সাইট এমবেড করতে পারে",
+  "One per line, with https and without a path. Only links you hand over yourself can be signed in a frame.": "প্রতি লাইনে একটি, https সহ এবং পাথ ছাড়া। শুধু আপনি নিজে যে লিঙ্ক দেন সেগুলোই ফ্রেমে স্বাক্ষর করা যায়।"
 }

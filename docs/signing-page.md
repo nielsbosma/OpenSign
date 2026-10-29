@@ -71,6 +71,8 @@ Choose **Preview** in the document editor to see the signing page as a chosen pa
 
 The page shows your organisation's name and logo and uses your brand color, all from **Settings → Organisation**. See [Logo](settings.md#logo).
 
+The page can also be shown inside your own app. See [Embedded signing](embedding.md).
+
 ## Privacy and safety
 
 - The secret part of the link is after the `#`, so it is not sent to the server in requests or logs, and the page removes it from the address bar once loaded.

@@ -15,7 +15,7 @@ use opensign_core::eid::jws::Key;
 use opensign_core::eid::tic::TEST_ISSUER;
 use opensign_core::services::documents::{self as docs, PartyInput};
 use opensign_core::services::eid::{self, Purpose, StartInput, StatusInput};
-use opensign_core::services::signing::{self, TokenInput};
+use opensign_core::services::signing;
 use opensign_core::settings::EidSettings;
 use opensign_core::testing::app;
 use opensign_core::{Role, call};
@@ -153,7 +153,8 @@ async fn bankid_identifies_the_right_person_only() {
     let signer = signer_ctx(&app);
 
     let token = sent_document(&app, &sender, "900101-0017").await;
-    let view = call::<signing::Open>(&signer, TokenInput { token: token.clone(), session: None }).await.unwrap();
+    let view =
+        call::<signing::Open>(&signer, signing::OpenInput { token: token.clone(), session: None, redirect_url: None }).await.unwrap();
     assert_eq!(view.needs_authentication, Some(AuthMethod::SeBankid));
     assert!(view.fields.is_empty() && view.document.page_count.is_none(), "nothing is shown before identification");
 
@@ -180,7 +181,10 @@ async fn bankid_identifies_the_right_person_only() {
         call::<eid::Status>(&signer, StatusInput { token: sent_document(&app, &sender, "900101-0017").await, id: started.id }).await;
     assert!(other.is_err(), "another party's link cannot pick up this identification");
 
-    let view = call::<signing::Open>(&signer, TokenInput { token: token.clone(), session: Some(session.clone()) }).await.unwrap();
+    let view =
+        call::<signing::Open>(&signer, signing::OpenInput { token: token.clone(), session: Some(session.clone()), redirect_url: None })
+            .await
+            .unwrap();
     assert_eq!(view.needs_authentication, None);
     assert_eq!(view.sign_authentication, None, "the same eID covers signing");
 
@@ -308,7 +312,7 @@ async fn bankid_through_tic_identifies_the_right_person_only() {
     let done = identify(token.clone()).await;
     assert_eq!(done.status, "complete");
     assert_eq!(standin.lock().unwrap().secret.as_deref(), Some("s3cret"), "TIC takes the secret in the form");
-    let view = call::<signing::Open>(&signer, TokenInput { token, session: done.session }).await.unwrap();
+    let view = call::<signing::Open>(&signer, signing::OpenInput { token, session: done.session, redirect_url: None }).await.unwrap();
     assert_eq!(view.needs_authentication, None);
 
     standin.lock().unwrap().nin = "199001010025".into();

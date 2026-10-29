@@ -485,7 +485,6 @@
   "Sent for signing": "أُرسل للتوقيع",
   "Sent {date}": "أُرسل في {date}",
   "Session Length (Hours)": "مدة الجلسة (ساعات)",
-  "Sessions, sign-in and uploads.": "الجلسات وتسجيل الدخول والرفع.",
   "Set It Up Now": "إعداده الآن",
   "Set Password": "تعيين كلمة المرور",
   "Set Up": "إعداد",
@@ -708,5 +707,10 @@
   "Continue": "متابعة",
   "Confirm Your New Email": "أكّد بريدك الجديد",
   "Confirm to start signing in with this address.": "أكّد لتبدأ تسجيل الدخول بهذا العنوان.",
-  "Confirm Email": "تأكيد البريد"
+  "Confirm Email": "تأكيد البريد",
+  "Sessions, sign-in, uploads and embedded signing.": "الجلسات وتسجيل الدخول والرفع والتوقيع المضمَّن.",
+  "Allow Embedded Signing": "السماح بالتوقيع المضمَّن",
+  "Lets the sites listed below show the signing page inside their own app. Off, no site can frame OpenSign.": "يسمح للمواقع المدرجة أدناه بعرض صفحة التوقيع داخل تطبيقاتها. عند الإيقاف، لا يمكن لأي موقع تضمين OpenSign.",
+  "Sites Allowed to Embed": "المواقع المسموح لها بالتضمين",
+  "One per line, with https and without a path. Only links you hand over yourself can be signed in a frame.": "موقع واحد في كل سطر، مع https ودون مسار. لا يمكن التوقيع داخل إطار إلا عبر الروابط التي تسلّمها بنفسك."
 }
