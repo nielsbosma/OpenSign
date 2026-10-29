@@ -242,6 +242,12 @@ impl Service for Open {
                 Entry::new("party.viewed", "document", document.id).metadata(json!({ "party": party.id, "name": party.name })),
             )
             .await?;
+            notify::emit(
+                conn,
+                "document.viewed",
+                json!({ "documentId": document.id, "externalId": document.external_id, "partyId": party.id, "name": party.name }),
+            )
+            .await?;
         }
         Ok(view)
     }

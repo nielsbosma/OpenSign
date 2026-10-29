@@ -187,6 +187,10 @@ See [Bulk send](bulk-send.md).
 | POST | `/webhooks` | Add one. Body: `url`, `events`. Returns the signing secret once |
 | DELETE | `/webhooks/{id}` | Remove one; queued deliveries are dropped |
 | POST | `/webhooks/{id}/test` | Send a `webhook.test` event |
+| GET | `/webhooks/{webhookId}/deliveries` | The delivery log, newest first. Query: `status` (`pending`, `delivered`, `failed`), `event`, `before`, `limit` |
+| GET | `/webhook-deliveries/{id}` | One delivery with its payload and every attempt |
+| POST | `/webhook-deliveries/{id}/resend` | Send a delivery again, as a new delivery |
+| POST | `/webhooks/{webhookId}/resend-failed` | Resend every delivery that was given up |
 
 See [Webhooks](webhooks.md).
 

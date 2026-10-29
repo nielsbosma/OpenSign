@@ -305,6 +305,16 @@ impl Service for Create {
                 .metadata(json!({ "template": input.template_id, "isTemplate": input.is_template })),
         )
         .await?;
+        if !input.is_template {
+            let document = reload(ctx, conn, id).await?;
+            notify::emit(
+                conn,
+                "document.created",
+                json!({ "documentId": id, "title": document.document.title, "externalId": document.document.external_id, "templateId": input.template_id }),
+            )
+            .await?;
+            return Ok(document);
+        }
         reload(ctx, conn, id).await
     }
 }

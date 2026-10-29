@@ -168,7 +168,7 @@ export function CopyButton({ value, label }: { value: string; label?: string }) 
 
 export function StatusDot({ tone }: { tone: 'ok' | 'warn' | 'error' | 'off' }) {
   const color = { ok: 'bg-success', warn: 'bg-warning', error: 'bg-destructive', off: 'bg-muted-foreground/40' }[tone];
-  return <span className={cn('inline-block size-2 rounded-full', color)} />;
+  return <span className={cn('inline-block size-2 shrink-0 rounded-full', color)} />;
 }
 
 export function IconButton({
