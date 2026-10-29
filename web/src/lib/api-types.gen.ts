@@ -1027,7 +1027,15 @@ export type DocumentsSignInPersonInput = {
   partyId: string;
 };
 
-export type DocumentsSignInPersonOutput = SignerLink;
+export type DocumentsSignInPersonOutput = InPersonLink;
+
+export type InPersonLink = {
+  name: string;
+  partyId: string;
+  /** Set when the party is you: the signer session that records your sign-in as your identification. */
+  session?: string | null;
+  url: string;
+};
 
 export type DocumentsSignMyselfInput = {
   /** How you identify before signing: `standard` (your sign-in to OpenSign, the default) or an eID such as `se_bankid`. */

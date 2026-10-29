@@ -1894,12 +1894,22 @@ pub struct InPersonInput {
     pub party_id: Uuid,
 }
 
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct InPersonLink {
+    pub party_id: Uuid,
+    pub name: String,
+    pub url: String,
+    /// Set when the party is you: the signer session that records your sign-in as your identification.
+    pub session: Option<String>,
+}
+
 pub struct SignInPerson;
 
 #[async_trait]
 impl Service for SignInPerson {
     type Input = InPersonInput;
-    type Output = SignerLink;
+    type Output = InPersonLink;
     const META: Meta = Meta::mutation(
         "documents.sign_in_person",
         "Start in-person signing: a fresh signing link for a party who signs on the sender's own device. Earlier links for the party stop working. Only for parties whose delivery is in_person and whose turn it is.",
@@ -1907,7 +1917,7 @@ impl Service for SignInPerson {
     )
     .not_a_tool();
 
-    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: InPersonInput) -> Result<SignerLink> {
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: InPersonInput) -> Result<InPersonLink> {
         let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
         if document.status != status::PENDING {
             return Err(conflict("Only a pending document can be signed"));
@@ -1931,7 +1941,14 @@ impl Service for SignInPerson {
             Entry::new("party.in_person_started", "document", document.id).metadata(json!({ "party": party.id, "name": party.name })),
         )
         .await?;
-        Ok(SignerLink { party_id: party.id, name: party.name.clone(), url: signer_url(ctx, ctx.keys(), &party) })
+        let actor = ctx.actor()?;
+        let own = document.owner_id == Some(actor.user_id) && party.email.as_deref() == Some(actor.email.as_str());
+        Ok(InPersonLink {
+            party_id: party.id,
+            name: party.name.clone(),
+            url: signer_url(ctx, ctx.keys(), &party),
+            session: own.then(|| super::signing::issue_account_session(ctx, &party, actor)),
+        })
     }
 }
 

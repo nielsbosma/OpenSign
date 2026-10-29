@@ -134,6 +134,20 @@ const en = {
   eidPopupBlocked: 'Allow pop-ups for this site, then try again.',
   eidWindowDone: 'Identification finished',
   eidWindowDoneNote: 'You can close this window and go back to the signing page.',
+  savedSignature: 'Saved',
+  savedInAccount: 'Your saved signature from your account settings.',
+  savedOnDevice: 'Saved in this browser.',
+  forgetSignature: 'Forget',
+  rememberSignature: 'Remember my signature in this browser for next time. It is not stored on the server.',
+  shareIntro: (sign: boolean, org: string) =>
+    `${org} has shared this document for you to ${sign ? 'sign' : 'approve'}. Enter your details to start.`,
+  shareEmail: 'Email',
+  shareEmailNote: 'We email you a code to confirm the address. Your signing link and the signed document are sent there too.',
+  shareContinue: 'Continue',
+  shareCodeSent: (email: string) => `We sent a 6-digit code to ${email}. It works for 15 minutes.`,
+  shareOpen: (sign: boolean): string => (sign ? 'Confirm and Sign' : 'Confirm and Approve'),
+  shareOtherEmail: 'Use Another Email',
+  shareReady: 'Your document is ready',
   methods: { sms_pin: 'SMS code', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-ID' } as Record<string, string>,
 };
 

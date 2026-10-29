@@ -124,5 +124,20 @@ export const pt: Texts = {
   eidPopupBlocked: 'Permita pop-ups para este site e tente novamente.',
   eidWindowDone: 'Identificação concluída',
   eidWindowDoneNote: 'Você pode fechar esta janela e voltar à página de assinatura.',
+  savedSignature: 'Salva',
+  savedInAccount: 'Sua assinatura salva nas configurações da conta.',
+  savedOnDevice: 'Salva neste navegador.',
+  forgetSignature: 'Esquecer',
+  rememberSignature: 'Lembrar minha assinatura neste navegador para a próxima vez. Ela não é guardada no servidor.',
+  shareIntro: (sign, org) =>
+    `${org} compartilhou este documento para você ${sign ? 'assinar' : 'aprovar'}. Informe seus dados para começar.`,
+  shareEmail: 'E-mail',
+  shareEmailNote:
+    'Enviaremos um código para confirmar o endereço. Seu link de assinatura e o documento assinado também são enviados para lá.',
+  shareContinue: 'Continuar',
+  shareCodeSent: (email) => `Enviamos um código de 6 dígitos para ${email}. Ele vale por 15 minutos.`,
+  shareOpen: (sign) => (sign ? 'Confirmar e assinar' : 'Confirmar e aprovar'),
+  shareOtherEmail: 'Usar outro e-mail',
+  shareReady: 'Seu documento está pronto',
   methods: { sms_pin: 'o código SMS', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-ID' },
 };

@@ -210,6 +210,9 @@ async fn signing_myself_makes_me_the_only_signer_and_records_my_sign_in() {
     assert!(doc.fields.iter().all(|f| f.party_id == Some(started.party_id)), "their fields become mine");
     assert_eq!(kind(call::<docs::SignMyself>(&sam, docs::SignMyselfInput { id, auth_to_sign: AuthMethod::Standard }).await), ErrorKind::Conflict);
 
+    let resumed = call::<docs::SignInPerson>(&sam, docs::InPersonInput { document_id: id, party_id: started.party_id }).await.unwrap();
+    assert!(resumed.session.is_some(), "starting again on my own party keeps my sign-in as identification");
+    let started = docs::SelfSigning { party_id: started.party_id, url: resumed.url, session: resumed.session.unwrap() };
     let signer = public(&app);
     let link = token(&started.url);
     let view = call::<signing::Open>(

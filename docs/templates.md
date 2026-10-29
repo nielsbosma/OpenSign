@@ -20,6 +20,7 @@ A template stays a template; there is no "send" step.
 
 - **One document**: choose **New Document**, pick the template, and give the document a title. OpenSign copies the files, parties (with their attachment requests), fields, message, language, signing order and reminders into a new draft. Fill in the real names and contact details, then send it as usual.
 - **Many documents**: use [Bulk send](bulk-send.md) to send the template to every row of a spreadsheet.
+- **Let people start it themselves**: turn on a [share link](share-links.md). Anyone with the link or its QR code confirms their email and signs their own copy.
 - **From the API**: `POST /api/v1/documents` with `templateId`, then set the parties and send. Scrive's `newfromtemplate` endpoint does the same. See [REST API](api.md).
 
 A document made from a template is independent of it: changing the template later does not change documents already made from it. The template's files are shared, not copied, so they take no extra storage.

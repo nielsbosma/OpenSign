@@ -38,7 +38,7 @@ Webhooks can also be managed with the [REST API](api.md), with an API key that h
 
 | Event | When | `data` |
 | --- | --- | --- |
-| `document.created` | A document is created, from scratch, from a template or by a bulk send. Templates fire nothing. | `documentId`, `title`, `externalId`, `templateId` |
+| `document.created` | A document is created, from scratch, from a template, by a bulk send or through a [share link](share-links.md). Templates fire nothing. | `documentId`, `title`, `externalId`, `templateId`, `source`, `shareLinkId` |
 | `document.sent` | A draft is sent for signing | `documentId`, `title`, `externalId` |
 | `document.viewed` | A party opens their signing link for the first time (after identifying, if that is required to view) | `documentId`, `externalId`, `partyId`, `name` |
 | `document.signed` | A party signs or approves | `documentId`, `externalId`, `partyId`, `name` |
@@ -92,11 +92,14 @@ opensign-delivery: 019a2c4e-7b1f-7c3a-9e51-3f0d2a8b6c11
   "id": "019a2c3f-…",
   "event": "document.created",
   "createdAt": "2026-10-28T09:01:40.311Z",
-  "data": { "documentId": "019a2b11-…", "title": "Consulting agreement", "externalId": "crm-4711", "templateId": "019a1f02-…" }
+  "data": {
+    "documentId": "019a2b11-…", "title": "Consulting agreement", "externalId": "crm-4711", "templateId": "019a1f02-…",
+    "source": "manual", "shareLinkId": null
+  }
 }
 ```
 
-`templateId` is `null` when the document was not made from a template.
+`templateId` is `null` when the document was not made from a template. `source` is `manual` (the app, the API or MCP), `bulk_send` or `share_link`; `shareLinkId` is set for `share_link`.
 
 `document.sent`:
 
