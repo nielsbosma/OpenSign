@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, CheckCircle2 } from 'lucide-react';
+import { Check, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { Field, Spinner } from '@/components/common';
@@ -57,11 +57,26 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
   );
 }
 
+const PASSWORD_CHARS = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+/** 24 characters from a 54-character alphabet, about 138 bits, in groups of six so it can be read back. */
+function generatePassword() {
+  const out: string[] = [];
+  const limit = 256 - (256 % PASSWORD_CHARS.length);
+  while (out.length < 24) {
+    for (const byte of crypto.getRandomValues(new Uint8Array(32))) {
+      if (byte < limit && out.length < 24) out.push(PASSWORD_CHARS[byte % PASSWORD_CHARS.length]!);
+    }
+  }
+  return out.join('').match(/.{6}/g)!.join('-');
+}
+
 function AdminStep() {
   const queryClient = useQueryClient();
   const [values, setValues] = useState({ setupCode: '', orgName: '', name: '', email: '', password: '' });
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const set = (key: keyof typeof values) => (e: React.ChangeEvent<HTMLInputElement>) => setValues({ ...values, [key]: e.target.value });
 
   const submit = async (e: FormEvent) => {
@@ -102,9 +117,39 @@ function AdminStep() {
             <Input id="email" type="email" autoComplete="username" value={values.email} onChange={set('email')} required />
           </Field>
         </div>
-        <Field label={t('Password')} htmlFor="password" hint={t(PASSWORD_HINT)}>
-          <Input id="password" type="password" autoComplete="new-password" value={values.password} onChange={set('password')} required />
+        <Field
+          label={t('Password')}
+          htmlFor="password"
+          hint={
+            <span className="flex items-start justify-between gap-3">
+              <span>{t(PASSWORD_HINT)}</span>
+              <button
+                type="button"
+                className="shrink-0 font-medium text-primary hover:underline"
+                onClick={() => {
+                  setValues({ ...values, password: generatePassword() });
+                  setShowPassword(true);
+                }}
+              >
+                {t('Generate Password')}
+              </button>
+            </span>
+          }
+        >
+          <Input
+            id="password"
+            type={showPassword ? 'text' : 'password'}
+            autoComplete="new-password"
+            value={values.password}
+            onChange={set('password')}
+            className={cn(showPassword && 'font-mono')}
+            required
+          />
         </Field>
+        <p className="flex gap-2 rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
+          <ShieldCheck className="size-4 shrink-0 text-primary" />
+          {t('To secure your account, turn on two-factor authentication or add a passkey under Settings once you are signed in.')}
+        </p>
         <Button type="submit" disabled={busy}>
           {busy && <Spinner className="text-primary-foreground" />} {t('Create Administrator')}
         </Button>

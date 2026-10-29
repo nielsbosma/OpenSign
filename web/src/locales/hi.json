@@ -685,5 +685,7 @@
   "“{title}”, completed {date}. The file is exactly as sealed.": "“{title}”, {date} को पूरा हुआ। फ़ाइल ठीक वैसी ही है जैसी मुहर लगते समय थी।",
   "Update Link": "अपडेट लिंक",
   "A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.": "एक पेज जो ref में दी गई रिलीज़ इंस्टॉल करता है, जैसे Sliplane Deployer द्वारा सेट किया गया लिंक। deploy hook न होने पर इस्तेमाल होता है।",
-  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "\"अभी अपडेट करें\" Sliplane Deployer खोलता है। Sliplane में साइन इन करें और पुष्टि करें; नया संस्करण शुरू होने पर माइग्रेशन चलते हैं।"
+  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "\"अभी अपडेट करें\" Sliplane Deployer खोलता है। Sliplane में साइन इन करें और पुष्टि करें; नया संस्करण शुरू होने पर माइग्रेशन चलते हैं।",
+  "Generate Password": "पासवर्ड बनाएं",
+  "To secure your account, turn on two-factor authentication or add a passkey under Settings once you are signed in.": "अपने खाते को सुरक्षित रखने के लिए, साइन इन करने के बाद सेटिंग्स में दो-चरणीय प्रमाणीकरण चालू करें या पासकी जोड़ें।"
 }

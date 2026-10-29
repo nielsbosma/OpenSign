@@ -685,5 +685,7 @@
   "“{title}”, completed {date}. The file is exactly as sealed.": "”{title}”, klart {date}. Filen är exakt som när den förseglades.",
   "Update Link": "Uppdateringslänk",
   "A page that installs a release given as ref, such as the link the Sliplane Deployer sets. Used when there is no deploy hook.": "En sida som installerar en version angiven som ref, till exempel länken som Sliplane Deployer sätter. Används när det inte finns någon deploy hook.",
-  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "Uppdatera nu öppnar Sliplane Deployer. Logga in på Sliplane och bekräfta; migreringar körs när den nya versionen startar."
+  "Update Now opens the Sliplane Deployer. Sign in to Sliplane and confirm; migrations run when the new version starts.": "Uppdatera nu öppnar Sliplane Deployer. Logga in på Sliplane och bekräfta; migreringar körs när den nya versionen startar.",
+  "Generate Password": "Generera lösenord",
+  "To secure your account, turn on two-factor authentication or add a passkey under Settings once you are signed in.": "Skydda ditt konto genom att slå på tvåfaktorsautentisering eller lägga till en nyckel (passkey) under Inställningar när du har loggat in."
 }
