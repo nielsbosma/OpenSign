@@ -12,6 +12,7 @@ import { ApiError, type AttachmentRequest, type AuthMethod, call, errorMessage, 
 import { saveBytes } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { FormError } from '../auth/AuthLayout';
+import { AiReview } from './AiReview';
 import { AttachmentUploads } from './AttachmentUploads';
 import { EidIdentify } from './EidIdentify';
 import { type Signature, SignaturePad } from './SignaturePad';
@@ -533,6 +534,11 @@ function SignerScreen({
             )}
             {!canAct && signError && <FormError message={signError} />}
           </div>
+          {view.review && view.document.status === 'pending' && (
+            <div className="mt-4 grid">
+              <AiReview token={token} session={session} state={view.review} language={view.document.language} />
+            </div>
+          )}
           <p className="mt-3 px-1 text-xs text-muted-foreground">{t.auditNote}</p>
         </aside>
       </div>

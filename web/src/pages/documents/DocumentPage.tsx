@@ -451,6 +451,24 @@ function DetailsSection({ doc }: { doc: DocumentView }) {
   );
 }
 
+function AiReviewSection({ doc }: { doc: DocumentView }) {
+  const set = useApiMutation('documents.set_review_links', { invalidates: ['documents.'] });
+  return (
+    <Section title="AI Review by Signers">
+      <label className="flex items-center justify-between gap-3 rounded-md bg-muted/50 px-3 py-2">
+        <span>
+          <span className="block">Let Signers Share With Their AI</span>
+          <span className="block text-xs text-muted-foreground">
+            A read-only link for their own assistant, such as ChatGPT or Claude. It cannot sign, expires within days and every use is
+            recorded in the audit trail. Turning this off revokes links already shared.
+          </span>
+        </span>
+        <Switch checked={doc.reviewLinks} disabled={set.isPending} onCheckedChange={(enabled) => set.mutate({ id: doc.id, enabled })} />
+      </label>
+    </Section>
+  );
+}
+
 function EditableTitle({ doc, editable }: { doc: DocumentView; editable: boolean }) {
   const [title, setTitle] = useState(doc.title);
   const update = useApiMutation('documents.update', { invalidates: ['documents.'] });
@@ -905,6 +923,7 @@ export function DocumentPage() {
                 </Section>
               )}
               {draft && <DetailsSection key={doc.id} doc={doc} />}
+              {(draft || (pending && doc.canEdit)) && <AiReviewSection doc={doc} />}
               {doc.status === 'completed' && doc.sealedSha256 && (
                 <Section title="Seal">
                   <p className="text-muted-foreground">

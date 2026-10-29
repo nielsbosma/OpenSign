@@ -154,6 +154,8 @@ pub struct SignerView {
     pub can_download: bool,
     /// Files the party is asked to upload before signing.
     pub attachments: Vec<AttachmentRequest>,
+    /// Sharing a read-only copy with the party's own AI agent; unset until they have identified.
+    pub review: Option<super::review::ReviewLinkState>,
 }
 
 /// What a party sees, without the parts that depend on their link and session.
@@ -201,6 +203,7 @@ pub(crate) async fn signer_view(
         your_turn: false,
         can_download: false,
         attachments: if locked { Vec::new() } else { attachments::for_party(conn, party.id).await? },
+        review: None,
     })
 }
 
@@ -222,6 +225,7 @@ impl Service for Open {
         view.sign_authentication = (!satisfied(party.auth_to_sign(), session.as_ref())).then(|| party.auth_to_sign());
         view.your_turn = your_turn;
         view.can_download = !locked && document.status == status::COMPLETED;
+        view.review = if locked { None } else { Some(super::review::state(ctx, conn, &document, &party).await?) };
         if !locked && party.viewed_at.is_none() && document.status == status::PENDING {
             sqlx::query("update parties set viewed_at = $2, status = case when status in ('waiting', 'notified') then 'viewed' else status end, updated_at = now() where id = $1")
                 .bind(party.id)
