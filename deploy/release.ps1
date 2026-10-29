@@ -160,6 +160,12 @@ if (-not $SkipRelease) {
 
 if ($SkipDeploy) { return }
 
+if (-not $SkipRelease -and (gh secret list --repo $Repo --json name 2>$null | ConvertFrom-Json).name -contains 'SLIPLANE_DEPLOY_HOOK') {
+    Ok 'CI deploys releases through the SLIPLANE_DEPLOY_HOOK secret, so there is nothing more to do here.'
+    Step 'Done'
+    return
+}
+
 Step 'Deploy to Sliplane'
 $creds = Read-Credentials
 Info '1) First install: creates the database, bucket, Gotenberg and OpenSign through the Sliplane API.'
