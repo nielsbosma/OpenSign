@@ -1075,7 +1075,7 @@ export type SetupCreateFirstAdminInput = {
   name: string;
   orgName: string;
   password: string;
-  /** The one-time code from the container log. */
+  /** The one-time code from the container log, or `SETUP_CODE` when that is set. */
   setupCode: string;
 };
 

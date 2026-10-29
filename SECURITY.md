@@ -27,7 +27,7 @@ It does not protect against someone who holds `APP_SECRET` together with the dat
 - TOTP two-factor authentication with single-use recovery codes, which an admin can require for everyone.
 - Passkeys (WebAuthn, verified in-house in Rust): user verification required, origin and RP ID checked, challenges single-use and short-lived, signature counters must increase, ES256, EdDSA and RSA of 2048 bits or more. A passkey satisfies the two-factor requirement.
 - Session cookies are `HttpOnly`, `SameSite=Lax`, `__Host-` prefixed and `Secure` on https, stored only as a MAC in the database, with absolute and idle expiry. Cookie-authenticated writes must come from our own origin (`Origin` or `Sec-Fetch-Site`).
-- The first admin can only be created with a one-time setup code from the server log.
+- The first admin can only be created with a one-time setup code: from the server log, or `SETUP_CODE` (24+ characters) when a deployer generates one and passes it in a link's URL fragment. It stops working once the first admin exists.
 - API keys and OAuth tokens are stored as hashes. MCP uses OAuth 2.1 with PKCE (S256 only), exact redirect URIs, audience-bound access tokens, and rotating refresh tokens with reuse detection that revokes the whole grant.
 
 **Roles**

@@ -135,7 +135,7 @@ OpenSign is one container image plus Postgres, an S3-compatible bucket and, for 
 
 [![Deploy to Sliplane](https://sliplane.opendeploy.cloud/button.svg)](https://sliplane.opendeploy.cloud/?repo=https://github.com/nielsbosma/OpenSign)
 
-The button reads [sliplane.yaml](sliplane.yaml): it asks for your Resend key (and optionally an AI provider), shows what it will create and what it costs, and sets up a managed Postgres, a bucket, Gotenberg on the private network and OpenSign with a fresh `APP_SECRET`. From a terminal, `SLIPLANE_TOKEN=api_rw_org_... ./deploy/sliplane.sh` does the same over the Sliplane API.
+The button reads [sliplane.yaml](sliplane.yaml): it asks for your Resend key (and optionally an AI provider), shows what it will create and what it costs, and sets up a managed Postgres, a bucket, Gotenberg on the private network and OpenSign with a fresh `APP_SECRET`. Its finish page opens setup with the setup code already filled in. From a terminal, `SLIPLANE_TOKEN=api_rw_org_... ./deploy/sliplane.sh` does the same over the Sliplane API.
 
 ### With Docker
 
@@ -162,7 +162,7 @@ The image is distroless, runs as a non-root user, works with a read-only root fi
 
 ### First run
 
-The container log prints a **setup code**, so nobody else can claim a fresh install. Enter it, create the first admin, and connect email through **Resend** or your own **SMTP** server. Everything else (SMS, BankID and eID, your seal certificate, AI, security rules, branding) is set in the browser, and any setting can be pinned with an environment variable such as `OPENSIGN_SECURITY_ENFORCE_TWO_FACTOR=true`.
+The container log prints a **setup code**, so nobody else can claim a fresh install (or set your own with `SETUP_CODE` and open `/setup#code=…`). Enter it, create the first admin, and connect email through **Resend** or your own **SMTP** server. Everything else (SMS, BankID and eID, your seal certificate, AI, security rules, branding) is set in the browser, and any setting can be pinned with an environment variable such as `OPENSIGN_SECURITY_ENFORCE_TWO_FACTOR=true`.
 
 Read more in [Deployment](docs/deployment.md), [First-run setup](docs/setup.md), [Identification](docs/identification.md) and [Updates](docs/updates.md).
 

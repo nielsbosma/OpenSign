@@ -4,6 +4,8 @@ use serde::Serialize;
 
 /// The only configuration that comes from the environment: the connections and the root secret.
 /// Everything else is an Admin setting.
+pub const MIN_SETUP_CODE_LEN: usize = 24;
+
 #[derive(Clone)]
 pub struct Env {
     pub database_url: String,
@@ -14,6 +16,8 @@ pub struct Env {
     pub s3_region: String,
     pub app_secret: String,
     pub app_url: Option<String>,
+    /// Replaces the derived setup code, so a deployer can open setup with it directly.
+    pub setup_code: Option<String>,
     pub converter_url: Option<String>,
     pub port: u16,
     pub role: ProcessRole,
@@ -55,6 +59,7 @@ fn hint(name: &str) -> &'static str {
             "A long random string that derives every encryption key. Generate it with `openssl rand -base64 48` and never change it."
         }
         "APP_URL" => "The public https address, e.g. https://sign.example.com",
+        "SETUP_CODE" => "Optional. A random value of at least 24 characters that replaces the setup code printed in the log",
         "CONVERTER_URL" => "The private address of the Gotenberg service that converts Word documents, e.g. http://converter:3000",
         _ => "",
     }
@@ -88,6 +93,14 @@ impl Env {
                 name: "APP_SECRET",
                 message: format!("APP_SECRET must be at least {} characters", opensign_crypto::MIN_SECRET_LEN),
                 hint: hint("APP_SECRET"),
+            });
+        }
+        let setup_code = get("SETUP_CODE");
+        if setup_code.as_ref().is_some_and(|c| c.chars().count() < MIN_SETUP_CODE_LEN) {
+            problems.push(EnvProblem {
+                name: "SETUP_CODE",
+                message: format!("SETUP_CODE must be at least {MIN_SETUP_CODE_LEN} characters"),
+                hint: hint("SETUP_CODE"),
             });
         }
         let url_var = |name: &'static str, problems: &mut Vec<EnvProblem>| {
@@ -135,6 +148,7 @@ impl Env {
             s3_region: get("S3_REGION").unwrap_or_else(|| "us-east-1".into()),
             app_secret,
             app_url,
+            setup_code,
             converter_url,
             port: port.unwrap_or(3000),
             role,
@@ -185,5 +199,14 @@ mod tests {
         let problems = Env::from_map(&vars).expect_err("invalid");
         let names: Vec<_> = problems.iter().map(|p| p.name).collect();
         assert_eq!(names, ["S3_BUCKET", "APP_SECRET", "APP_URL"]);
+    }
+
+    #[test]
+    fn setup_code_must_be_long() {
+        let mut vars = base();
+        vars.insert("SETUP_CODE".into(), "short".into());
+        assert_eq!(Env::from_map(&vars).expect_err("too short")[0].name, "SETUP_CODE");
+        vars.insert("SETUP_CODE".into(), "a".repeat(MIN_SETUP_CODE_LEN));
+        assert!(Env::from_map(&vars).expect("valid").setup_code.is_some());
     }
 }

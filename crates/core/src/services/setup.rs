@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use opensign_crypto::hash_password;
+use opensign_crypto::{constant_time_eq, hash_password};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sqlx::PgConnection;
@@ -41,7 +41,7 @@ impl Service for Status {
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CompleteInput {
-    /// The one-time code from the container log.
+    /// The one-time code from the container log, or `SETUP_CODE` when that is set.
     pub setup_code: String,
     pub org_name: String,
     pub name: String,
@@ -65,7 +65,11 @@ impl Service for Complete {
         Meta::mutation("setup.create_first_admin", "Create the first admin on a fresh install. Locks for good afterwards.", Access::Public);
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CompleteInput) -> Result<Created> {
-        if !ctx.keys().check_setup_code(&input.setup_code) {
+        let valid = match &ctx.app.env.setup_code {
+            Some(code) => constant_time_eq(input.setup_code.trim().as_bytes(), code.as_bytes()),
+            None => ctx.keys().check_setup_code(&input.setup_code),
+        };
+        if !valid {
             return Err(AppError::new(ErrorKind::Forbidden, "That setup code is not right. Find it in the container log."));
         }
         sqlx::query("select pg_advisory_xact_lock($1)").bind(SETUP_LOCK).execute(&mut *conn).await?;

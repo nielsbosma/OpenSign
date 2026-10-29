@@ -18,6 +18,8 @@ Open the install in a browser and fill in:
 | Organisation | Your organisation's name. Signers see it in emails and on the signing page. You can change it later in **Settings → Organisation**. |
 | Your Name, Email, Password | Your admin account. |
 
+Installs from the **Deploy to Sliplane** button skip the code: the deployer generates a `SETUP_CODE`, and **Open OpenSign** on its finish page goes to `/setup#code=…`, which fills it in. The code sits in the URL fragment, which the browser never sends to a server, and the page removes it from the address bar. If you open the install another way, the code is shown on the deployer's finish page and in the service's environment in Sliplane. With `SETUP_CODE` set, the log no longer prints a code.
+
 Once the first admin exists, the setup code stops working for good. Everyone else is invited from **Settings → Users** (see [Users and roles](users-and-roles.md)).
 
 ## Step 2: email
