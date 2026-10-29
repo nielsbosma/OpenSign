@@ -526,6 +526,8 @@ export type DocumentView = {
   pageCount?: number | null;
   parties: Array<PartyView>;
   reminderDays?: number | null;
+  /** Signers may share a read-only copy with their own AI agent. */
+  reviewLinks: boolean;
   sealedSha256?: string | null;
   /** Whether the seal carries a time stamp from the time stamp authority; unset until sealed. */
   sealedWithTimestamp?: boolean | null;
@@ -765,6 +767,13 @@ export type DocumentsSetPartiesInput = {
 
 export type DocumentsSetPartiesOutput = Array<PartyView>;
 
+export type DocumentsSetReviewLinksInput = {
+  enabled: boolean;
+  id: string;
+};
+
+export type DocumentsSetReviewLinksOutput = Ok_;
+
 export type DocumentsShareInput = {
   canEdit?: boolean;
   id: string;
@@ -966,6 +975,19 @@ export type SetupStatus = {
   needsSetup: boolean;
 };
 
+export type SigningCreateReviewLinkInput = {
+  session?: string | null;
+  token: string;
+};
+
+export type SigningCreateReviewLinkOutput = CreatedReviewLink;
+
+export type CreatedReviewLink = {
+  expiresAt: string;
+  /** Shown once: only a hash is stored. */
+  url: string;
+};
+
 export type SigningDeclineInput = {
   reason?: string | null;
   session?: string | null;
@@ -1027,6 +1049,20 @@ export type SigningOpenInput = {
   token: string;
 };
 
+export type ActiveReviewLink = {
+  createdAt: string;
+  expiresAt: string;
+  lastUsedAt?: string | null;
+  /** How many times an agent has fetched it. */
+  uses: number;
+};
+
+export type ReviewLinkState = {
+  active?: ActiveReviewLink | null;
+  /** The party may create a review link now. */
+  available: boolean;
+};
+
 export type SignerDocument = {
   brandColor: string;
   id: string;
@@ -1063,6 +1099,8 @@ export type SignerView = {
   /** Set when the party must identify before seeing the document; nothing else is filled in. */
   needsAuthentication?: AuthMethod | null;
   party: SignerParty;
+  /** Sharing a read-only copy with the party's own AI agent; unset until they have identified. */
+  review?: ReviewLinkState | null;
   /** Set when the party must identify before signing. */
   signAuthentication?: AuthMethod | null;
   yourTurn: boolean;
@@ -1089,6 +1127,13 @@ export type CodeSent = {
   /** The last digits of the number the code went to. */
   phoneHint: string;
 };
+
+export type SigningRevokeReviewLinkInput = {
+  session?: string | null;
+  token: string;
+};
+
+export type SigningRevokeReviewLinkOutput = Ok_;
 
 export type FieldValue = {
   fieldId: string;
@@ -1342,6 +1387,7 @@ export interface Services {
   "documents.send": { kind: "mutation"; input: DocumentsSendInput; output: DocumentsSendOutput };
   "documents.set_fields": { kind: "mutation"; input: DocumentsSetFieldsInput; output: DocumentsSetFieldsOutput };
   "documents.set_parties": { kind: "mutation"; input: DocumentsSetPartiesInput; output: DocumentsSetPartiesOutput };
+  "documents.set_review_links": { kind: "mutation"; input: DocumentsSetReviewLinksInput; output: DocumentsSetReviewLinksOutput };
   "documents.share": { kind: "mutation"; input: DocumentsShareInput; output: DocumentsShareOutput };
   "documents.sign_in_person": { kind: "mutation"; input: DocumentsSignInPersonInput; output: DocumentsSignInPersonOutput };
   "documents.signing_link": { kind: "mutation"; input: DocumentsSigningLinkInput; output: DocumentsSigningLinkOutput };
@@ -1360,6 +1406,7 @@ export interface Services {
   "settings.update": { kind: "mutation"; input: SettingsUpdateInput; output: SettingsUpdateOutput };
   "setup.create_first_admin": { kind: "mutation"; input: SetupCreateFirstAdminInput; output: SetupCreateFirstAdminOutput };
   "setup.status": { kind: "query"; input: SetupStatusInput; output: SetupStatusOutput };
+  "signing.create_review_link": { kind: "mutation"; input: SigningCreateReviewLinkInput; output: SigningCreateReviewLinkOutput };
   "signing.decline": { kind: "mutation"; input: SigningDeclineInput; output: SigningDeclineOutput };
   "signing.eid_cancel": { kind: "mutation"; input: SigningEidCancelInput; output: SigningEidCancelOutput };
   "signing.eid_start": { kind: "mutation"; input: SigningEidStartInput; output: SigningEidStartOutput };
@@ -1367,6 +1414,7 @@ export interface Services {
   "signing.open": { kind: "mutation"; input: SigningOpenInput; output: SigningOpenOutput };
   "signing.remove_attachment": { kind: "mutation"; input: SigningRemoveAttachmentInput; output: SigningRemoveAttachmentOutput };
   "signing.request_code": { kind: "mutation"; input: SigningRequestCodeInput; output: SigningRequestCodeOutput };
+  "signing.revoke_review_link": { kind: "mutation"; input: SigningRevokeReviewLinkInput; output: SigningRevokeReviewLinkOutput };
   "signing.sign": { kind: "mutation"; input: SigningSignInput; output: SigningSignOutput };
   "signing.verify_code": { kind: "mutation"; input: SigningVerifyCodeInput; output: SigningVerifyCodeOutput };
   "system.status": { kind: "query"; input: SystemStatusInput; output: SystemStatusOutput };

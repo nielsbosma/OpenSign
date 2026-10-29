@@ -154,6 +154,8 @@ pub struct SignerView {
     pub can_download: bool,
     /// Files the party is asked to upload before signing.
     pub attachments: Vec<AttachmentRequest>,
+    /// Sharing a read-only copy with the party's own AI agent; unset until they have identified.
+    pub review: Option<super::review::ReviewLinkState>,
 }
 
 pub struct Open;
@@ -206,6 +208,7 @@ impl Service for Open {
             your_turn,
             can_download: !locked && document.status == status::COMPLETED,
             attachments: if locked { Vec::new() } else { attachments::for_party(conn, party.id).await? },
+            review: if locked { None } else { Some(super::review::state(ctx, conn, &document, &party).await?) },
         };
         if !locked && party.viewed_at.is_none() && document.status == status::PENDING {
             sqlx::query("update parties set viewed_at = $2, status = case when status in ('waiting', 'notified') then 'viewed' else status end, updated_at = now() where id = $1")
