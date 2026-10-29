@@ -63,9 +63,14 @@ pub async fn complete(conn: &mut PgConnection, id: Uuid) -> Result<()> {
     Ok(())
 }
 
-/// Exponential back-off: 30 s, 1 min, 2 min … capped at 6 h. After the last attempt it stays failed.
+/// Exponential back-off after the given attempt: 30 s, 1 min, 2 min … capped at 6 h.
+pub fn retry_delay(attempts: i32) -> Duration {
+    Duration::seconds((30i64 << (attempts.clamp(1, 10) - 1)).min(6 * 3600))
+}
+
+/// Schedules the next try after `retry_delay`. After the last attempt it stays failed.
 pub async fn fail(conn: &mut PgConnection, job: &Job, error: &str) -> Result<()> {
-    let delay = Duration::seconds((30i64 << (job.attempts.clamp(1, 10) - 1)).min(6 * 3600));
+    let delay = retry_delay(job.attempts);
     sqlx::query("update jobs set locked_until = null, last_error = $2, run_at = now() + make_interval(secs => $3) where id = $1")
         .bind(job.id)
         .bind(error.chars().take(2000).collect::<String>())
