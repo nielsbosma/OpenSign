@@ -45,6 +45,7 @@ At each request a key gets the **intersection** of its scopes and its owner's cu
 | `documents.legal_hold` | Place and release legal holds |
 | `templates.manage` | Create and change shared templates |
 | `webhooks.manage` | Add and remove webhooks |
+| `automations.manage` | Manage [automations](automations.md) and their runs |
 | `users.read` | See who has an account |
 | `users.manage` | Invite people, change roles and deactivate accounts |
 | `audit.read` | Browse and verify the audit log |

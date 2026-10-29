@@ -16,8 +16,8 @@ use crate::error::{AppError, Result, bad_request};
 use crate::permissions::Permission;
 use crate::service::{Access, Meta, Service};
 use crate::settings::{
-    AiSettings, EidSettings, EmailSettings, OrgSettings, RetentionSettings, SecuritySettings, SettingsGroup, SigningSettings, SmsSettings,
-    public_view,
+    AiSettings, AutomationSettings, EidSettings, EmailSettings, OrgSettings, RetentionSettings, SecuritySettings, SettingsGroup,
+    SigningSettings, SmsSettings, public_view,
 };
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema)]
@@ -32,6 +32,7 @@ pub enum Group {
     Ai,
     Sms,
     Eid,
+    Automations,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -76,6 +77,7 @@ impl Service for GetSettings {
             Group::Ai => view::<AiSettings>(ctx, conn).await,
             Group::Sms => view::<SmsSettings>(ctx, conn).await,
             Group::Eid => view::<EidSettings>(ctx, conn).await,
+            Group::Automations => view::<AutomationSettings>(ctx, conn).await,
         }
     }
 }
@@ -191,6 +193,15 @@ async fn update<G: SettingsGroup>(ctx: &Ctx, conn: &mut PgConnection, patch: &Va
     validate::<G>(&next)?;
     ctx.app.settings.save(conn, ctx.keys(), &next, Some(ctx.actor()?.user_id)).await?;
     let saved: G = settings(ctx, conn).await?;
+    if G::NAME == "automations" {
+        // Checked after saving, since a kept secret is only known to the stored row.
+        let automations: AutomationSettings =
+            serde_json::from_value(serde_json::to_value(&saved).map_err(AppError::internal)?).map_err(AppError::internal)?;
+        if automations.enabled && automations.key().is_none() {
+            ctx.app.settings.invalidate(G::NAME);
+            return Err(bad_request("Enter your Composio API key before turning automations on"));
+        }
+    }
     let after = public_view(&saved);
     audit(
         ctx,
@@ -351,6 +362,7 @@ impl Service for UpdateSettings {
             Group::Ai => update::<AiSettings>(ctx, conn, &input.values).await,
             Group::Sms => update::<SmsSettings>(ctx, conn, &input.values).await,
             Group::Eid => update::<EidSettings>(ctx, conn, &input.values).await,
+            Group::Automations => update::<AutomationSettings>(ctx, conn, &input.values).await,
         }
     }
 }

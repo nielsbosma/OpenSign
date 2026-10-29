@@ -53,6 +53,7 @@ Tools carry the standard hints, so clients can ask before running them:
 | AI review | `documents_review` ↗, `documents_latest_review`, `ai_status`, `ai_usage`, `ai_models` ↗, `ai_test` ↗ |
 | Bulk send | `bulk_preview`, `bulk_start` ↗, `bulk_list`, `bulk_get`, `bulk_cancel` ◆ |
 | Webhooks | `webhooks_list`, `webhooks_create` ↗, `webhooks_delete` ◆, `webhooks_test` ↗, `webhooks_deliveries`, `webhooks_delivery`, `webhooks_resend` ↗, `webhooks_resend_failed` ↗ |
+| Automations | `automations_status`, `automations_apps` ↗, `automations_connections` ↗, `automations_connect` ↗, `automations_disconnect` ◆ ↗, `automations_tools` ↗, `automations_tool` ↗, `automations_list`, `automations_create` ↗, `automations_update` ↗, `automations_delete` ◆, `automations_test` ↗, `automations_runs`, `automations_run`, `automations_resend` ↗, `automations_resend_failed` ↗ |
 | Users | `users_list`, `users_invite` ↗, `users_list_invites`, `users_revoke_invite` ◆, `users_update` ◆, `users_change_email` ◆ ↗ |
 | Audit | `audit_list`, `audit_verify` |
 | Account and keys | `account_me`, `account_set_language`, `api_keys_list`, `api_keys_update`, `api_keys_revoke` ◆ |

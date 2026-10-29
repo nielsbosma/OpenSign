@@ -21,6 +21,7 @@ import { AccountPage } from '@/pages/settings/AccountPage';
 import { AdminSettingsPage } from '@/pages/settings/AdminSettingsPage';
 import { ApiKeysPage } from '@/pages/settings/ApiKeysPage';
 import { AuditPage } from '@/pages/settings/AuditPage';
+import { AutomationRunsPage, AutomationsPage } from '@/pages/settings/AutomationsPage';
 import { SettingsLayout } from '@/pages/settings/SettingsLayout';
 import { SystemPage } from '@/pages/settings/SystemPage';
 import { UsersPage } from '@/pages/settings/UsersPage';
@@ -115,6 +116,8 @@ export function App() {
           <Route path="api-keys" element={<ApiKeysPage />} />
           <Route path="webhooks" element={<WebhooksPage />} />
           <Route path="webhooks/:id" element={<WebhookDeliveriesPage />} />
+          <Route path="automations" element={<AutomationsPage />} />
+          <Route path="automations/:id" element={<AutomationRunsPage />} />
           <Route path="audit" element={<AuditPage />} />
           <Route path="system" element={<SystemPage />} />
           <Route path="admin/:group" element={<AdminSettingsPage />} />

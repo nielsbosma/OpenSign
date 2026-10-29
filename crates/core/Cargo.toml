@@ -49,6 +49,7 @@ ciborium = "0.2.2"
 ed25519-dalek = "2"
 p256 = { version = "0.13", features = ["ecdsa"] }
 rust_xlsxwriter = { version = "0.102.0", default-features = false }
+md-5 = "0.10"
 
 [features]
 testing = ["opensign-db/testing"]

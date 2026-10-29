@@ -1,6 +1,6 @@
 # Webhooks
 
-Webhooks tell your systems when documents change, as signed JSON POSTs. Use them instead of polling: update your CRM when a contract is signed, start onboarding when an employment agreement is completed, or chase a declined offer.
+Webhooks tell your systems when documents change, as signed JSON POSTs. Use them instead of polling: update your CRM when a contract is signed, start onboarding when an employment agreement is completed, or chase a declined offer. To send documents to apps such as Google Drive, Slack or HubSpot without an endpoint of your own, use [automations](automations.md).
 
 ## Adding a webhook
 

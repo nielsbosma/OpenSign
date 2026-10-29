@@ -10,7 +10,7 @@ use uuid::Uuid;
 use super::{Empty, Ok_};
 use crate::audit::{Entry, audit};
 use crate::context::Ctx;
-use crate::documents::notify::{emit_to, queue_delivery, webhook_secret_context};
+use crate::documents::notify::{Target, emit_to, queue_delivery, webhook_secret_context};
 use crate::error::{Result, bad_request, not_found};
 use crate::net::check_public_url;
 use crate::permissions::Permission;
@@ -174,10 +174,11 @@ impl Service for Test {
 }
 
 /// Given up after the last retry, and not resent since.
-const FAILED: &str = "f.delivered_at is null and f.next_attempt_at is null and f.attempts > 0
+pub(crate) const FAILED: &str = "f.delivered_at is null and f.next_attempt_at is null and f.attempts > 0
     and not exists (select 1 from webhook_deliveries r where r.resent_from = f.id)";
 
-const DELIVERY_COLUMNS: &str = "f.id, f.webhook_id, f.event, f.created_at, f.attempts, f.status_code, f.error, f.delivered_at,
+const DELIVERY_COLUMNS: &str =
+    "f.id, f.webhook_id, f.automation_id, f.event, f.created_at, f.attempts, f.status_code, f.error, f.delivered_at,
     f.last_attempt_at, f.next_attempt_at, f.resent_from,
     case when f.delivered_at is not null then 'delivered' when f.next_attempt_at is not null then 'pending' else 'failed' end as status";
 
@@ -195,7 +196,11 @@ pub enum DeliveryStatus {
 #[serde(rename_all = "camelCase")]
 pub struct DeliveryView {
     pub id: Uuid,
-    pub webhook_id: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub webhook_id: Option<Uuid>,
+    /// Set instead of `webhookId` for a run of a Composio automation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub automation_id: Option<Uuid>,
     pub event: String,
     pub created_at: DateTime<Utc>,
     /// pending (queued or waiting for a retry), delivered, or failed (given up after the last retry).
@@ -239,24 +244,60 @@ impl Service for Deliveries {
     ).tool();
 
     async fn run(_ctx: &Ctx, conn: &mut PgConnection, input: DeliveriesInput) -> Result<Vec<DeliveryView>> {
-        let status = match input.status {
-            None => "true",
-            Some(DeliveryStatus::Delivered) => "f.delivered_at is not null",
-            Some(DeliveryStatus::Pending) => "f.delivered_at is null and f.next_attempt_at is not null",
-            Some(DeliveryStatus::Failed) => "f.delivered_at is null and f.attempts > 0",
-        };
-        Ok(sqlx::query_as(&format!(
-            "select {DELIVERY_COLUMNS} from webhook_deliveries f
-             where f.webhook_id = $1 and {status} and ($2::text is null or f.event = $2) and ($3::uuid is null or f.id < $3)
-             order by f.id desc limit $4"
-        ))
-        .bind(input.webhook_id)
-        .bind(input.event.as_deref().map(str::trim).filter(|e| !e.is_empty()))
-        .bind(input.before)
-        .bind(input.limit.unwrap_or(50).clamp(1, 200))
-        .fetch_all(&mut *conn)
-        .await?)
+        let filter = LogFilter { status: input.status, event: input.event, before: input.before, limit: input.limit };
+        deliveries(conn, Log::Webhook, input.webhook_id, filter).await
     }
+}
+
+/// Which log: a webhook's deliveries, or an automation's runs. Both live in `webhook_deliveries`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Log {
+    Webhook,
+    Automation,
+}
+
+impl Log {
+    fn column(self) -> &'static str {
+        match self {
+            Log::Webhook => "webhook_id",
+            Log::Automation => "automation_id",
+        }
+    }
+
+    fn target(self, id: Uuid) -> Target {
+        match self {
+            Log::Webhook => Target::Webhook(id),
+            Log::Automation => Target::Automation(id),
+        }
+    }
+}
+
+pub(crate) struct LogFilter {
+    pub status: Option<DeliveryStatus>,
+    pub event: Option<String>,
+    pub before: Option<Uuid>,
+    pub limit: Option<i64>,
+}
+
+pub(crate) async fn deliveries(conn: &mut PgConnection, log: Log, owner: Uuid, filter: LogFilter) -> Result<Vec<DeliveryView>> {
+    let status = match filter.status {
+        None => "true",
+        Some(DeliveryStatus::Delivered) => "f.delivered_at is not null",
+        Some(DeliveryStatus::Pending) => "f.delivered_at is null and f.next_attempt_at is not null",
+        Some(DeliveryStatus::Failed) => "f.delivered_at is null and f.attempts > 0",
+    };
+    let column = log.column();
+    Ok(sqlx::query_as(&format!(
+        "select {DELIVERY_COLUMNS} from webhook_deliveries f
+         where f.{column} = $1 and {status} and ($2::text is null or f.event = $2) and ($3::uuid is null or f.id < $3)
+         order by f.id desc limit $4"
+    ))
+    .bind(owner)
+    .bind(filter.event.as_deref().map(str::trim).filter(|e| !e.is_empty()))
+    .bind(filter.before)
+    .bind(filter.limit.unwrap_or(50).clamp(1, 200))
+    .fetch_all(&mut *conn)
+    .await?)
 }
 
 #[derive(Serialize, JsonSchema, sqlx::FromRow)]
@@ -295,35 +336,54 @@ impl Service for GetDelivery {
     ).tool();
 
     async fn run(_ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<DeliveryDetail> {
-        let delivery: DeliveryView = sqlx::query_as(&format!("select {DELIVERY_COLUMNS} from webhook_deliveries f where f.id = $1"))
-            .bind(input.id)
-            .fetch_optional(&mut *conn)
-            .await?
-            .ok_or_else(|| not_found("Delivery"))?;
-        let payload: Value =
-            sqlx::query_scalar("select payload from webhook_deliveries where id = $1").bind(input.id).fetch_one(&mut *conn).await?;
-        let attempts_log = sqlx::query_as(
-            "select created_at, status_code, error, response_excerpt, duration_ms from webhook_attempts where delivery_id = $1 order by created_at, id",
-        )
-        .bind(input.id)
-        .fetch_all(&mut *conn)
-        .await?;
-        let resent_as = sqlx::query_scalar("select id from webhook_deliveries where resent_from = $1 order by id")
-            .bind(input.id)
-            .fetch_all(&mut *conn)
-            .await?;
-        Ok(DeliveryDetail { delivery, payload, attempts_log, resent_as })
+        delivery(conn, Log::Webhook, input.id).await
     }
 }
 
-async fn resend(conn: &mut PgConnection, id: Uuid) -> Result<Option<Uuid>> {
-    let row: Option<(Uuid, String, Value)> = sqlx::query_as("select webhook_id, event, payload from webhook_deliveries where id = $1")
-        .bind(id)
-        .fetch_optional(&mut *conn)
-        .await?;
-    let Some((hook, event, payload)) = row else { return Ok(None) };
+pub(crate) async fn delivery(conn: &mut PgConnection, log: Log, id: Uuid) -> Result<DeliveryDetail> {
+    let column = log.column();
+    let delivery: DeliveryView =
+        sqlx::query_as(&format!("select {DELIVERY_COLUMNS} from webhook_deliveries f where f.id = $1 and f.{column} is not null"))
+            .bind(id)
+            .fetch_optional(&mut *conn)
+            .await?
+            .ok_or_else(|| not_found(if log == Log::Webhook { "Delivery" } else { "Run" }))?;
+    let payload: Value = sqlx::query_scalar("select payload from webhook_deliveries where id = $1").bind(id).fetch_one(&mut *conn).await?;
+    let attempts_log = sqlx::query_as(
+        "select created_at, status_code, error, response_excerpt, duration_ms from webhook_attempts where delivery_id = $1 order by created_at, id",
+    )
+    .bind(id)
+    .fetch_all(&mut *conn)
+    .await?;
+    let resent_as =
+        sqlx::query_scalar("select id from webhook_deliveries where resent_from = $1 order by id").bind(id).fetch_all(&mut *conn).await?;
+    Ok(DeliveryDetail { delivery, payload, attempts_log, resent_as })
+}
+
+pub(crate) async fn resend(conn: &mut PgConnection, log: Log, id: Uuid) -> Result<Option<Uuid>> {
+    let column = log.column();
+    let row: Option<(Uuid, String, Value)> =
+        sqlx::query_as(&format!("select {column}, event, payload from webhook_deliveries where id = $1 and {column} is not null"))
+            .bind(id)
+            .fetch_optional(&mut *conn)
+            .await?;
+    let Some((owner, event, payload)) = row else { return Ok(None) };
     let created_at = payload["createdAt"].as_str().and_then(|t| t.parse::<DateTime<Utc>>().ok()).unwrap_or_else(crate::context::now);
-    Ok(Some(queue_delivery(conn, hook, &event, &payload["data"], created_at, Some(id)).await?))
+    Ok(Some(queue_delivery(conn, log.target(owner), &event, &payload["data"], created_at, Some(id)).await?))
+}
+
+/// Resends up to 500 given-up deliveries of one webhook or automation. Returns how many.
+pub(crate) async fn resend_failed(conn: &mut PgConnection, log: Log, owner: Uuid) -> Result<usize> {
+    let column = log.column();
+    let failed: Vec<Uuid> =
+        sqlx::query_scalar(&format!("select f.id from webhook_deliveries f where f.{column} = $1 and {FAILED} order by f.id limit 500"))
+            .bind(owner)
+            .fetch_all(&mut *conn)
+            .await?;
+    for id in &failed {
+        resend(conn, log, *id).await?;
+    }
+    Ok(failed.len())
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -346,7 +406,7 @@ impl Service for Resend {
     ).tool().open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<ResendOutput> {
-        let id = resend(conn, input.id).await?.ok_or_else(|| not_found("Delivery"))?;
+        let id = resend(conn, Log::Webhook, input.id).await?.ok_or_else(|| not_found("Delivery"))?;
         audit(ctx, conn, Entry::new("webhooks.resend", "webhook_delivery", input.id).metadata(json!({ "resentAs": id }))).await?;
         Ok(ResendOutput { id })
     }
@@ -380,20 +440,11 @@ impl Service for ResendFailed {
         let exists: Option<Uuid> =
             sqlx::query_scalar("select id from webhooks where id = $1").bind(input.webhook_id).fetch_optional(&mut *conn).await?;
         exists.ok_or_else(|| not_found("Webhook"))?;
-        let failed: Vec<Uuid> = sqlx::query_scalar(&format!(
-            "select f.id from webhook_deliveries f where f.webhook_id = $1 and {FAILED} order by f.id limit 500"
-        ))
-        .bind(input.webhook_id)
-        .fetch_all(&mut *conn)
-        .await?;
-        if failed.is_empty() {
+        let count = resend_failed(conn, Log::Webhook, input.webhook_id).await?;
+        if count == 0 {
             return Ok(ResendFailedOutput { count: 0 });
         }
-        for id in &failed {
-            resend(conn, *id).await?;
-        }
-        audit(ctx, conn, Entry::new("webhooks.resend_failed", "webhook", input.webhook_id).metadata(json!({ "count": failed.len() })))
-            .await?;
-        Ok(ResendFailedOutput { count: failed.len() })
+        audit(ctx, conn, Entry::new("webhooks.resend_failed", "webhook", input.webhook_id).metadata(json!({ "count": count }))).await?;
+        Ok(ResendFailedOutput { count })
     }
 }

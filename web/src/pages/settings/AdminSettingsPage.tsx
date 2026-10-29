@@ -133,6 +133,27 @@ const GROUPS: Record<Group, { title: string; description: string; help?: string;
       },
     ],
   },
+  automations: {
+    help: 'automations#turning-it-on',
+    title: msg('Automations'),
+    description: msg(
+      'Send document data to other apps through Composio, such as saving signed PDFs to Google Drive. Off until you add your own Composio API key.',
+    ),
+    fields: [
+      {
+        key: 'enabled',
+        label: msg('Turn On Automations'),
+        type: 'bool',
+        hint: msg('Off: no automation runs and no app can be connected.'),
+      },
+      {
+        key: 'composioApiKey',
+        label: msg('Composio API Key'),
+        type: 'secret',
+        hint: msg("From your project's settings at composio.dev. It is stored encrypted and only sent to Composio."),
+      },
+    ],
+  },
   updates: {
     title: msg('Updates'),
     description: msg('How OpenSign finds and installs new releases.'),
@@ -591,7 +612,7 @@ export function SettingsGroup({ group }: { group: Group }) {
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [certFiles, setCertFiles] = useState<Record<string, File>>({});
   const save = useApiMutation('settings.update', {
-    invalidates: ['settings.', 'ai.', 'setup.'],
+    invalidates: ['settings.', 'ai.', 'setup.', 'automations.'],
     onSuccess: () => {
       setDraft({});
       setCertFiles({});

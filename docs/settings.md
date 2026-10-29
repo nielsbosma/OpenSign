@@ -154,6 +154,15 @@ See [Identification](identification.md).
 | Client ID | `OPENSIGN_EID_TIC_CLIENT_ID` | |
 | Client Secret | `OPENSIGN_EID_TIC_CLIENT_SECRET` | Secret |
 
+## Automations
+
+Off by default. See [Automations](automations.md#turning-it-on).
+
+| Field | Variable | |
+| --- | --- | --- |
+| Turn On Automations | `OPENSIGN_AUTOMATIONS_ENABLED` | Needs the key. |
+| Composio API Key | `OPENSIGN_AUTOMATIONS_COMPOSIO_API_KEY` | Secret. Your own Composio project's key. |
+
 ## Pinning settings
 
 Any field above can be pinned with its environment variable. The variable is named `OPENSIGN_<GROUP>_<FIELD>`, with the field name in upper snake case, as listed in the tables. A pinned field:
