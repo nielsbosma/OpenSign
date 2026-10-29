@@ -38,6 +38,8 @@ export type Me = {
   permissions: Array<Permission>;
   role: Role;
   twoFactorEnabled: boolean;
+  /** The running OpenSign version. */
+  version: string;
 };
 
 export type AccountPasskeyAddInput = {
