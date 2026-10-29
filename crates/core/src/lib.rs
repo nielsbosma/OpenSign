@@ -15,6 +15,8 @@ pub use permissions::{Permission, Role};
 pub use service::{Access, DynService, Kind, Meta, Service, call};
 
 pub mod auth;
+pub mod automations;
+pub mod composio;
 pub mod documents;
 pub mod eid;
 pub mod email;

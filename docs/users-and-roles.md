@@ -36,6 +36,7 @@ Roles are sets of permissions. Every check happens on the server, whichever way 
 | `documents.legal_hold` | Place and release legal holds | ✓ | ✓ | | | |
 | `templates.manage` | Create and change shared templates | ✓ | ✓ | | | |
 | `webhooks.manage` | Add and remove webhooks | ✓ | ✓ | | | |
+| `automations.manage` | Connect apps through Composio and set up [automations](automations.md) | ✓ | | | | |
 | `audit.read` | Browse and verify the audit log | ✓ | | | ✓ | |
 | `system.read` | See version, migrations and background jobs | ✓ | | | ✓ | |
 | `users.manage` | Invite people, change roles and deactivate accounts | ✓ | | | | |

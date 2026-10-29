@@ -2307,6 +2307,7 @@ dependencies = [
  "jpeg-decoder",
  "lettre",
  "lopdf",
+ "md-5 0.10.6",
  "object_store",
  "opensign-core",
  "opensign-crypto",

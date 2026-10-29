@@ -24,7 +24,7 @@ export type AccountMcpConnectionsOutput = Array<Connection>;
 
 export type AccountMeInput = Record<string, unknown>;
 
-export type Permission = "org.read" | "users.read" | "users.manage" | "settings.manage" | "audit.read" | "documents.read" | "documents.create" | "documents.read_all" | "documents.manage_all" | "documents.export" | "documents.legal_hold" | "templates.manage" | "api_keys.manage" | "webhooks.manage" | "ai.use" | "system.read";
+export type Permission = "org.read" | "users.read" | "users.manage" | "settings.manage" | "audit.read" | "documents.read" | "documents.create" | "documents.read_all" | "documents.manage_all" | "documents.export" | "documents.legal_hold" | "templates.manage" | "api_keys.manage" | "webhooks.manage" | "automations.manage" | "ai.use" | "system.read";
 
 export type Role = "admin" | "manager" | "sender" | "auditor" | "viewer";
 
@@ -389,6 +389,303 @@ export type AuthVerifyTwoFactorOutput = {
   challenge: string;
   status: "two_factor_required";
 };
+
+export type AutomationsAppsInput = {
+  /** At most 100; 30 when left out. */
+  limit?: number | null;
+  /** Part of an app's name, such as "drive" or "hubspot". */
+  search?: string | null;
+};
+
+export type AppView = {
+  categories: Array<string>;
+  description?: string | null;
+  logo?: string | null;
+  name: string;
+  /** Works without connecting an account. */
+  noAuth: boolean;
+  /** Composio's toolkit slug, such as googledrive. */
+  slug: string;
+  toolsCount?: number | null;
+};
+
+export type AutomationsAppsOutput = Array<AppView>;
+
+export type AutomationsConnectInput = {
+  /** The app's toolkit slug from automations.apps, such as googledrive. */
+  app: string;
+};
+
+export type AutomationsConnectOutput = ConnectOutput;
+
+export type ConnectOutput = {
+  connectionId: string;
+  /** Open this in the browser to sign in to the app. Composio sends you back to Settings, Automations. */
+  redirectUrl: string;
+};
+
+export type AutomationsConnectionsInput = Record<string, unknown>;
+
+export type ConnectionView = {
+  /** The app's toolkit slug. */
+  app: string;
+  /** Rules that use this connection. */
+  automations: number;
+  createdAt?: string | null;
+  /** Composio's connected account id. Rules refer to it. */
+  id: string;
+  /** ACTIVE once the account is connected; INITIATED while the sign-in is not finished; EXPIRED or FAILED when it needs connecting again. */
+  status: string;
+};
+
+export type AutomationsConnectionsOutput = Array<ConnectionView>;
+
+export type AutomationsCreateInput = {
+  /** Off: the rule is kept but does not run. On when left out. */
+  active?: boolean | null;
+  /** The tool's arguments, by the names in its input schema. Strings may use placeholders such as {{document.title}}, {{fields.Total}}, {{parties.0.email}} or {{sealedPdf}} (the sealed PDF as a file); see automations.status for the list. */
+  arguments?: unknown;
+  /** An ACTIVE connection from automations.connections. */
+  connectionId: string;
+  /** One of document.created, document.sent, document.viewed, document.signed, document.completed, document.declined, document.canceled, document.expired. */
+  event: string;
+  /** Only documents in these folders. Empty or left out: every folder. */
+  folderIds?: Array<string>;
+  name: string;
+  /** Only documents made from these templates. Empty or left out: every document. */
+  templateIds?: Array<string>;
+  /** The tool's slug from automations.tools. It must belong to the connection's app. */
+  tool: string;
+};
+
+export type AutomationsCreateOutput = AutomationView;
+
+export type AutomationView = {
+  active: boolean;
+  /** The app's toolkit slug. */
+  app: string;
+  /** The tool's arguments. Strings may hold placeholders such as {{document.title}}. */
+  arguments: unknown;
+  connectionId: string;
+  createdAt: string;
+  event: string;
+  /** Runs that were given up and not resent. */
+  failed: number;
+  /** Runs only for documents in these folders. Empty: every folder. */
+  folderIds: Array<string>;
+  id: string;
+  lastError?: string | null;
+  lastRunAt?: string | null;
+  /** pending, delivered or failed, for the latest run. */
+  lastStatus?: string | null;
+  name: string;
+  /** Runs only for documents made from these templates. Empty: every document. */
+  templateIds: Array<string>;
+  tool: string;
+  toolVersion?: string | null;
+  updatedAt: string;
+};
+
+export type AutomationsDeleteInput = {
+  id: string;
+};
+
+export type AutomationsDeleteOutput = Ok_;
+
+export type AutomationsDisconnectInput = {
+  /** The connection id from automations.connections. */
+  id: string;
+};
+
+export type AutomationsDisconnectOutput = DisconnectOutput;
+
+export type DisconnectOutput = {
+  /** Rules that used the connection and were turned off. */
+  paused: number;
+};
+
+export type AutomationsListInput = Record<string, unknown>;
+
+export type AutomationsListOutput = Array<AutomationView>;
+
+export type AutomationsResendInput = {
+  id: string;
+};
+
+export type AutomationsResendOutput = ResendOutput;
+
+export type ResendOutput = {
+  /** The new delivery's id. */
+  id: string;
+};
+
+export type AutomationsResendFailedInput = {
+  automationId: string;
+};
+
+export type AutomationsResendFailedOutput = ResendFailedOutput;
+
+export type ResendFailedOutput = {
+  /** How many runs were queued again. */
+  count: number;
+};
+
+export type AutomationsRunInput = {
+  id: string;
+};
+
+export type AttemptView = {
+  createdAt: string;
+  durationMs: number;
+  error?: string | null;
+  /** The first 2 KB of the endpoint's answer. */
+  responseExcerpt?: string | null;
+  statusCode?: number | null;
+};
+
+export type AutomationsRunOutput = DeliveryDetail;
+
+export type DeliveryDetail = {
+  attempts: number;
+  attemptsLog: Array<AttemptView>;
+  /** Set instead of `webhookId` for a run of a Composio automation. */
+  automationId?: string | null;
+  createdAt: string;
+  deliveredAt?: string | null;
+  /** Why the latest attempt failed. */
+  error?: string | null;
+  event: string;
+  id: string;
+  lastAttemptAt?: string | null;
+  nextAttemptAt?: string | null;
+  /** The JSON body that was posted. The signature is made fresh on every attempt and is not kept. */
+  payload: unknown;
+  /** Later deliveries that resent this one. */
+  resentAs: Array<string>;
+  /** The delivery this one resends. */
+  resentFrom?: string | null;
+  /** pending (queued or waiting for a retry), delivered, or failed (given up after the last retry). */
+  status: string;
+  /** The status code of the latest attempt, if the endpoint answered. */
+  statusCode?: number | null;
+  webhookId?: string | null;
+};
+
+export type DeliveryStatus = "delivered" | "pending" | "failed";
+
+export type AutomationsRunsInput = {
+  automationId: string;
+  /** For the next page: the id of the last run of the previous page. */
+  before?: string | null;
+  /** At most 200; 50 when left out. */
+  limit?: number | null;
+  /** Only runs with this status. "failed" also includes runs waiting for a retry after a failed attempt. */
+  status?: DeliveryStatus | null;
+};
+
+export type DeliveryView = {
+  attempts: number;
+  /** Set instead of `webhookId` for a run of a Composio automation. */
+  automationId?: string | null;
+  createdAt: string;
+  deliveredAt?: string | null;
+  /** Why the latest attempt failed. */
+  error?: string | null;
+  event: string;
+  id: string;
+  lastAttemptAt?: string | null;
+  nextAttemptAt?: string | null;
+  /** The delivery this one resends. */
+  resentFrom?: string | null;
+  /** pending (queued or waiting for a retry), delivered, or failed (given up after the last retry). */
+  status: string;
+  /** The status code of the latest attempt, if the endpoint answered. */
+  statusCode?: number | null;
+  webhookId?: string | null;
+};
+
+export type AutomationsRunsOutput = Array<DeliveryView>;
+
+export type AutomationsStatusInput = Record<string, unknown>;
+
+export type PlaceholderView = {
+  description: string;
+  name: string;
+};
+
+export type AutomationsStatusOutput = StatusView;
+
+export type StatusView = {
+  enabled: boolean;
+  events: Array<string>;
+  /** A Composio API key is saved. It is never shown. */
+  keySet: boolean;
+  /** The placeholders a rule's arguments can use, besides `fields.<label>` and `parties.<n>.<name|email|phone|company>`. */
+  placeholders: Array<PlaceholderView>;
+};
+
+export type AutomationsTestInput = {
+  /** The document whose data the run uses. It must not be a template. */
+  documentId: string;
+  id: string;
+};
+
+export type AutomationsTestOutput = ResendOutput;
+
+export type AutomationsToolInput = {
+  /** The tool's slug, such as GOOGLEDRIVE_UPLOAD_FILE. */
+  tool: string;
+};
+
+export type AutomationsToolOutput = ToolView;
+
+export type ToolView = {
+  app: string;
+  description: string;
+  /** The tool's arguments as a JSON schema, to build a rule's arguments from. */
+  inputSchema: unknown;
+  name: string;
+  slug: string;
+  version?: string | null;
+};
+
+export type AutomationsToolsInput = {
+  /** The app's toolkit slug. */
+  app: string;
+  /** At most 100; 50 when left out. */
+  limit?: number | null;
+  /** Words describing what the tool does, such as "upload file". */
+  search?: string | null;
+};
+
+export type ToolSummary = {
+  description: string;
+  name: string;
+  slug: string;
+};
+
+export type AutomationsToolsOutput = Array<ToolSummary>;
+
+export type AutomationsUpdateInput = {
+  /** Off: the rule is kept but does not run. On when left out. */
+  active?: boolean | null;
+  /** The tool's arguments, by the names in its input schema. Strings may use placeholders such as {{document.title}}, {{fields.Total}}, {{parties.0.email}} or {{sealedPdf}} (the sealed PDF as a file); see automations.status for the list. */
+  arguments?: unknown;
+  /** An ACTIVE connection from automations.connections. */
+  connectionId: string;
+  /** One of document.created, document.sent, document.viewed, document.signed, document.completed, document.declined, document.canceled, document.expired. */
+  event: string;
+  /** Only documents in these folders. Empty or left out: every folder. */
+  folderIds?: Array<string>;
+  id: string;
+  name: string;
+  /** Only documents made from these templates. Empty or left out: every document. */
+  templateIds?: Array<string>;
+  /** The tool's slug from automations.tools. It must belong to the connection's app. */
+  tool: string;
+};
+
+export type AutomationsUpdateOutput = AutomationView;
 
 export type BrandingGetInput = Record<string, unknown>;
 
@@ -1449,7 +1746,7 @@ export type SealRegenerateInput = Record<string, unknown>;
 
 export type SealRegenerateOutput = SealInfo;
 
-export type Group = "org" | "email" | "security" | "retention" | "updates" | "signing" | "ai" | "sms" | "eid";
+export type Group = "org" | "email" | "security" | "retention" | "updates" | "signing" | "ai" | "sms" | "eid" | "automations";
 
 export type SettingsGetInput = {
   group: Group;
@@ -2086,8 +2383,6 @@ export type WebhooksDeleteInput = {
 
 export type WebhooksDeleteOutput = Ok_;
 
-export type DeliveryStatus = "delivered" | "pending" | "failed";
-
 export type WebhooksDeliveriesInput = {
   /** For the next page: the id of the last delivery of the previous page. */
   before?: string | null;
@@ -2100,65 +2395,13 @@ export type WebhooksDeliveriesInput = {
   webhookId: string;
 };
 
-export type DeliveryView = {
-  attempts: number;
-  createdAt: string;
-  deliveredAt?: string | null;
-  /** Why the latest attempt failed. */
-  error?: string | null;
-  event: string;
-  id: string;
-  lastAttemptAt?: string | null;
-  nextAttemptAt?: string | null;
-  /** The delivery this one resends. */
-  resentFrom?: string | null;
-  /** pending (queued or waiting for a retry), delivered, or failed (given up after the last retry). */
-  status: string;
-  /** The status code of the latest attempt, if the endpoint answered. */
-  statusCode?: number | null;
-  webhookId: string;
-};
-
 export type WebhooksDeliveriesOutput = Array<DeliveryView>;
 
 export type WebhooksDeliveryInput = {
   id: string;
 };
 
-export type AttemptView = {
-  createdAt: string;
-  durationMs: number;
-  error?: string | null;
-  /** The first 2 KB of the endpoint's answer. */
-  responseExcerpt?: string | null;
-  statusCode?: number | null;
-};
-
 export type WebhooksDeliveryOutput = DeliveryDetail;
-
-export type DeliveryDetail = {
-  attempts: number;
-  attemptsLog: Array<AttemptView>;
-  createdAt: string;
-  deliveredAt?: string | null;
-  /** Why the latest attempt failed. */
-  error?: string | null;
-  event: string;
-  id: string;
-  lastAttemptAt?: string | null;
-  nextAttemptAt?: string | null;
-  /** The JSON body that was posted. The signature is made fresh on every attempt and is not kept. */
-  payload: unknown;
-  /** Later deliveries that resent this one. */
-  resentAs: Array<string>;
-  /** The delivery this one resends. */
-  resentFrom?: string | null;
-  /** pending (queued or waiting for a retry), delivered, or failed (given up after the last retry). */
-  status: string;
-  /** The status code of the latest attempt, if the endpoint answered. */
-  statusCode?: number | null;
-  webhookId: string;
-};
 
 export type WebhooksListInput = Record<string, unknown>;
 
@@ -2170,18 +2413,13 @@ export type WebhooksResendInput = {
 
 export type WebhooksResendOutput = ResendOutput;
 
-export type ResendOutput = {
-  /** The new delivery's id. */
-  id: string;
-};
-
 export type WebhooksResendFailedInput = {
   webhookId: string;
 };
 
-export type WebhooksResendFailedOutput = ResendFailedOutput;
+export type WebhooksResendFailedOutput = ResendFailedOutput2;
 
-export type ResendFailedOutput = {
+export type ResendFailedOutput2 = {
   /** How many deliveries were queued again. */
   count: number;
 };
@@ -2226,6 +2464,22 @@ export interface Services {
   "auth.request_password_reset": { kind: "mutation"; input: AuthRequestPasswordResetInput; output: AuthRequestPasswordResetOutput };
   "auth.reset_password": { kind: "mutation"; input: AuthResetPasswordInput; output: AuthResetPasswordOutput };
   "auth.verify_two_factor": { kind: "mutation"; input: AuthVerifyTwoFactorInput; output: AuthVerifyTwoFactorOutput };
+  "automations.apps": { kind: "query"; input: AutomationsAppsInput; output: AutomationsAppsOutput };
+  "automations.connect": { kind: "mutation"; input: AutomationsConnectInput; output: AutomationsConnectOutput };
+  "automations.connections": { kind: "query"; input: AutomationsConnectionsInput; output: AutomationsConnectionsOutput };
+  "automations.create": { kind: "mutation"; input: AutomationsCreateInput; output: AutomationsCreateOutput };
+  "automations.delete": { kind: "mutation"; input: AutomationsDeleteInput; output: AutomationsDeleteOutput };
+  "automations.disconnect": { kind: "mutation"; input: AutomationsDisconnectInput; output: AutomationsDisconnectOutput };
+  "automations.list": { kind: "query"; input: AutomationsListInput; output: AutomationsListOutput };
+  "automations.resend": { kind: "mutation"; input: AutomationsResendInput; output: AutomationsResendOutput };
+  "automations.resend_failed": { kind: "mutation"; input: AutomationsResendFailedInput; output: AutomationsResendFailedOutput };
+  "automations.run": { kind: "query"; input: AutomationsRunInput; output: AutomationsRunOutput };
+  "automations.runs": { kind: "query"; input: AutomationsRunsInput; output: AutomationsRunsOutput };
+  "automations.status": { kind: "query"; input: AutomationsStatusInput; output: AutomationsStatusOutput };
+  "automations.test": { kind: "mutation"; input: AutomationsTestInput; output: AutomationsTestOutput };
+  "automations.tool": { kind: "query"; input: AutomationsToolInput; output: AutomationsToolOutput };
+  "automations.tools": { kind: "query"; input: AutomationsToolsInput; output: AutomationsToolsOutput };
+  "automations.update": { kind: "mutation"; input: AutomationsUpdateInput; output: AutomationsUpdateOutput };
   "branding.get": { kind: "query"; input: BrandingGetInput; output: BrandingGetOutput };
   "branding.remove_logo": { kind: "mutation"; input: BrandingRemoveLogoInput; output: BrandingRemoveLogoOutput };
   "branding.set_logo": { kind: "mutation"; input: BrandingSetLogoInput; output: BrandingSetLogoOutput };

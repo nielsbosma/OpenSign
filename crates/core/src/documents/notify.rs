@@ -294,8 +294,15 @@ pub async fn notify_stopped(ctx: &Ctx, conn: &mut PgConnection, document_id: Uui
     email::send(&ctx.app, &email_settings, &org, &message).await
 }
 
-/// Queues a webhook delivery for every active webhook subscribed to `event`, in the caller's
-/// transaction.
+/// Where a delivery goes: a webhook endpoint, or a Composio automation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Target {
+    Webhook(Uuid),
+    Automation(Uuid),
+}
+
+/// Queues a delivery for every active webhook subscribed to `event` and every active automation
+/// whose rule matches the document, in the caller's transaction.
 pub async fn emit(conn: &mut PgConnection, event: &str, data: Value) -> Result<()> {
     let hooks: Vec<Uuid> = sqlx::query_scalar("select id from webhooks where active and ($1 = any(events) or '*' = any(events))")
         .bind(event)
@@ -304,17 +311,32 @@ pub async fn emit(conn: &mut PgConnection, event: &str, data: Value) -> Result<(
     for hook in hooks {
         emit_to(conn, hook, event, &data).await?;
     }
+    let document = data["documentId"].as_str().and_then(|id| Uuid::try_parse(id).ok());
+    let automations: Vec<Uuid> = sqlx::query_scalar(
+        "select a.id from automations a left join documents d on d.id = $2
+         where a.active and a.event = $1
+           and (cardinality(a.template_ids) = 0 or d.template_id = any(a.template_ids))
+           and (cardinality(a.folder_ids) = 0 or d.folder_id = any(a.folder_ids))
+         order by a.created_at",
+    )
+    .bind(event)
+    .bind(document)
+    .fetch_all(&mut *conn)
+    .await?;
+    for automation in automations {
+        queue_delivery(conn, Target::Automation(automation), event, &data, crate::context::now(), None).await?;
+    }
     Ok(())
 }
 
 pub async fn emit_to(conn: &mut PgConnection, hook: Uuid, event: &str, data: &Value) -> Result<Uuid> {
-    queue_delivery(conn, hook, event, data, crate::context::now(), None).await
+    queue_delivery(conn, Target::Webhook(hook), event, data, crate::context::now(), None).await
 }
 
 /// Queues one delivery with a new id. A resend keeps the event's original `createdAt`.
 pub async fn queue_delivery(
     conn: &mut PgConnection,
-    hook: Uuid,
+    target: Target,
     event: &str,
     data: &Value,
     created_at: DateTime<Utc>,
@@ -322,17 +344,22 @@ pub async fn queue_delivery(
 ) -> Result<Uuid> {
     let id = Uuid::now_v7();
     let payload = json!({ "id": id, "event": event, "createdAt": created_at, "data": data });
+    let (hook, automation, job) = match target {
+        Target::Webhook(hook) => (Some(hook), None, "webhook"),
+        Target::Automation(automation) => (None, Some(automation), "automation"),
+    };
     sqlx::query(
-        "insert into webhook_deliveries (id, webhook_id, event, payload, resent_from, next_attempt_at) values ($1, $2, $3, $4, $5, now())",
+        "insert into webhook_deliveries (id, webhook_id, automation_id, event, payload, resent_from, next_attempt_at) values ($1, $2, $3, $4, $5, $6, now())",
     )
     .bind(id)
     .bind(hook)
+    .bind(automation)
     .bind(event)
     .bind(&payload)
     .bind(resent_from)
     .execute(&mut *conn)
     .await?;
-    enqueue(conn, "webhook", json!({ "delivery": id }), None, None).await?;
+    enqueue(conn, job, json!({ "delivery": id }), None, None).await?;
     Ok(id)
 }
 
@@ -359,7 +386,7 @@ struct PendingDelivery {
     active: bool,
 }
 
-const EXCERPT_BYTES: usize = 2048;
+pub const EXCERPT_BYTES: usize = 2048;
 
 pub async fn deliver_webhook(ctx: &Ctx, conn: &mut PgConnection, delivery_id: Uuid, job: &Job) -> Result<()> {
     let Some(d): Option<PendingDelivery> = sqlx::query_as(
@@ -403,16 +430,37 @@ pub async fn deliver_webhook(ctx: &Ctx, conn: &mut PgConnection, delivery_id: Uu
         Ok((code, body)) => (Some(code as i32), Some(format!("The endpoint answered {code}")), body),
         Err(e) => (None, Some(e.to_string()), None),
     };
-    let next_attempt = (error.is_some() && job.attempts < job.max_attempts).then(|| ctx.now + retry_delay(job.attempts));
+    let attempt = Attempt { status_code: code, error: error.clone(), response, duration_ms, retry: true };
+    record_attempt(ctx, conn, delivery_id, job, attempt).await?;
+    match error {
+        Some(e) => Err(AppError::internal(anyhow::anyhow!("webhook delivery failed: {e}"))),
+        None => Ok(()),
+    }
+}
+
+/// One try at a delivery, for the log.
+pub struct Attempt {
+    pub status_code: Option<i32>,
+    pub error: Option<String>,
+    pub response: Option<String>,
+    pub duration_ms: i32,
+    /// Off for failures that another try cannot fix.
+    pub retry: bool,
+}
+
+/// Logs an attempt and moves the delivery on: delivered, waiting for the job's next retry, or given up.
+pub async fn record_attempt(ctx: &Ctx, conn: &mut PgConnection, delivery_id: Uuid, job: &Job, attempt: Attempt) -> Result<()> {
+    let next_attempt =
+        (attempt.error.is_some() && attempt.retry && job.attempts < job.max_attempts).then(|| ctx.now + retry_delay(job.attempts));
     sqlx::query(
         "insert into webhook_attempts (id, delivery_id, status_code, error, response_excerpt, duration_ms, created_at) values ($1, $2, $3, $4, $5, $6, $7)",
     )
     .bind(Uuid::now_v7())
     .bind(delivery_id)
-    .bind(code)
-    .bind(&error)
-    .bind(&response)
-    .bind(duration_ms)
+    .bind(attempt.status_code)
+    .bind(&attempt.error)
+    .bind(&attempt.response)
+    .bind(attempt.duration_ms)
     .bind(ctx.now)
     .execute(&mut *conn)
     .await?;
@@ -421,16 +469,13 @@ pub async fn deliver_webhook(ctx: &Ctx, conn: &mut PgConnection, delivery_id: Uu
            delivered_at = case when $3 is null then $4 else null end where id = $1",
     )
     .bind(delivery_id)
-    .bind(code)
-    .bind(&error)
+    .bind(attempt.status_code)
+    .bind(&attempt.error)
     .bind(ctx.now)
     .bind(next_attempt)
     .execute(&mut *conn)
     .await?;
-    match error {
-        Some(e) => Err(AppError::internal(anyhow::anyhow!("webhook delivery failed: {e}"))),
-        None => Ok(()),
-    }
+    Ok(())
 }
 
 /// The error and its causes, without the URL, which can carry a token in its path.
@@ -460,7 +505,7 @@ async fn excerpt(response: &mut reqwest::Response) -> Option<String> {
     excerpt_text(&bytes)
 }
 
-fn excerpt_text(bytes: &[u8]) -> Option<String> {
+pub fn excerpt_text(bytes: &[u8]) -> Option<String> {
     let text = String::from_utf8_lossy(&bytes[..bytes.len().min(EXCERPT_BYTES)]).replace('\0', "");
     (!text.trim().is_empty()).then_some(text)
 }

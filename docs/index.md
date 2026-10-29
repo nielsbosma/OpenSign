@@ -15,6 +15,7 @@ These pages cover every part of OpenSign, for people who send documents, for adm
 | Send one template to hundreds of people | [Bulk send](bulk-send.md) |
 | Check that a signed PDF is genuine | [Verifying a document](verification.md) |
 | Connect a CRM or another system | [REST API](api.md) and [Webhooks](webhooks.md) |
+| Save signed PDFs to Google Drive, post to Slack, update HubSpot | [Automations](automations.md) through Composio |
 | Move from Scrive or DocuSign | [Scrive compatibility](scrive.md) or [DocuSign compatibility](docusign.md) |
 | Work with OpenSign from Claude | [MCP and Claude](mcp.md) |
 | Understand how OpenSign protects documents | [Security model](security.md) |
