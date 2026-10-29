@@ -65,6 +65,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<users::RevokeInvite>(),
         erase::<users::CreateApiKey>(),
         erase::<users::ListApiKeys>(),
+        erase::<users::UpdateApiKey>(),
         erase::<users::RevokeApiKey>(),
         erase::<admin::GetSettings>(),
         erase::<admin::UpdateSettings>(),

@@ -1,10 +1,13 @@
+use std::net::IpAddr;
+
 use chrono::{DateTime, Duration, Utc};
+use ipnet::IpNet;
 use opensign_crypto::{constant_time_eq, random_token, sha256_hex};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
 use crate::context::{Actor, Credential};
-use crate::error::{AppError, ErrorKind, Result};
+use crate::error::{AppError, ErrorKind, Result, bad_request};
 use crate::permissions::{Permission, Role};
 use crate::settings::SecuritySettings;
 
@@ -194,7 +197,7 @@ pub async fn load_api_key(
     {
         return Ok(None);
     }
-    if !row.allowed_ips.is_empty() && !ip.is_some_and(|ip| row.allowed_ips.iter().any(|a| a == ip)) {
+    if !ip_allowed(&row.allowed_ips, ip) {
         return Ok(None);
     }
     let Some(user) = user_by_id(conn, row.user_id).await? else { return Ok(None) };
@@ -208,6 +211,48 @@ pub async fn load_api_key(
     Ok(Some(actor))
 }
 
+pub const MAX_ALLOWED_IPS: usize = 50;
+
+fn parse_net(entry: &str) -> Option<IpNet> {
+    entry.parse::<IpNet>().ok().or_else(|| entry.parse::<IpAddr>().ok().map(IpNet::from))
+}
+
+/// Validates an allowlist of addresses and CIDR ranges and returns it in canonical form.
+pub fn normalize_allowed_ips(entries: &[String]) -> Result<Vec<String>> {
+    let mut out: Vec<String> = Vec::new();
+    for raw in entries.iter().map(|e| e.trim()).filter(|e| !e.is_empty()) {
+        let net = parse_net(raw).ok_or_else(|| bad_request(format!("{raw} is not an IP address or CIDR range")))?.trunc();
+        let canonical = if net.prefix_len() == net.max_prefix_len() { net.addr().to_string() } else { net.to_string() };
+        if !out.contains(&canonical) {
+            out.push(canonical);
+        }
+    }
+    if out.len() > MAX_ALLOWED_IPS {
+        return Err(bad_request(format!("Allow at most {MAX_ALLOWED_IPS} addresses or ranges")));
+    }
+    Ok(out)
+}
+
+pub fn ip_allowed(allowed: &[String], ip: Option<&str>) -> bool {
+    if allowed.is_empty() {
+        return true;
+    }
+    let Some(ip) = ip.and_then(|ip| ip.parse::<IpAddr>().ok()).map(|ip| ip.to_canonical()) else { return false };
+    allowed.iter().filter_map(|a| parse_net(a)).any(|net| net.contains(&ip))
+}
+
+/// True when every address `new` admits is already admitted by `old`.
+pub fn ips_no_wider(old: &[String], new: &[String]) -> bool {
+    if old.is_empty() {
+        return true;
+    }
+    if new.is_empty() {
+        return false;
+    }
+    let old: Vec<IpNet> = old.iter().filter_map(|a| parse_net(a)).collect();
+    new.iter().all(|n| parse_net(n).is_some_and(|n| old.iter().any(|o| o.contains(&n))))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,5 +263,31 @@ mod tests {
         for bad in ["", "anna", "anna@", "@example.com", "anna@example", "a b@example.com", "a@example.com,b@example.com", "\"a\"@x.se"] {
             assert!(normalize_email(bad).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn matches_allowed_ips() {
+        let allowed = normalize_allowed_ips(&[" 203.0.113.7 ".into(), "198.51.100.9/24".into(), "2001:db8::/32".into()]).expect("valid");
+        assert_eq!(allowed, ["203.0.113.7", "198.51.100.0/24", "2001:db8::/32"]);
+        assert!(ip_allowed(&allowed, Some("203.0.113.7")));
+        assert!(ip_allowed(&allowed, Some("198.51.100.200")));
+        assert!(ip_allowed(&allowed, Some("::ffff:198.51.100.1")));
+        assert!(ip_allowed(&allowed, Some("2001:db8:1::1")));
+        assert!(!ip_allowed(&allowed, Some("203.0.113.8")));
+        assert!(!ip_allowed(&allowed, None));
+        assert!(!ip_allowed(&allowed, Some("not an ip")));
+        assert!(ip_allowed(&[], None));
+        assert!(normalize_allowed_ips(&["10.0.0.0/33".into()]).is_err());
+        assert!(normalize_allowed_ips(&["example.com".into()]).is_err());
+    }
+
+    #[test]
+    fn compares_allowlists() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert!(ips_no_wider(&s(&[]), &s(&["10.0.0.1"])));
+        assert!(!ips_no_wider(&s(&["10.0.0.1"]), &s(&[])));
+        assert!(ips_no_wider(&s(&["10.0.0.0/8"]), &s(&["10.1.0.0/16", "10.0.0.5"])));
+        assert!(!ips_no_wider(&s(&["10.1.0.0/16"]), &s(&["10.0.0.0/8"])));
+        assert!(!ips_no_wider(&s(&["10.0.0.1"]), &s(&["10.0.0.1", "10.0.0.2"])));
     }
 }

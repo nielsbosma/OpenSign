@@ -191,6 +191,7 @@ export type Usage = {
 };
 
 export type ApiKeysCreateInput = {
+  /** Addresses or CIDR ranges the key may be used from. Empty allows any address. */
   allowedIps?: Array<string>;
   expiresInDays?: number | null;
   name: string;
@@ -209,6 +210,7 @@ export type CreatedApiKey = {
 export type ApiKeysListInput = Record<string, unknown>;
 
 export type ApiKeyView = {
+  allowedIps: Array<string>;
   createdAt: string;
   expiresAt?: string | null;
   id: string;
@@ -225,6 +227,18 @@ export type ApiKeysRevokeInput = {
 };
 
 export type ApiKeysRevokeOutput = Ok_;
+
+export type ApiKeysUpdateInput = {
+  /** Replaces the addresses or CIDR ranges the key may be used from; empty allows any address. Omit to keep them. */
+  allowedIps?: Array<string> | null;
+  id: string;
+  /** A new name. Omit to keep the current one. */
+  name?: string | null;
+  /** Replaces the key's scopes. You can only grant what your own role allows. Omit to keep them. */
+  permissions?: Array<Permission> | null;
+};
+
+export type ApiKeysUpdateOutput = ApiKeyView;
 
 export type AuditListInput = {
   action?: string | null;
@@ -1384,6 +1398,7 @@ export interface Services {
   "api_keys.create": { kind: "mutation"; input: ApiKeysCreateInput; output: ApiKeysCreateOutput };
   "api_keys.list": { kind: "query"; input: ApiKeysListInput; output: ApiKeysListOutput };
   "api_keys.revoke": { kind: "mutation"; input: ApiKeysRevokeInput; output: ApiKeysRevokeOutput };
+  "api_keys.update": { kind: "mutation"; input: ApiKeysUpdateInput; output: ApiKeysUpdateOutput };
   "audit.list": { kind: "query"; input: AuditListInput; output: AuditListOutput };
   "audit.verify": { kind: "query"; input: AuditVerifyInput; output: AuditVerifyOutput };
   "auth.login": { kind: "mutation"; input: AuthLoginInput; output: AuthLoginOutput };

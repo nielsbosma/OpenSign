@@ -3,6 +3,7 @@ import { type ReactNode, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
@@ -124,6 +125,24 @@ export function StatusDot({ tone }: { tone: 'ok' | 'warn' | 'error' | 'off' }) {
   return <span className={cn('inline-block size-2 rounded-full', color)} />;
 }
 
+export function IconButton({
+  label,
+  className,
+  children,
+  ...props
+}: Omit<React.ComponentProps<typeof Button>, 'size' | 'aria-label'> & { label: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button type="button" variant="ghost" size="icon" aria-label={label} className={cn('text-muted-foreground', className)} {...props}>
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 /** A destructive action that asks first. */
 export function ConfirmButton({
   label,
@@ -132,6 +151,7 @@ export function ConfirmButton({
   confirmLabel = label,
   onConfirm,
   disabled,
+  icon,
 }: {
   label: string;
   title: string;
@@ -139,19 +159,26 @@ export function ConfirmButton({
   confirmLabel?: string;
   onConfirm: () => void;
   disabled?: boolean;
+  icon?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        className="text-destructive hover:text-destructive"
-        onClick={() => setOpen(true)}
-        disabled={disabled}
-      >
-        {label}
-      </Button>
+      {icon ? (
+        <IconButton label={label} className="hover:text-destructive" onClick={() => setOpen(true)} disabled={disabled}>
+          {icon}
+        </IconButton>
+      ) : (
+        <Button
+          type="button"
+          variant="ghost"
+          className="text-destructive hover:text-destructive"
+          onClick={() => setOpen(true)}
+          disabled={disabled}
+        >
+          {label}
+        </Button>
+      )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
