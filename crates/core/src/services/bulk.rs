@@ -677,22 +677,13 @@ async fn send_row(ctx: &Ctx, conn: &mut PgConnection, bulk: &BulkJob, values: &B
         let inputs = current
             .into_iter()
             .map(|f| {
-                let value = match f.party_id {
-                    None => mapped.get(&format!("field.{}", f.label)).cloned().or(f.value),
-                    Some(_) => f.value,
-                };
-                Ok(FieldInput {
-                    party_id: f.party_id,
-                    kind: FieldKind::parse(&f.kind).ok_or_else(|| AppError::internal(anyhow::anyhow!("field kind {}", f.kind)))?,
-                    page: f.page,
-                    x: f.x,
-                    y: f.y,
-                    width: f.width,
-                    height: f.height,
-                    required: Some(f.required),
-                    label: Some(f.label),
-                    value,
-                })
+                let mut input = FieldInput::from_row(&f)?;
+                if f.party_id.is_none()
+                    && let Some(value) = mapped.get(&format!("field.{}", f.label))
+                {
+                    input.value = Some(value.clone());
+                }
+                Ok(input)
             })
             .collect::<Result<Vec<_>>>()?;
         docs::SetFields::run(ctx, conn, docs::SetFieldsInput { document_id, fields: inputs }).await?;

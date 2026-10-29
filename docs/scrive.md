@@ -52,7 +52,7 @@ The key's scopes and its owner's role apply as everywhere else.
 | `signatory_role` signing_party, approver, viewer | signer, approver, viewer |
 | `lang` | the document's signer language |
 
-- Placements use Scrive's `xrel`, `yrel`, `wrel`, `hrel` and one-based `page`. Field types `signature`, `checkbox`, `name` (order 1), `email`, `company` and text-like types are placed. The author party's text fields become values the sender fills in.
+- Placements use Scrive's `xrel`, `yrel`, `wrel`, `hrel` and one-based `page`. Field types `signature`, `checkbox`, `radiogroup` (one radio button per placement), `name` (order 1), `email`, `company`, `mobile` (as a phone field when empty or written with a country code) and text-like types are placed. The author party's text fields become values the sender fills in.
 - The list filter takes one status at a time.
 
 ## Errors

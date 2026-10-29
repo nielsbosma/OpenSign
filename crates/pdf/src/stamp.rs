@@ -10,6 +10,10 @@ pub const FONT_BOLD: &[u8] = b"OSHelvB";
 pub enum StampContent {
     Text(String),
     Check(bool),
+    /// One button of a radio group: a circle, with a dot when chosen.
+    Radio(bool),
+    /// An image as PNG, scaled to fit the box and centered in it.
+    Image(Vec<u8>),
     /// A drawn or typed signature as PNG, with the signer's name and a caption under it.
     Signature {
         png: Option<Vec<u8>>,
@@ -275,6 +279,32 @@ pub fn stamp(pdf: &[u8], stamps: &[Stamp]) -> Result<Vec<u8>> {
                         );
                     }
                 }
+                StampContent::Radio(chosen) => {
+                    let r = w.min(h) / 2.0;
+                    content.extend(format!("0.8 w 0 0 0.2 RG {}", circle(r, r, r - 0.4, "S")).into_bytes());
+                    if *chosen {
+                        content.extend(circle(r, r, r * 0.5, "f").into_bytes());
+                    }
+                }
+                StampContent::Image(png) => {
+                    let id = png_image(&mut doc, png)?;
+                    let key = format!("OSImg{}", images.len()).into_bytes();
+                    let (iw, ih) = image_size(&doc, id);
+                    let scale = (w / iw).min(h / ih);
+                    let (dw, dh) = (iw * scale, ih * scale);
+                    content.extend(
+                        format!(
+                            "q {} 0 0 {} {} {} cm /{} Do Q\n",
+                            fmt(dw),
+                            fmt(dh),
+                            fmt((w - dw) / 2.0),
+                            fmt((h - dh) / 2.0),
+                            String::from_utf8_lossy(&key)
+                        )
+                        .into_bytes(),
+                    );
+                    images.push((key, id));
+                }
                 StampContent::Signature { png, name, caption } => {
                     let caption_size = (h * 0.13).clamp(5.0, 8.0);
                     let name_size = (h * 0.16).clamp(6.0, 10.0);
@@ -315,6 +345,40 @@ pub fn stamp(pdf: &[u8], stamps: &[Stamp]) -> Result<Vec<u8>> {
     doc.compress();
     doc.save_to(&mut out).map_err(|e| PdfError::Malformed(e.to_string()))?;
     Ok(out)
+}
+
+/// A circle as four Bézier curves, then `paint` (`S` to stroke, `f` to fill).
+fn circle(cx: f64, cy: f64, r: f64, paint: &str) -> String {
+    let k = r * 0.5523;
+    format!(
+        "{} {} m {} {} {} {} {} {} c {} {} {} {} {} {} c {} {} {} {} {} {} c {} {} {} {} {} {} c {paint}\n",
+        fmt(cx + r),
+        fmt(cy),
+        fmt(cx + r),
+        fmt(cy + k),
+        fmt(cx + k),
+        fmt(cy + r),
+        fmt(cx),
+        fmt(cy + r),
+        fmt(cx - k),
+        fmt(cy + r),
+        fmt(cx - r),
+        fmt(cy + k),
+        fmt(cx - r),
+        fmt(cy),
+        fmt(cx - r),
+        fmt(cy - k),
+        fmt(cx - k),
+        fmt(cy - r),
+        fmt(cx),
+        fmt(cy - r),
+        fmt(cx + k),
+        fmt(cy - r),
+        fmt(cx + r),
+        fmt(cy - k),
+        fmt(cx + r),
+        fmt(cy),
+    )
 }
 
 pub(crate) fn image_size(doc: &Document, id: ObjectId) -> (f64, f64) {

@@ -108,7 +108,23 @@ fn party(name: &str, role: PartyRole, delivery: Delivery, auth_to_sign: AuthMeth
 }
 
 fn field(party_id: Option<Uuid>, kind: FieldKind, page: i32, y: f64) -> FieldInput {
-    FieldInput { party_id, kind, page, x: 0.1, y, width: 0.3, height: 0.06, required: None, label: None, value: None }
+    FieldInput {
+        party_id,
+        kind,
+        page,
+        x: 0.1,
+        y,
+        width: 0.3,
+        height: 0.06,
+        required: None,
+        label: None,
+        value: None,
+        options: vec![],
+        validation: None,
+        format: None,
+        group_key: None,
+        read_only: None,
+    }
 }
 
 #[tokio::test]
@@ -857,4 +873,182 @@ async fn webcam_photo_is_required_taken_and_sealed() {
     let names = sealed.catalog().unwrap().get(b"Names").unwrap().as_dict().unwrap();
     let tree = names.get(b"EmbeddedFiles").unwrap().as_dict().unwrap().get(b"Names").unwrap().as_array().unwrap();
     assert_eq!(tree[0].as_str().unwrap(), b"attachment-01-webcam-photo.png", "the photo is sealed into the evidence");
+}
+
+fn message<T>(result: opensign_core::Result<T>) -> String {
+    match result {
+        Err(e) => e.message,
+        Ok(_) => panic!("expected an error"),
+    }
+}
+
+#[tokio::test]
+async fn field_types_are_validated_and_stamped() {
+    let Some(app) = app().await else { return };
+    {
+        let mut conn = app.db.acquire().await.unwrap();
+        let no_tsa = SigningSettings { tsa_url: String::new(), ..SigningSettings::default() };
+        app.settings.save(&mut conn, &app.keys, &no_tsa, None).await.unwrap();
+    }
+    let sender = user(&app, "Fia Fields", Role::Sender).await;
+    let create = serde_json::from_value::<docs::CreateInput>(serde_json::json!({ "title": "Order form" })).unwrap();
+    let id = call::<docs::Create>(&sender, create).await.unwrap().document.id;
+    call::<docs::Upload>(&sender, docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)) })
+        .await
+        .unwrap();
+    let saved = call::<docs::SetParties>(
+        &sender,
+        docs::SetPartiesInput { document_id: id, parties: vec![party("Anna", PartyRole::Signer, Delivery::Link, AuthMethod::Standard)] },
+    )
+    .await
+    .unwrap();
+    let anna = Some(saved[0].id);
+    let at = |kind: FieldKind, n: i32, label: &str| FieldInput {
+        label: Some(label.into()),
+        width: 0.2,
+        height: 0.04,
+        ..field(anna, kind, 0, 0.05 + f64::from(n) * 0.055)
+    };
+    let validation = |v: serde_json::Value| Some(serde_json::from_value(v).unwrap());
+    let fields = vec![
+        FieldInput {
+            format: Some("1 234,00 kr".into()),
+            validation: validation(serde_json::json!({ "min": "1", "max": "100000" })),
+            ..at(FieldKind::Number, 0, "Amount")
+        },
+        FieldInput { options: vec!["Small".into(), "Large".into()], ..at(FieldKind::Select, 1, "Size") },
+        FieldInput { options: vec!["A".into(), "B".into(), "C".into()], ..at(FieldKind::Multiselect, 2, "Extras") },
+        FieldInput {
+            options: vec!["S".into()],
+            group_key: Some("fit".into()),
+            width: 0.03,
+            height: 0.03,
+            ..at(FieldKind::Radio, 3, "Fit")
+        },
+        FieldInput {
+            options: vec!["L".into()],
+            group_key: Some("fit".into()),
+            width: 0.03,
+            height: 0.03,
+            ..at(FieldKind::Radio, 4, "Fit")
+        },
+        at(FieldKind::Phone, 5, "Phone"),
+        FieldInput {
+            format: Some("DD/MM/YYYY".into()),
+            validation: validation(serde_json::json!({ "min": "2026-01-01" })),
+            ..at(FieldKind::DateInput, 6, "Start")
+        },
+        FieldInput { height: 0.1, ..at(FieldKind::Image, 7, "Logo") },
+        at(FieldKind::File, 9, "Certificate"),
+        FieldInput {
+            validation: validation(serde_json::json!({ "pattern": "[0-9]{3} ?[0-9]{2}", "message": "Write the postcode as 123 45" })),
+            ..at(FieldKind::Text, 10, "Postcode")
+        },
+        FieldInput { value: Some("Fixed".into()), read_only: Some(true), ..at(FieldKind::Text, 11, "Terms") },
+        at(FieldKind::Signature, 12, "Signature"),
+    ];
+    let set = |fields: Vec<FieldInput>| call::<docs::SetFields>(&sender, docs::SetFieldsInput { document_id: id, fields });
+    let broken = FieldInput { validation: validation(serde_json::json!({ "pattern": "([a-z]" })), ..at(FieldKind::Text, 0, "Bad") };
+    assert_eq!(kind(set(vec![broken]).await), ErrorKind::BadRequest, "a pattern that does not compile");
+    assert_eq!(kind(set(vec![at(FieldKind::Select, 0, "Empty")]).await), ErrorKind::BadRequest, "a list without options");
+    assert_eq!(kind(set(vec![field(None, FieldKind::Image, 0, 0.1)]).await), ErrorKind::BadRequest, "the sender uploads nothing");
+    let bad_default = FieldInput { value: Some("Huge".into()), options: vec!["Small".into()], ..at(FieldKind::Select, 0, "Size") };
+    assert_eq!(kind(set(vec![bad_default]).await), ErrorKind::BadRequest, "a default that is not an option");
+    let view = set(fields).await.unwrap();
+    let id_of = |label: &str, n: usize| view.fields.iter().filter(|f| f.label == label).nth(n).unwrap().id;
+    let (amount, size, extras, fit_s, fit_l, phone, start, logo, certificate, postcode, terms) = (
+        id_of("Amount", 0),
+        id_of("Size", 0),
+        id_of("Extras", 0),
+        id_of("Fit", 0),
+        id_of("Fit", 1),
+        id_of("Phone", 0),
+        id_of("Start", 0),
+        id_of("Logo", 0),
+        id_of("Certificate", 0),
+        id_of("Postcode", 0),
+        id_of("Terms", 0),
+    );
+    call::<docs::Send>(&sender, docs::SendInput { id, expires_at: None }).await.unwrap();
+
+    let token = {
+        let mut conn = app.db.acquire().await.unwrap();
+        signer_token(&app.keys, &parties(&mut conn, id).await.unwrap()[0])
+    };
+    let signer = signer_ctx(&app);
+    let good = vec![
+        (amount, "1 234,5 kr"),
+        (size, "Large"),
+        (extras, r#"["C","A"]"#),
+        (fit_s, ""),
+        (fit_l, "L"),
+        (phone, "+46 70 123 45 67"),
+        (start, "2026-03-01"),
+        (postcode, "123 45"),
+        (terms, "Changed"),
+    ];
+    let sign = |changes: &[(Uuid, &str)]| {
+        let values = good
+            .iter()
+            .map(|(id, v)| changes.iter().find(|(c, _)| c == id).map_or(*v, |(_, v)| *v))
+            .zip(good.iter().map(|(id, _)| *id))
+            .map(|(value, field_id)| FieldValue { field_id, value: value.into() })
+            .collect();
+        call::<signing::Sign>(
+            &signer,
+            signing::SignInput {
+                token: token.clone(),
+                session: None,
+                values,
+                signature: Some(SignatureInput { typed_name: Some("Anna".into()), image_png_base64: None }),
+                consent: true,
+            },
+        )
+    };
+    assert!(message(sign(&[]).await).contains("Logo"), "the image is required");
+    {
+        let mut tx = app.db.begin().await.unwrap();
+        let pdf = signing::upload_field_file(&signer, &mut tx, &token, None, logo, "logo.pdf", sample_pdf(1)).await;
+        assert_eq!(kind(pdf), ErrorKind::BadRequest, "an image field takes an image");
+        let wrong = signing::upload_field_file(&signer, &mut tx, &token, None, amount, "x.png", camera_png(10, 10)).await;
+        assert_eq!(kind(wrong), ErrorKind::NotFound, "only image and file fields take uploads");
+        let image =
+            signing::upload_field_file(&signer, &mut tx, &token, None, logo, "C:\\me\\logo.png", camera_png(400, 300)).await.unwrap();
+        assert_eq!(image.value.as_deref(), Some("logo.png"));
+        signing::upload_field_file(&signer, &mut tx, &token, None, certificate, "cert.pdf", sample_pdf(1)).await.unwrap();
+        tx.commit().await.unwrap();
+    }
+    assert_eq!(message(sign(&[(amount, "abc")]).await), "\u{201c}Amount\u{201d} must be a number");
+    assert_eq!(message(sign(&[(amount, "0,5")]).await), "\u{201c}Amount\u{201d} must be at least 1");
+    assert_eq!(message(sign(&[(postcode, "12")]).await), "Write the postcode as 123 45");
+    assert_eq!(kind(sign(&[(size, "Huge")]).await), ErrorKind::BadRequest);
+    assert_eq!(kind(sign(&[(phone, "070 123")]).await), ErrorKind::BadRequest);
+    assert_eq!(kind(sign(&[(start, "2025-12-31")]).await), ErrorKind::BadRequest);
+    let both = sign(&[(fit_s, "S")]).await;
+    assert!(message(both).contains("only one"), "one radio button per group");
+    assert!(sign(&[]).await.unwrap().completed);
+
+    let stored: Vec<(String, Option<String>)> =
+        sqlx::query_as("select label, value from fields where document_id = $1 order by y").bind(id).fetch_all(&app.db).await.unwrap();
+    let value = |label: &str, n: usize| stored.iter().filter(|(l, _)| l == label).nth(n).unwrap().1.clone();
+    assert_eq!(value("Amount", 0).as_deref(), Some("1234.5"));
+    assert_eq!(value("Extras", 0).as_deref(), Some(r#"["A","C"]"#));
+    assert_eq!((value("Fit", 0), value("Fit", 1).as_deref()), (None, Some("L")));
+    assert_eq!(value("Phone", 0).as_deref(), Some("+46701234567"));
+    assert_eq!(value("Start", 0).as_deref(), Some("2026-03-01"));
+    assert_eq!(value("Terms", 0).as_deref(), Some("Fixed"), "a read-only value cannot be changed");
+
+    worker::drain(&app).await.unwrap();
+    let download = call::<docs::Download>(&sender, docs::DownloadInput { id, version: Some(Version::Signed) }).await.unwrap();
+    let sealed = Document::load_mem(&B64.decode(download.content_base64).unwrap()).unwrap();
+    let page = *sealed.get_pages().get(&1).unwrap();
+    let content = sealed.get_page_content(page);
+    let has = |text: &[u8]| content.windows(text.len()).any(|w| w == text);
+    assert!(has(b"(1 234,50 kr)"), "numbers are written in their format");
+    assert!(has(b"(01/03/2026)"), "dates are written in their format");
+    assert!(has(b"(A, C)"));
+    assert!(has(b"/OSImg"), "the image is drawn on the page");
+    let names = sealed.catalog().unwrap().get(b"Names").unwrap().as_dict().unwrap();
+    let tree = names.get(b"EmbeddedFiles").unwrap().as_dict().unwrap().get(b"Names").unwrap().as_array().unwrap();
+    assert!(tree.iter().any(|n| n.as_str().is_ok_and(|n| n.ends_with(b"cert.pdf"))), "the file is sealed into the PDF");
 }

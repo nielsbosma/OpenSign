@@ -18,7 +18,7 @@ The page shows:
 - what the party is asked to do: sign, approve, or receive a copy,
 - the whole document, with the party's own fields highlighted.
 
-The party fills in their fields: text, dates, checkboxes, initials and signatures. Name, email and company fields are filled in from their details. If you asked for [attachments](attachments.md), they upload them here. If you asked for a [webcam photo](identification.md#webcam-photo), they take it here.
+The party fills in their fields: text, numbers, dropdowns, multi-select lists, radio groups, checkboxes, phone numbers, dates from a date picker, images and files they upload in place, initials and signatures. Each field is checked as they type, with errors in their language or the [error text you wrote](documents.md#checks-and-error-texts), and they cannot sign until every field passes. Name, email and company fields are filled in from their details. If you asked for [attachments](attachments.md), they upload them here. If you asked for a [webcam photo](identification.md#webcam-photo), they take it here.
 
 In a document that signs in order, a party who opens their link early sees "Others sign before you. We will email you when it is your turn."
 

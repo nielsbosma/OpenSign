@@ -45,18 +45,56 @@ Add everyone who signs, approves or receives a copy. For each party you choose t
 
 ### Fields
 
-Pick a party in the field toolbar, then place fields on the pages. Each field belongs to one party, who fills it in when signing.
+Pick a party in the field toolbar, then place fields on the pages. Each field belongs to one party, who fills it in when signing. Select a field to change it in the **Field** panel: who fills it in, its label, whether it is required, and the settings below.
 
 | Field | |
 | --- | --- |
 | Signature | A drawn or typed signature. |
 | Initials | The party's initials. |
-| Text | Free text. Can be required and have a label. |
-| Date | Filled in with the date of signing. |
-| Checkbox | Can be required, or prefilled as checked. |
+| Text | Free text. Can have a pattern, a length and a default. |
+| Number | A number, with a smallest and largest value and a [format](#number-and-date-formats). |
+| Dropdown | One choice from a list of options. |
+| Multi-Select | Any number of choices from a list, written comma-separated on the page. |
+| Radio | A group of buttons of which the party picks one. See [Radio groups](#radio-groups). |
+| Checkbox | Can be required, or ticked by default. |
+| Phone | A phone number with its country code, stored as +46701234567. |
+| Date Picker | A date the party picks from a calendar, with an earliest and latest date and a [format](#number-and-date-formats). |
+| Image | The party uploads an image or takes a photo. It is drawn into the box, scaled to fit. |
+| File | The party uploads a PDF, JPEG or PNG in place on the page. Its name goes in the box and the file is sealed into the signed PDF, like [attachments](attachments.md). |
+| Date | Filled in with the date of signing, in the format you choose. |
 | Name, Email, Company | Filled in from the party's details. |
 
-Choose **Me, now (prefilled)** in the toolbar to place text that you fill in yourself before sending, such as a contract number. Required fields of this kind must be filled in before the document can be sent.
+Choose **Me, now (prefilled)** in the toolbar to place a value you fill in yourself before sending, such as a contract number, an amount or a date. Required fields of this kind must be filled in before the document can be sent.
+
+A party's text, number, list, radio, checkbox, phone and date fields can have a **Default Value** they start from. Turn on **Read-Only** and they see it but cannot change it.
+
+#### Checks and error texts
+
+Checks run on the signing page as the party types, and again on the server when they sign, so a value that breaks a check can never reach the sealed PDF.
+
+| Check | Applies to | |
+| --- | --- | --- |
+| Allowed Format | Text, initials, company | A preset (email address, digits only, Swedish postcode, personal number or organisation number) or a regular expression of your own. The whole value must match. |
+| Min Length, Max Length | Text, initials, company | In characters. |
+| Smallest, Largest | Number | Inclusive. |
+| Earliest, Latest | Date Picker | Inclusive. |
+| Required | Every field the party fills in | |
+
+**Error Text** replaces the built-in error with your own, for any check on that field, such as *Write the order number as AB1234*. Without it, the party sees a built-in error in their own language.
+
+Patterns use the common regular expression syntax: classes such as `[0-9]` and `\d`, repetition such as `{3}`, `+` and `?`, alternatives with `|` and groups. Look-ahead and back-references are not supported, which keeps every check fast.
+
+#### Number and date formats
+
+The format decides how a value is written on the page; what is stored stays plain (`1234.5`, `2026-12-31`), so exports and the API always get the same shape.
+
+Write a number format as 1234 would look in it. `1,234.00` gives a comma between thousands and two decimals, `1 234,00 kr` a space, a decimal comma and a currency after, and `$1234` no decimals with a dollar sign. Values are rounded half up to the format's decimals. Parties can type numbers either way, such as `1 234,5` or `1,234.50`.
+
+Dates can be written as YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY, DD.MM.YYYY or D MMM YYYY (31 Dec 2026). The same formats apply to the date of signing.
+
+#### Radio groups
+
+Placing **Radio** adds one button. Select it and choose **Add a Button to the Group** for each further option, then drag the buttons where they belong. Each button holds one option; the group shares its label and whether an answer is required. The party can pick one button of the group.
 
 Fields are stored as fractions of the page, so they stay in place whatever the page size.
 
