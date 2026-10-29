@@ -8,7 +8,7 @@ import { FilePicker } from '@/components/ui/file-picker';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { type Group, useApi, useApiMutation } from '@/lib/api';
+import { errorMessage, type Group, useApi, useApiMutation } from '@/lib/api';
 import { formatDate, formatDateTime, LANGUAGES } from '@/lib/format';
 import { countryOptions, timeZoneOptions } from '@/lib/regions';
 import { SettingsCard } from './SettingsLayout';
@@ -17,7 +17,7 @@ type Spec = {
   key: string;
   label: string;
   /** `file` is a secret PEM or PKCS#12 file, `pem` a public one such as a CA certificate. */
-  type?: 'text' | 'secret' | 'bool' | 'number' | 'select' | 'file' | 'pem' | 'color' | 'country' | 'timeZone';
+  type?: 'text' | 'secret' | 'bool' | 'number' | 'select' | 'file' | 'pem' | 'color' | 'country' | 'timeZone' | 'aiModel';
   hint?: string;
   options?: [string, string][];
   placeholder?: string;
@@ -134,11 +134,11 @@ const GROUPS: Record<Group, { title: string; description: string; fields: Spec[]
           ['openai-compatible', 'Other OpenAI-compatible'],
         ],
       },
-      { key: 'model', label: 'Model', placeholder: 'claude-sonnet-5-5', when: 'provider' },
       { key: 'apiKey', label: 'API Key', type: 'secret', when: 'provider' },
       { key: 'baseUrl', label: 'Base URL', hint: 'Only for LiteLLM and other compatible servers.', when: 'provider' },
       { key: 'allowDocumentText', label: 'Allow document text to be sent for reviews', type: 'bool', when: 'provider' },
       { key: 'monthlyTokenBudget', label: 'Monthly Token Budget', type: 'number', hint: '0 means no limit.', when: 'provider' },
+      { key: 'model', label: 'Model', type: 'aiModel', when: 'provider' },
     ],
   },
   sms: {
@@ -344,6 +344,77 @@ function AiExtras() {
   );
 }
 
+const MODEL_PLACEHOLDERS: Record<string, string> = {
+  anthropic: 'claude-sonnet-5-5',
+  openai: 'gpt-5',
+};
+
+/** Asks the provider for its models with the form's current values; the server keeps the saved key. */
+function AiModelField({
+  id,
+  value,
+  onChange,
+  provider,
+  baseUrl,
+  apiKey,
+  locked,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  provider: string;
+  baseUrl: string;
+  apiKey: string | undefined;
+  locked: boolean;
+}) {
+  const models = useApiMutation('ai.models', { silent: true });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: list again only when the connection details change
+  useEffect(() => {
+    if (!provider) return;
+    const timer = setTimeout(() => models.mutate({ provider, baseUrl, apiKey }), 600);
+    return () => clearTimeout(timer);
+  }, [provider, baseUrl, apiKey]);
+
+  if (models.data && models.data.length > 0) {
+    const options = models.data.map((m) => ({ value: m.id, label: m.name, detail: m.name !== m.id ? m.id : undefined }));
+    if (value && !options.some((o) => o.value === value)) {
+      options.unshift({ value, label: value, detail: 'Not offered by this provider' });
+    }
+    const count = models.data.length;
+    return (
+      <Field label="Model" htmlFor={id} hint={`Connected. ${count} ${count === 1 ? 'model is' : 'models are'} available with this key.`}>
+        <SearchSelect
+          id={id}
+          value={value}
+          onChange={onChange}
+          options={options}
+          placeholder="Choose a model…"
+          searchPlaceholder="Search models…"
+          disabled={locked}
+        />
+      </Field>
+    );
+  }
+  const hint = locked
+    ? 'Set by an environment variable.'
+    : models.isPending || models.isIdle
+      ? 'Checking the connection…'
+      : models.error
+        ? `Could not list models: ${errorMessage(models.error).replace(/\.$/, '')}. Enter the model name instead.`
+        : 'The provider listed no models. Enter the model name.';
+  return (
+    <Field label="Model" htmlFor={id} hint={hint}>
+      <Input
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={MODEL_PLACEHOLDERS[provider]}
+        disabled={locked}
+      />
+    </Field>
+  );
+}
+
 export function AdminSettingsPage() {
   const { group = '' } = useParams();
   if (group === 'updates') return <Navigate to="/settings/system" replace />;
@@ -419,6 +490,20 @@ export function SettingsGroup({ group }: { group: Group }) {
                       </SelectContent>
                     </Select>
                   </Field>
+                );
+              }
+              if (f.type === 'aiModel') {
+                return (
+                  <AiModelField
+                    key={f.key}
+                    id={id}
+                    value={String(value(f.key) ?? '')}
+                    onChange={(v) => set(f.key, v)}
+                    provider={String(value('provider') ?? '')}
+                    baseUrl={String(value('baseUrl') ?? '')}
+                    apiKey={typeof draft.apiKey === 'string' ? draft.apiKey : undefined}
+                    locked={locked}
+                  />
                 );
               }
               if (f.type === 'country' || f.type === 'timeZone') {

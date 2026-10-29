@@ -136,6 +136,22 @@ export type ChatOutput = {
   reply: string;
 };
 
+export type AiModelsInput = {
+  /** A key typed but not saved yet. Empty means none. */
+  apiKey?: string | null;
+  /** Unsaved base URL from the settings form; the saved one if left out. */
+  baseUrl?: string | null;
+  /** Unsaved provider from the settings form; the saved one if left out. */
+  provider?: string | null;
+};
+
+export type Model = {
+  id: string;
+  name: string;
+};
+
+export type AiModelsOutput = Array<Model>;
+
 export type AiStatusInput = Record<string, unknown>;
 
 export type AiStatusOutput = Status;
@@ -1334,6 +1350,7 @@ export interface Services {
   "account.two_factor_begin": { kind: "mutation"; input: AccountTwoFactorBeginInput; output: AccountTwoFactorBeginOutput };
   "account.two_factor_confirm": { kind: "mutation"; input: AccountTwoFactorConfirmInput; output: AccountTwoFactorConfirmOutput };
   "ai.chat": { kind: "mutation"; input: AiChatInput; output: AiChatOutput };
+  "ai.models": { kind: "mutation"; input: AiModelsInput; output: AiModelsOutput };
   "ai.status": { kind: "query"; input: AiStatusInput; output: AiStatusOutput };
   "ai.test": { kind: "mutation"; input: AiTestInput; output: AiTestOutput };
   "ai.usage": { kind: "query"; input: AiUsageInput; output: AiUsageOutput };
