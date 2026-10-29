@@ -107,6 +107,9 @@ async fn template(ctx: &Ctx, conn: &mut PgConnection, id: Uuid) -> Result<Templa
     if !document.is_template {
         return Err(bad_request("Bulk send starts from a template"));
     }
+    if document.archived_at.is_some() {
+        return Err(bad_request("That template is archived. Restore it before using it."));
+    }
     let parties = parties(conn, id).await?;
     if !parties.iter().any(PartyRow::must_act) {
         return Err(bad_request("The template needs at least one party who signs or approves"));
@@ -635,6 +638,7 @@ async fn send_row(ctx: &Ctx, conn: &mut PgConnection, bulk: &BulkJob, values: &B
             sequential: None,
             external_id: mapped.get("externalId").filter(|e| !e.is_empty()).cloned(),
             metadata: Some(json!({ "bulkSend": bulk.id })),
+            folder_id: None,
         },
     )
     .await?;

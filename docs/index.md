@@ -26,6 +26,7 @@ These pages cover every part of OpenSign, for people who send documents, for adm
 - **Templates and bulk send.** Save a prepared document as a template, then send it to every row of a CSV or Excel file. See [Templates](templates.md) and [Bulk send](bulk-send.md).
 - **Signer attachments.** Ask a party for files, such as a copy of an ID, which are cleaned and sealed into the signed PDF. See [Signer attachments](attachments.md).
 - **Sealed PDFs.** PAdES B-LTA seals with an RFC 3161 time stamp and everything needed to validate the file offline for years. See [Sealed PDFs and evidence](sealed-pdfs.md).
+- **Folders and archive.** Sort documents and templates into shared folders, and archive finished work so the lists stay short. See [Folders and archive](folders.md).
 - **Retention and legal hold.** Delete documents automatically after set periods, and keep the ones that matter with a legal hold. See [Retention and legal hold](retention.md).
 - **Users and roles.** Admin, manager, sender, auditor and viewer, with passkeys or an authenticator app for two-factor sign-in. See [Users and roles](users-and-roles.md).
 - **APIs.** A REST API with OpenAPI, drop-in Scrive and DocuSign endpoints, signed webhooks, and an MCP server for Claude and other AI clients. See [REST API](api.md).

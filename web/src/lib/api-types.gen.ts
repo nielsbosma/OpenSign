@@ -474,6 +474,19 @@ export type BulkStartInput = {
 
 export type BulkStartOutput = BulkSend;
 
+export type DocumentsArchiveInput = {
+  /** true archives, false restores from the archive. */
+  archived: boolean;
+  /** Documents or templates, at most 200. */
+  ids: Array<string>;
+};
+
+export type DocumentsArchiveOutput = ArchiveOutput;
+
+export type ArchiveOutput = {
+  changed: number;
+};
+
 export type DocumentsAuthMethodsInput = Record<string, unknown>;
 
 /** Proof of identity a party must give. `standard` is possession of the link. */
@@ -560,6 +573,8 @@ export type PartyView = {
 export type DocumentsCancelOutput = DocumentView;
 
 export type DocumentView = {
+  /** Archived documents and templates are left out of lists unless asked for; archived templates cannot be used. */
+  archivedAt?: string | null;
   /** Files parties are asked to upload while signing, and what they uploaded. */
   attachments: Array<AttachmentRequest>;
   canEdit: boolean;
@@ -572,6 +587,7 @@ export type DocumentView = {
   externalId?: string | null;
   fields: Array<FieldRow>;
   files: Array<FileRecord>;
+  folderId?: string | null;
   id: string;
   isTemplate: boolean;
   language: string;
@@ -614,14 +630,20 @@ export type Check = {
 export type DocumentsCheckOutput = Array<Check>;
 
 export type DocumentsCountsInput = {
+  /** Only what is directly in this folder, as in documents.list. */
+  folderId?: string | null;
   /** Matches the title, or an exact external id, as in documents.list. */
   search?: string | null;
+  /** Count templates instead of documents. */
+  templates?: boolean;
 };
 
 export type DocumentsCountsOutput = StatusCounts;
 
 export type StatusCounts = {
   all: number;
+  /** Archived ones, which `all` and `byStatus` leave out. */
+  archived: number;
   /** Documents per status: draft, pending, completed, declined, canceled and expired. Missing means none. */
   byStatus: {
     [key: string]: number;
@@ -631,6 +653,8 @@ export type StatusCounts = {
 export type DocumentsCreateInput = {
   /** Your own reference, e.g. a CRM id. Searchable. */
   externalId?: string | null;
+  /** Put it in this folder: a document folder for documents, a template folder for templates. */
+  folderId?: string | null;
   /** Create a reusable template instead of a document. */
   isTemplate?: boolean;
   /** What signers see and receive unless a party has its own: en, zh, hi, es, fr, ar, bn, pt, ru, ur or sv. Defaults to the template's, then the organisation's. */
@@ -706,6 +730,10 @@ export type LegalHoldView = {
 };
 
 export type DocumentsListInput = {
+  /** List the archive instead: archived documents or templates only. Archived ones are left out otherwise. */
+  archived?: boolean;
+  /** Only what is directly in this folder. Leave out to list everything regardless of folder. */
+  folderId?: string | null;
   limit?: number | null;
   offset?: number | null;
   /** Matches the title, or an exact external id. */
@@ -717,10 +745,12 @@ export type DocumentsListInput = {
 };
 
 export type DocumentSummary = {
+  archivedAt?: string | null;
   completedAt?: string | null;
   createdAt: string;
   expiresAt?: string | null;
   externalId?: string | null;
+  folderId?: string | null;
   id: string;
   isTemplate: boolean;
   ownerName?: string | null;
@@ -732,6 +762,19 @@ export type DocumentSummary = {
 };
 
 export type DocumentsListOutput = Array<DocumentSummary>;
+
+export type DocumentsMoveInput = {
+  /** The folder to move them to, or null for no folder. Documents go in document folders, templates in template folders. */
+  folderId?: string | null;
+  /** Documents or templates to move, at most 200. */
+  ids: Array<string>;
+};
+
+export type DocumentsMoveOutput = MoveOutput;
+
+export type MoveOutput = {
+  moved: number;
+};
 
 export type DocumentsRemindInput = {
   id: string;
@@ -1004,6 +1047,52 @@ export type VerifyOutput = {
   sha256: string;
   signatures: Array<unknown>;
 };
+
+export type Scope = "documents" | "templates";
+
+export type FoldersCreateInput = {
+  name: string;
+  /** Put the new folder inside this one; leave out for a top-level folder. */
+  parentId?: string | null;
+  /** documents or templates. */
+  scope: Scope;
+};
+
+export type FoldersCreateOutput = FolderView;
+
+export type FolderView = {
+  canEdit: boolean;
+  createdAt: string;
+  createdBy?: string | null;
+  id: string;
+  /** Documents or templates you can see directly in this folder, not counting archived ones or subfolders. */
+  itemCount: number;
+  name: string;
+  parentId?: string | null;
+  scope: string;
+};
+
+export type FoldersDeleteInput = {
+  id: string;
+};
+
+export type FoldersDeleteOutput = Ok_;
+
+export type FoldersListInput = {
+  /** documents or templates. */
+  scope: Scope;
+};
+
+export type FoldersListOutput = Array<FolderView>;
+
+export type FoldersUpdateInput = {
+  id: string;
+  name: string;
+  /** The folder to put it in, or null to make it a top-level folder. */
+  parentId?: string | null;
+};
+
+export type FoldersUpdateOutput = FolderView;
 
 export type OauthApproveInput = {
   /** The `request` parameter of the consent page. */
@@ -1476,6 +1565,7 @@ export interface Services {
   "bulk.list": { kind: "query"; input: BulkListInput; output: BulkListOutput };
   "bulk.preview": { kind: "mutation"; input: BulkPreviewInput; output: BulkPreviewOutput };
   "bulk.start": { kind: "mutation"; input: BulkStartInput; output: BulkStartOutput };
+  "documents.archive": { kind: "mutation"; input: DocumentsArchiveInput; output: DocumentsArchiveOutput };
   "documents.auth_methods": { kind: "query"; input: DocumentsAuthMethodsInput; output: DocumentsAuthMethodsOutput };
   "documents.cancel": { kind: "mutation"; input: DocumentsCancelInput; output: DocumentsCancelOutput };
   "documents.check": { kind: "query"; input: DocumentsCheckInput; output: DocumentsCheckOutput };
@@ -1487,6 +1577,7 @@ export interface Services {
   "documents.latest_review": { kind: "query"; input: DocumentsLatestReviewInput; output: DocumentsLatestReviewOutput };
   "documents.legal_hold": { kind: "mutation"; input: DocumentsLegalHoldInput; output: DocumentsLegalHoldOutput };
   "documents.list": { kind: "query"; input: DocumentsListInput; output: DocumentsListOutput };
+  "documents.move": { kind: "mutation"; input: DocumentsMoveInput; output: DocumentsMoveOutput };
   "documents.remind": { kind: "mutation"; input: DocumentsRemindInput; output: DocumentsRemindOutput };
   "documents.remove_file": { kind: "mutation"; input: DocumentsRemoveFileInput; output: DocumentsRemoveFileOutput };
   "documents.review": { kind: "mutation"; input: DocumentsReviewInput; output: DocumentsReviewOutput };
@@ -1502,6 +1593,10 @@ export interface Services {
   "documents.update": { kind: "mutation"; input: DocumentsUpdateInput; output: DocumentsUpdateOutput };
   "documents.upload": { kind: "mutation"; input: DocumentsUploadInput; output: DocumentsUploadOutput };
   "documents.verify": { kind: "query"; input: DocumentsVerifyInput; output: DocumentsVerifyOutput };
+  "folders.create": { kind: "mutation"; input: FoldersCreateInput; output: FoldersCreateOutput };
+  "folders.delete": { kind: "mutation"; input: FoldersDeleteInput; output: FoldersDeleteOutput };
+  "folders.list": { kind: "query"; input: FoldersListInput; output: FoldersListOutput };
+  "folders.update": { kind: "mutation"; input: FoldersUpdateInput; output: FoldersUpdateOutput };
   "oauth.approve": { kind: "mutation"; input: OauthApproveInput; output: OauthApproveOutput };
   "oauth.deny": { kind: "mutation"; input: OauthDenyInput; output: OauthDenyOutput };
   "oauth.describe": { kind: "query"; input: OauthDescribeInput; output: OauthDescribeOutput };

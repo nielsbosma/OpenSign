@@ -105,11 +105,13 @@ pub mod status {
     pub const DECLINED: &str = "declined";
     pub const CANCELED: &str = "canceled";
     pub const EXPIRED: &str = "expired";
+    /// Statuses a document can be archived in.
+    pub const FINISHED: &[&str] = &[COMPLETED, DECLINED, CANCELED, EXPIRED];
 }
 
 pub const DOCUMENT_COLUMNS: &str = "id, title, status, is_template, template_id, owner_id, message, language, sequential, expires_at, reminder_days, \
      source_file_id, sealed_file_id, original_sha256, sealed_sha256, page_count, external_id, metadata, sent_at, completed_at, canceled_at, created_at, updated_at, \
-     legal_hold, legal_hold_reason, legal_hold_at, review_links";
+     legal_hold, legal_hold_reason, legal_hold_at, review_links, folder_id, archived_at";
 
 #[derive(Debug, Clone, Serialize, JsonSchema, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -147,6 +149,9 @@ pub struct DocumentRow {
     pub legal_hold_at: Option<DateTime<Utc>>,
     /// Signers may share a read-only copy with their own AI agent.
     pub review_links: bool,
+    pub folder_id: Option<Uuid>,
+    /// Archived documents and templates are left out of lists unless asked for; archived templates cannot be used.
+    pub archived_at: Option<DateTime<Utc>>,
 }
 
 pub const PARTY_COLUMNS: &str = "id, document_id, role, name, email, phone, personal_number, company, sign_order, delivery, auth_to_view, auth_to_sign, \

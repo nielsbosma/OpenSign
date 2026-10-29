@@ -8,7 +8,7 @@ const NAV: { group: string; slugs: string[] }[] = [
   { group: 'Getting Started', slugs: ['index', 'quick-start', 'setup'] },
   {
     group: 'Sending Documents',
-    slugs: ['documents', 'templates', 'parties', 'identification', 'attachments', 'in-person', 'bulk-send'],
+    slugs: ['documents', 'templates', 'folders', 'parties', 'identification', 'attachments', 'in-person', 'bulk-send'],
   },
   { group: 'Signing', slugs: ['signing-page', 'sealed-pdfs', 'verification'] },
   { group: 'Administration', slugs: ['users-and-roles', 'account-security', 'settings', 'retention', 'audit-log', 'ai'] },
