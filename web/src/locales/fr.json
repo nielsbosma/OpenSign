@@ -1055,5 +1055,7 @@
   "Runs queued again: {count}": "Exécutions remises en file d'attente : {count}",
   "Run {count} Failed Again": "Relancer {count} échecs",
   "No runs yet": "Aucune exécution pour l'instant",
-  "Run": "Exécution"
+  "Run": "Exécution",
+  "API Key SID": "SID de la clé API",
+  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "Twilio uniquement. Avec une clé API, son secret va dans le champ ci-dessus. Laissez vide pour utiliser l’Auth Token."
 }

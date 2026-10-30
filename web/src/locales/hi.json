@@ -1055,5 +1055,7 @@
   "Runs queued again: {count}": "फिर से कतार में रखे गए रन: {count}",
   "Run {count} Failed Again": "{count} विफल फिर से चलाएँ",
   "No runs yet": "अभी तक कोई रन नहीं",
-  "Run": "रन"
+  "Run": "रन",
+  "API Key SID": "API कुंजी SID",
+  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "केवल Twilio के लिए। API कुंजी के साथ उसका सीक्रेट ऊपर वाले फ़ील्ड में डालें। Auth Token के लिए खाली छोड़ें।"
 }

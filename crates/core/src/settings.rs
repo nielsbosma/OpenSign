@@ -247,13 +247,15 @@ pub struct SmsSettings {
     pub provider: String,
     pub username: String,
     pub password: Option<String>,
+    /// Twilio only: sign in with this API key, whose secret is `password`, instead of the Auth Token.
+    pub api_key_sid: String,
     pub sender: String,
 }
 
 impl SettingsGroup for SmsSettings {
     const NAME: &'static str = "sms";
     const SECRETS: &'static [&'static str] = &["password"];
-    const SECRET_TARGETS: &'static [(&'static str, &'static [&'static str])] = &[("password", &["provider", "username"])];
+    const SECRET_TARGETS: &'static [(&'static str, &'static [&'static str])] = &[("password", &["provider", "username", "apiKeySid"])];
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]

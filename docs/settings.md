@@ -127,7 +127,8 @@ See [Identification](identification.md#sms-codes).
 | Provider | `OPENSIGN_SMS_PROVIDER` | Off, `46elks` or `twilio` |
 | Username or Account SID | `OPENSIGN_SMS_USERNAME` | |
 | Password or Auth Token | `OPENSIGN_SMS_PASSWORD` | Secret |
-| Sender | `OPENSIGN_SMS_SENDER` | A name of up to 11 letters, or a number you own |
+| API Key SID | `OPENSIGN_SMS_API_KEY_SID` | Twilio only, optional. The key's secret goes in the password field |
+| Sender | `OPENSIGN_SMS_SENDER` | A name of up to 11 letters, a number you own, or a Twilio Messaging Service SID |
 
 ## BankID and eID
 

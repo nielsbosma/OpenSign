@@ -48,7 +48,9 @@ In **Settings → SMS**, pick a provider:
 | [46elks](https://46elks.com) | API username | API password |
 | [Twilio](https://www.twilio.com) | Account SID | Auth token |
 
-**Sender** is a name of up to 11 letters, or a number you own. The same provider is used for SMS delivery of signing links.
+A Twilio API key works too, and can be revoked on its own: the Account SID stays in **Username**, the key goes in **API Key SID** and its secret in **Password**. Only keys made in Twilio's US1 region work.
+
+**Sender** is a name of up to 11 letters, or a number you own. With Twilio it can also be a Messaging Service SID (`MG…`). The same provider is used for SMS delivery of signing links.
 
 ## Swedish BankID
 

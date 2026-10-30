@@ -253,6 +253,12 @@ const GROUPS: Record<Group, { title: string; description: string; help?: string;
       },
       { key: 'username', label: msg('Username or Account SID'), when: 'provider' },
       { key: 'password', label: msg('Password or Auth Token'), type: 'secret', when: 'provider' },
+      {
+        key: 'apiKeySid',
+        label: msg('API Key SID'),
+        hint: msg('Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.'),
+        when: 'provider',
+      },
       { key: 'sender', label: msg('Sender'), hint: msg('A name of up to 11 letters, or a number you own.'), when: 'provider' },
     ],
   },

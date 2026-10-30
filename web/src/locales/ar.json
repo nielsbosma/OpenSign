@@ -1055,5 +1055,7 @@
   "Runs queued again: {count}": "مرات التشغيل المعادة إلى قائمة الانتظار: {count}",
   "Run {count} Failed Again": "إعادة تشغيل {count} فاشلة",
   "No runs yet": "لا توجد مرات تشغيل بعد",
-  "Run": "التشغيل"
+  "Run": "التشغيل",
+  "API Key SID": "SID مفتاح API",
+  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "Twilio فقط. عند استخدام مفتاح API، يوضع سره في الحقل أعلاه. اتركه فارغًا لاستخدام Auth Token."
 }
