@@ -2288,7 +2288,7 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
 name = "opensign-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2338,7 +2338,7 @@ dependencies = [
 
 [[package]]
 name = "opensign-crypto"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -2360,7 +2360,7 @@ dependencies = [
 
 [[package]]
 name = "opensign-db"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "opensign-db",
  "sqlx",
@@ -2371,7 +2371,7 @@ dependencies = [
 
 [[package]]
 name = "opensign-pdf"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -2405,7 +2405,7 @@ dependencies = [
 
 [[package]]
 name = "opensign-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "axum",
