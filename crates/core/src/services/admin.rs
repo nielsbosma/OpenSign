@@ -9,7 +9,7 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use super::{Empty, Ok_, settings};
-use crate::audit::{ChainReport, Entry, audit, verify_chain};
+use crate::audit::{ChainReport, Entry, audit, verify_trail};
 use crate::context::Ctx;
 use crate::email::{self, Message};
 use crate::error::{AppError, Result, bad_request};
@@ -493,12 +493,12 @@ impl Service for VerifyAudit {
     type Output = ChainReport;
     const META: Meta = Meta::query(
         "audit.verify",
-        "Recompute the audit log's hash chain and report the first entry that was changed or removed, if any.",
+        "Recompute the audit log's hash chain, check its time stamps and the copy of the latest one kept in the bucket, and report anything that was changed or removed.",
         Access::Permission(Permission::AuditRead),
     )
     .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<ChainReport> {
-        verify_chain(conn, ctx.keys()).await
+        verify_trail(ctx, conn).await
     }
 }

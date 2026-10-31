@@ -1056,5 +1056,8 @@
   "Runs queued again: {count}": "আবার সারিতে রাখা রান: {count}",
   "Run {count} Failed Again": "{count}টি ব্যর্থ আবার চালান",
   "No runs yet": "এখনো কোনো রান নেই",
-  "Run": "রান"
+  "Run": "রান",
+  "The audit trail does not match the time stamp copy in the bucket": "অডিট ট্রেল বাকেটে থাকা টাইম স্ট্যাম্পের অনুলিপির সঙ্গে মেলে না",
+  "Recent entries have no time stamp. Check the time stamp authority.": "সাম্প্রতিক এন্ট্রিগুলোতে টাইম স্ট্যাম্প নেই। টাইম স্ট্যাম্প কর্তৃপক্ষ পরীক্ষা করুন।",
+  "The time stamp copy in the bucket is missing or out of date.": "বাকেটে টাইম স্ট্যাম্পের অনুলিপি নেই বা পুরোনো।"
 }

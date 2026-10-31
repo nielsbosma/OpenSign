@@ -160,6 +160,13 @@ pub(crate) fn check_authority(token_der: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+/// A stored token's time, if it covers `data` and its authority passes `check_authority`.
+pub fn verify_timestamp_token(token_der: &[u8], data: &[u8]) -> Result<DateTime<Utc>, String> {
+    let time = token_time(token_der, data).map_err(|e| e.to_string())?;
+    check_authority(token_der)?;
+    Ok(time)
+}
+
 /// Checks the TSA's signature on a token: the signed attributes carry the digest of the TSTInfo
 /// and verify with the key of the certificate the token names.
 pub(crate) fn token_signature_valid(token_der: &[u8]) -> Result<bool, String> {

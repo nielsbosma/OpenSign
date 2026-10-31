@@ -1056,5 +1056,8 @@
   "Runs queued again: {count}": "Exécutions remises en file d'attente : {count}",
   "Run {count} Failed Again": "Relancer {count} échecs",
   "No runs yet": "Aucune exécution pour l'instant",
-  "Run": "Exécution"
+  "Run": "Exécution",
+  "The audit trail does not match the time stamp copy in the bucket": "La piste d'audit ne correspond pas à la copie de l'horodatage dans le bucket",
+  "Recent entries have no time stamp. Check the time stamp authority.": "Les entrées récentes n'ont pas d'horodatage. Vérifiez l'autorité d'horodatage.",
+  "The time stamp copy in the bucket is missing or out of date.": "La copie de l'horodatage dans le bucket est absente ou obsolète."
 }

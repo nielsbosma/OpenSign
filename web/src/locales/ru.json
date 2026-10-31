@@ -1056,5 +1056,8 @@
   "Runs queued again: {count}": "Запусков снова в очереди: {count}",
   "Run {count} Failed Again": "Перезапустить неудачные: {count}",
   "No runs yet": "Запусков пока нет",
-  "Run": "Запуск"
+  "Run": "Запуск",
+  "The audit trail does not match the time stamp copy in the bucket": "Журнал аудита не совпадает с копией метки времени в хранилище",
+  "Recent entries have no time stamp. Check the time stamp authority.": "У последних записей нет метки времени. Проверьте службу меток времени.",
+  "The time stamp copy in the bucket is missing or out of date.": "Копия метки времени в хранилище отсутствует или устарела."
 }

@@ -65,6 +65,29 @@ fn hint(name: &str) -> &'static str {
     }
 }
 
+/// The secrets this repository publishes for local use. They are fine on the developer's machine.
+const LOCAL_SECRETS: &[&str] = &["dev-only-secret-do-not-use-in-production-0123456789", "local-prod-profile-secret-change-me-0123456789"];
+const PLACEHOLDERS: &[&str] = &["change-me", "changeme", "do-not-use", "replace-me", "your-secret"];
+/// `openssl rand -hex 16` gives about 14 distinct characters, a phrase of repeats far fewer.
+const MIN_DISTINCT_SECRET_CHARS: usize = 8;
+
+fn is_local(url: &str) -> bool {
+    let host = url.strip_prefix("http://").unwrap_or_default().split(['/', ':']).next().unwrap_or_default();
+    matches!(host, "localhost" | "127.0.0.1")
+}
+
+fn weak_secret(secret: &str, app_url: Option<&str>) -> Option<&'static str> {
+    if LOCAL_SECRETS.contains(&secret) && app_url.is_some_and(is_local) {
+        return None;
+    }
+    let lower = secret.to_lowercase();
+    if LOCAL_SECRETS.contains(&secret) || PLACEHOLDERS.iter().any(|p| lower.contains(p)) {
+        return Some("APP_SECRET is an example value. Generate your own");
+    }
+    let distinct: std::collections::BTreeSet<char> = secret.chars().collect();
+    (distinct.len() < MIN_DISTINCT_SECRET_CHARS).then_some("APP_SECRET is too predictable. Generate a random one")
+}
+
 impl Env {
     pub fn from_map(vars: &HashMap<String, String>) -> Result<Env, Vec<EnvProblem>> {
         let mut problems = Vec::new();
@@ -128,6 +151,12 @@ impl Env {
             }
         };
         let development = get("APP_ENV").as_deref() == Some("development");
+        if !development
+            && app_secret.chars().count() >= opensign_crypto::MIN_SECRET_LEN
+            && let Some(message) = weak_secret(&app_secret, app_url.as_deref())
+        {
+            problems.push(EnvProblem { name: "APP_SECRET", message: message.into(), hint: hint("APP_SECRET") });
+        }
         if !development
             && let Some(url) = &app_url
             && url.starts_with("http://")
@@ -199,6 +228,24 @@ mod tests {
         let problems = Env::from_map(&vars).expect_err("invalid");
         let names: Vec<_> = problems.iter().map(|p| p.name).collect();
         assert_eq!(names, ["S3_BUCKET", "APP_SECRET", "APP_URL"]);
+    }
+
+    #[test]
+    fn refuses_weak_secrets_in_production() {
+        let problems = |secret: &str, url: &str| {
+            let mut vars = base();
+            vars.insert("APP_SECRET".into(), secret.into());
+            vars.insert("APP_URL".into(), url.into());
+            Env::from_map(&vars).err().unwrap_or_default().iter().map(|p| p.name).collect::<Vec<_>>()
+        };
+        let public = "https://sign.example.com";
+        assert_eq!(problems(LOCAL_SECRETS[0], public), ["APP_SECRET"]);
+        assert_eq!(problems(LOCAL_SECRETS[1], public), ["APP_SECRET"]);
+        assert_eq!(problems(&"a".repeat(40), public), ["APP_SECRET"]);
+        assert_eq!(problems("please-change-me-please-change-me-please", public), ["APP_SECRET"]);
+        assert!(problems(LOCAL_SECRETS[1], "http://localhost:8090").is_empty());
+        assert!(problems(LOCAL_SECRETS[1], "http://localhost.example.com").contains(&"APP_SECRET"));
+        assert!(problems("Zm9vYmFyYmF6cXV4cXV1eGNvcmdlZ3JhdWx0Z2FycGx5d2FsZG8", public).is_empty());
     }
 
     #[test]

@@ -291,6 +291,23 @@ fn time_stamp_signatures_are_checked() {
 }
 
 #[test]
+fn stored_time_stamp_tokens_are_checked() {
+    let ca = root("Test CA");
+    let tsa = issue(&ca, "Test TSA", 7);
+    let digest: [u8; 32] = Sha256::digest(b"head").into();
+    let good = token(&tsa, &[&tsa.cert], &digest);
+    let time = crate::verify_timestamp_token(&good, b"head").unwrap();
+    assert!((Utc::now() - time).num_hours().abs() <= 1);
+    assert!(crate::verify_timestamp_token(&good, b"another head").is_err(), "the token covers something else");
+    let impostor = root("Impostor");
+    let mut forged = issue(&ca, "Test TSA", 7);
+    forged.key = impostor.key;
+    let bad = token(&forged, &[&forged.cert], &digest);
+    assert!(crate::verify_timestamp_token(&bad, b"head").is_err(), "the signature does not verify");
+    assert!(crate::verify_timestamp_token(b"garbage", b"head").is_err());
+}
+
+#[test]
 fn plans_and_checks_revocation_data() {
     let setup = sealed_with_timestamp();
     let plan = plan_validation(&setup.sealed, &[]).unwrap();

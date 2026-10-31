@@ -299,16 +299,28 @@ export type AuditListOutput = Array<AuditView>;
 
 export type AuditVerifyInput = Record<string, unknown>;
 
+/** What the copy of the latest anchor kept in the bucket says about the chain in the database. */
+export type WitnessStatus = "not_checked" | "none" | "ok" | "behind" | "missing" | "unreadable" | "mismatch";
+
 export type AuditVerifyOutput = ChainReport;
 
 export type ChainReport = {
+  /** A time stamp authority is set, yet entries older than a few hours have no anchor. A warning: an authority that is down causes this too. */
+  anchor_stale: boolean;
   /** Hourly time-stamped heads that no longer match the entry they were taken from. */
   broken_anchors: Array<number>;
   /** The first entry whose stored hash does not match its contents or its predecessor. */
   broken_at?: number | null;
   entries: number;
   head?: string | null;
+  /** Anchors whose time stamp token has a bad signature, covers something else or names another time. */
+  invalid_anchors: Array<number>;
+  last_anchor_at?: string | null;
+  /** Anchors with no time stamp token. OpenSign never writes these. */
+  unsigned_anchors: Array<number>;
+  /** False when an entry, an anchor or the bucket copy shows the trail was changed. */
   valid: boolean;
+  witness: WitnessStatus;
 };
 
 export type AuthConfirmEmailChangeInput = {

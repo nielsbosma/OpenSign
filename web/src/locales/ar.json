@@ -1056,5 +1056,8 @@
   "Runs queued again: {count}": "مرات التشغيل المعادة إلى قائمة الانتظار: {count}",
   "Run {count} Failed Again": "إعادة تشغيل {count} فاشلة",
   "No runs yet": "لا توجد مرات تشغيل بعد",
-  "Run": "التشغيل"
+  "Run": "التشغيل",
+  "The audit trail does not match the time stamp copy in the bucket": "لا يطابق سجل التدقيق نسخة الطابع الزمني الموجودة في الحاوية",
+  "Recent entries have no time stamp. Check the time stamp authority.": "لا تحتوي الإدخالات الأخيرة على طابع زمني. تحقق من جهة الطابع الزمني.",
+  "The time stamp copy in the bucket is missing or out of date.": "نسخة الطابع الزمني في الحاوية مفقودة أو قديمة."
 }
