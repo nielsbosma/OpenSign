@@ -1094,5 +1094,10 @@
   "Trusted Proxies": "受信任的代理",
   "Who may state a visitor's address: private for any proxy on a private network, none when OpenSign faces the internet directly, or the addresses and ranges of your own proxies.": "谁可以声明访问者的地址:private 表示专用网络上的任何代理,none 表示 OpenSign 直接面向互联网,或填写您自己代理的地址和范围。",
   "Allow New MCP Clients to Register": "允许新的 MCP 客户端注册",
-  "Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.": "Claude 等应用在首次连接时会自行注册。关闭后,只有之前已注册的应用才能连接。"
+  "Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.": "Claude 等应用在首次连接时会自行注册。关闭后,只有之前已注册的应用才能连接。",
+  "Allowed Countries": "允许的国家/地区",
+  "Country calling codes that may get SMS, such as 46, 47. Empty allows every country.": "可以接收短信的国家/地区代码，例如 46, 47。留空则允许所有国家/地区。",
+  "Messages per Hour": "每小时消息数",
+  "Messages per Day": "每天消息数",
+  "Messages per Hour for a Share Link": "每个共享链接每小时消息数"
 }

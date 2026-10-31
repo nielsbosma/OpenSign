@@ -161,6 +161,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<eid::Start>(),
         erase::<eid::Status>(),
         erase::<eid::Cancel>(),
+        erase::<eid::Continue>(),
         erase::<signing::Sign>(),
         erase::<signing::Decline>(),
         erase::<signing::RemoveAttachment>(),

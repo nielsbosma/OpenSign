@@ -2077,9 +2077,31 @@ export type SigningEidCancelInput = {
 
 export type SigningEidCancelOutput = Ok_;
 
+export type SigningEidContinueInput = {
+  /** The person pressed Continue. Without it, this only says what they are about to identify for. */
+  confirm?: boolean;
+  /** From the address of the page opened by a framed signing page. */
+  ticket: string;
+};
+
+export type SigningEidContinueOutput = ContinueOutput;
+
+export type ContinueOutput = {
+  /** See `Started::browser_binding`. */
+  browserBinding?: string | null;
+  language: string;
+  method: AuthMethod;
+  organisation: string;
+  /** Set once confirmed: where to send the browser. */
+  redirectUrl?: string | null;
+  title: string;
+};
+
 export type Purpose = "view" | "sign";
 
 export type SigningEidStartInput = {
+  /** The signing page runs in a frame on another site, where this browser's cookies for OpenSign do not stick. `redirectUrl` then leads to a page on OpenSign that takes over in its own window. */
+  framed?: boolean;
   purpose: Purpose;
   session?: string | null;
   token: string;
@@ -2090,6 +2112,8 @@ export type SigningEidStartOutput = Started2;
 export type Started2 = {
   /** Opens the BankID app on this device: `bankid:///?autostarttoken=...&redirect=null`. */
   autoStartToken?: string | null;
+  /** Becomes a cookie in the RPC layer and is removed from the answer: the eID broker's answer counts only in the browser that holds it. */
+  browserBinding?: string | null;
   expiresAt: string;
   id: string;
   method: AuthMethod;
@@ -2698,6 +2722,7 @@ export interface Services {
   "signing.create_review_link": { kind: "mutation"; input: SigningCreateReviewLinkInput; output: SigningCreateReviewLinkOutput };
   "signing.decline": { kind: "mutation"; input: SigningDeclineInput; output: SigningDeclineOutput };
   "signing.eid_cancel": { kind: "mutation"; input: SigningEidCancelInput; output: SigningEidCancelOutput };
+  "signing.eid_continue": { kind: "mutation"; input: SigningEidContinueInput; output: SigningEidContinueOutput };
   "signing.eid_start": { kind: "mutation"; input: SigningEidStartInput; output: SigningEidStartOutput };
   "signing.eid_status": { kind: "query"; input: SigningEidStatusInput; output: SigningEidStatusOutput };
   "signing.open": { kind: "mutation"; input: SigningOpenInput; output: SigningOpenOutput };

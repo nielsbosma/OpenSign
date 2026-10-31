@@ -238,6 +238,13 @@ pub(crate) fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
             }
         }
         "ai" => url("baseUrl"),
+        "sms" => {
+            let allowed = value["allowedCountries"].as_str().unwrap_or_default();
+            if allowed.split([',', ';', ' ']).map(|c| c.trim().trim_start_matches('+')).any(|c| !c.chars().all(|d| d.is_ascii_digit())) {
+                return Err(bad_request("Enter country calling codes as digits, such as 46, 47"));
+            }
+            Ok(())
+        }
         "eid" => {
             url("brokerIssuer")?;
             let eid: EidSettings = serde_json::from_value(value.clone()).map_err(AppError::internal)?;

@@ -433,15 +433,24 @@ pub struct EidCallback {
 
 /// `GET /api/eid/callback`: the eID broker or TIC Identity returns the browser here. The signing page picks the
 /// result up with the session id; the page itself still holds the signing link.
-pub async fn eid_callback(State(state): State<AppState>, Query(q): Query<EidCallback>, parts: Parts) -> Response {
-    let caller = match caller(&state, &parts, Surface::Signer, Some(security::SIGNER)).await {
+pub async fn eid_callback(State(app_state): State<AppState>, Query(q): Query<EidCallback>, parts: Parts) -> Response {
+    let caller = match caller(&app_state, &parts, Surface::Signer, Some(security::SIGNER)).await {
         Ok(c) => c,
         Err(r) => return *r,
     };
     let result = async {
         let state = q.state.as_deref().filter(|s| !s.is_empty() && s.len() <= 200).ok_or_else(|| bad_request("Missing state"))?;
         let mut conn = caller.ctx.db().acquire().await?;
-        opensign_core::services::eid::broker_callback(&caller.ctx, &mut conn, state, q.code.as_deref(), q.error.as_deref()).await
+        let browser = auth::eid_cookie(&parts.headers, &app_state);
+        opensign_core::services::eid::broker_callback(
+            &caller.ctx,
+            &mut conn,
+            state,
+            browser.as_deref(),
+            q.code.as_deref(),
+            q.error.as_deref(),
+        )
+        .await
     }
     .await;
     let location = match result {
@@ -453,6 +462,7 @@ pub async fn eid_callback(State(state): State<AppState>, Query(q): Query<EidCall
         response.headers_mut().insert(header::LOCATION, value);
     }
     response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response.headers_mut().append(header::SET_COOKIE, auth::clear_eid_cookie(&app_state));
     response
 }
 

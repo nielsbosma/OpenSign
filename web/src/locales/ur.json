@@ -1094,5 +1094,10 @@
   "Trusted Proxies": "قابل اعتماد پراکسی",
   "Who may state a visitor's address: private for any proxy on a private network, none when OpenSign faces the internet directly, or the addresses and ranges of your own proxies.": "وزیٹر کا پتہ کون بتا سکتا ہے: نجی نیٹ ورک کی کسی بھی پراکسی کے لیے private، جب OpenSign براہ راست انٹرنیٹ پر ہو تو none، یا آپ کی اپنی پراکسیوں کے پتے اور رینج۔",
   "Allow New MCP Clients to Register": "نئے MCP کلائنٹس کو رجسٹر ہونے دیں",
-  "Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.": "Claude جیسی ایپس پہلی بار جڑنے پر خود رجسٹر ہو جاتی ہیں۔ بند ہونے پر صرف پہلے سے رجسٹر شدہ ایپس جڑ سکتی ہیں۔"
+  "Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.": "Claude جیسی ایپس پہلی بار جڑنے پر خود رجسٹر ہو جاتی ہیں۔ بند ہونے پر صرف پہلے سے رجسٹر شدہ ایپس جڑ سکتی ہیں۔",
+  "Allowed Countries": "اجازت یافتہ ممالک",
+  "Country calling codes that may get SMS, such as 46, 47. Empty allows every country.": "ملکی کوڈ جنہیں SMS مل سکتا ہے، جیسے 46، 47۔ خالی چھوڑنے پر تمام ممالک کی اجازت ہے۔",
+  "Messages per Hour": "فی گھنٹہ پیغامات",
+  "Messages per Day": "فی دن پیغامات",
+  "Messages per Hour for a Share Link": "شیئر لنک کے لیے فی گھنٹہ پیغامات"
 }

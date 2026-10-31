@@ -1094,5 +1094,10 @@
   "Trusted Proxies": "Betrodda proxyservrar",
   "Who may state a visitor's address: private for any proxy on a private network, none when OpenSign faces the internet directly, or the addresses and ranges of your own proxies.": "Vem som får ange en besökares adress: private för alla proxyservrar på ett privat nät, none när OpenSign nås direkt från internet, eller adresser och intervall för dina egna proxyservrar.",
   "Allow New MCP Clients to Register": "Tillåt att nya MCP-klienter registrerar sig",
-  "Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.": "Appar som Claude registrerar sig själva första gången de ansluter. Avstängt kan bara de som redan har registrerat sig ansluta."
+  "Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.": "Appar som Claude registrerar sig själva första gången de ansluter. Avstängt kan bara de som redan har registrerat sig ansluta.",
+  "Allowed Countries": "Tillåtna länder",
+  "Country calling codes that may get SMS, such as 46, 47. Empty allows every country.": "Landsnummer som får ta emot sms, till exempel 46, 47. Tomt tillåter alla länder.",
+  "Messages per Hour": "Meddelanden per timme",
+  "Messages per Day": "Meddelanden per dag",
+  "Messages per Hour for a Share Link": "Meddelanden per timme för en delningslänk"
 }

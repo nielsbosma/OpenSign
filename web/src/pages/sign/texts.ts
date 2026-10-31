@@ -134,6 +134,8 @@ const en = {
   eidPopupBlocked: 'Allow pop-ups for this site, then try again.',
   eidWindowDone: 'Identification finished',
   eidWindowDoneNote: 'You can close this window and go back to the signing page.',
+  eidContinue: (label: string, title: string, organisation: string) => `${organisation} asks you to identify with ${label} for “${title}”.`,
+  eidContinueNote: 'Continue only if you started this yourself on the signing page. If someone sent you this link, close this window.',
   savedSignature: 'Saved',
   savedInAccount: 'Your saved signature from your account settings.',
   savedOnDevice: 'Saved in this browser.',

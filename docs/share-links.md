@@ -16,7 +16,7 @@ Share links need email to be set up, since every visitor confirms their address.
 ## What the visitor sees
 
 1. A start page with your logo, the template's title and message, in the template's language. They can switch to any of the [11 signing languages](signing-page.md#languages).
-2. They enter their name and email (and phone number, when the party gets SMS codes or SMS links).
+2. They enter their name and email (and phone number, when the party gets SMS codes or SMS links). A name holds letters only, not numbers or addresses, since it goes into the document's title and the emails about it. Text messages for a link's documents count against the SMS limits in [Identification](identification.md).
 3. OpenSign emails them a six-digit code that works for 15 minutes. They enter it.
 4. OpenSign makes a document from the template with them as the party and sends it. The signing page opens straight away; the same link is also emailed to them, so they can come back to it later.
 

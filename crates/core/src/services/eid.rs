@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Duration, Utc};
-use opensign_crypto::{KeyPurpose, random_token};
+use opensign_crypto::{KeyPurpose, constant_time_eq, random_token};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -15,15 +15,18 @@ use super::settings;
 use super::signing::{Resolved, SESSION_MINUTES, issue_session, resolve, satisfied};
 use crate::audit::{Entry, audit};
 use crate::context::Ctx;
-use crate::documents::{AuthMethod, PartyRow, required_personal_number, status};
+use crate::documents::{AuthMethod, DOCUMENT_COLUMNS, Delivery, DocumentRow, PARTY_COLUMNS, PartyRow, required_personal_number, status};
 use crate::eid::bankid::{self, BankId, Collected};
 use crate::eid::freja::{self, Freja, Outcome, User};
 use crate::eid::{Identity, bankid_via_tic, oidc, same_person, se_personal_number, tic};
 use crate::error::{AppError, ErrorKind, Result, bad_request, conflict, not_found, too_many};
 use crate::service::{Access, Meta, Service};
-use crate::settings::{EidSettings, OrgSettings};
+use crate::settings::{EidSettings, OrgSettings, SecuritySettings};
 
 const STARTS_PER_HOUR: i64 = 10;
+const CONTINUE_TICKET: &str = "eid-continue";
+const OTHER_BROWSER: &str =
+    "Finish the identification in the same browser where you started it. Go back to the signing link and start again.";
 
 fn secrets_context(id: Uuid) -> String {
     format!("eid:{id}:secrets")
@@ -35,6 +38,10 @@ fn evidence_context(id: Uuid) -> String {
 
 pub fn state_mac(ctx: &Ctx, state: &str) -> String {
     hex::encode(ctx.keys().mac(KeyPurpose::TokenMac, format!("eid-state:{state}").as_bytes()))
+}
+
+fn browser_mac(ctx: &Ctx, binding: &str) -> String {
+    hex::encode(ctx.keys().mac(KeyPurpose::TokenMac, format!("eid-browser:{binding}").as_bytes()))
 }
 
 fn number_context(id: Uuid) -> String {
@@ -85,6 +92,10 @@ pub struct StartInput {
     pub token: String,
     pub session: Option<String>,
     pub purpose: Purpose,
+    /// The signing page runs in a frame on another site, where this browser's cookies for OpenSign
+    /// do not stick. `redirectUrl` then leads to a page on OpenSign that takes over in its own window.
+    #[serde(default)]
+    pub framed: bool,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -99,6 +110,9 @@ pub struct Started {
     /// Send the browser here to identify at the eID broker.
     pub redirect_url: Option<String>,
     pub expires_at: DateTime<Utc>,
+    /// Becomes a cookie in the RPC layer and is removed from the answer: the eID broker's answer
+    /// counts only in the browser that holds it.
+    pub browser_binding: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -112,6 +126,8 @@ struct Secrets {
     nonce: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     verifier: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    authorize_url: Option<String>,
 }
 
 fn method_for(party: &PartyRow, purpose: Purpose) -> AuthMethod {
@@ -205,17 +221,22 @@ impl Service for Start {
         let provider = if provider == "se_bankid" && bankid_via_tic(&eid) { "tic" } else { provider };
         let expected = required_personal_number(ctx.keys(), &party)?;
         let id = Uuid::now_v7();
-        let mut secrets = Secrets { qr_start_token: None, qr_start_secret: None, nonce: None, verifier: None };
+        let mut secrets = Secrets { qr_start_token: None, qr_start_secret: None, nonce: None, verifier: None, authorize_url: None };
         let mut state_mac_value = None;
+        let mut browser_mac_value = None;
         let (reference, started) = match provider {
             "se_bankid" => {
                 let number = swedish(expected.as_deref(), ctx.now.year())?;
                 let org: OrgSettings = settings(ctx, conn).await?;
                 let organisation = if org.name.is_empty() { "OpenSign".to_string() } else { org.name };
-                let text =
-                    (input.purpose == Purpose::Sign).then(|| format!("I sign the document \"{}\" sent by {organisation}.", document.title));
+                let sign = input.purpose == Purpose::Sign;
+                let text = if sign {
+                    format!("I sign the document \"{}\" sent by {organisation}.", document.title)
+                } else {
+                    format!("I identify myself to read the document \"{}\" sent by {organisation}.", document.title)
+                };
                 let ip = ctx.ip.clone().unwrap_or_else(|| "127.0.0.1".into());
-                let order = BankId::from_settings(&eid)?.start(&ip, number.as_deref(), text.as_deref()).await?;
+                let order = BankId::from_settings(&eid)?.start(&ip, number.as_deref(), &text, sign).await?;
                 let qr = bankid::qr_code(&order.qr_start_token, &order.qr_start_secret, 0);
                 secrets.qr_start_token = Some(order.qr_start_token);
                 secrets.qr_start_secret = Some(order.qr_start_secret);
@@ -226,6 +247,7 @@ impl Service for Start {
                     qr: Some(qr),
                     redirect_url: None,
                     expires_at: ctx.now + Duration::minutes(3),
+                    browser_binding: None,
                 };
                 (Some(order.order_ref), started)
             }
@@ -245,6 +267,7 @@ impl Service for Start {
                     qr: inferred.then(|| freja::qr_code(&auth_ref)),
                     redirect_url: None,
                     expires_at: ctx.now + Duration::minutes(3),
+                    browser_binding: None,
                 };
                 (Some(auth_ref), started)
             }
@@ -274,14 +297,23 @@ impl Service for Start {
                 state_mac_value = Some(state_mac(ctx, &state));
                 secrets.nonce = Some(nonce);
                 secrets.verifier = Some(verifier);
-                let started = Started {
-                    id,
-                    method,
-                    auto_start_token: None,
-                    qr: None,
-                    redirect_url: Some(url),
-                    expires_at: ctx.now + Duration::minutes(10),
+                let expires_at = ctx.now + Duration::minutes(10);
+                let (redirect_url, browser_binding) = if input.framed {
+                    let security: SecuritySettings = settings(ctx, conn).await?;
+                    if party.delivery != Delivery::Link.as_str() || security.embed_origins().is_empty() {
+                        return Err(bad_request("This signing link cannot identify from inside a frame. Open it on its own."));
+                    }
+                    secrets.authorize_url = Some(url);
+                    let ticket = ContinueTicket { s: id, p: party.id, v: party.link_version };
+                    let ticket = ctx.keys().sign_token(CONTINUE_TICKET, &ticket, (expires_at - ctx.now).num_seconds(), ctx.now.timestamp());
+                    (format!("{}/sign/eid#{ticket}", ctx.app.public_url()), None)
+                } else {
+                    let binding = random_token();
+                    browser_mac_value = Some(browser_mac(ctx, &binding));
+                    (url, Some(binding))
                 };
+                let started =
+                    Started { id, method, auto_start_token: None, qr: None, redirect_url: Some(redirect_url), expires_at, browser_binding };
                 (None, started)
             }
         };
@@ -291,8 +323,8 @@ impl Service for Start {
             &serde_json::to_string(&secrets).map_err(AppError::internal)?,
         );
         sqlx::query(
-            "insert into eid_sessions (id, party_id, provider, purpose, reference, state_mac, secrets, expires_at, created_at)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+            "insert into eid_sessions (id, party_id, provider, purpose, reference, state_mac, secrets, expires_at, created_at, browser_mac)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
         )
         .bind(id)
         .bind(party.id)
@@ -303,6 +335,7 @@ impl Service for Start {
         .bind(sealed)
         .bind(started.expires_at)
         .bind(ctx.now)
+        .bind(browser_mac_value)
         .execute(&mut *conn)
         .await?;
         audit(
@@ -511,7 +544,7 @@ impl Service for Status {
             status: "complete".into(),
             message: None,
             qr: None,
-            session: Some(issue_session(ctx, &party, method, Some(proof))),
+            session: Some(issue_session(ctx, &party, method, Some(proof), purpose == Purpose::Sign)),
             expires_at: Some(ctx.now + Duration::minutes(SESSION_MINUTES)),
         })
     }
@@ -551,21 +584,148 @@ impl Service for Cancel {
     }
 }
 
-type CallbackRow = (Uuid, Uuid, String, Option<String>, DateTime<Utc>);
+#[derive(Serialize, Deserialize)]
+struct ContinueTicket {
+    s: Uuid,
+    p: Uuid,
+    v: i32,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ContinueInput {
+    /// From the address of the page opened by a framed signing page.
+    pub ticket: String,
+    /// The person pressed Continue. Without it, this only says what they are about to identify for.
+    #[serde(default)]
+    pub confirm: bool,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ContinueOutput {
+    pub title: String,
+    pub organisation: String,
+    pub method: AuthMethod,
+    pub language: String,
+    /// Set once confirmed: where to send the browser.
+    pub redirect_url: Option<String>,
+    /// See `Started::browser_binding`.
+    pub browser_binding: Option<String>,
+}
+
+pub struct Continue;
+
+#[async_trait]
+impl Service for Continue {
+    type Input = ContinueInput;
+    type Output = ContinueOutput;
+    const META: Meta = Meta::mutation(
+        "signing.eid_continue",
+        "Show what a framed signing page's eID identification is for and, once confirmed, tie it to this browser and go on to the eID provider.",
+        Access::Public,
+    )
+    .without_transaction();
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ContinueInput) -> Result<ContinueOutput> {
+        let invalid = || bad_request("This identification is not valid or was already used. Go back to the signing link and start again.");
+        let ticket: ContinueTicket =
+            ctx.keys().verify_token(CONTINUE_TICKET, input.ticket.trim(), ctx.now.timestamp()).map_err(|_| invalid())?;
+        let party: PartyRow = sqlx::query_as(&format!("select {PARTY_COLUMNS} from parties where id = $1 and link_version = $2"))
+            .bind(ticket.p)
+            .bind(ticket.v)
+            .fetch_optional(&mut *conn)
+            .await?
+            .ok_or_else(invalid)?;
+        let document: DocumentRow = sqlx::query_as(&format!("select {DOCUMENT_COLUMNS} from documents d where id = $1"))
+            .bind(party.document_id)
+            .fetch_one(&mut *conn)
+            .await?;
+        if document.status != status::PENDING {
+            return Err(invalid());
+        }
+        let row: Row = sqlx::query_as(&format!(
+            "select {ROW_COLUMNS} from eid_sessions where id = $1 and party_id = $2 and status = 'pending' and browser_mac is null and expires_at > $3"
+        ))
+        .bind(ticket.s)
+        .bind(party.id)
+        .bind(ctx.now)
+        .fetch_optional(&mut *conn)
+        .await?
+        .ok_or_else(invalid)?;
+        let org: OrgSettings = settings(ctx, conn).await?;
+        let mut output = ContinueOutput {
+            title: document.title.clone(),
+            organisation: if org.name.is_empty() { "OpenSign".to_string() } else { org.name },
+            method: method_of(&row.provider),
+            language: party.lang(&document).code().to_string(),
+            redirect_url: None,
+            browser_binding: None,
+        };
+        if input.confirm {
+            let binding = random_token();
+            let bound =
+                sqlx::query("update eid_sessions set browser_mac = $2 where id = $1 and status = 'pending' and browser_mac is null")
+                    .bind(row.id)
+                    .bind(browser_mac(ctx, &binding))
+                    .execute(&mut *conn)
+                    .await?;
+            if bound.rows_affected() == 0 {
+                return Err(invalid());
+            }
+            audit(
+                ctx,
+                conn,
+                Entry::new("party.eid_continued", "document", document.id)
+                    .metadata(json!({ "party": party.id, "name": party.name, "method": row.provider })),
+            )
+            .await?;
+            output.redirect_url = secrets(ctx, &row)?.authorize_url;
+            output.browser_binding = Some(binding);
+        }
+        Ok(output)
+    }
+}
+
+type CallbackRow = (Uuid, Uuid, String, Option<String>, DateTime<Utc>, Option<String>);
 
 /// The broker or TIC Identity sends the browser back here. Returns the eID session to resume on the
 /// signing page.
-pub async fn broker_callback(ctx: &Ctx, conn: &mut PgConnection, state: &str, code: Option<&str>, error: Option<&str>) -> Result<Uuid> {
+pub async fn broker_callback(
+    ctx: &Ctx,
+    conn: &mut PgConnection,
+    state: &str,
+    browser: Option<&str>,
+    code: Option<&str>,
+    error: Option<&str>,
+) -> Result<Uuid> {
     let row: Option<CallbackRow> = sqlx::query_as(
         "update eid_sessions set state_mac = null where state_mac = $1 and provider in ('broker', 'tic') and status = 'pending'
-         returning id, party_id, provider, secrets, expires_at",
+         returning id, party_id, provider, secrets, expires_at, browser_mac",
     )
     .bind(state_mac(ctx, state))
     .fetch_optional(&mut *conn)
     .await?;
-    let Some((id, party_id, provider, sealed, expires_at)) = row else {
+    let Some((id, party_id, provider, sealed, expires_at, bound_to)) = row else {
         return Err(bad_request("This identification is not valid or was already used. Go back to the signing link and start again."));
     };
+    let party: PartyRow =
+        sqlx::query_as(&format!("select {PARTY_COLUMNS} from parties where id = $1")).bind(party_id).fetch_one(&mut *conn).await?;
+    let same_browser = match (&bound_to, browser) {
+        (Some(mac), Some(binding)) => constant_time_eq(browser_mac(ctx, binding).as_bytes(), mac.as_bytes()),
+        _ => false,
+    };
+    if !same_browser {
+        fail(conn, id, OTHER_BROWSER).await?;
+        audit(
+            ctx,
+            conn,
+            Entry::new("party.eid_other_browser", "document", party.document_id)
+                .metadata(json!({ "party": party.id, "name": party.name, "method": provider })),
+        )
+        .await?;
+        return Err(bad_request(OTHER_BROWSER));
+    }
     let finish = async {
         if expires_at < ctx.now {
             return Err(bad_request("The identification took too long. Try again."));
@@ -574,10 +734,6 @@ pub async fn broker_callback(ctx: &Ctx, conn: &mut PgConnection, state: &str, co
             return Err(bad_request("The identification was canceled or did not go through."));
         }
         let code = code.ok_or_else(|| bad_request("The eID broker sent no result"))?;
-        let party: PartyRow = sqlx::query_as(&format!("select {} from parties where id = $1", crate::documents::PARTY_COLUMNS))
-            .bind(party_id)
-            .fetch_one(&mut *conn)
-            .await?;
         let plain = ctx
             .keys()
             .decrypt_str(KeyPurpose::Settings, &secrets_context(id), sealed.as_deref().unwrap_or_default())

@@ -119,6 +119,8 @@ export const zh: Texts = {
   eidPopupBlocked: '请允许此网站弹出窗口，然后重试。',
   eidWindowDone: '身份验证已完成',
   eidWindowDoneNote: '您可以关闭此窗口并返回签署页面。',
+  eidContinue: (label, title, organisation) => `${organisation} 请您使用 ${label} 验证身份，以处理“${title}”。`,
+  eidContinueNote: '仅当您本人从签署页面开始此操作时才继续。如果此链接是别人发给您的，请关闭此窗口。',
   savedSignature: '已保存',
   savedInAccount: '您在账户设置中保存的签名。',
   savedOnDevice: '已保存在此浏览器中。',

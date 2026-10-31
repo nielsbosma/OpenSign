@@ -190,6 +190,7 @@ async fn evidence_events(conn: &mut PgConnection, document_id: Uuid) -> Result<V
                 "party.reminded" => format!("Reminder sent to {name}"),
                 "party.viewed" => format!("Opened by {name}{ip}"),
                 "party.in_person_started" => format!("In-person signing for {name} started by {actor} on their device"),
+                "party.link_issued" => format!("Signing link for {name} handed out by {actor}"),
                 "party.authenticated" => format!(
                     "{name} identified with {}",
                     metadata["method"].as_str().and_then(AuthMethod::parse).map(AuthMethod::label).unwrap_or("a code")
@@ -301,7 +302,7 @@ pub async fn seal_document(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid
                 authentication: auth_label(p),
                 signed_at: p.signed_at.map(|t| fmt_time(Some(t))),
                 ip: p.evidence.as_ref().and_then(|e| e["ip"].as_str()).map(str::to_string),
-                identity: super::open_identity(ctx.keys(), p),
+                identity: super::open_identity(ctx.keys(), p).map(|i| super::mask_identity(&i)),
             })
             .collect(),
         events: evidence_events(conn, document.id).await?,

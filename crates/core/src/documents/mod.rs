@@ -278,6 +278,25 @@ pub fn seal_identity(keys: &Keys, party_id: Uuid, identity: &str) -> String {
     keys.encrypt_str(KeyPurpose::Settings, &identity_context(party_id), identity)
 }
 
+fn mask_tail(value: &str, keep: usize) -> String {
+    let length = value.chars().count();
+    value.chars().enumerate().map(|(i, c)| if i + keep < length && c.is_ascii_alphanumeric() { 'x' } else { c }).collect()
+}
+
+/// An identification as every party may read it in the sealed document: personal numbers and
+/// phone numbers cut to their last digits.
+pub fn mask_identity(identity: &str) -> String {
+    const NUMBER: &str = "personal number ";
+    if let Some(phone) = identity.strip_prefix("SMS code to ") {
+        return format!("SMS code to {}", mask_tail(phone, 3));
+    }
+    let Some(at) = identity.rfind(NUMBER) else { return identity.to_string() };
+    let start = at + NUMBER.len();
+    let rest = &identity[start..];
+    let end = rest.find([',', ' ']).unwrap_or(rest.len());
+    format!("{}{}{}", &identity[..start], mask_tail(&rest[..end], 4), &rest[end..])
+}
+
 pub fn open_identity(keys: &Keys, party: &PartyRow) -> Option<String> {
     let stored = party.evidence.as_ref()?["identity"].as_str()?;
     keys.decrypt_str(KeyPurpose::Settings, &identity_context(party.id), stored).ok().map(|plain| plain.to_string())

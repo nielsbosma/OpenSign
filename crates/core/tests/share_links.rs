@@ -162,11 +162,8 @@ async fn saved_signature_is_kept_per_user_and_can_be_removed() {
     let saved = call::<signatures::Set>(&ann, typed).await.unwrap();
     assert_eq!(saved.typed_name.as_deref(), Some("Ann A."));
     assert!(saved.image_png_base64.is_none());
-    let retired: i64 = sqlx::query_scalar("select count(*) from files where kind = 'saved_signature' and deleted_at is not null")
-        .fetch_one(&app.db)
-        .await
-        .unwrap();
-    assert_eq!(retired, 1, "the replaced drawing is retired");
+    let replaced: i64 = sqlx::query_scalar("select count(*) from jobs where kind = 'delete_objects'").fetch_one(&app.db).await.unwrap();
+    assert!(replaced >= 1, "the replaced drawing is destroyed");
 
     call::<signatures::Remove>(&ann, Default::default()).await.unwrap();
     assert!(call::<signatures::Get>(&ann, Default::default()).await.unwrap().empty);

@@ -2,11 +2,12 @@ import type { FieldKind, Validation } from './api';
 
 /**
  * What a field may hold and how its value is written on the page, the same rules as
- * `crates/core/src/documents/values.rs`. Both run `field-values.cases.json`. The server checks again on submit.
+ * `crates/core/src/documents/values.rs`. Both run `field-values.cases.json`. The server checks again on submit, and
+ * alone runs a field's pattern: patterns come from the sender, and a browser's regular expressions can be made to hang.
  */
 
 export type Invalid =
-  | { code: 'number' | 'phone' | 'date' | 'option' | 'pattern' }
+  | { code: 'number' | 'phone' | 'date' | 'option' }
   | { code: 'tooShort' | 'tooLong'; n: number }
   | { code: 'below' | 'above'; limit: string };
 
@@ -37,14 +38,6 @@ const TEXT_KINDS: FieldKind[] = ['text', 'initials', 'company'];
 export const takesPattern = (kind: FieldKind) => TEXT_KINDS.includes(kind);
 
 const fail = (error: Invalid): Checked => ({ ok: false, error });
-
-function compile(pattern: string): RegExp | null {
-  try {
-    return new RegExp(`^(?:${pattern})$`, 'u');
-  } catch {
-    return null;
-  }
-}
 
 /** A value in its stored form: numbers as plain decimals, phones in E.164, dates as YYYY-MM-DD, several choices as JSON. */
 export function normalize(kind: FieldKind, spec: Spec, input: string): Checked {
@@ -104,9 +97,6 @@ export function normalize(kind: FieldKind, spec: Spec, input: string): Checked {
         const length = [...raw].length;
         if (v.minLength != null && length < v.minLength) return fail({ code: 'tooShort', n: v.minLength });
         if (v.maxLength != null && length > v.maxLength) return fail({ code: 'tooLong', n: v.maxLength });
-        // A pattern the browser cannot read is still checked by the server.
-        const re = v.pattern ? compile(v.pattern) : null;
-        if (re && !re.test(raw)) return fail({ code: 'pattern' });
       }
       return { ok: true, value: raw };
     }

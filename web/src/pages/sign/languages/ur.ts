@@ -124,6 +124,9 @@ export const ur: Texts = {
   eidPopupBlocked: 'اس سائٹ کے لیے پاپ اپ کی اجازت دیں، پھر دوبارہ کوشش کریں۔',
   eidWindowDone: 'شناخت مکمل ہو گئی',
   eidWindowDoneNote: 'آپ یہ ونڈو بند کر کے دستخط کے صفحے پر واپس جا سکتے ہیں۔',
+  eidContinue: (label, title, organisation) => `${organisation} آپ سے «${title}» کے لیے ${label} کے ساتھ شناخت کرنے کو کہہ رہی ہے۔`,
+  eidContinueNote:
+    'صرف اسی صورت میں جاری رکھیں جب آپ نے خود دستخط کے صفحے سے آغاز کیا ہو۔ اگر کسی نے آپ کو یہ لنک بھیجا ہے تو یہ ونڈو بند کر دیں۔',
   savedSignature: 'محفوظ',
   savedInAccount: 'آپ کی اکاؤنٹ سیٹنگز میں محفوظ دستخط۔',
   savedOnDevice: 'اس براؤزر میں محفوظ۔',

@@ -122,6 +122,8 @@ export const hi: Texts = {
   eidPopupBlocked: 'इस साइट के लिए पॉप-अप की अनुमति दें, फिर दोबारा कोशिश करें।',
   eidWindowDone: 'पहचान पूरी हुई',
   eidWindowDoneNote: 'आप यह विंडो बंद करके हस्ताक्षर पेज पर लौट सकते हैं।',
+  eidContinue: (label, title, organisation) => `${organisation} आपसे “${title}” के लिए ${label} से पहचान करने को कह रहा है।`,
+  eidContinueNote: 'जारी तभी रखें जब आपने खुद हस्ताक्षर पेज से शुरू किया हो। अगर किसी ने आपको यह लिंक भेजा है, तो यह विंडो बंद कर दें।',
   savedSignature: 'सहेजा गया',
   savedInAccount: 'आपकी खाता सेटिंग में सहेजा गया हस्ताक्षर।',
   savedOnDevice: 'इस ब्राउज़र में सहेजा गया।',

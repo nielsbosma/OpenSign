@@ -29,7 +29,11 @@ A photo is evidence of who signed, not proof of liveness: a skilled signer could
 
 For BankID and Freja, put the party's **Personal Number** on the party. OpenSign then requires that the eID names exactly that person: an identification by anyone else is refused and recorded in the audit trail. Without a personal number, anyone who holds the link and has an eID could sign, and the setup check warns about it.
 
-The personal number is stored encrypted and shown masked (only the last four digits). When editing a party, leave the field empty to keep the stored number.
+The personal number is stored encrypted and shown masked (only the last four digits), also in the sealed PDF that every party receives. The full number the eID returned stays encrypted in the database. When editing a party, leave the field empty to keep the stored number.
+
+## Identifying to view and to sign
+
+**Identify to View** and **Identify to Sign** are two separate steps, even with the same eID. Only an identification made for signing tells the person what they are signing (BankID shows it in the app), so a party with both identifies twice.
 
 ## SMS codes
 
@@ -38,6 +42,7 @@ The party asks for a code on the signing page and gets a 6-digit code by SMS.
 - A code is valid for 10 minutes and allows 5 attempts.
 - At most 5 codes per hour can be sent to a party.
 - Codes are stored only as a keyed hash.
+- The sealed PDF shows the phone number with only its last three digits.
 
 ### Setting up SMS
 
@@ -49,6 +54,16 @@ In **Settings → SMS**, pick a provider:
 | [Twilio](https://www.twilio.com) | Account SID | Auth token |
 
 **Sender** is a name of up to 11 letters, or a number you own. The same provider is used for SMS delivery of signing links.
+
+### Limiting what SMS can cost
+
+Text messages cost money, and share links let people you do not know ask for them. These settings keep the bill bounded:
+
+- **Allowed Countries**: the country calling codes that may get SMS, such as `46, 47`. Empty allows every country, which is how an install starts so that nothing already working stops. Set it to the countries you actually send to: some numbers abroad cost many times what a local one does.
+- **Messages per Hour** (200 by default) and **Messages per Day** (1000): for everything the install sends. When one is reached, further messages are refused until the window has passed, and the server logs a warning.
+- **Messages per Hour for a Share Link** (30): for all documents made from one share link.
+
+0 means no limit.
 
 ## Swedish BankID
 
@@ -90,6 +105,10 @@ An OpenID Connect broker such as Idura (Criipto) or Signicat gives access to Nor
 3. Optionally set **eID Choice (acr_values)** to pick one eID, such as `urn:grn:authn:no:bankid`. Empty lets the signer choose at the broker.
 
 The signer is sent to the broker and back. OpenSign uses the authorization code flow with PKCE, state and nonce, and checks the ID token's signature, issuer, audience and expiry.
+
+The identification must finish in the browser where it started: a short-lived cookie ties the two together, so this also holds for TIC Identity, and an answer that returns anywhere else is refused and recorded in the audit trail. Keep cookies on for your OpenSign address.
+
+When the signing page is embedded in another site, a cookie cannot be set from inside the frame. The signer then gets a window on your OpenSign address that says which document the identification is for, and goes on to the broker when they press the button. This is only offered for parties with link delivery, on an install that allows embedding.
 
 ## What is recorded
 

@@ -124,6 +124,8 @@ export const pt: Texts = {
   eidPopupBlocked: 'Permita pop-ups para este site e tente novamente.',
   eidWindowDone: 'Identificação concluída',
   eidWindowDoneNote: 'Você pode fechar esta janela e voltar à página de assinatura.',
+  eidContinue: (label, title, organisation) => `${organisation} pede que você se identifique com ${label} para “${title}”.`,
+  eidContinueNote: 'Continue apenas se você mesmo iniciou na página de assinatura. Se alguém lhe enviou este link, feche esta janela.',
   savedSignature: 'Salva',
   savedInAccount: 'Sua assinatura salva nas configurações da conta.',
   savedOnDevice: 'Salva neste navegador.',

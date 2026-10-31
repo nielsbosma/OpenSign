@@ -119,6 +119,8 @@ async fn sweep(ctx: &Ctx, conn: &mut sqlx::PgConnection) -> Result<()> {
     .bind(ctx.now)
     .execute(&mut *conn)
     .await?;
+    crate::sms::prune(conn, ctx.now).await?;
+    crate::services::signing::sweep_retired_files(conn).await?;
     enqueue(conn, "retention", json!({}), None, Some("retention")).await?;
     enqueue(conn, "anchor_audit", json!({}), None, Some("anchor_audit")).await
 }

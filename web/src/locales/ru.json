@@ -1094,5 +1094,10 @@
   "Trusted Proxies": "Доверенные прокси",
   "Who may state a visitor's address: private for any proxy on a private network, none when OpenSign faces the internet directly, or the addresses and ranges of your own proxies.": "Кто может сообщать адрес посетителя: private — любой прокси в частной сети, none — если OpenSign напрямую доступен из интернета, либо адреса и диапазоны ваших прокси.",
   "Allow New MCP Clients to Register": "Разрешить регистрацию новых клиентов MCP",
-  "Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.": "Приложения вроде Claude регистрируются сами при первом подключении. Если выключено, подключиться могут только уже зарегистрированные."
+  "Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.": "Приложения вроде Claude регистрируются сами при первом подключении. Если выключено, подключиться могут только уже зарегистрированные.",
+  "Allowed Countries": "Разрешённые страны",
+  "Country calling codes that may get SMS, such as 46, 47. Empty allows every country.": "Телефонные коды стран, которым можно отправлять SMS, например 46, 47. Пусто — все страны.",
+  "Messages per Hour": "Сообщений в час",
+  "Messages per Day": "Сообщений в день",
+  "Messages per Hour for a Share Link": "Сообщений в час для ссылки общего доступа"
 }
