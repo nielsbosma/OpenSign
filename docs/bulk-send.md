@@ -5,7 +5,7 @@ Bulk send sends a [template](templates.md) to every row of a spreadsheet. Each r
 ## Before you start
 
 - Prepare a template with the parties, fields, message and identification you want.
-- Prepare a CSV, Excel (`.xlsx`, `.xls`) or OpenDocument (`.ods`) file. The first row names the columns. Up to 1,000 rows and 5 MB.
+- Prepare a CSV or Excel (`.xlsx`) file. Save older `.xls` and OpenDocument `.ods` files as `.xlsx` first. The first row names the columns. Up to 1,000 rows and 5 MB.
 - You need permission to send documents.
 
 ## Sending
