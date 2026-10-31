@@ -9,7 +9,7 @@ use opensign_core::services::auth::{self, LoginResult};
 use opensign_core::services::webhooks::{self, DeliveryStatus};
 use opensign_core::services::{Empty, documents, setup};
 use opensign_core::settings::SecuritySettings;
-use opensign_core::testing::app;
+use opensign_core::testing::production_app;
 use opensign_core::worker;
 use serde_json::json;
 use uuid::Uuid;
@@ -42,7 +42,7 @@ fn deliveries(webhook_id: Uuid, status: Option<DeliveryStatus>) -> webhooks::Del
 
 #[tokio::test]
 async fn failed_deliveries_are_logged_and_can_be_resent() {
-    let Some(app) = app().await else { return };
+    let Some(app) = production_app().await else { return };
     let ada = admin(&app).await;
     let input = serde_json::from_value(json!({ "url": "https://example.com/hook", "events": ["*"] })).unwrap();
     let hook = call::<webhooks::Create>(&ada, input).await.unwrap().webhook.id;

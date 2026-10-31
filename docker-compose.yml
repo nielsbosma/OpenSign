@@ -5,6 +5,10 @@
 #   docker compose --profile prod up -d   also runs the production image at http://localhost:8090
 #
 # Mailpit's inbox: http://localhost:8026 (dev email goes there instead of Resend).
+# Webhook receiver: http://localhost:8027. Point a webhook at http://localhost:8027/<any uuid> from `pnpm dev`,
+# and see it at http://localhost:8027/s/<that uuid>.
+# The production image refuses both unless started with OPENSIGN_APP_ENV=development, and then a webhook
+# uses http://webhooks:8080/<any uuid>, because it runs in a container.
 # S3 (RustFS) at http://localhost:9310 (opensign / opensign-secret).
 
 name: opensign
@@ -59,6 +63,14 @@ services:
       timeout: 3s
       retries: 30
 
+  # Catches webhook deliveries and shows them, as Mailpit does for email.
+  webhooks:
+    image: ghcr.io/tarampampam/webhook-tester:2
+    environment:
+      AUTO_CREATE_SESSIONS: "true"
+    ports:
+      - "8027:8080"
+
   # Converts Word and other office files to PDF. It has no access to keys or the database,
   # and in production it sits on a private network with no outbound internet.
   converter:
@@ -90,6 +102,9 @@ services:
       APP_URL: http://localhost:8090
       CONVERTER_URL: http://converter:3000
       ROLE: ${OPENSIGN_ROLE:-all}
+      # development sends email to Mailpit, logs SMS, and lets webhooks reach private addresses.
+      APP_ENV: ${OPENSIGN_APP_ENV:-production}
+      MAILPIT_URL: http://mailpit:8025
     ports:
       - "8090:3000"
     depends_on:
@@ -98,6 +113,8 @@ services:
       s3-init:
         condition: service_completed_successfully
       converter:
+        condition: service_started
+      webhooks:
         condition: service_started
 
 volumes:

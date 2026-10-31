@@ -16,7 +16,7 @@
     "test": "cargo test --workspace && pnpm --filter @opensign/web test",
     "test:e2e": "pnpm --filter @opensign/web exec playwright test",
     "api:types": "pnpm --filter @opensign/web api:types",
-    "infra:up": "docker compose up -d --wait postgres s3 mailpit converter && docker compose run --rm s3-init",
+    "infra:up": "docker compose up -d --wait postgres s3 mailpit webhooks converter && docker compose run --rm s3-init",
     "infra:down": "docker compose down"
   },
   "devDependencies": {

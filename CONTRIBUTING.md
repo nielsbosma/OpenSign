@@ -16,7 +16,7 @@ By contributing you agree that your contribution is licensed under the MIT licen
 
 ```sh
 pnpm install
-pnpm infra:up            # Postgres, S3, Mailpit and Gotenberg in Docker
+pnpm infra:up            # Postgres, S3, Mailpit, a webhook receiver and Gotenberg in Docker
 cp .env.example .env
 pnpm dev                 # server on :3000, web app on http://localhost:5173
 ```
@@ -30,6 +30,8 @@ pnpm dev                 # server on :3000, web app on http://localhost:5173
 | `docker compose --profile prod up -d --build` | The production image at http://localhost:8090 |
 
 Email in development goes to Mailpit at http://localhost:8026.
+
+Webhooks in development can go to the receiver at http://localhost:8027: add a webhook with the URL `http://localhost:8027/<any uuid>` and open `http://localhost:8027/s/<that uuid>` to see what arrives. Against the production image (`docker compose --profile prod`), start it with `OPENSIGN_APP_ENV=development` and use `http://webhooks:8080/<any uuid>` instead. Outside development, webhooks only go to public https addresses.
 
 ## Releasing
 

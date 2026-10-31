@@ -211,7 +211,7 @@ Issues and pull requests are welcome. Run it locally with:
 
 ```sh
 pnpm install
-pnpm infra:up            # Postgres, S3, Mailpit and Gotenberg in Docker
+pnpm infra:up            # Postgres, S3, Mailpit, a webhook receiver and Gotenberg in Docker
 cp .env.example .env
 pnpm dev                 # web app on http://localhost:5173
 ```
