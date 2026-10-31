@@ -1055,5 +1055,10 @@
   "Runs queued again: {count}": "আবার সারিতে রাখা রান: {count}",
   "Run {count} Failed Again": "{count}টি ব্যর্থ আবার চালান",
   "No runs yet": "এখনো কোনো রান নেই",
-  "Run": "রান"
+  "Run": "রান",
+  "Allowed Countries": "অনুমোদিত দেশ",
+  "Country calling codes that may get SMS, such as 46, 47. Empty allows every country.": "যেসব দেশের কোডে SMS পাঠানো যাবে, যেমন 46, 47। খালি রাখলে সব দেশ অনুমোদিত।",
+  "Messages per Hour": "প্রতি ঘণ্টায় বার্তা",
+  "Messages per Day": "প্রতিদিন বার্তা",
+  "Messages per Hour for a Share Link": "শেয়ার লিঙ্কের জন্য প্রতি ঘণ্টায় বার্তা"
 }

@@ -120,6 +120,8 @@ export const bn: Texts = {
   eidPopupBlocked: 'এই সাইটের জন্য পপ-আপ চালু করুন, তারপর আবার চেষ্টা করুন।',
   eidWindowDone: 'পরিচয় যাচাই সম্পন্ন',
   eidWindowDoneNote: 'আপনি এই উইন্ডোটি বন্ধ করে স্বাক্ষর পৃষ্ঠায় ফিরে যেতে পারেন।',
+  eidContinue: (label, title, organisation) => `${organisation} আপনাকে “${title}”-এর জন্য ${label} দিয়ে পরিচয় যাচাই করতে বলছে।`,
+  eidContinueNote: 'কেবল তখনই চালিয়ে যান যদি আপনি নিজে স্বাক্ষর পৃষ্ঠা থেকে শুরু করে থাকেন। কেউ আপনাকে এই লিঙ্ক পাঠালে এই উইন্ডোটি বন্ধ করুন।',
   savedSignature: 'সংরক্ষিত',
   savedInAccount: 'আপনার অ্যাকাউন্ট সেটিংসে সংরক্ষিত স্বাক্ষর।',
   savedOnDevice: 'এই ব্রাউজারে সংরক্ষিত।',

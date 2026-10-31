@@ -81,8 +81,6 @@ function invalidText(f: FieldRow, error: Invalid, t: Texts) {
       return t.invalidDate;
     case 'option':
       return t.invalidOption;
-    case 'pattern':
-      return t.invalidFormat;
     case 'tooShort':
       return t.tooShort(error.n);
     case 'tooLong':

@@ -124,6 +124,8 @@ export const es: Texts = {
   eidPopupBlocked: 'Permite las ventanas emergentes para este sitio e inténtalo de nuevo.',
   eidWindowDone: 'Identificación completada',
   eidWindowDoneNote: 'Puedes cerrar esta ventana y volver a la página de firma.',
+  eidContinue: (label, title, organisation) => `${organisation} te pide que te identifiques con ${label} para «${title}».`,
+  eidContinueNote: 'Continúa solo si lo iniciaste tú en la página de firma. Si alguien te envió este enlace, cierra esta ventana.',
   savedSignature: 'Guardada',
   savedInAccount: 'Su firma guardada en la configuración de su cuenta.',
   savedOnDevice: 'Guardada en este navegador.',

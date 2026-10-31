@@ -123,6 +123,8 @@ export const sv: Texts = {
   eidPopupBlocked: 'Tillåt popupfönster för den här webbplatsen och försök igen.',
   eidWindowDone: 'Identifieringen är klar',
   eidWindowDoneNote: 'Du kan stänga det här fönstret och gå tillbaka till signeringssidan.',
+  eidContinue: (label, title, organisation) => `${organisation} ber dig identifiera dig med ${label} för ”${title}”.`,
+  eidContinueNote: 'Fortsätt bara om du själv började på signeringssidan. Om någon skickade den här länken till dig, stäng fönstret.',
   savedSignature: 'Sparad',
   savedInAccount: 'Din sparade signatur från kontoinställningarna.',
   savedOnDevice: 'Sparad i den här webbläsaren.',

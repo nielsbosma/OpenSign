@@ -17,7 +17,9 @@ type Case = {
 describe('field values', () => {
   it.each(cases.values as Case[])('$kind $input', (c) => {
     const got = normalize(c.kind as FieldKind, c, c.input);
-    if (c.error) expect(got.ok ? null : got.error.code).toBe(c.error);
+    // Only the server runs patterns, so here such a value is passed on as it is.
+    if (c.error === 'pattern') expect(got).toEqual({ ok: true, value: c.input.trim() });
+    else if (c.error) expect(got.ok ? null : got.error.code).toBe(c.error);
     else expect(got).toEqual({ ok: true, value: c.stored ?? null });
   });
 

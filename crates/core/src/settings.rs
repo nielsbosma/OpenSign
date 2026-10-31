@@ -240,7 +240,7 @@ impl SettingsGroup for AiSettings {
     const SECRET_TARGETS: &'static [(&'static str, &'static [&'static str])] = &[("apiKey", &["provider", "baseUrl"])];
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(default, rename_all = "camelCase")]
 pub struct SmsSettings {
     /// `46elks`, `twilio` or empty.
@@ -248,6 +248,29 @@ pub struct SmsSettings {
     pub username: String,
     pub password: Option<String>,
     pub sender: String,
+    /// Country calling codes that may receive SMS, such as `46, 47`. Empty allows every country.
+    pub allowed_countries: String,
+    /// Messages per hour across everyone; 0 means no limit.
+    pub hourly_limit: u32,
+    /// Messages per day across everyone; 0 means no limit.
+    pub daily_limit: u32,
+    /// Messages per hour for documents made from one share link; 0 means no limit.
+    pub share_link_hourly_limit: u32,
+}
+
+impl Default for SmsSettings {
+    fn default() -> Self {
+        Self {
+            provider: String::new(),
+            username: String::new(),
+            password: None,
+            sender: String::new(),
+            allowed_countries: String::new(),
+            hourly_limit: 200,
+            daily_limit: 1000,
+            share_link_hourly_limit: 30,
+        }
+    }
 }
 
 impl SettingsGroup for SmsSettings {

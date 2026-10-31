@@ -99,6 +99,8 @@ pub async fn notify_party(ctx: &Ctx, conn: &mut PgConnection, party_id: Uuid, re
                 .ok_or_else(|| AppError::internal(anyhow::anyhow!("party {} has SMS delivery without a phone", party.id)))?;
             let sms: SmsSettings = settings(ctx, conn).await?;
             let text = lang.invitation_sms(org_name(&org), &sender, &document.title, approve, &url);
+            let share_link = document.metadata["shareLink"].as_str().and_then(|s| Uuid::parse_str(s).ok());
+            crate::sms::reserve(conn, &sms, &phone, share_link, ctx.now).await?;
             crate::sms::send(&ctx.app, &sms, &phone, &text).await?;
         }
         _ => {}

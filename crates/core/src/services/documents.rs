@@ -1495,9 +1495,10 @@ async fn check_auth_available(ctx: &Ctx, conn: &mut PgConnection, method: AuthMe
         AuthMethod::None | AuthMethod::Standard => Ok(()),
         AuthMethod::SmsPin => {
             let sms: SmsSettings = settings(ctx, conn).await?;
-            if party.phone.is_none() {
+            let Some(phone) = &party.phone else {
                 return Err(bad_request(format!("{} needs a phone number for SMS codes", party.name)));
-            }
+            };
+            crate::sms::check_country(&sms, phone)?;
             if !crate::sms::is_configured(&sms) && !ctx.app.env.development {
                 return Err(bad_request("SMS is not set up. An admin chooses an SMS provider in Admin settings."));
             }

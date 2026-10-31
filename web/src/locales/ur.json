@@ -1055,5 +1055,10 @@
   "Runs queued again: {count}": "دوبارہ قطار میں رکھے گئے رنز: {count}",
   "Run {count} Failed Again": "{count} ناکام دوبارہ چلائیں",
   "No runs yet": "ابھی تک کوئی رن نہیں",
-  "Run": "رن"
+  "Run": "رن",
+  "Allowed Countries": "اجازت یافتہ ممالک",
+  "Country calling codes that may get SMS, such as 46, 47. Empty allows every country.": "ملکی کوڈ جنہیں SMS مل سکتا ہے، جیسے 46، 47۔ خالی چھوڑنے پر تمام ممالک کی اجازت ہے۔",
+  "Messages per Hour": "فی گھنٹہ پیغامات",
+  "Messages per Day": "فی دن پیغامات",
+  "Messages per Hour for a Share Link": "شیئر لنک کے لیے فی گھنٹہ پیغامات"
 }

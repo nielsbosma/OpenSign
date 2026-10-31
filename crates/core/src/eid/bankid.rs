@@ -100,20 +100,15 @@ impl BankId {
         }
     }
 
-    /// Starts an identification, or a signature of `visible_text` when it is given. With a
-    /// personal number, only that person's BankID can complete it.
-    pub async fn start(&self, end_user_ip: &str, personal_number: Option<&str>, visible_text: Option<&str>) -> Result<Order> {
-        let mut body = json!({ "endUserIp": end_user_ip });
+    /// Starts an identification or a signature, with `visible_text` shown in the app either way so
+    /// the person sees what they are confirming. With a personal number, only that person's BankID
+    /// can complete it.
+    pub async fn start(&self, end_user_ip: &str, personal_number: Option<&str>, visible_text: &str, sign: bool) -> Result<Order> {
+        let mut body = json!({ "endUserIp": end_user_ip, "userVisibleData": B64.encode(visible_text) });
         if let Some(number) = personal_number {
             body["requirement"] = json!({ "personalNumber": number });
         }
-        let method = match visible_text {
-            Some(text) => {
-                body["userVisibleData"] = json!(B64.encode(text));
-                "sign"
-            }
-            None => "auth",
-        };
+        let method = if sign { "sign" } else { "auth" };
         serde_json::from_value(self.post(method, body).await?).map_err(|_| unavailable("BankID answered in an unexpected way"))
     }
 

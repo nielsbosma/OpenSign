@@ -125,6 +125,9 @@ export const fr: Texts = {
   eidPopupBlocked: 'Autorisez les fenêtres pop-up pour ce site, puis réessayez.',
   eidWindowDone: 'Identification terminée',
   eidWindowDoneNote: 'Vous pouvez fermer cette fenêtre et revenir à la page de signature.',
+  eidContinue: (label, title, organisation) => `${organisation} vous demande de vous identifier avec ${label} pour « ${title} ».`,
+  eidContinueNote:
+    'Continuez uniquement si vous avez commencé vous-même sur la page de signature. Si quelqu’un vous a envoyé ce lien, fermez cette fenêtre.',
   savedSignature: 'Enregistrée',
   savedInAccount: 'Votre signature enregistrée dans les paramètres de votre compte.',
   savedOnDevice: 'Enregistrée dans ce navigateur.',

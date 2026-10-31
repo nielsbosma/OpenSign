@@ -94,6 +94,12 @@ pub async fn call(State(state): State<AppState>, Path(name): Path<String>, reque
             }
         }
         "auth.logout" => response_headers.push((header::SET_COOKIE, auth::clear_cookie(&state))),
+        "signing.eid_start" | "signing.eid_continue" => {
+            let binding = output.as_object_mut().and_then(|map| map.remove("browserBinding"));
+            if let Some(binding) = binding.as_ref().and_then(Value::as_str) {
+                response_headers.push((header::SET_COOKIE, auth::set_eid_cookie(&state, binding)));
+            }
+        }
         _ => {}
     }
     let mut response = Json(output).into_response();

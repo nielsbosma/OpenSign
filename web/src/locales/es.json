@@ -1055,5 +1055,10 @@
   "Runs queued again: {count}": "Ejecuciones en cola de nuevo: {count}",
   "Run {count} Failed Again": "Ejecutar de nuevo {count} fallidas",
   "No runs yet": "Aún no hay ejecuciones",
-  "Run": "Ejecución"
+  "Run": "Ejecución",
+  "Allowed Countries": "Países permitidos",
+  "Country calling codes that may get SMS, such as 46, 47. Empty allows every country.": "Prefijos de país que pueden recibir SMS, por ejemplo 46, 47. Vacío permite todos los países.",
+  "Messages per Hour": "Mensajes por hora",
+  "Messages per Day": "Mensajes por día",
+  "Messages per Hour for a Share Link": "Mensajes por hora para un enlace compartido"
 }

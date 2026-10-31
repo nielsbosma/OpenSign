@@ -119,6 +119,8 @@ export const ar: Texts = {
   eidPopupBlocked: 'اسمح بالنوافذ المنبثقة لهذا الموقع، ثم حاول مرة أخرى.',
   eidWindowDone: 'اكتمل التحقق من الهوية',
   eidWindowDoneNote: 'يمكنك إغلاق هذه النافذة والعودة إلى صفحة التوقيع.',
+  eidContinue: (label, title, organisation) => `تطلب منك ${organisation} التحقق من هويتك باستخدام ${label} من أجل «${title}».`,
+  eidContinueNote: 'تابع فقط إذا كنت قد بدأت بنفسك من صفحة التوقيع. إذا أرسل إليك أحدهم هذا الرابط، فأغلق هذه النافذة.',
   savedSignature: 'محفوظ',
   savedInAccount: 'توقيعك المحفوظ في إعدادات حسابك.',
   savedOnDevice: 'محفوظ في هذا المتصفح.',

@@ -254,6 +254,21 @@ const GROUPS: Record<Group, { title: string; description: string; help?: string;
       { key: 'username', label: msg('Username or Account SID'), when: 'provider' },
       { key: 'password', label: msg('Password or Auth Token'), type: 'secret', when: 'provider' },
       { key: 'sender', label: msg('Sender'), hint: msg('A name of up to 11 letters, or a number you own.'), when: 'provider' },
+      {
+        key: 'allowedCountries',
+        label: msg('Allowed Countries'),
+        hint: msg('Country calling codes that may get SMS, such as 46, 47. Empty allows every country.'),
+        when: 'provider',
+      },
+      { key: 'hourlyLimit', label: msg('Messages per Hour'), type: 'number', hint: msg('0 means no limit.'), when: 'provider' },
+      { key: 'dailyLimit', label: msg('Messages per Day'), type: 'number', hint: msg('0 means no limit.'), when: 'provider' },
+      {
+        key: 'shareLinkHourlyLimit',
+        label: msg('Messages per Hour for a Share Link'),
+        type: 'number',
+        hint: msg('0 means no limit.'),
+        when: 'provider',
+      },
     ],
   },
   eid: {

@@ -90,9 +90,10 @@ export function EidIdentify({
     setError(undefined);
     setMessage(undefined);
     try {
-      const out = await call('signing.eid_start', { token, session, purpose });
+      const out = await call('signing.eid_start', { token, session, purpose, framed });
       if (out.redirectUrl && framed) {
-        // Identity providers refuse to run in frames, so the broker gets its own window and we wait for it here.
+        // Identity providers refuse to run in frames, so the broker gets its own window, through a page of ours that
+        // can leave a cookie there, and we wait for it here.
         window.open(out.redirectUrl, '_blank', 'noopener');
         setStarted({ id: out.id, popupUrl: out.redirectUrl });
         return;

@@ -1055,5 +1055,10 @@
   "Runs queued again: {count}": "已重新加入队列的运行：{count}",
   "Run {count} Failed Again": "再次运行 {count} 个失败项",
   "No runs yet": "尚无运行记录",
-  "Run": "运行"
+  "Run": "运行",
+  "Allowed Countries": "允许的国家/地区",
+  "Country calling codes that may get SMS, such as 46, 47. Empty allows every country.": "可以接收短信的国家/地区代码，例如 46, 47。留空则允许所有国家/地区。",
+  "Messages per Hour": "每小时消息数",
+  "Messages per Day": "每天消息数",
+  "Messages per Hour for a Share Link": "每个共享链接每小时消息数"
 }
