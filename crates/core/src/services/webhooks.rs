@@ -12,7 +12,7 @@ use crate::audit::{Entry, audit};
 use crate::context::Ctx;
 use crate::documents::notify::{Target, emit_to, queue_delivery, webhook_secret_context};
 use crate::error::{Result, bad_request, not_found};
-use crate::net::check_public_url;
+use crate::net::check_webhook_url;
 use crate::permissions::Permission;
 use crate::service::{Access, Meta, Service};
 
@@ -98,7 +98,7 @@ impl Service for Create {
     .open_world();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CreateInput) -> Result<CreatedWebhook> {
-        let url = check_public_url(input.url.trim()).map_err(bad_request)?.to_string();
+        let url = check_webhook_url(input.url.trim(), ctx.app.env.development).map_err(bad_request)?.to_string();
         let mut events: Vec<String> = input.events.iter().map(|e| e.trim().to_string()).collect();
         events.sort();
         events.dedup();

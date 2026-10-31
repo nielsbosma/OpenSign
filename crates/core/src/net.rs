@@ -147,6 +147,22 @@ pub fn check_outbound_url(url: &str, allow_http: bool) -> Result<reqwest::Url, S
     }
 }
 
+/// The address of a webhook. In development it may also be plain http on a private address, so
+/// deliveries can reach the local receiver in `docker-compose.yml`. Production stays `check_public_url`.
+pub fn check_webhook_url(url: &str, development: bool) -> Result<reqwest::Url, String> {
+    if !development {
+        return check_public_url(url);
+    }
+    let parsed = reqwest::Url::parse(url).map_err(|_| "Enter a valid URL".to_string())?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err("Use an http or https URL".into());
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err("Leave credentials out of the URL".into());
+    }
+    Ok(parsed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -187,6 +203,17 @@ mod tests {
         assert!(check_outbound_url("http://timestamp.digicert.com", true).is_ok());
         assert!(check_outbound_url("http://169.254.169.254/latest", true).is_err());
         assert!(check_outbound_url("ftp://example.com/", true).is_err());
+    }
+
+    #[test]
+    fn webhook_urls_are_only_relaxed_in_development() {
+        for url in ["http://webhooks:8080/x", "http://localhost:8027/x", "https://10.0.0.1/x", "https://169.254.169.254/x"] {
+            assert!(check_webhook_url(url, false).is_err(), "{url}");
+            assert!(check_webhook_url(url, true).is_ok(), "{url}");
+        }
+        assert!(check_webhook_url("https://hooks.example.com/x", false).is_ok());
+        assert!(check_webhook_url("https://user:pw@example.com/", true).is_err());
+        assert!(check_webhook_url("ftp://example.com/", true).is_err());
     }
 
     #[tokio::test]

@@ -13,6 +13,15 @@ pub const TEST_SECRET: &str = "test-secret-test-secret-test-secret-0123";
 /// An app on a fresh database schema with an in-memory bucket, or `None` when `TEST_DATABASE_URL`
 /// is not set (the test is then skipped).
 pub async fn app() -> Option<Arc<App>> {
+    app_with(true).await
+}
+
+/// As `app`, with the outbound rules a real install has.
+pub async fn production_app() -> Option<Arc<App>> {
+    app_with(false).await
+}
+
+async fn app_with(development: bool) -> Option<Arc<App>> {
     let db = opensign_db::test_db().await?;
     opensign_db::migrate(&db).await.expect("migrations apply");
     let env = Env {
@@ -28,7 +37,7 @@ pub async fn app() -> Option<Arc<App>> {
         converter_url: std::env::var("TEST_CONVERTER_URL").ok(),
         port: 3000,
         role: ProcessRole::All,
-        development: true,
+        development,
     };
     Some(Arc::new(App {
         env,

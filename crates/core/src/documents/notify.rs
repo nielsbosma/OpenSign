@@ -406,11 +406,10 @@ pub async fn deliver_webhook(ctx: &Ctx, conn: &mut PgConnection, delivery_id: Uu
     let signature = webhook_signature(&secret, ctx.now.timestamp(), &body);
     let started = std::time::Instant::now();
     let result = async {
-        crate::net::check_public_url(&d.url).map_err(|e| anyhow::anyhow!(e))?;
-        let mut response = ctx
-            .app
-            .http
-            .public
+        let development = ctx.app.env.development;
+        crate::net::check_webhook_url(&d.url, development).map_err(|e| anyhow::anyhow!(e))?;
+        let http = if development { &ctx.app.http.internal } else { &ctx.app.http.public };
+        let mut response = http
             .post(&d.url)
             .header("content-type", "application/json")
             .header("opensign-signature", signature)
