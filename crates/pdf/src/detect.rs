@@ -1,20 +1,24 @@
-use serde::Serialize;
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::Result;
 use crate::text::{Glyph, PageLayout, Shape, layout, load};
 
 const MAX_SUGGESTIONS: usize = 300;
+
+/// Spelled out, serde's derive would borrow the value from its input, which never lives that long.
+type StaticStr = &'static str;
 const BOX_CHARS: &[char] = &['☐', '□', '❏', '❐', '❑', '❒', '▢', '◻', '⬜', '\u{f06f}', '\u{f0a8}', '\u{f071}'];
 
 /// A place on a page that looks like it wants a field, with a guess at the kind. The box is in
 /// fractions of the displayed page, origin top-left.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DetectedField {
     /// Zero-based page within the file.
     pub page: usize,
     /// A field kind: signature, initials, date, date_input, name, email, company, phone, text or checkbox.
-    pub kind: &'static str,
+    #[serde(deserialize_with = "known_kind")]
+    pub kind: StaticStr,
     /// The words next to it, such as "Name" or "I accept the terms".
     pub label: String,
     pub x: f64,
@@ -24,7 +28,14 @@ pub struct DetectedField {
 }
 
 /// A line of text on a page, with its position as fractions of the displayed page.
-#[derive(Debug, Clone, Serialize)]
+fn known_kind<'de, D: Deserializer<'de>>(deserializer: D) -> Result<&'static str, D::Error> {
+    let kind = String::deserialize(deserializer)?;
+    KINDS.iter().copied().find(|k| *k == kind).ok_or_else(|| serde::de::Error::custom("unknown field kind"))
+}
+
+const KINDS: &[&str] = &["signature", "initials", "date", "date_input", "name", "email", "company", "phone", "text", "checkbox"];
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TextLine {
     pub x: f64,
@@ -32,7 +43,7 @@ pub struct TextLine {
     pub text: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PageText {
     pub width: f64,

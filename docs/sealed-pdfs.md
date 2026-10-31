@@ -26,7 +26,7 @@ The seal follows PAdES Baseline B-LTA, the European standard level for documents
 
 OpenSign checks each OCSP response or CRL before storing it: it must be signed by the issuer or its delegated responder, be about the right certificate, and be current. The validation data and the archive time stamp are added as incremental updates, so the bytes the seal covers never change.
 
-If revocation data cannot be fetched, the document is still sealed and the gap is recorded in the audit log. If the time stamp authority cannot be reached after several attempts, the document is sealed without a time stamp rather than left waiting.
+If revocation data cannot be fetched, the document is still sealed and the gap is recorded in the audit log. So is a certificate that a responder reports as revoked. If the time stamp authority cannot be reached after several attempts, the document is sealed without a time stamp rather than left waiting.
 
 ## The seal certificate
 

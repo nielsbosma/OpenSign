@@ -2372,6 +2372,7 @@ dependencies = [
 name = "opensign-pdf"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "cms",
  "const-oid 0.9.6",
@@ -2386,6 +2387,7 @@ dependencies = [
  "png",
  "qrcode",
  "rand 0.8.8",
+ "rlimit",
  "rsa",
  "serde",
  "serde_json",
@@ -2395,6 +2397,7 @@ dependencies = [
  "signature 3.0.0",
  "spki 0.7.3",
  "thiserror",
+ "tracing",
  "x509-cert",
  "x509-ocsp",
 ]
@@ -3114,6 +3117,15 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "rlimit"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7043b63bd0cd1aaa628e476b80e6d4023a3b50eb32789f2728908107bd0c793a"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

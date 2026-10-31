@@ -534,6 +534,7 @@
   "Sign in with your fingerprint, face or device PIN instead of a password and code. Works with iCloud Keychain, Google Password Manager, Windows Hello and security keys.": "পাসওয়ার্ড ও কোডের বদলে আঙুলের ছাপ, মুখ বা ডিভাইসের PIN দিয়ে সাইন ইন করুন। iCloud Keychain, Google Password Manager, Windows Hello ও সিকিউরিটি কী-র সঙ্গে কাজ করে।",
   "Signature": "স্বাক্ষর",
   "Signature Reason": "স্বাক্ষরের কারণ",
+  "Signed by someone other than this server. The file is intact, but nothing here confirms who they are.": "এই সার্ভার ছাড়া অন্য কেউ স্বাক্ষর করেছে। ফাইলটি অক্ষত, কিন্তু এখানে কিছুই নিশ্চিত করে না যে তারা কে।",
   "Signed": "স্বাক্ষরিত",
   "Signed PDF": "স্বাক্ষরিত PDF",
   "Signers can give their own AI a read-only copy of a document. 0 turns this off; at most 30.": "স্বাক্ষরকারীরা তাদের নিজস্ব AI-কে নথির একটি শুধু-পড়ার কপি দিতে পারেন। 0 এটি বন্ধ করে; সর্বোচ্চ 30।",

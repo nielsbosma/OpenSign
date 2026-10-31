@@ -312,7 +312,7 @@ async fn fill(api: &Api, id: Uuid, body: &Value) -> Result<(), AppError> {
         page += uploaded["pages"].as_u64().unwrap_or(1) as usize;
     }
     let (_, combined) = opensign_core::services::documents::preview_pdf(&api.ctx, id, None).await?;
-    let sizes = super::page_sizes(&combined)?;
+    let sizes = super::page_sizes(combined.clone()).await?;
 
     let recipients = &body["recipients"];
     let mut parties = Vec::new();

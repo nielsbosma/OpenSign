@@ -7,7 +7,7 @@ use const_oid::db::rfc5911::{ID_CONTENT_TYPE, ID_DATA, ID_MESSAGE_DIGEST, ID_SIG
 use const_oid::db::rfc5912::{ECDSA_WITH_SHA_256, ID_SHA_256};
 use der::asn1::{Any, OctetString, SetOfVec};
 use der::{Encode, Sequence};
-use lopdf::{Document, Object, StringFormat, dictionary};
+use lopdf::{Object, StringFormat, dictionary};
 use p256::ecdsa::DerSignature;
 use sha2::{Digest, Sha256};
 use spki::AlgorithmIdentifierOwned;
@@ -21,7 +21,6 @@ pub const ID_AA_SIGNATURE_TIME_STAMP_TOKEN: ObjectIdentifier = ObjectIdentifier:
 
 /// Room for the CMS signature: certificate chain, time stamp token with the TSA's chain, and margin.
 const CONTENTS_BYTES: usize = 24 * 1024;
-const RANGE_PLACEHOLDER: &[u8] = b"9999999999";
 
 #[derive(Debug, Clone)]
 pub struct SealOptions {
@@ -71,9 +70,10 @@ fn find(haystack: &[u8], needle: &[u8]) -> Vec<usize> {
 }
 
 pub fn prepare(pdf: &[u8], options: &SealOptions) -> Result<Prepared> {
-    let mut doc = Document::load_mem(pdf)?;
+    let mut doc = crate::load::load(pdf)?;
     let first_page = *doc.get_pages().values().next().ok_or_else(|| PdfError::Malformed("no pages".into()))?;
-    let placeholder = || Object::Integer(9_999_999_999);
+    let range = range_placeholder();
+    let placeholder = || Object::Integer(range);
     let mut sig = dictionary! {
         "Type" => "Sig",
         "Filter" => "Adobe.PPKLite",
@@ -106,31 +106,41 @@ pub fn prepare(pdf: &[u8], options: &SealOptions) -> Result<Prepared> {
 
     let mut out = Vec::with_capacity(pdf.len() + CONTENTS_BYTES * 2 + 1024);
     doc.save_to(&mut out).map_err(|e| PdfError::Malformed(e.to_string()))?;
-    fill_byte_range(out, 0, CONTENTS_BYTES)
+    fill_byte_range(out, 0, CONTENTS_BYTES, range)
 }
 
-/// Finds the zero-filled `/Contents` hole and the byte range placeholders written after `from`,
-/// fills in the byte range and hashes everything but the hole.
-pub(crate) fn fill_byte_range(mut out: Vec<u8>, from: usize, contents_bytes: usize) -> Result<Prepared> {
-    let mut hole = vec![b'<'];
+/// A number of the placeholder's width that the document cannot contain by design: names and
+/// texts in it are chosen by others, and the first match must be the signature dictionary's.
+pub(crate) fn range_placeholder() -> i64 {
+    1_000_000_000 + (rand::random::<u32>() as i64) * 2
+}
+
+/// Finds the byte range placeholders written after `from`, then the zero-filled `/Contents` hole
+/// right behind them in the same dictionary, fills in the byte range and hashes everything but the hole.
+pub(crate) fn fill_byte_range(mut out: Vec<u8>, from: usize, contents_bytes: usize, range: i64) -> Result<Prepared> {
+    let ranges = format!("[0 {range} {range} {range}]");
+    let found = find(&out[from..], ranges.as_bytes());
+    let [at] = found[..] else { return Err(sig_err("could not find the byte range placeholder")) };
+    let at = from + at;
+
+    let mut hole = b"/Contents<".to_vec();
     hole.extend(std::iter::repeat_n(b'0', contents_bytes * 2));
     hole.push(b'>');
-    let holes = find(&out[from..], &hole);
-    let [hole_start] = holes[..] else { return Err(sig_err("could not find the signature placeholder")) };
-    let hole_start = from + hole_start;
-    let hole_end = hole_start + hole.len();
-
-    let ranges: Vec<usize> = find(&out[from..], RANGE_PLACEHOLDER).into_iter().map(|at| from + at).collect();
-    if ranges.len() != 3 {
-        return Err(sig_err("could not find the byte range placeholder"));
+    if !out[at + ranges.len()..].starts_with(&hole) {
+        return Err(sig_err("could not find the signature placeholder"));
     }
+    let hole_start = at + ranges.len() + b"/Contents".len();
+    let hole_end = at + ranges.len() + hole.len();
+
     let values = [hole_start, hole_end, out.len() - hole_end];
-    for (at, value) in ranges.iter().zip(values) {
-        let text = format!("{value:<10}");
-        if text.len() != RANGE_PLACEHOLDER.len() {
+    let width = range.to_string().len();
+    for (n, value) in values.into_iter().enumerate() {
+        let text = format!("{value:<width$}");
+        if text.len() != width {
             return Err(sig_err("the document is too large to seal"));
         }
-        out[*at..*at + 10].copy_from_slice(text.as_bytes());
+        let start = at + b"[0 ".len() + n * (width + 1);
+        out[start..start + width].copy_from_slice(text.as_bytes());
     }
     let mut hasher = Sha256::new();
     hasher.update(&out[..hole_start]);

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use async_trait::async_trait;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
@@ -2253,17 +2255,28 @@ pub async fn verify_pdf(conn: &mut PgConnection, bytes: Vec<u8>) -> Result<Verif
         return Err(bad_request("This is not a PDF file"));
     }
     let sha256 = sha256_hex(&bytes);
-    let signatures = tokio::task::spawn_blocking(move || opensign_pdf::verify_signatures(&bytes))
+    let mut signatures = tokio::task::spawn_blocking(move || opensign_pdf::verify_signatures(&bytes))
         .await
         .map_err(AppError::internal)?
         .map_err(|_| bad_request("This PDF could not be read"))?;
-    let document = sqlx::query_as::<_, (Uuid, String, Option<DateTime<Utc>>)>(
-        "select id, title, completed_at from documents where sealed_sha256 = $1 and status = 'completed'",
-    )
-    .bind(&sha256)
-    .fetch_optional(&mut *conn)
-    .await?
-    .map(|(id, title, completed_at)| VerifiedDocument { id, title, completed_at });
+    let chains: Vec<Vec<String>> = sqlx::query_scalar("select chain from seal_identities").fetch_all(&mut *conn).await?;
+    let ours: HashSet<String> =
+        chains.iter().filter_map(|chain| chain.first()).filter_map(|leaf| B64.decode(leaf).ok()).map(|der| sha256_hex(&der)).collect();
+    for signature in &mut signatures {
+        signature.trusted = signature.intact && signature.signer_certificate_sha256.as_ref().is_some_and(|sha| ours.contains(sha));
+    }
+    // A matching hash alone would also vouch for a stored file whose seal no longer holds.
+    let document = if signatures.iter().any(|s| s.trusted) {
+        sqlx::query_as::<_, (Uuid, String, Option<DateTime<Utc>>)>(
+            "select id, title, completed_at from documents where sealed_sha256 = $1 and status = 'completed'",
+        )
+        .bind(&sha256)
+        .fetch_optional(&mut *conn)
+        .await?
+        .map(|(id, title, completed_at)| VerifiedDocument { id, title, completed_at })
+    } else {
+        None
+    };
     Ok(VerifyOutput { sha256, signatures, document })
 }
 
@@ -2275,7 +2288,7 @@ impl Service for Verify {
     type Output = VerifyOutput;
     const META: Meta = Meta::query(
         "documents.verify",
-        "Check a signed PDF (base64): whether its signatures are intact and whether this server sealed exactly this file.",
+        "Check a signed PDF (base64): whether its signatures are intact, whether each signer is this server's own seal (trusted), and whether this server sealed exactly this file.",
         Access::Authenticated,
     )
     .tool();

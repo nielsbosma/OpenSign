@@ -11,6 +11,7 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
+base64 = { workspace = true }
 chrono = { workspace = true }
 const-oid = { version = "0.9", features = ["db"] }
 cms = { version = "0.2", features = ["std"] }
@@ -34,5 +35,9 @@ signature = { version = "2", features = ["std"] }
 signature-ct = { package = "signature", version = "3" }
 spki = { version = "0.7", features = ["std"] }
 thiserror = { workspace = true }
+tracing = { workspace = true }
 x509-cert = { version = "0.2", features = ["builder", "std"] }
 x509-ocsp = { version = "0.2.1", default-features = false }
+
+[target.'cfg(unix)'.dependencies]
+rlimit = "0.10"

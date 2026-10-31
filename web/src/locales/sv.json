@@ -534,6 +534,7 @@
   "Sign in with your fingerprint, face or device PIN instead of a password and code. Works with iCloud Keychain, Google Password Manager, Windows Hello and security keys.": "Logga in med fingeravtryck, ansikte eller enhetens PIN i stället för lösenord och kod. Fungerar med iCloud-nyckelring, Google Lösenordshanterare, Windows Hello och säkerhetsnycklar.",
   "Signature": "Underskrift",
   "Signature Reason": "Skäl för underskriften",
+  "Signed by someone other than this server. The file is intact, but nothing here confirms who they are.": "Signerad av någon annan än den här servern. Filen är oförändrad, men inget här bekräftar vem som signerade.",
   "Signed": "Signerat",
   "Signed PDF": "Signerad PDF",
   "Signers can give their own AI a read-only copy of a document. 0 turns this off; at most 30.": "Signerare kan ge sin egen AI en skrivskyddad kopia av ett dokument. 0 stänger av; högst 30.",

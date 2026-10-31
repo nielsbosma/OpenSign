@@ -52,7 +52,7 @@ See [Identification](identification.md).
 
 ## Documents
 
-- Uploads are checked by content. PDFs are rewritten without JavaScript, actions, embedded files or XFA. Word files are converted by Gotenberg on a private network, which has no keys or database access.
+- Uploads are checked by content. PDFs are rewritten without JavaScript, actions, embedded files or XFA, and parsed in a short-lived child process with no secrets in its environment, a memory limit and a deadline, so a hostile file can only fail its own request. Word files are converted by Gotenberg on a private network, which has no keys or database access.
 - PDFs are served as downloads with `Content-Security-Policy: sandbox`.
 - Finished documents get evidence pages, a JSON evidence attachment, a PAdES seal and an RFC 3161 time stamp, then long-term validation data and an archive time stamp. CI checks the result with `pdfsig` and `qpdf`.
 - Verification rejects any change after a signature other than validation data.
