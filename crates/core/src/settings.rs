@@ -399,6 +399,60 @@ impl AutomationSettings {
     }
 }
 
+/// Sign-in through one OpenID Connect provider.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(default, rename_all = "camelCase")]
+pub struct SsoSettings {
+    pub enabled: bool,
+    /// The sign-in button's text, such as `Sign In with Acme`. Empty uses a general one.
+    pub button_label: String,
+    pub issuer: String,
+    pub client_id: String,
+    pub client_secret: Option<String>,
+    /// The role of an account created at first sign-in. Never admin.
+    pub default_role: String,
+    /// Refuses a sign-in unless the provider's ID token says a second factor was used.
+    pub require_provider_mfa: bool,
+    /// `all`, or `adminsOnly` to keep passwords and passkeys only for admins while single sign-on is on.
+    pub password_sign_in: String,
+}
+
+impl Default for SsoSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            button_label: String::new(),
+            issuer: String::new(),
+            client_id: String::new(),
+            client_secret: None,
+            default_role: "viewer".into(),
+            require_provider_mfa: true,
+            password_sign_in: "all".into(),
+        }
+    }
+}
+
+impl SettingsGroup for SsoSettings {
+    const NAME: &'static str = "sso";
+    const SECRETS: &'static [&'static str] = &["clientSecret"];
+    const SECRET_TARGETS: &'static [(&'static str, &'static [&'static str])] = &[("clientSecret", &["issuer", "clientId"])];
+}
+
+impl SsoSettings {
+    /// Switched on and has what it needs.
+    pub fn ready(&self) -> bool {
+        self.enabled
+            && !self.issuer.trim().is_empty()
+            && !self.client_id.trim().is_empty()
+            && self.client_secret.as_deref().is_some_and(|s| !s.is_empty())
+    }
+
+    /// Only counts while people have another way in, so turning single sign-on off locks nobody out.
+    pub fn admins_only_passwords(&self) -> bool {
+        self.ready() && self.password_sign_in != "all"
+    }
+}
+
 const TTL: Duration = Duration::from_secs(5);
 
 #[derive(Default)]

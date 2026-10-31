@@ -14,7 +14,7 @@ use crate::permissions::Role;
 use crate::service::{Access, Meta, Service};
 use crate::settings::{EmailSettings, OrgSettings};
 
-const SETUP_LOCK: i64 = 0x0073_6574_7570;
+pub(crate) const SETUP_LOCK: i64 = 0x0073_6574_7570;
 
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]

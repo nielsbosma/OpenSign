@@ -156,6 +156,21 @@ See [Identification](identification.md).
 | Client ID | `OPENSIGN_EID_TIC_CLIENT_ID` | |
 | Client Secret | `OPENSIGN_EID_TIC_CLIENT_SECRET` | Secret |
 
+## Single Sign-On
+
+See [Single sign-on](single-sign-on.md). The assistant and MCP cannot change this group.
+
+| Field | Variable | |
+| --- | --- | --- |
+| Turn On Single Sign-On | `OPENSIGN_SSO_ENABLED` | Needs the issuer, client ID and client secret. |
+| Button Text | `OPENSIGN_SSO_BUTTON_LABEL` | Empty shows a general text. |
+| Issuer URL | `OPENSIGN_SSO_ISSUER` | A public https address. |
+| Client ID | `OPENSIGN_SSO_CLIENT_ID` | |
+| Client Secret | `OPENSIGN_SSO_CLIENT_SECRET` | Secret. |
+| Role for New Accounts | `OPENSIGN_SSO_DEFAULT_ROLE` | `viewer` by default. `viewer`, `auditor`, `sender` or `manager`, never `admin`. |
+| Require a Second Factor from the Provider | `OPENSIGN_SSO_REQUIRE_PROVIDER_MFA` | On by default. |
+| Password Sign-In | `OPENSIGN_SSO_PASSWORD_SIGN_IN` | `all` by default, or `adminsOnly`. |
+
 ## Automations
 
 Off by default. See [Automations](automations.md#turning-it-on).

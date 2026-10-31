@@ -18,6 +18,7 @@ pub mod setup;
 pub mod share_links;
 pub mod signatures;
 pub mod signing;
+pub mod sso;
 pub mod system;
 pub mod templates;
 pub mod transfers;
@@ -65,6 +66,8 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<auth::BeginTwoFactor>(),
         erase::<auth::ConfirmTwoFactor>(),
         erase::<auth::ChangePassword>(),
+        erase::<sso::Status>(),
+        erase::<sso::Start>(),
         erase::<auth::RequestPasswordReset>(),
         erase::<auth::ResetPassword>(),
         erase::<setup::Status>(),

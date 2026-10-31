@@ -8,6 +8,8 @@ In **Settings → Users**, choose **Invite** and enter the person's email addres
 
 Pending invitations are listed on the same page and can be revoked, which stops the link working at once. Inviting and changing users needs the **users.manage** permission.
 
+With [single sign-on](single-sign-on.md), people do not need an invitation: an account is created at first sign-in, with the role you chose for new accounts. While **Password Sign-In** is **Admins Only**, you can only invite admins.
+
 ## Roles
 
 | Role | For | Can |
@@ -54,5 +56,7 @@ In **Settings → Users** an admin can:
 - change someone's role. A role change signs them out everywhere, and also narrows or widens what their API keys can do, since a key never has more than its owner's role (see [REST API](api.md#api-keys)),
 - **deactivate** an account, which signs the person out everywhere and revokes their API keys; **reactivate** it later if needed,
 - **reset two-factor** for someone who lost their phone or passkey. It removes their authenticator app, recovery codes and passkeys, signs them out everywhere and revokes their API keys, and they get an email if any keys were revoked. If two-factor is required, they set it up again at their next sign-in.
+
+The email of a [single sign-on](single-sign-on.md) account comes from the identity provider and cannot be edited here. Blocking someone at the provider leaves an open session running until it expires, so also deactivate them to stop them at once.
 
 Accounts are deactivated rather than deleted, so the audit trail always knows who did what. You cannot change your own role or deactivate yourself; ask another admin. Users can change their own password, two-factor and passkeys under **Settings → Account**. Admins can also edit their own name and email there; everyone else asks an admin.

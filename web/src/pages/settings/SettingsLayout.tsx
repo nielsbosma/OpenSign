@@ -16,6 +16,7 @@ const SECTIONS: { title: string; items: { path: string; label: string; permissio
       { path: '/settings/admin/org', label: msg('Organisation'), permission: 'settings.manage' },
       { path: '/settings/admin/signing', label: msg('Signing and Seal'), permission: 'settings.manage' },
       { path: '/settings/admin/security', label: msg('Security'), permission: 'settings.manage' },
+      { path: '/settings/admin/sso', label: msg('Single Sign-On'), permission: 'settings.manage' },
       { path: '/settings/admin/retention', label: msg('Retention'), permission: 'settings.manage' },
       { path: '/settings/audit', label: msg('Audit Trail'), permission: 'audit.read' },
       { path: '/settings/system', label: msg('System'), permission: 'system.read' },
@@ -36,14 +37,16 @@ const SECTIONS: { title: string; items: { path: string; label: string; permissio
 ];
 
 export function SettingsLayout() {
-  const { can } = useSession();
+  const { can, user } = useSession();
   return (
     <>
       <PageHeader title={t('Settings')} />
       <div className="grid gap-8 md:grid-cols-[200px_minmax(0,1fr)]">
         <nav className="grid content-start gap-5" aria-label={t('Settings')}>
           {SECTIONS.map((section) => {
-            const items = section.items.filter((i) => !i.permission || can(i.permission));
+            const items = section.items.filter(
+              (i) => (!i.permission || can(i.permission)) && !(user?.sso && i.path === '/settings/api-keys'),
+            );
             if (!items.length) return null;
             return (
               <div key={section.title} className="grid gap-0.5">

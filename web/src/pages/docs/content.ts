@@ -23,7 +23,10 @@ const NAV: { group: string; slugs: string[] }[] = [
     ],
   },
   { group: 'Signing', slugs: ['signing-page', 'sealed-pdfs', 'verification'] },
-  { group: 'Administration', slugs: ['users-and-roles', 'account-security', 'settings', 'retention', 'audit-log', 'ai', 'automations'] },
+  {
+    group: 'Administration',
+    slugs: ['users-and-roles', 'account-security', 'single-sign-on', 'settings', 'retention', 'audit-log', 'ai', 'automations'],
+  },
   { group: 'Developers', slugs: ['api', 'webhooks', 'embedding', 'scrive', 'docusign', 'mcp'] },
   { group: 'Operations', slugs: ['deployment', 'updates', 'security'] },
 ];

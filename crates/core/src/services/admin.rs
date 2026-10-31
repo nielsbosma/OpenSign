@@ -12,12 +12,12 @@ use super::{Empty, Ok_, settings};
 use crate::audit::{ChainReport, Entry, audit, verify_trail};
 use crate::context::Ctx;
 use crate::email::{self, Message};
-use crate::error::{AppError, Result, bad_request};
+use crate::error::{AppError, ErrorKind, Result, bad_request};
 use crate::permissions::Permission;
 use crate::service::{Access, Meta, Service};
 use crate::settings::{
     AiSettings, AutomationSettings, EidSettings, EmailSettings, OrgSettings, RetentionSettings, SecuritySettings, SettingsGroup,
-    SigningSettings, SmsSettings, public_view,
+    SigningSettings, SmsSettings, SsoSettings, public_view,
 };
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema)]
@@ -32,6 +32,7 @@ pub enum Group {
     Ai,
     Sms,
     Eid,
+    Sso,
     Automations,
 }
 
@@ -77,6 +78,7 @@ impl Service for GetSettings {
             Group::Ai => view::<AiSettings>(ctx, conn).await,
             Group::Sms => view::<SmsSettings>(ctx, conn).await,
             Group::Eid => view::<EidSettings>(ctx, conn).await,
+            Group::Sso => view::<SsoSettings>(ctx, conn).await,
             Group::Automations => view::<AutomationSettings>(ctx, conn).await,
         }
     }
@@ -191,6 +193,11 @@ async fn update<G: SettingsGroup>(ctx: &Ctx, conn: &mut PgConnection, patch: &Va
     }
     let next: G = serde_json::from_value(merge(base, &patch, G::SECRETS)).map_err(|e| bad_request(format!("Invalid settings: {e}")))?;
     validate::<G>(&next)?;
+    if G::NAME == "sso"
+        && let Some(issuer) = serde_json::to_value(&next).map_err(AppError::internal)?["issuer"].as_str().filter(|i| !i.is_empty())
+    {
+        crate::services::sso::check_issuer(issuer, ctx.app.env.development).map_err(bad_request)?;
+    }
     ctx.app.settings.save(conn, ctx.keys(), &next, Some(ctx.actor()?.user_id)).await?;
     let saved: G = settings(ctx, conn).await?;
     if G::NAME == "automations" {
@@ -200,6 +207,14 @@ async fn update<G: SettingsGroup>(ctx: &Ctx, conn: &mut PgConnection, patch: &Va
         if automations.enabled && automations.key().is_none() {
             ctx.app.settings.invalidate(G::NAME);
             return Err(bad_request("Enter your Composio API key before turning automations on"));
+        }
+    }
+    if G::NAME == "sso" {
+        let sso: SsoSettings =
+            serde_json::from_value(serde_json::to_value(&saved).map_err(AppError::internal)?).map_err(AppError::internal)?;
+        if sso.enabled && !sso.ready() {
+            ctx.app.settings.invalidate(G::NAME);
+            return Err(bad_request("Enter the issuer, client ID and client secret before turning single sign-on on"));
         }
     }
     let after = public_view(&saved);
@@ -273,6 +288,20 @@ pub(crate) fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
                     .map_err(|e| bad_request(format!("Freja's signing certificate is not usable: {e}")))?;
             }
             Ok(())
+        }
+        "sso" => {
+            let sso: SsoSettings = serde_json::from_value(value.clone()).map_err(AppError::internal)?;
+            match crate::permissions::Role::parse(&sso.default_role) {
+                Some(crate::permissions::Role::Admin) => {
+                    Err(bad_request("New accounts cannot be admins. Make someone an admin under Users."))
+                }
+                None => Err(bad_request("Choose a role for new accounts")),
+                Some(_) if !matches!(sso.password_sign_in.as_str(), "all" | "adminsOnly") => {
+                    Err(bad_request("Password sign-in must be for everyone or for admins only"))
+                }
+                Some(_) if sso.button_label.chars().count() > 60 => Err(bad_request("Keep the button's text to 60 characters")),
+                Some(_) => Ok(()),
+            }
         }
         "updates" => {
             for key in ["deployHookUrl", "updateUrl"] {
@@ -373,6 +402,13 @@ impl Service for UpdateSettings {
             Group::Ai => update::<AiSettings>(ctx, conn, &input.values).await,
             Group::Sms => update::<SmsSettings>(ctx, conn, &input.values).await,
             Group::Eid => update::<EidSettings>(ctx, conn, &input.values).await,
+            Group::Sso => {
+                // Who may sign in, and with what role, is not for an agent or an API key to change.
+                if !ctx.in_app() {
+                    return Err(AppError::new(ErrorKind::Forbidden, "Change single sign-on in the app, signed in"));
+                }
+                update::<SsoSettings>(ctx, conn, &input.values).await
+            }
             Group::Automations => update::<AutomationSettings>(ctx, conn, &input.values).await,
         }
     }

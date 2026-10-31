@@ -450,10 +450,23 @@ export function AccountPage() {
       <EditUserDialog user={editing && user ? user : null} onOpenChange={setEditing} />
       <LanguageCard />
       <SignatureCard />
-      <PasskeysCard />
-      <TwoFactorCard />
-      <PasswordCard />
-      <McpCard />
+      {user?.sso ? (
+        <SettingsCard
+          title={t('Single Sign-On')}
+          description={t(
+            'You sign in through the identity provider your organisation uses. Your password, two-factor and email are managed there.',
+          )}
+        >
+          {null}
+        </SettingsCard>
+      ) : (
+        <>
+          <PasskeysCard />
+          <TwoFactorCard />
+          <PasswordCard />
+          <McpCard />
+        </>
+      )}
     </div>
   );
 }

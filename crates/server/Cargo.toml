@@ -35,6 +35,8 @@ tracing-subscriber = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+rand = { workspace = true }
+rsa = { version = "0.9", features = ["sha2"] }
 opensign-core = { workspace = true, features = ["testing"] }
 http-body-util = "0.1"
 lopdf = "0.46"

@@ -293,6 +293,60 @@ const GROUPS: Record<Group, { title: string; description: string; help?: string;
       },
     ],
   },
+  sso: {
+    help: 'single-sign-on',
+    title: msg('Single Sign-On'),
+    description: msg('Let people sign in through your identity provider with OpenID Connect, such as Microsoft Entra ID, Google or Okta.'),
+    fields: [
+      { key: 'enabled', label: msg('Turn On Single Sign-On'), type: 'bool' },
+      {
+        key: 'buttonLabel',
+        label: msg('Button Text'),
+        placeholder: 'Sign In with Acme',
+        hint: msg('Shown on the sign-in page. Leave empty for a general text.'),
+      },
+      {
+        key: 'issuer',
+        label: msg('Issuer URL'),
+        placeholder: 'https://login.example.com',
+        hint: msg('Must be a public https address. Register /api/auth/sso/callback on this address as the redirect URI.'),
+      },
+      { key: 'clientId', label: msg('Client ID') },
+      { key: 'clientSecret', label: msg('Client Secret'), type: 'secret' },
+      {
+        key: 'defaultRole',
+        label: msg('Role for New Accounts'),
+        type: 'select',
+        options: [
+          ['viewer', msg('Viewer')],
+          ['auditor', msg('Auditor')],
+          ['sender', msg('Sender')],
+          ['manager', msg('Manager')],
+        ],
+        hint: msg('An account is created at first sign-in with this role. Never Admin; change roles under Users.'),
+      },
+      {
+        key: 'requireProviderMfa',
+        label: msg('Require a Second Factor from the Provider'),
+        type: 'bool',
+        hint: msg(
+          'Refuses a sign-in unless the ID token says a second factor was used (amr). Providers that do not send it need this off.',
+        ),
+      },
+      {
+        key: 'passwordSignIn',
+        label: msg('Password Sign-In'),
+        type: 'select',
+        options: [
+          ['all', msg('Everyone')],
+          ['adminsOnly', msg('Admins Only')],
+        ],
+        hint: msg(
+          'Admins Only keeps one way in if the provider is down. At first sign-in, an account with the same verified email becomes a single sign-on account and loses its password, unless it is an admin.',
+        ),
+      },
+    ],
+  },
   eid: {
     help: 'identification',
     title: msg('BankID and eID'),

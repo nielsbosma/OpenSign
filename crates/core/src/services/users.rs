@@ -35,6 +35,8 @@ pub struct UserView {
     pub role: String,
     pub active: bool,
     pub two_factor_enabled: bool,
+    /// Signs in through the identity provider, which also decides the email.
+    pub sso: bool,
     pub last_login_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
 }
@@ -54,7 +56,7 @@ impl Service for List {
 
     async fn run(_ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<Vec<UserView>> {
         Ok(sqlx::query_as(
-            "select id, email, name, role, active, totp_enabled_at is not null as two_factor_enabled, last_login_at, created_at from users order by lower(name)",
+            "select id, email, name, role, active, totp_enabled_at is not null as two_factor_enabled, sso, last_login_at, created_at from users order by lower(name)",
         )
         .fetch_all(&mut *conn)
         .await?)
@@ -94,6 +96,9 @@ impl Service for Invite {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: InviteInput) -> Result<InviteView> {
         let email = normalize_email(&input.email)?;
+        if input.role != Role::Admin && admins_only_passwords(ctx, conn).await? {
+            return Err(bad_request("Only admins are invited here. Everyone else gets an account at their first single sign-on."));
+        }
         if user_by_email(conn, &email).await?.is_some() {
             return Err(conflict("Someone with that email already has an account"));
         }
@@ -142,6 +147,11 @@ impl Service for Invite {
         .await?;
         Ok(InviteView { id, email, role: input.role.as_str().into(), expires_at })
     }
+}
+
+async fn admins_only_passwords(ctx: &Ctx, conn: &mut PgConnection) -> Result<bool> {
+    let sso: crate::settings::SsoSettings = settings(ctx, conn).await?;
+    Ok(sso.admins_only_passwords())
 }
 
 pub struct ListInvites;
@@ -228,6 +238,9 @@ impl Service for AcceptInvite {
         .await?;
         let (invite_id, email, role) =
             invite.ok_or_else(|| bad_request("This invitation has expired or was already used. Ask for a new one."))?;
+        if role != Role::Admin.as_str() && admins_only_passwords(ctx, conn).await? {
+            return Err(bad_request("This install signs in with single sign-on now. Use it on the sign-in page."));
+        }
         if user_by_email(conn, &email).await?.is_some() {
             return Err(conflict("You already have an account. Sign in instead."));
         }
@@ -331,6 +344,7 @@ impl Service for Update {
             role,
             active,
             two_factor_enabled: user.totp_enabled_at.is_some(),
+            sso: user.sso,
             last_login_at: user.last_login_at,
             created_at: user.created_at,
         })
@@ -366,6 +380,9 @@ impl Service for ChangeEmail {
             return Err(AppError::new(ErrorKind::Forbidden, "Change email addresses in the app, signed in"));
         }
         let user = user_by_id(conn, input.id).await?.ok_or_else(|| not_found("User"))?;
+        if user.sso {
+            return Err(bad_request("This account's email comes from the identity provider. Change it there.").with_code("sso_account"));
+        }
         let email = normalize_email(&input.email)?;
         if email.eq_ignore_ascii_case(&user.email) {
             return Err(bad_request("That is already their email"));
@@ -465,7 +482,7 @@ impl Service for ConfirmEmailChange {
         .await?;
         let expired = || bad_request("This link has expired or was already used. Ask for a new one.");
         let (user_id, email) = row.ok_or_else(expired)?;
-        let user = user_by_id(&mut tx, user_id).await?.filter(|u| u.active).ok_or_else(expired)?;
+        let user = user_by_id(&mut tx, user_id).await?.filter(|u| u.active && !u.sso).ok_or_else(expired)?;
         if user_by_email(&mut tx, &email).await?.is_some_and(|u| u.id != user.id) {
             return Err(conflict("Someone with that email already has an account"));
         }
@@ -577,6 +594,7 @@ impl Service for CreateApiKey {
         if actor.credential != Credential::Session {
             return Err(AppError::new(ErrorKind::Forbidden, "Create API keys in the app, signed in"));
         }
+        crate::auth::user_by_id(conn, actor.user_id).await?.ok_or_else(forbidden)?.refuse_sso()?;
         require_step_up(ctx, conn).await?;
         let name = key_name(&input.name)?;
         let permissions = key_permissions(actor, &input.permissions)?;

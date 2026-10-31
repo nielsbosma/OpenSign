@@ -36,6 +36,7 @@ fn limit_for(name: &str) -> Option<Limit> {
         | "auth.verify_two_factor"
         | "auth.passkey_begin"
         | "auth.passkey_sign_in"
+        | "auth.sso_start"
         | "auth.request_password_reset"
         | "auth.reset_password"
         | "users.accept_invite"
@@ -126,6 +127,12 @@ pub async fn call(State(state): State<AppState>, Path(name): Path<String>, reque
             response_headers.push((header::SET_COOKIE, auth::set_cookie(&state, &token, expires)));
             if let Some(map) = output.as_object_mut() {
                 map.remove("token");
+            }
+        }
+        "auth.sso_start" => {
+            let binding = output.as_object_mut().and_then(|map| map.remove("browserBinding"));
+            if let Some(binding) = binding.as_ref().and_then(Value::as_str) {
+                response_headers.push((header::SET_COOKIE, auth::set_sso_cookie(&state, binding)));
             }
         }
         "auth.logout" => response_headers.push((header::SET_COOKIE, auth::clear_cookie(&state))),

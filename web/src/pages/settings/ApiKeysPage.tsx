@@ -1,6 +1,6 @@
 import { KeyRound, Pencil, Plus, Trash2 } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, Navigate } from 'react-router';
 import { ConfirmButton, CopyButton, EmptyState, Field, IconButton, Loading } from '@/components/common';
 import { needsStepUp, StepUpDialog } from '@/components/StepUpDialog';
 import { Button } from '@/components/ui/button';
@@ -242,6 +242,11 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
 }
 
 export function ApiKeysPage() {
+  const { user } = useSession();
+  return user?.sso ? <Navigate to="/settings/account" replace /> : <ApiKeys />;
+}
+
+function ApiKeys() {
   const keys = useApi('api_keys.list');
   const revoke = useApiMutation('api_keys.revoke', { invalidates: ['api_keys.'] });
   const [creating, setCreating] = useState(false);
