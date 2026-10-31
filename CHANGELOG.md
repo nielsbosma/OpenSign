@@ -2,7 +2,11 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/) and versions follow [Semantic Versioning](https://semver.org/). Database migrations always run forward.
 
-## [Unreleased]
+## [0.1.1] - 2026-10-31
+
+### Before You Update
+
+Production now refuses example and predictable `APP_SECRET` values, so an install using one will not start. Check yours first. If it is one of them, plan a migration before updating: changing it makes existing data unreadable. Installs from the Sliplane Deployer have a generated secret and are not affected.
 
 ### Security
 
@@ -24,7 +28,6 @@ A security review of 0.1.0 led to this round of hardening. Update as soon as you
 
 - Creating an API key or approving an MCP client can ask for your password or passkey again. Password and two-factor resets revoke API keys and tell the owner.
 - `/api/rpc` requires `Content-Type: application/json` when there is a body, and bodies are limited to 2 MB except on upload-like services.
-- Production refuses example and predictable `APP_SECRET` values. If yours is one, plan a migration before updating: changing it makes existing data unreadable.
 - Bulk send reads CSV and `.xlsx` only; `.xls` and `.ods` are refused.
 - Formulas are limited to 64 operators and chains of 32 fields.
 - Sender-defined text patterns are checked by the server when signing, not while typing.
