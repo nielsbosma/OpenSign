@@ -20,6 +20,9 @@ const MAX_CONDITION_VALUE_CHARS: usize = 200;
 const MAX_DEPTH: usize = 32;
 const MAX_DECIMALS: usize = 10;
 const MAX_DIGITS: usize = 15;
+const MAX_OPERATORS: usize = 64;
+const MAX_CHAIN: usize = 32;
+const MAX_NESTED_OUTCOMES: usize = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -338,6 +341,15 @@ fn refs(expr: &Expr, out: &mut Vec<String>) {
     }
 }
 
+fn operators(expr: &Expr) -> usize {
+    match expr {
+        Expr::Neg(e) => 1 + operators(e),
+        Expr::Bin(_, a, b) | Expr::Cmp(_, a, b) => 1 + operators(a) + operators(b),
+        Expr::Call(_, args) => 1 + args.iter().map(operators).sum::<usize>(),
+        _ => 0,
+    }
+}
+
 /// The labels a formula uses, or why it cannot be read.
 pub fn formula_refs(source: &str) -> std::result::Result<Vec<String>, String> {
     let mut out = Vec::new();
@@ -598,6 +610,7 @@ struct Run<'a, 'b> {
     by_label: HashMap<&'a str, Vec<usize>>,
     done: Vec<Option<Outcome>>,
     busy: Vec<bool>,
+    nested: usize,
 }
 
 impl<'a> Run<'a, '_> {
@@ -623,10 +636,11 @@ impl<'a> Run<'a, '_> {
             return done.clone();
         }
         // A loop is refused when fields are saved; if one slips through, the field stays hidden.
-        if self.busy[i] {
+        if self.busy[i] || self.nested >= MAX_NESTED_OUTCOMES {
             return Outcome { visible: false, value: None };
         }
         self.busy[i] = true;
+        self.nested += 1;
         let item = self.items[i].clone();
         let mut visible = true;
         for c in item.conditions {
@@ -647,6 +661,7 @@ impl<'a> Run<'a, '_> {
             item.value.map(str::to_string)
         };
         self.busy[i] = false;
+        self.nested -= 1;
         let outcome = Outcome { visible, value };
         self.done[i] = Some(outcome.clone());
         outcome
@@ -662,7 +677,34 @@ pub fn evaluate(items: &[Item]) -> Vec<Outcome> {
             by_label.entry(label).or_default().push(i);
         }
     }
-    let mut run = Run { items, by_label, done: vec![None; items.len()], busy: vec![false; items.len()] };
+    let deps: Vec<Vec<usize>> = items
+        .iter()
+        .map(|item| dependencies(item).iter().flat_map(|label| by_label.get(label.as_str()).into_iter().flatten().copied()).collect())
+        .collect();
+    let mut run = Run { items, by_label, done: vec![None; items.len()], busy: vec![false; items.len()], nested: 0 };
+    // Dependencies first, with a stack of our own: stored fields may chain further than the call
+    // stack reaches, and a stack overflow would take the whole process down.
+    let mut seen = vec![false; items.len()];
+    for start in 0..items.len() {
+        if seen[start] {
+            continue;
+        }
+        seen[start] = true;
+        let mut stack = vec![(start, 0usize)];
+        while let Some((i, next)) = stack.last_mut() {
+            let i = *i;
+            if let Some(&d) = deps[i].get(*next) {
+                *next += 1;
+                if !seen[d] {
+                    seen[d] = true;
+                    stack.push((d, 0));
+                }
+            } else {
+                run.outcome(i);
+                stack.pop();
+            }
+        }
+    }
     (0..items.len()).map(|i| run.outcome(i)).collect()
 }
 
@@ -747,7 +789,12 @@ pub fn check(items: &[Item], owners: &[Owner]) -> Result<()> {
         }
         match (item.kind, item.formula) {
             (FieldKind::Formula, Some(f)) => {
-                parse(f).map_err(|e| bad_request(format!("The formula of \u{201c}{name}\u{201d} cannot be read: {e}")))?;
+                let expr = parse(f).map_err(|e| bad_request(format!("The formula of \u{201c}{name}\u{201d} cannot be read: {e}")))?;
+                if operators(&expr) > MAX_OPERATORS {
+                    return Err(bad_request(format!(
+                        "The formula of \u{201c}{name}\u{201d} is too long: use at most {MAX_OPERATORS} operators"
+                    )));
+                }
             }
             (FieldKind::Formula, None) => return Err(bad_request(format!("Write the formula of \u{201c}{name}\u{201d}"))),
             (_, Some(_)) => return Err(bad_request("Only formula fields have a formula")),
@@ -787,29 +834,43 @@ pub fn check(items: &[Item], owners: &[Owner]) -> Result<()> {
         }
         deps.push(mine);
     }
-    // 0 = not visited, 1 = on the current path, 2 = done.
+    // 0 = not visited, 1 = on the current path, 2 = done. `chain` is the longest run of fields below each one.
     let mut state = vec![0u8; items.len()];
-    fn visit(i: usize, deps: &[Vec<usize>], state: &mut [u8]) -> bool {
-        match state[i] {
-            1 => return false,
-            2 => return true,
-            _ => {}
+    let mut chain = vec![0usize; items.len()];
+    for start in 0..items.len() {
+        if state[start] != 0 {
+            continue;
         }
-        state[i] = 1;
-        for d in &deps[i] {
-            if !visit(*d, deps, state) {
-                return false;
+        state[start] = 1;
+        let mut stack = vec![(start, 0usize)];
+        while let Some((i, next)) = stack.last_mut() {
+            let i = *i;
+            if let Some(&d) = deps[i].get(*next) {
+                *next += 1;
+                match state[d] {
+                    0 => {
+                        state[d] = 1;
+                        stack.push((d, 0));
+                    }
+                    1 => {
+                        return Err(bad_request(format!(
+                            "\u{201c}{}\u{201d} depends on itself through other fields' conditions or formulas",
+                            items[i].label.trim()
+                        )));
+                    }
+                    _ => {}
+                }
+            } else {
+                chain[i] = deps[i].iter().map(|d| chain[*d] + 1).max().unwrap_or(0);
+                if chain[i] > MAX_CHAIN {
+                    return Err(bad_request(format!(
+                        "\u{201c}{}\u{201d} builds on too many other fields in a row; keep it to at most {MAX_CHAIN}",
+                        items[i].label.trim()
+                    )));
+                }
+                state[i] = 2;
+                stack.pop();
             }
-        }
-        state[i] = 2;
-        true
-    }
-    for (i, item) in items.iter().enumerate() {
-        if !visit(i, &deps, &mut state) {
-            return Err(bad_request(format!(
-                "\u{201c}{}\u{201d} depends on itself through other fields' conditions or formulas",
-                item.label.trim()
-            )));
         }
     }
     Ok(())
@@ -909,5 +970,87 @@ mod tests {
         assert!(check(&[formula.clone(), item("B", &[])], &[Owner::Sender, party]).is_err(), "a sender formula using a party field");
         let deep = format!("{}1{}", "(".repeat(40), ")".repeat(40));
         assert!(parse(&deep).is_err());
+    }
+
+    fn chain_of(fields: usize, formula_tail: &str) -> (Vec<String>, Vec<String>) {
+        let labels = (0..fields).map(|i| format!("F{i}")).collect();
+        let formulas = (0..fields).map(|i| format!("{{F{}}}{formula_tail}", i + 1)).collect();
+        (labels, formulas)
+    }
+
+    fn chain_items<'a>(labels: &'a [String], formulas: &'a [String]) -> Vec<Item<'a>> {
+        let last = labels.len() - 1;
+        labels
+            .iter()
+            .enumerate()
+            .map(|(i, label)| Item {
+                label,
+                kind: if i == last { FieldKind::Number } else { FieldKind::Formula },
+                value: Some("1"),
+                conditions: &[],
+                formula: if i == last { None } else { Some(&formulas[i]) },
+                format: None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn long_field_chains_are_refused_when_saved() {
+        let (labels, formulas) = chain_of(40, "+1");
+        let items = chain_items(&labels, &formulas);
+        let owners = vec![Owner::Sender; items.len()];
+        assert!(check(&items, &owners).unwrap_err().message.contains("too many other fields"));
+        let (labels, formulas) = chain_of(20, "+1");
+        let items = chain_items(&labels, &formulas);
+        assert!(check(&items, &vec![Owner::Sender; items.len()]).is_ok());
+    }
+
+    #[test]
+    fn long_formulas_are_refused_when_saved() {
+        let (labels, formulas) = chain_of(2, &"+1".repeat(MAX_OPERATORS + 1));
+        let items = chain_items(&labels, &formulas);
+        assert!(check(&items, &vec![Owner::Sender; items.len()]).unwrap_err().message.contains("too long"));
+    }
+
+    #[test]
+    fn stored_chains_evaluate_on_a_small_stack() {
+        // Fields saved before the limits: as long as a formula could be, chained further than a stack reaches.
+        std::thread::Builder::new()
+            .stack_size(2 * 1024 * 1024)
+            .spawn(|| {
+                let (labels, formulas) = chain_of(500, &"+1".repeat(235));
+                let items = chain_items(&labels, &formulas);
+                let out = evaluate(&items);
+                assert_eq!(out[0].value.as_deref(), Some((1 + 499 * 235).to_string().as_str()));
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[test]
+    fn a_stored_loop_of_any_length_leaves_fields_hidden() {
+        std::thread::Builder::new()
+            .stack_size(2 * 1024 * 1024)
+            .spawn(|| {
+                let labels: Vec<String> = (0..2000).map(|i| format!("F{i}")).collect();
+                let formulas: Vec<String> = (0..2000).map(|i| format!("{{F{}}}+1", (i + 1) % 2000)).collect();
+                let items: Vec<Item> = labels
+                    .iter()
+                    .zip(&formulas)
+                    .map(|(label, formula)| Item {
+                        label,
+                        kind: FieldKind::Formula,
+                        value: None,
+                        conditions: &[],
+                        formula: Some(formula),
+                        format: None,
+                    })
+                    .collect();
+                assert_eq!(evaluate(&items).len(), 2000);
+            })
+            .unwrap()
+            .join()
+            .unwrap();
     }
 }

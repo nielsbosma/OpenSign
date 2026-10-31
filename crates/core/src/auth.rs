@@ -1,12 +1,15 @@
 use std::net::IpAddr;
+use std::time::Duration as StdDuration;
 
 use chrono::{DateTime, Duration, Utc};
 use ipnet::IpNet;
-use opensign_crypto::{constant_time_eq, random_token, sha256_hex};
+use opensign_crypto::{burn_password_check, constant_time_eq, hash_password, random_token, sha256_hex, verify_password};
 use sqlx::PgConnection;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use tokio::sync::Semaphore;
 use uuid::Uuid;
 
-use crate::context::{Actor, Credential};
+use crate::context::{Actor, Credential, Ctx};
 use crate::error::{AppError, ErrorKind, Result, bad_request};
 use crate::permissions::{Permission, Role};
 use crate::settings::SecuritySettings;
@@ -23,8 +26,6 @@ pub struct UserRow {
     pub totp_pending_secret: Option<String>,
     pub totp_enabled_at: Option<DateTime<Utc>>,
     pub totp_last_step: Option<i64>,
-    pub failed_login_count: i32,
-    pub locked_until: Option<DateTime<Utc>>,
     pub last_login_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub language: Option<String>,
@@ -54,6 +55,56 @@ pub fn normalize_email(email: &str) -> Result<String> {
         return Err(AppError::new(ErrorKind::BadRequest, "Enter a valid email address"));
     }
     Ok(email)
+}
+
+/// Argon2 takes 64 MiB and a core for a moment. A few at a time on blocking threads keeps a flood of
+/// sign-ins from using up the memory or stalling everything else on the async workers.
+static PASSWORD_WORK: Semaphore = Semaphore::const_new(4);
+const PASSWORD_QUEUE: StdDuration = StdDuration::from_secs(10);
+/// Each one waiting holds a database connection, so a flood must not be able to take the whole pool.
+const PASSWORD_WAITING: usize = 8;
+static WAITING: AtomicUsize = AtomicUsize::new(0);
+
+struct InQueue<'a>(&'a AtomicUsize);
+
+impl Drop for InQueue<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+fn join_queue(waiting: &AtomicUsize, limit: usize) -> Option<InQueue<'_>> {
+    let place = InQueue(waiting);
+    (waiting.fetch_add(1, Ordering::SeqCst) < limit).then_some(place)
+}
+
+async fn password_work<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> Result<T> {
+    let busy = || AppError::new(ErrorKind::Unavailable, "Too many sign-ins right now. Try again in a moment.");
+    let in_queue = join_queue(&WAITING, PASSWORD_WAITING).ok_or_else(busy)?;
+    let permit = tokio::time::timeout(PASSWORD_QUEUE, PASSWORD_WORK.acquire()).await.map_err(|_| busy())?.map_err(|_| busy())?;
+    drop(in_queue);
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        work()
+    })
+    .await
+    .map_err(AppError::internal)
+}
+
+pub async fn check_password(hash: &str, password: &str) -> Result<bool> {
+    let (hash, password) = (hash.to_string(), password.to_string());
+    password_work(move || verify_password(&hash, &password)).await
+}
+
+/// Takes as long as checking a real password, so an unknown account does not answer sooner.
+pub async fn burn_password(password: &str) -> Result<()> {
+    let password = password.to_string();
+    password_work(move || burn_password_check(&password)).await
+}
+
+pub async fn new_password_hash(password: &str) -> Result<String> {
+    let password = password.to_string();
+    password_work(move || hash_password(&password)).await?.map_err(|e| bad_request(e.to_string()))
 }
 
 pub fn actor_for(user: &UserRow, security: &SecuritySettings, credential: Credential) -> Option<Actor> {
@@ -99,10 +150,23 @@ pub async fn create_session(
     .bind(now)
     .bind(ip)
     .bind(user_agent.map(|ua| ua.chars().take(400).collect::<String>()))
-    .bind(now + Duration::minutes(10))
+    .bind(now + Duration::minutes(STEP_UP_MINUTES))
     .execute(&mut *conn)
     .await?;
     Ok(NewSession { token, id, expires_at })
+}
+
+/// How long a confirmation of who you are lasts, and how long signing in counts as one.
+pub const STEP_UP_MINUTES: i64 = 10;
+
+/// For the few calls that hand out lasting access: a stolen cookie alone is not enough. The web app
+/// sees the code, asks for the password or a passkey through `account.step_up`, and tries again.
+pub async fn require_step_up(ctx: &Ctx, conn: &mut PgConnection) -> Result<()> {
+    let needed = || AppError::new(ErrorKind::Forbidden, "Confirm it is you to continue").with_code("step_up_required");
+    let Some(session) = &ctx.session_id else { return Err(needed()) };
+    let until: Option<Option<DateTime<Utc>>> =
+        sqlx::query_scalar("select elevated_until from sessions where id = $1").bind(session).fetch_optional(&mut *conn).await?;
+    if until.flatten().is_some_and(|t| t > ctx.now) { Ok(()) } else { Err(needed()) }
 }
 
 #[derive(sqlx::FromRow)]
@@ -155,6 +219,27 @@ pub async fn revoke_sessions(conn: &mut PgConnection, user_id: Uuid, except: Opt
         .execute(&mut *conn)
         .await?;
     Ok(result.rows_affected())
+}
+
+pub async fn revoke_api_keys(conn: &mut PgConnection, user_id: Uuid) -> Result<u64> {
+    let result = sqlx::query("update api_keys set revoked_at = now() where user_id = $1 and revoked_at is null")
+        .bind(user_id)
+        .execute(&mut *conn)
+        .await?;
+    Ok(result.rows_affected())
+}
+
+/// Links sent to a mailbox or for a password that no longer applies must not outlive the change.
+pub async fn expire_account_links(conn: &mut PgConnection, user_id: Uuid) -> Result<()> {
+    sqlx::query("update password_reset_tokens set used_at = now() where user_id = $1 and used_at is null")
+        .bind(user_id)
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query("update email_change_tokens set used_at = now() where user_id = $1 and used_at is null")
+        .bind(user_id)
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
 }
 
 pub const API_KEY_PREFIX: &str = "osk_";
@@ -213,7 +298,7 @@ pub async fn load_api_key(
 
 pub const MAX_ALLOWED_IPS: usize = 50;
 
-fn parse_net(entry: &str) -> Option<IpNet> {
+pub(crate) fn parse_net(entry: &str) -> Option<IpNet> {
     entry.parse::<IpNet>().ok().or_else(|| entry.parse::<IpAddr>().ok().map(IpNet::from))
 }
 
@@ -289,5 +374,20 @@ mod tests {
         assert!(ips_no_wider(&s(&["10.0.0.0/8"]), &s(&["10.1.0.0/16", "10.0.0.5"])));
         assert!(!ips_no_wider(&s(&["10.1.0.0/16"]), &s(&["10.0.0.0/8"])));
         assert!(!ips_no_wider(&s(&["10.0.0.1"]), &s(&["10.0.0.1", "10.0.0.2"])));
+    }
+}
+
+#[cfg(test)]
+mod queue_tests {
+    use super::*;
+
+    #[test]
+    fn the_password_queue_is_bounded_and_gives_places_back() {
+        let waiting = AtomicUsize::new(0);
+        let first = join_queue(&waiting, 1);
+        assert!(first.is_some());
+        assert!(join_queue(&waiting, 1).is_none());
+        drop(first);
+        assert!(join_queue(&waiting, 1).is_some());
     }
 }

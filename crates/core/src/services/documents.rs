@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use async_trait::async_trait;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
@@ -39,11 +41,28 @@ pub struct IdInput {
     pub id: Uuid,
 }
 
+const ON_HOLD: &str = "This document is on legal hold and cannot be changed";
+
 pub(crate) fn require_draft(document: &DocumentRow) -> Result<()> {
+    if document.legal_hold {
+        return Err(conflict(ON_HOLD));
+    }
     if document.status != status::DRAFT {
         return Err(conflict("Only drafts can be changed. Cancel the document and make a copy to change it."));
     }
     Ok(())
+}
+
+/// `require_draft` on the row as it is now, holding it until the transaction ends, so a change
+/// cannot slip in while the document is being sent.
+pub(crate) async fn lock_draft(conn: &mut PgConnection, id: Uuid) -> Result<()> {
+    let row: Option<(String, bool)> =
+        sqlx::query_as("select status, legal_hold from documents where id = $1 for update").bind(id).fetch_optional(&mut *conn).await?;
+    match row {
+        Some((_, true)) => Err(conflict(ON_HOLD)),
+        Some((state, false)) if state == status::DRAFT => Ok(()),
+        _ => Err(conflict("Only drafts can be changed. Cancel the document and make a copy to change it.")),
+    }
 }
 
 fn clean_text(value: &str, what: &str, max: usize) -> Result<String> {
@@ -620,11 +639,7 @@ pub async fn add_file(ctx: &Ctx, document_id: Uuid, name: &str, bytes: Vec<u8>, 
     }
 
     let mut tx = ctx.db().begin().await?;
-    let state: Option<String> =
-        sqlx::query_scalar("select status from documents where id = $1 for update").bind(document_id).fetch_optional(&mut *tx).await?;
-    if state.as_deref() != Some(status::DRAFT) {
-        return Err(conflict("Only drafts can be changed"));
-    }
+    lock_draft(&mut tx, document_id).await?;
     let name = pdf_name(name);
     let file = store_file(
         &mut tx,
@@ -746,11 +761,7 @@ pub async fn replace_file(ctx: &Ctx, document_id: Uuid, file_id: Uuid, name: &st
     let tagged = found.iter().any(|(_, tag)| *tag);
 
     let mut tx = ctx.db().begin().await?;
-    let state: Option<String> =
-        sqlx::query_scalar("select status from documents where id = $1 for update").bind(document_id).fetch_optional(&mut *tx).await?;
-    if state.as_deref() != Some(status::DRAFT) {
-        return Err(conflict("Only drafts can be changed"));
-    }
+    lock_draft(&mut tx, document_id).await?;
     let now: Vec<Uuid> = files(&mut tx, document_id).await?.iter().map(|f| f.id).collect();
     if now != records.iter().map(|f| f.id).collect::<Vec<_>>() {
         return Err(conflict("The files changed while the new one was uploading. Try again."));
@@ -819,6 +830,7 @@ pub async fn replace_file(ctx: &Ctx, document_id: Uuid, file_id: Uuid, name: &st
         })),
     )
     .await?;
+    crate::documents::delete_unused_files(&mut tx, &[file_id]).await?;
     tx.commit().await?;
     Ok(ReplaceOutput { file, pages: clean.pages.len(), removed: clean.removed, moved, fields: fields_out })
 }
@@ -878,7 +890,7 @@ impl Service for RemoveFile {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: RemoveFileInput) -> Result<DocumentView> {
         let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
-        require_draft(&document)?;
+        lock_draft(conn, document.id).await?;
         let done = sqlx::query("delete from document_files where document_id = $1 and file_id = $2")
             .bind(document.id)
             .bind(input.file_id)
@@ -887,6 +899,7 @@ impl Service for RemoveFile {
         if done.rows_affected() == 0 {
             return Err(not_found("File"));
         }
+        crate::documents::delete_unused_files(conn, &[input.file_id]).await?;
         audit(ctx, conn, Entry::new("document.file_removed", "document", document.id).metadata(json!({ "file": input.file_id }))).await?;
         reload(ctx, conn, document.id).await
     }
@@ -926,7 +939,7 @@ impl Service for Update {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: UpdateInput) -> Result<DocumentView> {
         let document = load_document(ctx, conn, input.id, Need::Edit).await?;
-        require_draft(&document)?;
+        lock_draft(conn, document.id).await?;
         if let Some(at) = input.expires_at
             && at <= ctx.now + Duration::hours(1)
         {
@@ -1090,7 +1103,7 @@ impl Service for SetParties {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SetPartiesInput) -> Result<Vec<PartyView>> {
         let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
-        require_draft(&document)?;
+        lock_draft(conn, document.id).await?;
         if input.parties.len() > MAX_PARTIES {
             return Err(bad_request(format!("A document can have at most {MAX_PARTIES} parties")));
         }
@@ -1433,7 +1446,7 @@ impl Service for SetFields {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SetFieldsInput) -> Result<DocumentView> {
         let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
-        require_draft(&document)?;
+        lock_draft(conn, document.id).await?;
         if input.fields.len() > MAX_FIELDS {
             return Err(bad_request(format!("A document can have at most {MAX_FIELDS} fields")));
         }
@@ -1495,9 +1508,10 @@ async fn check_auth_available(ctx: &Ctx, conn: &mut PgConnection, method: AuthMe
         AuthMethod::None | AuthMethod::Standard => Ok(()),
         AuthMethod::SmsPin => {
             let sms: SmsSettings = settings(ctx, conn).await?;
-            if party.phone.is_none() {
+            let Some(phone) = &party.phone else {
                 return Err(bad_request(format!("{} needs a phone number for SMS codes", party.name)));
-            }
+            };
+            crate::sms::check_country(&sms, phone)?;
             if !crate::sms::is_configured(&sms) && !ctx.app.env.development {
                 return Err(bad_request("SMS is not set up. An admin chooses an SMS provider in Admin settings."));
             }
@@ -1561,8 +1575,13 @@ impl Service for Send {
         if document.is_template {
             return Err(bad_request("Templates cannot be sent. Create a document from it first."));
         }
-        let state: String =
-            sqlx::query_scalar("select status from documents where id = $1 for update").bind(document.id).fetch_one(&mut *conn).await?;
+        let (state, on_hold): (String, bool) = sqlx::query_as("select status, legal_hold from documents where id = $1 for update")
+            .bind(document.id)
+            .fetch_one(&mut *conn)
+            .await?;
+        if on_hold {
+            return Err(conflict(ON_HOLD));
+        }
         if state != status::DRAFT {
             return Err(conflict("Only drafts can be sent"));
         }
@@ -1661,12 +1680,11 @@ impl Service for Send {
             json!({ "documentId": document.id, "title": document.title, "externalId": document.external_id }),
         )
         .await?;
-        let links = parties(conn, document.id)
-            .await?
-            .iter()
-            .filter(|p| p.delivery == Delivery::Link.as_str())
-            .map(|p| SignerLink { party_id: p.id, name: p.name.clone(), url: signer_url(ctx, ctx.keys(), p) })
-            .collect();
+        let mut links = Vec::new();
+        for p in parties(conn, document.id).await?.iter().filter(|p| p.delivery == Delivery::Link.as_str()) {
+            audit_link_issued(ctx, conn, document.id, p, "send").await?;
+            links.push(SignerLink { party_id: p.id, name: p.name.clone(), url: signer_url(ctx, ctx.keys(), p) });
+        }
         Ok(SendOutput { document: view(ctx, conn, document).await?, links })
     }
 }
@@ -1694,8 +1712,11 @@ impl Service for Cancel {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CancelInput) -> Result<DocumentView> {
         let document = load_document(ctx, conn, input.id, Need::Edit).await?;
+        if document.legal_hold {
+            return Err(conflict(ON_HOLD));
+        }
         let done = sqlx::query(
-            "update documents set status = 'canceled', canceled_at = $2, updated_at = now() where id = $1 and status = 'pending'",
+            "update documents set status = 'canceled', canceled_at = $2, updated_at = now() where id = $1 and status = 'pending' and not legal_hold",
         )
         .bind(document.id)
         .bind(ctx.now)
@@ -1762,7 +1783,11 @@ impl Service for Delete {
         if document.status == status::PENDING {
             return Err(conflict("Cancel the document before deleting it"));
         }
-        if document.status == status::COMPLETED && !ctx.can(Permission::DocumentsManageAll) {
+        let signed: bool = sqlx::query_scalar("select exists (select 1 from parties where document_id = $1 and signed_at is not null)")
+            .bind(document.id)
+            .fetch_one(&mut *conn)
+            .await?;
+        if (document.status == status::COMPLETED || signed) && !ctx.can(Permission::DocumentsManageAll) {
             return Err(forbidden());
         }
         crate::documents::purge(ctx, conn, &document, "manual").await?;
@@ -1942,6 +1967,8 @@ pub async fn preview_pdf(ctx: &Ctx, id: Uuid, version: Option<i32>) -> Result<(S
         None => {
             if let Some(file_id) = document.sealed_file_id.or(document.source_file_id) {
                 let record = file_record(&mut conn, file_id).await?;
+                audit(ctx, &mut conn, Entry::new("document.downloaded", "document", document.id).metadata(json!({ "version": "preview" })))
+                    .await?;
                 return Ok((name, read_file(&ctx.app.storage, ctx.keys(), &record).await?));
             }
             files(&mut conn, document.id).await?
@@ -2132,7 +2159,7 @@ impl Service for SignMyself {
         if document.is_template {
             return Err(bad_request("Templates cannot be signed. Create a document from it first."));
         }
-        require_draft(&document)?;
+        lock_draft(conn, document.id).await?;
         if input.auth_to_sign == AuthMethod::None {
             return Err(bad_request("authToSign is standard, sms_pin, se_bankid, freja or broker"));
         }
@@ -2214,12 +2241,26 @@ pub async fn handed_over_links(ctx: &Ctx, conn: &mut PgConnection, id: Uuid) -> 
         Ok(d) if d.status == status::PENDING => d,
         _ => return Ok(Vec::new()),
     };
-    Ok(parties(conn, document.id)
+    let mut links = Vec::new();
+    for p in parties(conn, document.id)
         .await?
         .iter()
         .filter(|p| p.delivery == "link" && p.must_act() && p.signed_at.is_none() && p.declined_at.is_none())
-        .map(|p| (p.id, signer_url(ctx, ctx.keys(), p)))
-        .collect())
+    {
+        audit_link_issued(ctx, conn, document.id, p, "read").await?;
+        links.push((p.id, signer_url(ctx, ctx.keys(), p)));
+    }
+    Ok(links)
+}
+
+async fn audit_link_issued(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid, party: &PartyRow, via: &str) -> Result<()> {
+    audit(
+        ctx,
+        conn,
+        Entry::new("party.link_issued", "document", document_id).metadata(json!({ "party": party.id, "name": party.name, "via": via })),
+    )
+    .await?;
+    Ok(())
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -2247,8 +2288,25 @@ pub struct VerifyOutput {
     pub document: Option<VerifiedDocument>,
 }
 
+/// A PDF's signatures, read in a worker. For the public route, which must not hold a database
+/// connection while it waits: anyone can send a file that takes the whole deadline.
+pub async fn read_signatures_public(bytes: Vec<u8>) -> Result<(String, Vec<opensign_pdf::SignatureCheck>)> {
+    if !bytes.windows(5).take(1024).any(|w| w == b"%PDF-") {
+        return Err(bad_request("This is not a PDF file"));
+    }
+    let sha256 = sha256_hex(&bytes);
+    let signatures = tokio::task::spawn_blocking(move || opensign_pdf::verify_signatures_public(&bytes))
+        .await
+        .map_err(AppError::internal)?
+        .map_err(|e| match e {
+            opensign_pdf::PdfError::Rejected(message) if message == opensign_pdf::BUSY => AppError::new(ErrorKind::Unavailable, message),
+            _ => bad_request("This PDF could not be read"),
+        })?;
+    Ok((sha256, signatures))
+}
+
 /// Checks a PDF's signatures and whether this server sealed exactly these bytes.
-pub async fn verify_pdf(conn: &mut PgConnection, bytes: Vec<u8>) -> Result<VerifyOutput> {
+pub async fn verify_pdf(ctx: &Ctx, conn: &mut PgConnection, bytes: Vec<u8>) -> Result<VerifyOutput> {
     if !bytes.windows(5).take(1024).any(|w| w == b"%PDF-") {
         return Err(bad_request("This is not a PDF file"));
     }
@@ -2257,14 +2315,87 @@ pub async fn verify_pdf(conn: &mut PgConnection, bytes: Vec<u8>) -> Result<Verif
         .await
         .map_err(AppError::internal)?
         .map_err(|_| bad_request("This PDF could not be read"))?;
-    let document = sqlx::query_as::<_, (Uuid, String, Option<DateTime<Utc>>)>(
-        "select id, title, completed_at from documents where sealed_sha256 = $1 and status = 'completed'",
-    )
-    .bind(&sha256)
-    .fetch_optional(&mut *conn)
-    .await?
-    .map(|(id, title, completed_at)| VerifiedDocument { id, title, completed_at });
+    compare_with_seals(ctx, conn, sha256, signatures).await
+}
+
+/// Says which of the signatures are this server's own, and which document they sealed.
+pub async fn compare_with_seals(
+    ctx: &Ctx,
+    conn: &mut PgConnection,
+    sha256: String,
+    mut signatures: Vec<opensign_pdf::SignatureCheck>,
+) -> Result<VerifyOutput> {
+    let chains: Vec<Vec<String>> = sqlx::query_scalar("select chain from seal_identities").fetch_all(&mut *conn).await?;
+    let ours: HashSet<String> =
+        chains.iter().filter_map(|chain| chain.first()).filter_map(|leaf| B64.decode(leaf).ok()).map(|der| sha256_hex(&der)).collect();
+    let signing: crate::settings::SigningSettings = settings(ctx, conn).await?;
+    let authorities = signing.trusted_authorities();
+    for signature in &mut signatures {
+        signature.trusted = signature.intact && signature.signer_certificate_sha256.as_ref().is_some_and(|sha| ours.contains(sha));
+        signature.timestamp_trusted =
+            signature.timestamp.is_some() && signature.timestamp_authority_sha256.as_ref().is_some_and(|sha| authorities.contains(sha));
+    }
+    // A matching hash alone would also vouch for a stored file whose seal no longer holds.
+    let document = if signatures.iter().any(|s| s.trusted) {
+        sqlx::query_as::<_, (Uuid, String, Option<DateTime<Utc>>)>(
+            "select id, title, completed_at from documents where sealed_sha256 = $1 and status = 'completed'",
+        )
+        .bind(&sha256)
+        .fetch_optional(&mut *conn)
+        .await?
+        .map(|(id, title, completed_at)| VerifiedDocument { id, title, completed_at })
+    } else {
+        None
+    };
     Ok(VerifyOutput { sha256, signatures, document })
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PartyIdentityInput {
+    pub document_id: Uuid,
+    pub party_id: Uuid,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PartyIdentityOutput {
+    /// How the party identified, with the personal number or phone number in full. Null when they have not signed.
+    pub identity: Option<String>,
+}
+
+pub struct PartyIdentity;
+
+#[async_trait]
+impl Service for PartyIdentity {
+    type Input = PartyIdentityInput;
+    type Output = PartyIdentityOutput;
+    const META: Meta = Meta::mutation(
+        "documents.party_identity",
+        "Show how a party identified with their personal number or phone number in full, which the sealed evidence masks. Use it only when that is needed, for example in a dispute. Every use is audited.",
+        Access::Permission(Permission::DocumentsReadAll),
+    )
+    .not_a_tool("It returns personal numbers.");
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: PartyIdentityInput) -> Result<PartyIdentityOutput> {
+        let document = load_document(ctx, conn, input.document_id, Need::Read).await?;
+        let evidence: Option<Value> = sqlx::query_scalar("select evidence from parties where id = $1 and document_id = $2")
+            .bind(input.party_id)
+            .bind(document.id)
+            .fetch_optional(&mut *conn)
+            .await?
+            .ok_or_else(|| crate::error::not_found("Party"))?;
+        let sealed = evidence.as_ref().and_then(|e| e["identityFull"].as_str().or(e["identity"].as_str()));
+        let identity = sealed
+            .map(|s| {
+                crate::documents::open_sealed_identity(ctx.keys(), input.party_id, s)
+                    .ok_or_else(|| AppError::internal(anyhow::anyhow!("party identity cannot be opened")))
+            })
+            .transpose()?;
+        audit(ctx, conn, Entry::new("document.party_identity_read", "document", document.id).metadata(json!({ "party": input.party_id })))
+            .await?;
+        Ok(PartyIdentityOutput { identity })
+    }
 }
 
 pub struct Verify;
@@ -2275,17 +2406,17 @@ impl Service for Verify {
     type Output = VerifyOutput;
     const META: Meta = Meta::query(
         "documents.verify",
-        "Check a signed PDF (base64): whether its signatures are intact and whether this server sealed exactly this file.",
+        "Check a signed PDF (base64): whether its signatures are intact, whether each signer is this server's own seal (trusted), and whether this server sealed exactly this file.",
         Access::Authenticated,
     )
     .tool();
 
-    async fn run(_ctx: &Ctx, conn: &mut PgConnection, input: VerifyInput) -> Result<VerifyOutput> {
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: VerifyInput) -> Result<VerifyOutput> {
         if input.content_base64.len() > 70 * 1024 * 1024 {
             return Err(bad_request("The file is too large"));
         }
         let bytes = B64.decode(input.content_base64.trim()).map_err(|_| bad_request("contentBase64 is not valid base64"))?;
-        verify_pdf(conn, bytes).await
+        verify_pdf(ctx, conn, bytes).await
     }
 }
 

@@ -26,7 +26,7 @@ pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 
 const RECOVERY_ALPHABET: &[u8] = b"abcdefghjkmnpqrstuvwxyz23456789";
 
-/// Ten codes like `k7mq-x2pd-r9tw`, about 70 bits each.
+/// Ten codes like `k7mq-x2pd-r9tw`: twelve characters from 31, about 59 bits each.
 pub fn recovery_codes() -> Vec<String> {
     (0..10)
         .map(|_| {

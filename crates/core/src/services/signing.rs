@@ -9,7 +9,7 @@ use opensign_crypto::{KeyPurpose, constant_time_eq, random_bytes};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sqlx::PgConnection;
+use sqlx::{Connection, PgConnection};
 use uuid::Uuid;
 
 use super::settings;
@@ -20,7 +20,7 @@ use crate::documents::logic;
 use crate::documents::values::{self, Spec};
 use crate::documents::{
     AuthMethod, DOCUMENT_COLUMNS, Delivery, DocumentRow, FIELD_COLUMNS, FieldKind, FieldRow, PartyRole, PartyRow, current_turn, fields,
-    notify, parties, party_for_token, seal_identity, status,
+    mask_identity, notify, parties, party_for_token, seal_identity, status,
 };
 use crate::error::{AppError, ErrorKind, Result, bad_request, conflict, too_many};
 use crate::jobs::enqueue;
@@ -33,6 +33,7 @@ const CODE_MINUTES: i64 = 10;
 const CODE_ATTEMPTS: i32 = 5;
 const CODES_PER_HOUR: i64 = 5;
 const MAX_SIGNATURE_IMAGE: usize = 300 * 1024;
+const MAX_UPLOADS_PER_REQUEST: i32 = 20;
 
 pub(crate) fn invalid_link() -> AppError {
     AppError::new(ErrorKind::NotFound, "This signing link is not valid or has expired. Ask the sender for a new one.")
@@ -43,18 +44,26 @@ pub(crate) struct SignerSession {
     p: Uuid,
     v: i32,
     a: AuthMethod,
-    /// What the identification proved, e.g. the name from an eID, for the evidence.
+    /// What the identification proved, as shown in the sealed document.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     i: Option<String>,
+    /// The same with nothing masked, encrypted: this token goes through the browser.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    n: Option<String>,
+    /// The eID was asked for to sign, and showed what is being signed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    s: bool,
     /// The OpenSign user who signs their own document, signed in to the app.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     u: Option<Uuid>,
 }
 
-pub fn issue_session(ctx: &Ctx, party: &PartyRow, method: AuthMethod, identity: Option<String>) -> String {
+pub fn issue_session(ctx: &Ctx, party: &PartyRow, method: AuthMethod, identity: Option<String>, for_signing: bool) -> String {
+    let shown = identity.as_deref().map(mask_identity);
+    let n = identity.filter(|full| shown.as_deref() != Some(full.as_str())).map(|full| seal_identity(ctx.keys(), party.id, &full));
     ctx.keys().sign_token(
         "signer-session",
-        &SignerSession { p: party.id, v: party.link_version, a: method, i: identity, u: None },
+        &SignerSession { p: party.id, v: party.link_version, a: method, i: shown, n, s: for_signing, u: None },
         SESSION_MINUTES * 60,
         ctx.now.timestamp(),
     )
@@ -65,7 +74,15 @@ pub(crate) fn issue_account_session(ctx: &Ctx, party: &PartyRow, actor: &crate::
     let identity = format!("Signed in to OpenSign as {} <{}>", actor.name, actor.email);
     ctx.keys().sign_token(
         "signer-session",
-        &SignerSession { p: party.id, v: party.link_version, a: AuthMethod::Standard, i: Some(identity), u: Some(actor.user_id) },
+        &SignerSession {
+            p: party.id,
+            v: party.link_version,
+            a: AuthMethod::Standard,
+            i: Some(identity),
+            n: None,
+            s: false,
+            u: Some(actor.user_id),
+        },
         SESSION_MINUTES * 60,
         ctx.now.timestamp(),
     )
@@ -82,6 +99,15 @@ pub(crate) fn satisfied(required: AuthMethod, session: Option<&SignerSession>) -
         AuthMethod::None | AuthMethod::Standard => true,
         AuthMethod::SmsPin => session.is_some_and(|s| s.a != AuthMethod::None && s.a != AuthMethod::Standard),
         eid => session.is_some_and(|s| s.a == eid),
+    }
+}
+
+/// Signing with an eID takes an identification made for signing: only that one showed the person
+/// what they sign. An SMS code says nothing about the document, so any session will do.
+pub(crate) fn satisfied_to_sign(required: AuthMethod, session: Option<&SignerSession>) -> bool {
+    match required {
+        AuthMethod::None | AuthMethod::Standard | AuthMethod::SmsPin => satisfied(required, session),
+        eid => satisfied(eid, session) && session.is_some_and(|s| s.s),
     }
 }
 
@@ -272,7 +298,7 @@ impl Service for Open {
         let your_turn = document.status == status::PENDING && current_turn(&document, &all).contains(&party.id);
         let mut view = signer_view(ctx, conn, &document, &party, locked).await?;
         view.needs_authentication = locked.then(|| party.auth_to_view());
-        view.sign_authentication = (!satisfied(party.auth_to_sign(), session.as_ref())).then(|| party.auth_to_sign());
+        view.sign_authentication = (!satisfied_to_sign(party.auth_to_sign(), session.as_ref())).then(|| party.auth_to_sign());
         view.your_turn = your_turn;
         view.can_download = !locked && document.status == status::COMPLETED;
         view.review = if locked { None } else { Some(super::review::state(ctx, conn, &document, &party).await?) };
@@ -323,7 +349,8 @@ pub struct RequestCode;
 impl Service for RequestCode {
     type Input = TokenInput;
     type Output = CodeSent;
-    const META: Meta = Meta::mutation("signing.request_code", "Send a one-time code by SMS to the party's phone.", Access::Public);
+    const META: Meta =
+        Meta::mutation("signing.request_code", "Send a one-time code by SMS to the party's phone.", Access::Public).without_transaction();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: TokenInput) -> Result<CodeSent> {
         let Resolved { party, document, .. } = resolve(ctx, conn, &input.token, None).await?;
@@ -331,34 +358,43 @@ impl Service for RequestCode {
             return Err(bad_request("This party does not use SMS codes"));
         }
         let phone = party.phone.clone().ok_or_else(|| bad_request("There is no phone number for you. Ask the sender to add one."))?;
-        sqlx::query("select 1 from parties where id = $1 for update").bind(party.id).execute(&mut *conn).await?;
+        let org: OrgSettings = settings(ctx, conn).await?;
+        let sms: SmsSettings = settings(ctx, conn).await?;
+        let id = Uuid::now_v7();
+        let code = format!("{:06}", u32::from_be_bytes(random_bytes::<4>()) % 1_000_000);
+        let expires_at = ctx.now + Duration::minutes(CODE_MINUTES);
+        // Committed before the SMS goes out, so a slow provider holds no lock.
+        let mut tx = conn.begin().await?;
+        sqlx::query("select 1 from parties where id = $1 for update").bind(party.id).execute(&mut *tx).await?;
         let recent: i64 = sqlx::query_scalar("select count(*) from sms_challenges where party_id = $1 and created_at > $2")
             .bind(party.id)
             .bind(ctx.now - Duration::hours(1))
-            .fetch_one(&mut *conn)
+            .fetch_one(&mut *tx)
             .await?;
         if recent >= CODES_PER_HOUR {
             return Err(too_many("Too many codes requested. Try again in an hour."));
         }
-        let id = Uuid::now_v7();
-        let code = format!("{:06}", u32::from_be_bytes(random_bytes::<4>()) % 1_000_000);
-        let expires_at = ctx.now + Duration::minutes(CODE_MINUTES);
+        let share_link = document.metadata["shareLink"].as_str().and_then(|s| Uuid::parse_str(s).ok());
+        let spent = crate::sms::reserve(&mut tx, &sms, &phone, share_link, ctx.now).await?;
         sqlx::query("update sms_challenges set expires_at = least(expires_at, $2) where party_id = $1 and verified_at is null")
             .bind(party.id)
             .bind(ctx.now)
-            .execute(&mut *conn)
+            .execute(&mut *tx)
             .await?;
         sqlx::query("insert into sms_challenges (id, party_id, purpose, code_hash, expires_at) values ($1, $2, 'auth', $3, $4)")
             .bind(id)
             .bind(party.id)
             .bind(sms_code_hash(ctx, id, &code))
             .bind(expires_at)
-            .execute(&mut *conn)
+            .execute(&mut *tx)
             .await?;
-        let org: OrgSettings = settings(ctx, conn).await?;
-        let sms: SmsSettings = settings(ctx, conn).await?;
+        tx.commit().await?;
         let org_name = if org.name.is_empty() { "OpenSign" } else { org.name.as_str() };
-        crate::sms::send(&ctx.app, &sms, &phone, &party.lang(&document).code_sms(&code, &document.title, org_name)).await?;
+        if let Err(e) = crate::sms::send(&ctx.app, &sms, &phone, &party.lang(&document).code_sms(&code, &document.title, org_name)).await {
+            sqlx::query("delete from sms_challenges where id = $1").bind(id).execute(&mut *conn).await?;
+            crate::sms::release(conn, spent).await?;
+            return Err(e);
+        }
         audit(ctx, conn, Entry::new("party.code_sent", "document", document.id).metadata(json!({ "party": party.id, "name": party.name })))
             .await?;
         let hint: String = phone.chars().rev().take(3).collect::<Vec<_>>().into_iter().rev().collect();
@@ -396,6 +432,7 @@ impl Service for VerifyCode {
         let challenge: Option<(Uuid, String)> = sqlx::query_as(
             "update sms_challenges set attempts = attempts + 1 where id = (
                select id from sms_challenges where party_id = $1 and verified_at is null and expires_at > $2 and attempts < $3 order by created_at desc limit 1)
+               and attempts < $3
              returning id, code_hash",
         )
         .bind(party.id)
@@ -424,7 +461,7 @@ impl Service for VerifyCode {
         .await?;
         let identity = party.phone.as_deref().map(|p| format!("SMS code to {p}"));
         Ok(SignerSessionOutput {
-            session: issue_session(ctx, &party, AuthMethod::SmsPin, identity),
+            session: issue_session(ctx, &party, AuthMethod::SmsPin, identity, false),
             expires_at: ctx.now + Duration::minutes(SESSION_MINUTES),
         })
     }
@@ -518,7 +555,7 @@ impl Service for Sign {
         if !current_turn(&document, &all).contains(&party.id) {
             return Err(conflict("It is not your turn yet. You will get an email when it is."));
         }
-        if !satisfied(party.auth_to_view(), session.as_ref()) || !satisfied(party.auth_to_sign(), session.as_ref()) {
+        if !satisfied(party.auth_to_view(), session.as_ref()) || !satisfied_to_sign(party.auth_to_sign(), session.as_ref()) {
             return Err(AppError::new(ErrorKind::Unauthorized, format!("Identify yourself with {} first", party.auth_to_sign().label())));
         }
         if !input.consent {
@@ -652,13 +689,16 @@ impl Service for Sign {
                 .bind(dropped.is_some())
                 .execute(&mut *conn)
                 .await?;
-            retire_file(conn, dropped).await?;
+            if !document.legal_hold {
+                retire_file(conn, dropped).await?;
+            }
         }
 
         let method = session.as_ref().map_or(party.auth_to_sign(), |s| s.a);
         let evidence = json!({
             "auth": method,
             "identity": session.as_ref().and_then(|s| s.i.as_deref()).map(|i| seal_identity(ctx.keys(), party.id, i)),
+            "identityFull": session.as_ref().and_then(|s| s.n.as_deref()),
             "account": session.as_ref().and_then(|s| s.u),
             "ip": ctx.ip,
             "userAgent": ctx.user_agent,
@@ -762,6 +802,9 @@ async fn attachment_party(ctx: &Ctx, conn: &mut PgConnection, token: &str, sessi
     if document.status != status::PENDING || !party.must_act() || party.signed_at.is_some() || party.declined_at.is_some() {
         return Err(conflict("Attachments can no longer be changed"));
     }
+    if document.legal_hold {
+        return Err(conflict("This document is on legal hold, so its attachments cannot be changed"));
+    }
     if !current_turn(document, &parties(conn, document.id).await?).contains(&party.id) {
         return Err(conflict("It is not your turn yet. You will get an email when it is."));
     }
@@ -781,9 +824,33 @@ async fn request_of(conn: &mut PgConnection, party_id: Uuid, id: Uuid) -> Result
     attachments::for_party(conn, party_id).await?.into_iter().find(|r| r.id == id).ok_or_else(|| crate::error::not_found("Attachment"))
 }
 
+async fn destroy_unreferenced(conn: &mut PgConnection, ids: &[Uuid]) -> Result<()> {
+    crate::documents::delete_unused_files(conn, ids).await.map(|_| ())
+}
+
+/// For a file just replaced or removed; call it after the row that pointed at it has changed.
 pub(crate) async fn retire_file(conn: &mut PgConnection, file_id: Option<Uuid>) -> Result<()> {
-    if let Some(id) = file_id {
-        sqlx::query("update files set deleted_at = now() where id = $1 and deleted_at is null").bind(id).execute(&mut *conn).await?;
+    match file_id {
+        Some(id) => destroy_unreferenced(conn, &[id]).await,
+        None => Ok(()),
+    }
+}
+
+/// Files retired by earlier versions, which only marked them.
+pub async fn sweep_retired_files(conn: &mut PgConnection) -> Result<()> {
+    let ids: Vec<Uuid> = sqlx::query_scalar("select id from files where deleted_at is not null limit 1000").fetch_all(&mut *conn).await?;
+    destroy_unreferenced(conn, &ids).await
+}
+
+/// Replacing a file costs storage and CPU, so a link can do it only so often.
+async fn count_upload(conn: &mut PgConnection, table: &str, id: Uuid) -> Result<()> {
+    let counted = sqlx::query(&format!("update {table} set uploads = uploads + 1 where id = $1 and uploads < $2"))
+        .bind(id)
+        .bind(MAX_UPLOADS_PER_REQUEST)
+        .execute(&mut *conn)
+        .await?;
+    if counted.rows_affected() == 0 {
+        return Err(too_many("This file was uploaded too many times. Ask the sender for help."));
     }
     Ok(())
 }
@@ -801,6 +868,7 @@ pub async fn upload_attachment(
 ) -> Result<AttachmentRequest> {
     let Resolved { party, document, .. } = attachment_party(ctx, conn, token, session_token).await?;
     let request = request_of(conn, party.id, request_id).await?;
+    count_upload(conn, "attachment_requests", request.id).await?;
     let photo = request.kind == attachments::KIND_PHOTO;
     let (file_name, content_type, body) =
         if photo { attachments::clean_photo(bytes).await? } else { attachments::clean(bytes, name).await? };
@@ -811,13 +879,13 @@ pub async fn upload_attachment(
         NewFile { kind: if photo { "photo" } else { "attachment" }, name: &file_name, content_type, body: &body, uploaded_by: None },
     )
     .await?;
-    retire_file(conn, request.file_id).await?;
     sqlx::query("update attachment_requests set file_id = $2, uploaded_at = $3 where id = $1")
         .bind(request.id)
         .bind(record.id)
         .bind(ctx.now)
         .execute(&mut *conn)
         .await?;
+    retire_file(conn, request.file_id).await?;
     audit(
         ctx,
         conn,
@@ -894,6 +962,7 @@ pub async fn upload_field_file(
 ) -> Result<FieldRow> {
     let Resolved { party, document, .. } = attachment_party(ctx, conn, token, session_token).await?;
     let field = upload_field(conn, party.id, field_id).await?;
+    count_upload(conn, "fields", field.id).await?;
     let image = field.kind == FieldKind::Image.as_str();
     let (file_name, content_type, body) =
         if image { attachments::clean_field_image(bytes, name).await? } else { attachments::clean(bytes, name).await? };
@@ -904,13 +973,13 @@ pub async fn upload_field_file(
         NewFile { kind: if image { "field_image" } else { "field_file" }, name: &file_name, content_type, body: &body, uploaded_by: None },
     )
     .await?;
-    retire_file(conn, field.file_id).await?;
     sqlx::query("update fields set file_id = $2, value = $3 where id = $1")
         .bind(field.id)
         .bind(record.id)
         .bind(&record.name)
         .execute(&mut *conn)
         .await?;
+    retire_file(conn, field.file_id).await?;
     audit(
         ctx,
         conn,

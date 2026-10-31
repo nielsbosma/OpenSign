@@ -26,6 +26,7 @@ use crate::{AppState, RequestId};
 const PROTOCOL_VERSIONS: &[&str] = &["2025-06-18", "2025-03-26", "2024-11-05"];
 const BODY_LIMIT: usize = 40 * 1024 * 1024;
 const TOKEN: Limit = Limit { name: "oauth", per_minute: 30, burst: 20 };
+const REGISTER: Limit = Limit { name: "oauth_register", per_minute: 1, burst: 10 };
 
 const INSTRUCTIONS: &str = "OpenSign is an electronic signature service. Documents start as drafts: create one, upload a PDF or Word \
 file (base64), add parties (signers, approvers, viewers) and fields placed as fractions of the page, then send. Signers get \
@@ -41,17 +42,18 @@ fn no_store(mut response: Response) -> Response {
     response
 }
 
-fn ip_of(request: &Request) -> Option<std::net::IpAddr> {
-    security::client_ip(request.headers(), security::peer(request))
+async fn security_settings(state: &AppState) -> Result<SecuritySettings, AppError> {
+    let mut conn = state.app.db.acquire().await?;
+    state.app.settings.get(&mut conn, &state.app.keys).await
 }
 
 async fn authorization_server(State(state): State<AppState>) -> Json<Value> {
+    let registration = security_settings(&state).await.map(|s| s.allow_client_registration).unwrap_or(true);
     let base = base(&state);
-    Json(json!({
+    let mut metadata = json!({
         "issuer": base,
         "authorization_endpoint": format!("{base}/oauth/authorize"),
         "token_endpoint": format!("{base}/oauth/token"),
-        "registration_endpoint": format!("{base}/oauth/register"),
         "revocation_endpoint": format!("{base}/oauth/revoke"),
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
@@ -59,7 +61,11 @@ async fn authorization_server(State(state): State<AppState>) -> Json<Value> {
         "token_endpoint_auth_methods_supported": ["none"],
         "revocation_endpoint_auth_methods_supported": ["none"],
         "scopes_supported": [SCOPE],
-    }))
+    });
+    if registration {
+        metadata["registration_endpoint"] = json!(format!("{base}/oauth/register"));
+    }
+    Json(metadata)
 }
 
 async fn protected_resource(State(state): State<AppState>) -> Json<Value> {
@@ -83,8 +89,14 @@ fn oauth_failure(e: AppError) -> Response {
 }
 
 async fn register(State(state): State<AppState>, request: Request) -> Response {
-    if !state.limiter.allow(security::AUTH, ip_of(&request)) {
+    let peer = security::peer(&request);
+    if !state.limiter.allow(REGISTER, security::client_ip(&state, request.headers(), peer).await) {
         return security::too_many();
+    }
+    match security_settings(&state).await {
+        Ok(security) if security.allow_client_registration => {}
+        Ok(_) => return oauth_failure(oauth::oauth_error("access_denied", "This server does not take new client registrations")),
+        Err(e) => return oauth_failure(e),
     }
     let Ok(body) = to_bytes(request.into_body(), 64 * 1024).await else {
         return oauth_failure(oauth::oauth_error("invalid_client_metadata", "Too large"));
@@ -129,7 +141,8 @@ async fn authorize(State(state): State<AppState>, RawQuery(query): RawQuery) -> 
 }
 
 async fn token(State(state): State<AppState>, request: Request) -> Response {
-    if !state.limiter.allow(TOKEN, ip_of(&request)) {
+    let peer = security::peer(&request);
+    if !state.limiter.allow(TOKEN, security::client_ip(&state, request.headers(), peer).await) {
         return security::too_many();
     }
     let Ok(body) = to_bytes(request.into_body(), 16 * 1024).await else {
@@ -165,7 +178,8 @@ async fn token(State(state): State<AppState>, request: Request) -> Response {
 }
 
 async fn revoke(State(state): State<AppState>, request: Request) -> Response {
-    if !state.limiter.allow(TOKEN, ip_of(&request)) {
+    let peer = security::peer(&request);
+    if !state.limiter.allow(TOKEN, security::client_ip(&state, request.headers(), peer).await) {
         return security::too_many();
     }
     let Ok(body) = to_bytes(request.into_body(), 16 * 1024).await else { return StatusCode::BAD_REQUEST.into_response() };
@@ -199,7 +213,7 @@ async fn mcp_context(state: &AppState, request: &Parts) -> Result<Ctx, Box<Respo
     };
     let token = token.trim().to_string();
     let mut ctx = Ctx::new(state.app.clone(), Surface::Mcp);
-    ctx.ip = security::client_ip(&request.headers, peer).map(|i| i.to_string());
+    ctx.ip = security::client_ip(state, &request.headers, peer).await.map(|i| i.to_string());
     ctx.user_agent = request.headers.get(header::USER_AGENT).and_then(|v| v.to_str().ok()).map(|s| s.chars().take(300).collect());
     ctx.request_id = Some(request_id);
     let actor = async {
@@ -320,7 +334,8 @@ async fn mcp(State(state): State<AppState>, request: Request) -> Response {
     {
         return json_error(StatusCode::FORBIDDEN, "forbidden", "Cross-origin request refused");
     }
-    if !state.limiter.allow(security::GENERAL, ip_of(&request)) {
+    let peer = security::peer(&request);
+    if !state.limiter.allow(security::GENERAL, security::client_ip(&state, request.headers(), peer).await) {
         return security::too_many();
     }
     let (parts, body) = request.into_parts();

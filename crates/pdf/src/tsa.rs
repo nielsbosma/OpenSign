@@ -3,7 +3,7 @@ use cms::content_info::ContentInfo;
 use cms::signed_data::SignedData;
 use const_oid::ObjectIdentifier;
 use const_oid::db::rfc5911::ID_SIGNED_DATA;
-use const_oid::db::rfc5912::ID_SHA_256;
+use const_oid::db::rfc5912::{ID_KP_TIME_STAMPING, ID_SHA_256};
 use der::asn1::{Any, GeneralizedTime, Int, OctetString};
 use der::{Decode, Encode, Sequence, Tag, Tagged};
 use sha2::{Digest, Sha256};
@@ -96,6 +96,7 @@ pub fn parse_response(response: &[u8], digest: &[u8; 32], nonce: &[u8; 16]) -> R
     if echoed.as_ref() != Some(&expected) {
         return Err(invalid(&"the token does not echo our nonce"));
     }
+    check_authority(&token_der).map_err(TimestampError::Invalid)?;
     Ok(token_der)
 }
 
@@ -132,6 +133,48 @@ pub(crate) fn digest_time(token_der: &[u8], digest: &[u8]) -> Result<DateTime<Ut
     let time = fields.get(4).ok_or_else(|| TimestampError::Invalid("TSTInfo has no time".into()))?;
     let time: GeneralizedTime = time.decode_as().map_err(|e| TimestampError::Invalid(e.to_string()))?;
     Ok(DateTime::<Utc>::from(time.to_system_time()))
+}
+
+/// What can be checked about a token's authority without a trust list: its signature verifies, its
+/// certificate is for time stamping, and that certificate was valid at the time it vouches for.
+pub(crate) fn check_authority(token_der: &[u8]) -> Result<(), String> {
+    if !token_signature_valid(token_der)? {
+        return Err("the time stamp authority's signature does not verify".into());
+    }
+    let info = ContentInfo::from_der(token_der).map_err(|e| e.to_string())?;
+    let signed: SignedData = info.content.decode_as().map_err(|e| e.to_string())?;
+    let [signer] = signed.signer_infos.0.as_slice() else { return Err("the time stamp has more than one signer".into()) };
+    let certs = crate::verify::certificates(&signed);
+    let cert = crate::verify::signer_certificate(&certs, &signer.sid).ok_or("the time stamp does not include its certificate")?;
+    if !crate::x509::has_extended_key_usage(cert, ID_KP_TIME_STAMPING) {
+        return Err("the time stamp authority's certificate is not for time stamping".into());
+    }
+    let content = signed.encap_content_info.econtent.as_ref().ok_or("the time stamp has no content")?;
+    let tst = OctetString::from_der(&content.to_der().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    let fields: Vec<Any> = Vec::from_der(tst.as_bytes()).map_err(|e| e.to_string())?;
+    let time: GeneralizedTime = fields.get(4).ok_or("the time stamp has no time")?.decode_as().map_err(|e| e.to_string())?;
+    let (time, validity) = (time.to_system_time(), &cert.tbs_certificate.validity);
+    if time < validity.not_before.to_system_time() || time > validity.not_after.to_system_time() {
+        return Err("the time stamp authority's certificate was not valid at that time".into());
+    }
+    Ok(())
+}
+
+/// A stored token's time, if it covers `data` and its authority passes `check_authority`.
+pub fn verify_timestamp_token(token_der: &[u8], data: &[u8]) -> Result<DateTime<Utc>, String> {
+    let time = token_time(token_der, data).map_err(|e| e.to_string())?;
+    check_authority(token_der)?;
+    Ok(time)
+}
+
+/// SHA-256 of the certificate named by a token's only signer.
+pub(crate) fn authority_fingerprint(token_der: &[u8]) -> Option<String> {
+    let info = ContentInfo::from_der(token_der).ok()?;
+    let signed: SignedData = info.content.decode_as().ok()?;
+    let [signer] = signed.signer_infos.0.as_slice() else { return None };
+    let certs = crate::verify::certificates(&signed);
+    let cert = crate::verify::signer_certificate(&certs, &signer.sid)?;
+    Some(hex::encode(Sha256::digest(cert.to_der().ok()?)))
 }
 
 /// Checks the TSA's signature on a token: the signed attributes carry the digest of the TSTInfo

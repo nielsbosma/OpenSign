@@ -87,7 +87,7 @@ The redirect must be on a listed site, or the call is refused. The returned link
 - **SMS codes** work as usual.
 - **BankID** shows its QR code in the frame. **Open BankID on This Device** starts the app from the frame.
 - **Freja eID** shows its QR code in the frame.
-- **e-ID through a broker** and **BankID through TIC Identity** open in a new window, because identity providers refuse to run in frames. The frame waits and continues when the person finishes; they can close the window. If the browser blocks the window, the frame shows a button to open it.
+- **e-ID through a broker** and **BankID through TIC Identity** open in a new window, because identity providers refuse to run in frames. The window first says what the identification is for. When the person finishes, it shows a six-digit code to enter in the frame, so a forwarded window link cannot identify someone on behalf of whoever holds the frame. If the browser blocks the window, the frame shows a button to open it.
 
 ## What stays the same
 

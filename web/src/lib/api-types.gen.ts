@@ -131,6 +131,35 @@ export type AccountSignatureInput = Record<string, unknown>;
 
 export type AccountSignatureOutput = SavedSignature;
 
+export type SignInInput = {
+  authenticatorData: string;
+  clientDataJson: string;
+  /** The credential's rawId, base64url. */
+  credentialId: string;
+  signature: string;
+  state: string;
+  userHandle?: string | null;
+};
+
+export type AccountStepUpInput = {
+  /** Your password. Leave out when you confirm with a passkey. */
+  currentPassword?: string | null;
+  /** The browser's passkey response. Leave out when you confirm with your password. */
+  passkey?: SignInInput | null;
+};
+
+export type AccountStepUpOutput = Ok_;
+
+export type AccountStepUpBeginInput = Record<string, unknown>;
+
+export type AccountStepUpBeginOutput = StepUpOptions;
+
+export type StepUpOptions = {
+  hasPassword: boolean;
+  /** Present when the account has a passkey. */
+  passkey?: Ceremony | null;
+};
+
 export type AccountTwoFactorBeginInput = Record<string, unknown>;
 
 export type AccountTwoFactorBeginOutput = TwoFactorSetup;
@@ -168,10 +197,26 @@ export type Action = {
   tool: string;
 };
 
+/** Something the assistant wants done. Nothing has happened: confirming it calls the service as the signed-in user. The summary and details are built from the input by the server, not by the model. */
+export type Proposal = {
+  destructive: boolean;
+  details: Array<ProposalDetail>;
+  input: unknown;
+  summary: string;
+  /** The service to call, by its dotted name. */
+  tool: string;
+};
+
+export type ProposalDetail = {
+  label: string;
+  value: string;
+};
+
 export type AiChatOutput = ChatOutput;
 
 export type ChatOutput = {
   actions: Array<Action>;
+  proposals: Array<Proposal>;
   reply: string;
 };
 
@@ -299,16 +344,28 @@ export type AuditListOutput = Array<AuditView>;
 
 export type AuditVerifyInput = Record<string, unknown>;
 
+/** What the copy of the latest anchor kept in the bucket says about the chain in the database. */
+export type WitnessStatus = "not_checked" | "none" | "ok" | "behind" | "missing" | "unreadable" | "mismatch";
+
 export type AuditVerifyOutput = ChainReport;
 
 export type ChainReport = {
+  /** A time stamp authority is set, yet entries older than a few hours have no anchor. A warning: an authority that is down causes this too. */
+  anchor_stale: boolean;
   /** Hourly time-stamped heads that no longer match the entry they were taken from. */
   broken_anchors: Array<number>;
   /** The first entry whose stored hash does not match its contents or its predecessor. */
   broken_at?: number | null;
   entries: number;
   head?: string | null;
+  /** Anchors whose time stamp token has a bad signature, covers something else or names another time. */
+  invalid_anchors: Array<number>;
+  last_anchor_at?: string | null;
+  /** Anchors with no time stamp token. OpenSign never writes these. */
+  unsigned_anchors: Array<number>;
+  /** False when an entry, an anchor or the bucket copy shows the trail was changed. */
   valid: boolean;
+  witness: WitnessStatus;
 };
 
 export type AuthConfirmEmailChangeInput = {
@@ -333,6 +390,9 @@ export type AuthLoginOutput = {
 } | {
   challenge: string;
   status: "two_factor_required";
+} | {
+  ceremony: Ceremony;
+  status: "passkey_required";
 };
 
 export type AuthLogoutInput = Record<string, unknown>;
@@ -360,6 +420,9 @@ export type AuthPasskeySignInOutput = {
 } | {
   challenge: string;
   status: "two_factor_required";
+} | {
+  ceremony: Ceremony;
+  status: "passkey_required";
 };
 
 export type AuthRequestPasswordResetInput = {
@@ -388,6 +451,9 @@ export type AuthVerifyTwoFactorOutput = {
 } | {
   challenge: string;
   status: "two_factor_required";
+} | {
+  ceremony: Ceremony;
+  status: "passkey_required";
 };
 
 export type AutomationsAppsInput = {
@@ -749,7 +815,7 @@ export type BulkListOutput = Array<BulkSend>;
 
 export type BulkPreviewInput = {
   contentBase64: string;
-  /** A .csv, .xlsx, .xls or .ods file whose first row names the columns. Up to 1000 rows. */
+  /** A .csv or .xlsx file whose first row names the columns. Up to 1000 rows. */
   fileName: string;
   templateId: string;
   /** Ask the AI provider to match columns the built-in rules could not. Sends the column names, and a few sample rows only if an Admin allows document text to leave the server. */
@@ -791,7 +857,7 @@ export type PreviewOutput = {
 
 export type BulkStartInput = {
   contentBase64: string;
-  /** A .csv, .xlsx, .xls or .ods file whose first row names the columns. Up to 1000 rows. */
+  /** A .csv or .xlsx file whose first row names the columns. Up to 1000 rows. */
   fileName: string;
   mapping: Array<ColumnMapping>;
   templateId: string;
@@ -1324,6 +1390,18 @@ export type MoveOutput = {
   moved: number;
 };
 
+export type DocumentsPartyIdentityInput = {
+  documentId: string;
+  partyId: string;
+};
+
+export type DocumentsPartyIdentityOutput = PartyIdentityOutput;
+
+export type PartyIdentityOutput = {
+  /** How the party identified, with the personal number or phone number in full. Null when they have not signed. */
+  identity?: string | null;
+};
+
 export type DocumentsRemindInput = {
   id: string;
 };
@@ -1793,6 +1871,8 @@ export type OauthDescribeOutput = ConsentView;
 export type ConsentView = {
   clientName: string;
   clientUri?: string | null;
+  /** The part of that host someone had to register, such as `example.co.uk`. Whoever holds it receives the access; the labels in front of it can say anything. */
+  redirectDomain: string;
   /** Where the browser goes after approval. Show it, so a look-alike client name cannot hide it. */
   redirectHost: string;
 };
@@ -2003,15 +2083,39 @@ export type SigningDeclineInput = {
 export type SigningDeclineOutput = Ok_;
 
 export type SigningEidCancelInput = {
+  /** The code the window showed, when the status asks for one with `needsCode`. */
+  code?: string | null;
   id: string;
   token: string;
 };
 
 export type SigningEidCancelOutput = Ok_;
 
+export type SigningEidContinueInput = {
+  /** The person pressed Continue. Without it, this only says what they are about to identify for. */
+  confirm?: boolean;
+  /** From the address of the page opened by a framed signing page. */
+  ticket: string;
+};
+
+export type SigningEidContinueOutput = ContinueOutput;
+
+export type ContinueOutput = {
+  /** See `Started::browser_binding`. */
+  browserBinding?: string | null;
+  language: string;
+  method: AuthMethod;
+  organisation: string;
+  /** Set once confirmed: where to send the browser. */
+  redirectUrl?: string | null;
+  title: string;
+};
+
 export type Purpose = "view" | "sign";
 
 export type SigningEidStartInput = {
+  /** The signing page runs in a frame on another site, where this browser's cookies for OpenSign do not stick. `redirectUrl` then leads to a page on OpenSign that takes over in its own window. */
+  framed?: boolean;
   purpose: Purpose;
   session?: string | null;
   token: string;
@@ -2022,6 +2126,8 @@ export type SigningEidStartOutput = Started2;
 export type Started2 = {
   /** Opens the BankID app on this device: `bankid:///?autostarttoken=...&redirect=null`. */
   autoStartToken?: string | null;
+  /** Becomes a cookie in the RPC layer and is removed from the answer: the eID broker's answer counts only in the browser that holds it. */
+  browserBinding?: string | null;
   expiresAt: string;
   id: string;
   method: AuthMethod;
@@ -2032,6 +2138,8 @@ export type Started2 = {
 };
 
 export type SigningEidStatusInput = {
+  /** The code the window showed, when the status asks for one with `needsCode`. */
+  code?: string | null;
   id: string;
   token: string;
 };
@@ -2042,6 +2150,8 @@ export type EidStatus = {
   expiresAt?: string | null;
   /** What to tell the person. */
   message?: string | null;
+  /** The person finished in another window, and the session comes only with the code shown there. */
+  needsCode?: boolean;
   /** The QR code to show now, while pending. */
   qr?: string | null;
   /** Set once, when complete: pass it as `session` with the next calls. */
@@ -2522,6 +2632,8 @@ export interface Services {
   "account.set_language": { kind: "mutation"; input: AccountSetLanguageInput; output: AccountSetLanguageOutput };
   "account.set_signature": { kind: "mutation"; input: AccountSetSignatureInput; output: AccountSetSignatureOutput };
   "account.signature": { kind: "query"; input: AccountSignatureInput; output: AccountSignatureOutput };
+  "account.step_up": { kind: "mutation"; input: AccountStepUpInput; output: AccountStepUpOutput };
+  "account.step_up_begin": { kind: "mutation"; input: AccountStepUpBeginInput; output: AccountStepUpBeginOutput };
   "account.two_factor_begin": { kind: "mutation"; input: AccountTwoFactorBeginInput; output: AccountTwoFactorBeginOutput };
   "account.two_factor_confirm": { kind: "mutation"; input: AccountTwoFactorConfirmInput; output: AccountTwoFactorConfirmOutput };
   "ai.chat": { kind: "mutation"; input: AiChatInput; output: AiChatOutput };
@@ -2585,6 +2697,7 @@ export interface Services {
   "documents.legal_hold": { kind: "mutation"; input: DocumentsLegalHoldInput; output: DocumentsLegalHoldOutput };
   "documents.list": { kind: "query"; input: DocumentsListInput; output: DocumentsListOutput };
   "documents.move": { kind: "mutation"; input: DocumentsMoveInput; output: DocumentsMoveOutput };
+  "documents.party_identity": { kind: "mutation"; input: DocumentsPartyIdentityInput; output: DocumentsPartyIdentityOutput };
   "documents.remind": { kind: "mutation"; input: DocumentsRemindInput; output: DocumentsRemindOutput };
   "documents.remove_file": { kind: "mutation"; input: DocumentsRemoveFileInput; output: DocumentsRemoveFileOutput };
   "documents.replace_file": { kind: "mutation"; input: DocumentsReplaceFileInput; output: DocumentsReplaceFileOutput };
@@ -2628,6 +2741,7 @@ export interface Services {
   "signing.create_review_link": { kind: "mutation"; input: SigningCreateReviewLinkInput; output: SigningCreateReviewLinkOutput };
   "signing.decline": { kind: "mutation"; input: SigningDeclineInput; output: SigningDeclineOutput };
   "signing.eid_cancel": { kind: "mutation"; input: SigningEidCancelInput; output: SigningEidCancelOutput };
+  "signing.eid_continue": { kind: "mutation"; input: SigningEidContinueInput; output: SigningEidContinueOutput };
   "signing.eid_start": { kind: "mutation"; input: SigningEidStartInput; output: SigningEidStartOutput };
   "signing.eid_status": { kind: "query"; input: SigningEidStatusInput; output: SigningEidStatusOutput };
   "signing.open": { kind: "mutation"; input: SigningOpenInput; output: SigningOpenOutput };

@@ -21,9 +21,14 @@ fn id(job: &Job, key: &str) -> Result<Uuid> {
 }
 
 async fn run(ctx: &Ctx, job: &Job) -> Result<()> {
+    // Sending can take as long as the mail or SMS provider likes: no row stays locked meanwhile,
+    // or the party could not sign until it answers.
+    if job.kind == "notify_party" {
+        let mut conn = ctx.db().acquire().await?;
+        return notify::notify_party(ctx, &mut conn, id(job, "party")?, job.payload["reminder"].as_bool().unwrap_or(false)).await;
+    }
     let mut tx = ctx.db().begin().await?;
     match job.kind.as_str() {
-        "notify_party" => notify::notify_party(ctx, &mut tx, id(job, "party")?, job.payload["reminder"].as_bool().unwrap_or(false)).await?,
         "seal_document" => seal::seal_document(ctx, &mut tx, id(job, "document")?, job.attempts).await?,
         "notify_completed" => {
             let to = job.payload["to"].as_str().and_then(notify::Recipient::parse);
@@ -107,6 +112,20 @@ async fn sweep(ctx: &Ctx, conn: &mut sqlx::PgConnection) -> Result<()> {
     sqlx::query("delete from idempotency_keys where created_at < $1 - interval '1 day'").bind(ctx.now).execute(&mut *conn).await?;
     sqlx::query("delete from webhook_deliveries where created_at < $1 - interval '30 days'").bind(ctx.now).execute(&mut *conn).await?;
     sqlx::query("delete from used_tokens where expires_at < $1").bind(ctx.now).execute(&mut *conn).await?;
+    sqlx::query("delete from login_failures where last_failed_at < $1 - interval '2 days' and (locked_until is null or locked_until < $1)")
+        .bind(ctx.now)
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query(
+        "delete from oauth_clients c where c.created_at < $1 - interval '7 days'
+           and not exists (select 1 from oauth_grants g where g.client_id = c.client_id)
+           and not exists (select 1 from oauth_codes o where o.client_id = c.client_id)",
+    )
+    .bind(ctx.now)
+    .execute(&mut *conn)
+    .await?;
+    crate::sms::prune(conn, ctx.now).await?;
+    crate::services::signing::sweep_retired_files(conn).await?;
     enqueue(conn, "retention", json!({}), None, Some("retention")).await?;
     enqueue(conn, "anchor_audit", json!({}), None, Some("anchor_audit")).await
 }
@@ -128,13 +147,18 @@ async fn anchor_audit(ctx: &Ctx, conn: &mut sqlx::PgConnection) -> Result<()> {
         return Ok(());
     }
     let token = seal::timestamp(ctx, url, &<sha2::Sha256 as sha2::Digest>::digest(&hash).into()).await?;
-    sqlx::query("insert into audit_anchors (audit_id, head_hash, tsa_token, tsa_url) values ($1, $2, $3, $4)")
-        .bind(head_id)
-        .bind(&hash)
-        .bind(token)
-        .bind(url)
-        .execute(&mut *conn)
-        .await?;
+    let anchor_id: i64 =
+        sqlx::query_scalar("insert into audit_anchors (audit_id, head_hash, tsa_token, tsa_url) values ($1, $2, $3, $4) returning id")
+            .bind(head_id)
+            .bind(&hash)
+            .bind(&token)
+            .bind(url)
+            .fetch_one(&mut *conn)
+            .await?;
+    // The anchor stands without its copy, and `audit.verify` reports the gap until the next one.
+    if let Err(e) = crate::audit::write_witness(&ctx.app.storage, ctx.keys(), anchor_id, head_id, &hash, &token).await {
+        tracing::warn!(error = %e, "could not copy the audit anchor to the bucket");
+    }
     Ok(())
 }
 

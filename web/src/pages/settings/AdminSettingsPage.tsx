@@ -131,6 +131,21 @@ const GROUPS: Record<Group, { title: string; description: string; help?: string;
         hint: msg('One per line, with https and without a path. Only links you hand over yourself can be signed in a frame.'),
         when: 'embedSigning',
       },
+      {
+        key: 'trustedProxies',
+        label: msg('Trusted Proxies'),
+        type: 'text',
+        placeholder: 'private',
+        hint: msg(
+          "Who may state a visitor's address: private for any proxy on a private network, none when OpenSign faces the internet directly, or the addresses and ranges of your own proxies.",
+        ),
+      },
+      {
+        key: 'allowClientRegistration',
+        label: msg('Allow New MCP Clients to Register'),
+        type: 'bool',
+        hint: msg('Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.'),
+      },
     ],
   },
   automations: {
@@ -208,6 +223,13 @@ const GROUPS: Record<Group, { title: string; description: string; help?: string;
       { key: 'sealName', label: msg('Seal Name'), hint: msg('Shown as the signer of the seal. Empty: the organisation name.') },
       { key: 'reason', label: msg('Signature Reason') },
       { key: 'tsaUrl', label: msg('Timestamp Authority (RFC 3161)'), placeholder: 'http://timestamp.digicert.com' },
+      {
+        key: 'trustedTimestampAuthorities',
+        label: msg('Trusted Timestamp Authorities'),
+        hint: msg(
+          'SHA-256 fingerprints of the certificates to trust, separated by commas. Verify then says which time stamps come from them.',
+        ),
+      },
     ],
   },
   ai: {
@@ -254,6 +276,21 @@ const GROUPS: Record<Group, { title: string; description: string; help?: string;
       { key: 'username', label: msg('Username or Account SID'), when: 'provider' },
       { key: 'password', label: msg('Password or Auth Token'), type: 'secret', when: 'provider' },
       { key: 'sender', label: msg('Sender'), hint: msg('A name of up to 11 letters, or a number you own.'), when: 'provider' },
+      {
+        key: 'allowedCountries',
+        label: msg('Allowed Countries'),
+        hint: msg('Country calling codes that may get SMS, such as 46, 47. Empty allows every country.'),
+        when: 'provider',
+      },
+      { key: 'hourlyLimit', label: msg('Messages per Hour'), type: 'number', hint: msg('0 means no limit.'), when: 'provider' },
+      { key: 'dailyLimit', label: msg('Messages per Day'), type: 'number', hint: msg('0 means no limit.'), when: 'provider' },
+      {
+        key: 'shareLinkHourlyLimit',
+        label: msg('Messages per Hour for a Share Link'),
+        type: 'number',
+        hint: msg('0 means no limit.'),
+        when: 'provider',
+      },
     ],
   },
   eid: {

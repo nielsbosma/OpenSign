@@ -1,12 +1,14 @@
 use lopdf::{Dictionary, Document, Object, ObjectId, Stream, dictionary};
+use serde::{Deserialize, Serialize};
 
 use crate::geometry::page_box;
+use crate::load::load;
 use crate::{PdfError, Result};
 
 pub const FONT: &[u8] = b"OSHelv";
 pub const FONT_BOLD: &[u8] = b"OSHelvB";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StampContent {
     Text(String),
     Check(bool),
@@ -22,7 +24,7 @@ pub enum StampContent {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Stamp {
     /// Zero-based page index.
     pub page: usize,
@@ -227,7 +229,7 @@ pub fn text_op(font: &[u8], size: f64, x: f64, y: f64, text: &str) -> Vec<u8> {
 /// Draws field values and signatures onto the pages. Fields are given as fractions of the
 /// displayed page with the origin top-left, the way the web editor places them.
 pub fn stamp(pdf: &[u8], stamps: &[Stamp]) -> Result<Vec<u8>> {
-    let mut doc = Document::load_mem(pdf)?;
+    let mut doc = load(pdf)?;
     let pages: Vec<ObjectId> = doc.get_pages().into_values().collect();
     let mut by_page: std::collections::BTreeMap<usize, Vec<&Stamp>> = Default::default();
     for s in stamps {

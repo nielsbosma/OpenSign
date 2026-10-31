@@ -361,6 +361,7 @@ impl Service for Restore {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: VersionInput) -> Result<DocumentView> {
         let t = template(ctx, conn, input.template_id, Need::Edit).await?;
+        super::documents::lock_draft(conn, t.id).await?;
         let target = version(ctx, conn, t.id, input.number).await?;
         let (_, current) = current_version(ctx, conn, t.id).await?;
         if current == target {

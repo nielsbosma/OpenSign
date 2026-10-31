@@ -278,13 +278,32 @@ pub fn seal_identity(keys: &Keys, party_id: Uuid, identity: &str) -> String {
     keys.encrypt_str(KeyPurpose::Settings, &identity_context(party_id), identity)
 }
 
+pub fn open_sealed_identity(keys: &Keys, party_id: Uuid, sealed: &str) -> Option<String> {
+    keys.decrypt_str(KeyPurpose::Settings, &identity_context(party_id), sealed).ok().map(|s| s.to_string())
+}
+
+fn mask_tail(value: &str, keep: usize) -> String {
+    let length = value.chars().count();
+    value.chars().enumerate().map(|(i, c)| if i + keep < length && c.is_ascii_alphanumeric() { 'x' } else { c }).collect()
+}
+
+/// An identification as every party may read it in the sealed document: personal numbers and
+/// phone numbers cut to their last digits.
+pub fn mask_identity(identity: &str) -> String {
+    const NUMBER: &str = "personal number ";
+    if let Some(phone) = identity.strip_prefix("SMS code to ") {
+        return format!("SMS code to {}", mask_tail(phone, 3));
+    }
+    let Some(at) = identity.rfind(NUMBER) else { return identity.to_string() };
+    let start = at + NUMBER.len();
+    let rest = &identity[start..];
+    let end = rest.find([',', ' ']).unwrap_or(rest.len());
+    format!("{}{}{}", &identity[..start], mask_tail(&rest[..end], 4), &rest[end..])
+}
+
 pub fn open_identity(keys: &Keys, party: &PartyRow) -> Option<String> {
     let stored = party.evidence.as_ref()?["identity"].as_str()?;
-    match keys.decrypt_str(KeyPurpose::Settings, &identity_context(party.id), stored) {
-        Ok(plain) => Some(plain.to_string()),
-        Err(_) if !stored.starts_with("v1.") => Some(stored.to_string()),
-        Err(_) => None,
-    }
+    keys.decrypt_str(KeyPurpose::Settings, &identity_context(party.id), stored).ok().map(|plain| plain.to_string())
 }
 
 /// For identity checks: a personal number that is set but does not decrypt is an error, never
@@ -542,6 +561,29 @@ pub async fn view(ctx: &Ctx, conn: &mut PgConnection, document: DocumentRow) -> 
     })
 }
 
+/// Deletes those of the files that nothing refers to any more. The row holds the wrapped key, so the
+/// body is unreadable from here on; a job then removes the object from the bucket.
+pub async fn delete_unused_files(conn: &mut PgConnection, file_ids: &[Uuid]) -> Result<usize> {
+    let keys: Vec<String> = sqlx::query_scalar(
+        "delete from files f where f.id = any($1)
+           and not exists (select 1 from documents d where d.source_file_id = f.id or d.sealed_file_id = f.id)
+           and not exists (select 1 from document_files x where x.file_id = f.id)
+           and not exists (select 1 from attachment_requests a where a.file_id = f.id)
+           and not exists (select 1 from fields x where x.file_id = f.id)
+           and not exists (select 1 from template_version_files x where x.file_id = f.id)
+           and not exists (select 1 from users u where u.signature_file_id = f.id)
+           and not exists (select 1 from parties p where p.signature->>'imageFileId' = f.id::text)
+         returning storage_key",
+    )
+    .bind(file_ids)
+    .fetch_all(&mut *conn)
+    .await?;
+    if !keys.is_empty() {
+        crate::jobs::enqueue(conn, "delete_objects", serde_json::json!({ "keys": keys }), None, None).await?;
+    }
+    Ok(keys.len())
+}
+
 /// Deletes a document with everything that belongs to it. File rows go in the same transaction,
 /// which destroys their wrapped keys, so the encrypted bodies are unreadable at once; the bucket
 /// objects are removed by a job after commit. Files another document still uses are kept.
@@ -565,28 +607,13 @@ pub async fn purge(ctx: &Ctx, conn: &mut PgConnection, document: &DocumentRow, r
     .fetch_all(&mut *conn)
     .await?;
     sqlx::query("delete from documents where id = $1").bind(document.id).execute(&mut *conn).await?;
-    let keys: Vec<String> = sqlx::query_scalar(
-        "delete from files f where f.id = any($1)
-           and not exists (select 1 from documents d where d.source_file_id = f.id or d.sealed_file_id = f.id)
-           and not exists (select 1 from document_files x where x.file_id = f.id)
-           and not exists (select 1 from attachment_requests a where a.file_id = f.id)
-           and not exists (select 1 from fields x where x.file_id = f.id)
-           and not exists (select 1 from template_version_files x where x.file_id = f.id)
-           and not exists (select 1 from parties p where p.signature->>'imageFileId' = f.id::text)
-         returning storage_key",
-    )
-    .bind(&file_ids)
-    .fetch_all(&mut *conn)
-    .await?;
-    if !keys.is_empty() {
-        crate::jobs::enqueue(conn, "delete_objects", serde_json::json!({ "keys": keys }), None, None).await?;
-    }
+    let deleted = delete_unused_files(conn, &file_ids).await?;
     crate::audit::audit(
         ctx,
         conn,
         crate::audit::Entry::new("document.deleted", "document", document.id)
             .before(serde_json::json!({ "title": document.title, "status": document.status, "sealedSha256": document.sealed_sha256 }))
-            .metadata(serde_json::json!({ "reason": reason, "filesDeleted": keys.len() })),
+            .metadata(serde_json::json!({ "reason": reason, "filesDeleted": deleted })),
     )
     .await?;
     Ok(())

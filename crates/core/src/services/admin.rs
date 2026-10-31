@@ -9,7 +9,7 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use super::{Empty, Ok_, settings};
-use crate::audit::{ChainReport, Entry, audit, verify_chain};
+use crate::audit::{ChainReport, Entry, audit, verify_trail};
 use crate::context::Ctx;
 use crate::email::{self, Message};
 use crate::error::{AppError, Result, bad_request};
@@ -222,6 +222,12 @@ async fn update<G: SettingsGroup>(ctx: &Ctx, conn: &mut PgConnection, patch: &Va
 
 pub(crate) fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
     let value = serde_json::to_value(group).map_err(AppError::internal)?;
+    if let Ok(signing) = serde_json::from_value::<SigningSettings>(value.clone())
+        && G::NAME == "signing"
+        && signing.trusted_authorities().iter().any(|sha| sha.len() != 64 || !sha.bytes().all(|b| b.is_ascii_hexdigit()))
+    {
+        return Err(bad_request("Each trusted time stamp authority is a SHA-256 fingerprint of 64 hex characters"));
+    }
     let url = |field: &str| -> Result<()> {
         if let Some(u) = value.get(field).and_then(Value::as_str).filter(|u| !u.is_empty()) {
             crate::net::check_outbound_url(u, G::NAME == "signing").map_err(bad_request)?;
@@ -233,14 +239,18 @@ pub(crate) fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
         // A LiteLLM or other self-hosted proxy usually runs next to OpenSign on the private network.
         "ai" if matches!(value["provider"].as_str(), Some("litellm" | "openai-compatible")) => {
             match value["baseUrl"].as_str().filter(|u| !u.is_empty()) {
-                Some(u) => match reqwest::Url::parse(u) {
-                    Ok(parsed) if matches!(parsed.scheme(), "http" | "https") && parsed.username().is_empty() => Ok(()),
-                    _ => Err(bad_request("Enter the proxy's http or https address")),
-                },
+                Some(u) => crate::net::check_ai_proxy_url(u).map(|_| ()).map_err(bad_request),
                 None => Err(bad_request("Enter the address of the OpenAI-compatible endpoint")),
             }
         }
         "ai" => url("baseUrl"),
+        "sms" => {
+            let allowed = value["allowedCountries"].as_str().unwrap_or_default();
+            if allowed.split([',', ';', ' ']).map(|c| c.trim().trim_start_matches('+')).any(|c| !c.chars().all(|d| d.is_ascii_digit())) {
+                return Err(bad_request("Enter country calling codes as digits, such as 46, 47"));
+            }
+            Ok(())
+        }
         "eid" => {
             url("brokerIssuer")?;
             let eid: EidSettings = serde_json::from_value(value.clone()).map_err(AppError::internal)?;
@@ -274,6 +284,7 @@ pub(crate) fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
         }
         "security" => {
             let security: SecuritySettings = serde_json::from_value(value.clone()).map_err(AppError::internal)?;
+            crate::settings::TrustedProxies::parse(&security.trusted_proxies)?;
             if security.embed_origins.len() > 20 {
                 return Err(bad_request("List at most 20 sites allowed to embed"));
             }
@@ -493,12 +504,12 @@ impl Service for VerifyAudit {
     type Output = ChainReport;
     const META: Meta = Meta::query(
         "audit.verify",
-        "Recompute the audit log's hash chain and report the first entry that was changed or removed, if any.",
+        "Recompute the audit log's hash chain, check its time stamps and the copy of the latest one kept in the bucket, and report anything that was changed or removed.",
         Access::Permission(Permission::AuditRead),
     )
     .tool();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<ChainReport> {
-        verify_chain(conn, ctx.keys()).await
+        verify_trail(ctx, conn).await
     }
 }

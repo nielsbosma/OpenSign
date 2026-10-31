@@ -5,8 +5,11 @@
 use async_trait::async_trait;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64;
+use std::sync::LazyLock;
+
 use chrono::{DateTime, Duration, Utc};
 use opensign_crypto::{KeyPurpose, constant_time_eq, random_bytes};
+use regex::Regex;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -27,11 +30,12 @@ use crate::error::{AppError, ErrorKind, Result, bad_request, conflict, not_found
 use crate::i18n::Lang;
 use crate::permissions::Permission;
 use crate::service::{Access, Meta, Service};
-use crate::settings::{EmailSettings, OrgSettings, SecuritySettings};
+use crate::settings::{EmailSettings, OrgSettings, SecuritySettings, SmsSettings};
 
 const CODE_MINUTES: i64 = 15;
 const CODE_ATTEMPTS: i32 = 5;
 const CODES_PER_EMAIL_HOUR: i64 = 3;
+const MAX_VISITOR_NAME: usize = 100;
 
 fn inactive() -> AppError {
     AppError::new(ErrorKind::NotFound, "This link is not active. Ask whoever shared it for a new one.")
@@ -315,6 +319,22 @@ async fn active(ctx: &Ctx, conn: &mut PgConnection, slug: &str, lock: bool) -> R
     Ok(Active { link, template, party })
 }
 
+/// The visitor's name lands in a document title and in email sent in the owner's name, so it has to
+/// look like a name and cannot carry an address.
+fn visitor_name(input: &str) -> Result<String> {
+    static NAME: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[\p{L}\p{M}][\p{L}\p{M} .,'\u{2019}-]*$").expect("a valid pattern"));
+    static ADDRESS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\.[\p{L}\p{M}]{2,}").expect("a valid pattern"));
+    let name = clean_value(input)?.replace('\n', " ");
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(bad_request("Enter your name"));
+    }
+    if name.chars().count() > MAX_VISITOR_NAME || !NAME.is_match(name) || ADDRESS.is_match(name) {
+        return Err(bad_request("Enter your name as it is written on your ID, with letters only."));
+    }
+    Ok(name.to_string())
+}
+
 fn needs_phone(party: &PartyRow) -> bool {
     party.delivery == Delivery::Sms.as_str() || party.auth_to_view() == AuthMethod::SmsPin || party.auth_to_sign() == AuthMethod::SmsPin
 }
@@ -413,22 +433,30 @@ impl Service for RequestCode {
         "share_links.request_code",
         "Email a one-time code to confirm the visitor's address before a document is made from a share link.",
         Access::Public,
-    );
+    )
+    .without_transaction();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: RequestCodeInput) -> Result<CodeRequested> {
-        let Active { link, template, party } = active(ctx, conn, &input.slug, true).await?;
-        let name = clean_value(&input.name)?.replace('\n', " ");
-        if name.is_empty() || name.chars().count() > 200 {
-            return Err(bad_request("Enter your name"));
-        }
+        let name = visitor_name(&input.name)?;
+        // Committed before the email goes out, so a slow mail server holds no lock on the link.
+        let mut tx = conn.begin().await?;
+        let conn_tx: &mut PgConnection = &mut tx;
+        let Active { link, template, party } = active(ctx, conn_tx, &input.slug, true).await?;
         let email = normalize_email(&input.email)?;
         let phone = match input.phone.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
             Some(p) => Some(crate::sms::normalize_phone(p)?),
             None if needs_phone(&party) => return Err(bad_request("Enter your phone number")),
             None => None,
         };
-        sqlx::query("delete from share_link_requests where created_at < $1").bind(ctx.now - Duration::days(1)).execute(&mut *conn).await?;
-        if created_last_hour(ctx, conn, link.id).await? >= link.per_hour as i64 {
+        if let Some(phone) = &phone {
+            let sms: SmsSettings = settings(ctx, conn_tx).await?;
+            crate::sms::check_country(&sms, phone)?;
+        }
+        sqlx::query("delete from share_link_requests where created_at < $1")
+            .bind(ctx.now - Duration::days(1))
+            .execute(&mut *conn_tx)
+            .await?;
+        if created_last_hour(ctx, conn_tx, link.id).await? >= link.per_hour as i64 {
             return Err(busy());
         }
         let (for_link, for_email): (i64, i64) = sqlx::query_as(
@@ -437,7 +465,7 @@ impl Service for RequestCode {
         .bind(link.id)
         .bind(&email)
         .bind(ctx.now - Duration::hours(1))
-        .fetch_one(&mut *conn)
+        .fetch_one(&mut *conn_tx)
         .await?;
         if for_link >= (link.per_hour as i64 * 3).max(20) {
             return Err(busy());
@@ -459,13 +487,14 @@ impl Service for RequestCode {
         .bind(code_hash(ctx, id, &code))
         .bind(&ctx.ip)
         .bind(expires_at)
-        .execute(&mut *conn)
+        .execute(&mut *conn_tx)
         .await?;
+        tx.commit().await?;
         let org: OrgSettings = settings(ctx, conn).await?;
         let org_name = if org.name.is_empty() { "OpenSign".to_string() } else { org.name.clone() };
         let lang = input.language.as_deref().and_then(Lang::parse).unwrap_or_else(|| party.lang(&template));
         let email_settings: EmailSettings = settings(ctx, conn).await?;
-        email::send(
+        let sent = email::send(
             &ctx.app,
             &email_settings,
             &org,
@@ -480,7 +509,11 @@ impl Service for RequestCode {
                 lang,
             },
         )
-        .await?;
+        .await;
+        if let Err(e) = sent {
+            sqlx::query("delete from share_link_requests where id = $1").bind(id).execute(&mut *conn).await?;
+            return Err(e);
+        }
         audit(ctx, conn, Entry::new("share_link.code_sent", "document", template.id).metadata(json!({ "email": email, "name": name })))
             .await?;
         Ok(CodeRequested { request_id: id, expires_at })
@@ -638,4 +671,22 @@ async fn start_document(ctx: &Ctx, conn: &mut PgConnection, slug: &str, request:
     let all = parties(conn, document_id).await?;
     let me = all.iter().find(|p| p.id == visitor).ok_or_else(inactive)?;
     Ok(Started { url: signer_url(ctx, ctx.keys(), me), your_turn: current_turn(&document, &all).contains(&me.id) })
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::visitor_name;
+
+    #[test]
+    fn a_visitor_name_looks_like_a_name() {
+        for fine in ["Anna Andersson", "José-María O'Neil", "J.R. Smith", "Björn Åkesson, Jr.", "स्वामी विवेकानन्द", "李明", "محمد علي"]
+        {
+            assert_eq!(visitor_name(fine).unwrap(), fine);
+        }
+        for bad in ["Open https://a.example", "a.example", "www.a.example now", "me@a.example", "Call 0701234567", "<b>Anna</b>", ""] {
+            assert!(visitor_name(bad).is_err(), "{bad}");
+        }
+        assert!(visitor_name(&"a".repeat(101)).is_err());
+    }
 }

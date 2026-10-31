@@ -22,10 +22,13 @@ Reading the audit trail needs the **audit.read** permission, which admins and au
 - **Append-only.** Database triggers refuse to update, delete or truncate audit entries, even for the database owner using OpenSign's tables normally.
 - **Hash-chained.** Each entry includes a keyed hash of the entry before it, made with a key derived from `APP_SECRET`. A changed, removed or reordered entry breaks the chain from that point on.
 - **Anchored in time.** Every hour, OpenSign has the head of the chain time-stamped by the time stamp authority. Someone who could rewrite the database and knew the key still could not rebuild the trail before the last anchor without the time stamps showing it.
+- **Copied outside the database.** Each anchor is also written to the bucket, with a keyed check value. Someone who holds only the database cannot remove the end of the trail, or the anchors, without it showing, as long as an anchor was made after those entries. Entries newer than the last anchor have only the chain to protect them.
 
 ## Verifying the chain
 
-Choose **Verify the Chain** on the Audit Trail page (or call `GET /api/v1/audit/verify`). OpenSign recomputes every hash and checks every anchor, and reports whether the chain is intact or the first entry that was changed or removed.
+Choose **Verify the Chain** on the Audit Trail page (or call `GET /api/v1/audit/verify`). OpenSign recomputes every hash, checks each anchor's time stamp (its signature, that it covers the anchored entry, and its time), compares the latest copy in the bucket, and reports whether the trail is intact or what was changed or removed.
+
+The check also warns about two things that do not by themselves mean the trail was changed: recent entries with no time stamp, usually because the time stamp authority is down or not set up, and a copy in the bucket that is missing or out of date, which is normal until the first anchor after upgrading. The time stamp authority's certificate is not checked against a trust list here.
 
 ## From the API
 

@@ -1,16 +1,17 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
-use opensign_crypto::{
-    KeyPurpose, Totp, burn_password_check, hash_password, password_needs_rehash, random_token, recovery_codes, sha256_hex, verify_password,
-};
+use opensign_crypto::{KeyPurpose, Totp, password_needs_rehash, random_token, recovery_codes, sha256_hex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use sqlx::PgConnection;
+use sqlx::{Connection, PgConnection};
 use uuid::Uuid;
 
 use super::{Empty, Ok_, settings};
 use crate::audit::{Entry, audit};
-use crate::auth::{UserRow, create_session, normalize_email, revoke_sessions, user_by_email, user_by_id};
+use crate::auth::{
+    UserRow, burn_password, check_password, create_session, expire_account_links, new_password_hash, normalize_email, revoke_api_keys,
+    revoke_sessions, user_by_email, user_by_id,
+};
 use crate::context::Ctx;
 use crate::email::{self, Message};
 use crate::error::{AppError, ErrorKind, Result, bad_request, unauthorized};
@@ -20,6 +21,14 @@ use crate::settings::{EmailSettings, OrgSettings, SecuritySettings};
 const MAX_FAILURES: i32 = 5;
 const CHALLENGE_MINUTES: i64 = 5;
 const RESET_MINUTES: i64 = 60;
+/// A quiet day forgets earlier failures. Waiting that long buys fewer guesses than the hourly
+/// guess the longest lock allows anyway.
+const FORGET_HOURS: i64 = 24;
+const ALL_ADDRESSES: &str = "*";
+/// Only this many failures from at least `ACCOUNT_LOCK_ADDRESSES` addresses lock everyone out, so
+/// one address cannot do it to the owner alone.
+const ACCOUNT_LOCK_FAILURES: i32 = 20;
+const ACCOUNT_LOCK_ADDRESSES: i64 = 3;
 
 fn invalid_login() -> AppError {
     AppError::new(ErrorKind::Unauthorized, "Wrong email or password")
@@ -51,38 +60,172 @@ pub enum LoginResult {
     TwoFactorRequired {
         challenge: String,
     },
+    /// The password was right; finish with the account's passkey through `auth.passkey_sign_in`.
+    PasskeyRequired {
+        ceremony: super::passkeys::Ceremony,
+    },
 }
 
 pub(crate) async fn start_session(ctx: &Ctx, conn: &mut PgConnection, user: &UserRow) -> Result<LoginResult> {
     let security: SecuritySettings = settings(ctx, conn).await?;
     let session = create_session(conn, user.id, &security, ctx.ip.as_deref(), ctx.user_agent.as_deref(), ctx.now).await?;
-    sqlx::query("update users set failed_login_count = 0, locked_until = null, last_login_at = $2 where id = $1")
-        .bind(user.id)
-        .bind(ctx.now)
-        .execute(&mut *conn)
-        .await?;
+    sqlx::query("update users set last_login_at = $2 where id = $1").bind(user.id).bind(ctx.now).execute(&mut *conn).await?;
+    forget_address(ctx, conn, &login_subject(&user.email)).await?;
     let ctx =
         ctx.clone().with_actor(crate::auth::actor_for(user, &security, crate::context::Credential::Session).ok_or_else(invalid_login)?);
     audit(&ctx, conn, Entry::new("auth.sign_in", "user", user.id)).await?;
     Ok(LoginResult::SignedIn { token: session.token, expires_at: session.expires_at })
 }
 
-/// Counts in the database, so parallel guesses cannot all read the same count and skip the lockout.
-async fn record_failure(ctx: &Ctx, conn: &mut PgConnection, user: &UserRow) -> Result<()> {
-    let failures: i32 =
-        sqlx::query_scalar("update users set failed_login_count = failed_login_count + 1 where id = $1 returning failed_login_count")
-            .bind(user.id)
-            .fetch_one(&mut *conn)
-            .await?;
-    if lock_minutes(failures) > 0 {
-        sqlx::query("update users set locked_until = greatest(locked_until, $2) where id = $1")
-            .bind(user.id)
-            .bind(ctx.now + Duration::minutes(lock_minutes(failures)))
-            .execute(&mut *conn)
-            .await?;
+/// Failures are kept per typed email rather than per user, so an address nobody signs in with
+/// throttles exactly like a real one.
+pub(crate) fn login_subject(email: &str) -> String {
+    sha256_hex(format!("login:{}", email.trim().to_lowercase()))
+}
+
+/// One bucket per IPv4 address or IPv6 /64, the block one customer usually gets.
+fn login_address(ctx: &Ctx) -> String {
+    let ip = ctx.ip.as_deref().and_then(|ip| ip.parse::<std::net::IpAddr>().ok()).map(|ip| ip.to_canonical());
+    match ip {
+        Some(std::net::IpAddr::V6(v6)) => {
+            let s = v6.segments();
+            format!("{:x}:{:x}:{:x}:{:x}::/64", s[0], s[1], s[2], s[3])
+        }
+        Some(ip) => ip.to_string(),
+        None => "unknown".into(),
     }
-    audit(ctx, conn, Entry::new("auth.sign_in_failed", "user", user.id).metadata(serde_json::json!({ "failures": failures }))).await?;
+}
+
+pub(crate) async fn login_locked(ctx: &Ctx, conn: &mut PgConnection, subject: &str) -> Result<bool> {
+    Ok(sqlx::query_scalar("select exists (select 1 from login_failures where subject = $1 and address = any($2) and locked_until > $3)")
+        .bind(subject)
+        .bind(vec![login_address(ctx), ALL_ADDRESSES.to_string()])
+        .bind(ctx.now)
+        .fetch_one(&mut *conn)
+        .await?)
+}
+
+async fn count_failure(ctx: &Ctx, conn: &mut PgConnection, subject: &str, address: &str) -> Result<i32> {
+    Ok(sqlx::query_scalar(
+        "insert into login_failures (subject, address, failures, last_failed_at) values ($1, $2, 1, $3)
+         on conflict (subject, address) do update set
+           failures = case when login_failures.last_failed_at < $3 - make_interval(hours => $4) then 1 else login_failures.failures + 1 end,
+           last_failed_at = $3
+         returning failures",
+    )
+    .bind(subject)
+    .bind(address)
+    .bind(ctx.now)
+    .bind(FORGET_HOURS as i32)
+    .fetch_one(&mut *conn)
+    .await?)
+}
+
+async fn lock_login(ctx: &Ctx, conn: &mut PgConnection, subject: &str, address: &str, minutes: i64) -> Result<()> {
+    sqlx::query("update login_failures set locked_until = greatest(locked_until, $3) where subject = $1 and address = $2")
+        .bind(subject)
+        .bind(address)
+        .bind(ctx.now + Duration::minutes(minutes))
+        .execute(&mut *conn)
+        .await?;
     Ok(())
+}
+
+/// Counts in the database, so parallel guesses cannot all read the same count and skip the lockout.
+pub(crate) async fn record_failure(ctx: &Ctx, conn: &mut PgConnection, subject: &str, user: Option<&UserRow>) -> Result<()> {
+    let address = login_address(ctx);
+    let here = count_failure(ctx, conn, subject, &address).await?;
+    if lock_minutes(here) > 0 {
+        lock_login(ctx, conn, subject, &address, lock_minutes(here)).await?;
+    }
+    let total = count_failure(ctx, conn, subject, ALL_ADDRESSES).await?;
+    if total >= ACCOUNT_LOCK_FAILURES {
+        let addresses: i64 = sqlx::query_scalar(
+            "select count(*) from login_failures where subject = $1 and address <> $2 and last_failed_at >= $3 - make_interval(hours => $4)",
+        )
+        .bind(subject)
+        .bind(ALL_ADDRESSES)
+        .bind(ctx.now)
+        .bind(FORGET_HOURS as i32)
+        .fetch_one(&mut *conn)
+        .await?;
+        if addresses >= ACCOUNT_LOCK_ADDRESSES {
+            let minutes = lock_minutes(total - ACCOUNT_LOCK_FAILURES + MAX_FAILURES);
+            lock_login(ctx, conn, subject, ALL_ADDRESSES, minutes).await?;
+        }
+    }
+    if let Some(user) = user {
+        audit(
+            ctx,
+            conn,
+            Entry::new("auth.sign_in_failed", "user", user.id).metadata(serde_json::json!({ "failures": here, "total": total })),
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+/// A sign-in clears only what its own address did: the owner signing in must not hand a guesser
+/// elsewhere a fresh set of tries.
+async fn forget_address(ctx: &Ctx, conn: &mut PgConnection, subject: &str) -> Result<()> {
+    let forgotten: Option<i32> = sqlx::query_scalar("delete from login_failures where subject = $1 and address = $2 returning failures")
+        .bind(subject)
+        .bind(login_address(ctx))
+        .fetch_optional(&mut *conn)
+        .await?;
+    if let Some(failures) = forgotten {
+        sqlx::query(
+            "update login_failures set failures = greatest(failures - $3, 0),
+               locked_until = case when failures - $3 < $4 then null else locked_until end
+             where subject = $1 and address = $2",
+        )
+        .bind(subject)
+        .bind(ALL_ADDRESSES)
+        .bind(failures)
+        .bind(ACCOUNT_LOCK_FAILURES)
+        .execute(&mut *conn)
+        .await?;
+    }
+    Ok(())
+}
+
+/// Sends after the transaction, in the background: nothing waits for the mail server, and the
+/// response time does not tell who has an account.
+pub(crate) async fn send_in_background(ctx: &Ctx, conn: &mut PgConnection, message: Message) -> Result<()> {
+    let email_settings: EmailSettings = settings(ctx, conn).await?;
+    let org: OrgSettings = settings(ctx, conn).await?;
+    let app = ctx.app.clone();
+    tokio::spawn(async move {
+        if let Err(error) = email::send(&app, &email_settings, &org, &message).await {
+            tracing::warn!(error = %error, subject = %message.subject, "account email failed");
+        }
+    });
+    Ok(())
+}
+
+/// Tells the owner that lasting access ended, so a key an integration relied on does not just stop.
+pub(crate) async fn notify_keys_revoked(ctx: &Ctx, conn: &mut PgConnection, user: &UserRow, keys: u64, reason: &str) -> Result<()> {
+    if keys == 0 {
+        return Ok(());
+    }
+    send_in_background(
+        ctx,
+        conn,
+        Message {
+            to: user.email.clone(),
+            to_name: Some(user.name.clone()),
+            subject: "Your OpenSign API keys were revoked".into(),
+            paragraphs: vec![
+                format!("Hi {},", user.name),
+                format!("{reason} To keep your account safe, your API keys ({keys}) stopped working. Create new ones under Settings."),
+            ],
+            button: None,
+            footer: Some("If you did not expect this, contact your OpenSign admin right away.".into()),
+            attachments: vec![],
+            lang: crate::i18n::Lang::En,
+        },
+    )
+    .await
 }
 
 pub struct Login;
@@ -94,25 +237,30 @@ impl Service for Login {
     const META: Meta = Meta::mutation("auth.login", "Sign in with email and password.", Access::Public).without_transaction();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: LoginInput) -> Result<LoginResult> {
-        let Some(user) = user_by_email(conn, &input.email).await? else {
-            burn_password_check(&input.password);
-            return Err(invalid_login());
-        };
-        if user.locked_until.is_some_and(|t| t > ctx.now) {
-            burn_password_check(&input.password);
+        let subject = login_subject(&input.email);
+        if login_locked(ctx, conn, &subject).await? {
+            burn_password(&input.password).await?;
             return Err(locked());
         }
-        let password_ok = user.password_hash.as_deref().is_some_and(|h| verify_password(h, &input.password));
-        if user.password_hash.is_none() {
-            burn_password_check(&input.password);
-        }
+        let Some(user) = user_by_email(conn, &input.email).await? else {
+            burn_password(&input.password).await?;
+            record_failure(ctx, conn, &subject, None).await?;
+            return Err(invalid_login());
+        };
+        let password_ok = match &user.password_hash {
+            Some(hash) => check_password(hash, &input.password).await?,
+            None => {
+                burn_password(&input.password).await?;
+                false
+            }
+        };
         if !password_ok || !user.active {
-            record_failure(ctx, conn, &user).await?;
+            record_failure(ctx, conn, &subject, Some(&user)).await?;
             return Err(invalid_login());
         }
         if let Some(hash) = &user.password_hash
             && password_needs_rehash(hash)
-            && let Ok(new_hash) = hash_password(&input.password)
+            && let Ok(new_hash) = new_password_hash(&input.password).await
         {
             sqlx::query("update users set password_hash = $2 where id = $1").bind(user.id).bind(new_hash).execute(&mut *conn).await?;
         }
@@ -125,6 +273,9 @@ impl Service for Login {
                 .execute(&mut *conn)
                 .await?;
             return Ok(LoginResult::TwoFactorRequired { challenge });
+        }
+        if user.has_passkey {
+            return Ok(LoginResult::PasskeyRequired { ceremony: super::passkeys::begin_second_factor(ctx, conn, user.id).await? });
         }
         start_session(ctx, conn, &user).await
     }
@@ -160,11 +311,12 @@ impl Service for VerifyTwoFactor {
             return Err(expired());
         }
         let user = user_by_id(conn, user_id).await?.filter(|u| u.active).ok_or_else(expired)?;
-        if user.locked_until.is_some_and(|t| t > ctx.now) {
+        let subject = login_subject(&user.email);
+        if login_locked(ctx, conn, &subject).await? {
             return Err(locked());
         }
         if !check_second_factor(ctx, conn, &user, &input.code).await? {
-            record_failure(ctx, conn, &user).await?;
+            record_failure(ctx, conn, &subject, Some(&user)).await?;
             return Err(AppError::new(ErrorKind::Unauthorized, "That code is not right"));
         }
         sqlx::query("delete from login_challenges where id = $1").bind(sha256_hex(&input.challenge)).execute(&mut *conn).await?;
@@ -385,6 +537,24 @@ pub async fn replace_recovery_codes(conn: &mut PgConnection, user_id: Uuid) -> R
     Ok(codes)
 }
 
+/// A signed-in check of the password. Wrong guesses count like those at the sign-in page, so a
+/// stolen session is no quicker way to learn the password. Call it outside a transaction: the
+/// count has to survive the refusal.
+pub(crate) async fn confirm_password(ctx: &Ctx, conn: &mut PgConnection, user: &UserRow, password: Option<&str>) -> Result<bool> {
+    let subject = login_subject(&user.email);
+    if login_locked(ctx, conn, &subject).await? {
+        return Err(locked());
+    }
+    let right = match (&user.password_hash, password) {
+        (Some(hash), Some(password)) => check_password(hash, password).await?,
+        _ => false,
+    };
+    if !right {
+        record_failure(ctx, conn, &subject, Some(user)).await?;
+    }
+    Ok(right)
+}
+
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangePasswordInput {
@@ -401,22 +571,26 @@ impl Service for ChangePassword {
     const META: Meta =
         Meta::mutation("account.change_password", "Change your password. Signs out your other sessions.", Access::Authenticated)
             .not_a_tool("Passwords never pass through an agent.")
-            .before_two_factor();
+            .before_two_factor()
+            .without_transaction();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ChangePasswordInput) -> Result<Ok_> {
         let actor = ctx.actor()?;
         let user = user_by_id(conn, actor.user_id).await?.ok_or_else(unauthorized)?;
-        if !user.password_hash.as_deref().is_some_and(|h| verify_password(h, &input.current_password)) {
+        if !confirm_password(ctx, conn, &user, Some(&input.current_password)).await? {
             return Err(bad_request("Your current password is not right"));
         }
-        let hash = hash_password(&input.new_password).map_err(|e| bad_request(e.to_string()))?;
+        let hash = new_password_hash(&input.new_password).await?;
+        let mut tx = conn.begin().await?;
         sqlx::query("update users set password_hash = $2, password_changed_at = now() where id = $1")
             .bind(user.id)
             .bind(hash)
-            .execute(&mut *conn)
+            .execute(&mut *tx)
             .await?;
-        revoke_sessions(conn, user.id, ctx.session_id.as_deref()).await?;
-        audit(ctx, conn, Entry::new("account.password_changed", "user", user.id)).await?;
+        expire_account_links(&mut tx, user.id).await?;
+        revoke_sessions(&mut tx, user.id, ctx.session_id.as_deref()).await?;
+        audit(ctx, &mut tx, Entry::new("account.password_changed", "user", user.id)).await?;
+        tx.commit().await?;
         Ok(Ok_::default())
     }
 }
@@ -432,7 +606,7 @@ pub struct RequestPasswordReset;
 impl Service for RequestPasswordReset {
     type Input = EmailInput;
     type Output = Ok_;
-    const META: Meta = Meta::mutation("auth.request_password_reset", "Email a password reset link.", Access::Public);
+    const META: Meta = Meta::mutation("auth.request_password_reset", "Email a password reset link.", Access::Public).without_transaction();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: EmailInput) -> Result<Ok_> {
         let Ok(email) = normalize_email(&input.email) else { return Ok(Ok_::default()) };
@@ -446,21 +620,20 @@ impl Service for RequestPasswordReset {
             return Ok(Ok_::default());
         }
         let token = random_token();
+        let mut tx = conn.begin().await?;
         sqlx::query("insert into password_reset_tokens (id, user_id, expires_at) values ($1, $2, $3)")
             .bind(sha256_hex(&token))
             .bind(user.id)
             .bind(ctx.now + Duration::minutes(RESET_MINUTES))
-            .execute(&mut *conn)
+            .execute(&mut *tx)
             .await?;
-        audit(ctx, conn, Entry::new("auth.password_reset_requested", "user", user.id)).await?;
-        let email_settings: EmailSettings = settings(ctx, conn).await?;
-        let org: OrgSettings = settings(ctx, conn).await?;
+        audit(ctx, &mut tx, Entry::new("auth.password_reset_requested", "user", user.id)).await?;
+        tx.commit().await?;
         let link = format!("{}/reset-password#{token}", ctx.app.public_url());
-        let sent = email::send(
-            &ctx.app,
-            &email_settings,
-            &org,
-            &Message {
+        send_in_background(
+            ctx,
+            conn,
+            Message {
                 to: user.email.clone(),
                 to_name: Some(user.name.clone()),
                 subject: "Reset your OpenSign password".into(),
@@ -474,10 +647,7 @@ impl Service for RequestPasswordReset {
                 lang: crate::i18n::Lang::En,
             },
         )
-        .await;
-        if let Err(error) = sent {
-            tracing::warn!(error = %error, "password reset email failed");
-        }
+        .await?;
         Ok(Ok_::default())
     }
 }
@@ -494,27 +664,35 @@ pub struct ResetPassword;
 impl Service for ResetPassword {
     type Input = ResetPasswordInput;
     type Output = Ok_;
-    const META: Meta = Meta::mutation("auth.reset_password", "Set a new password with a reset link.", Access::Public);
+    const META: Meta = Meta::mutation("auth.reset_password", "Set a new password with a reset link.", Access::Public).without_transaction();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ResetPasswordInput) -> Result<Ok_> {
-        let hash = hash_password(&input.password).map_err(|e| bad_request(e.to_string()))?;
+        let hash = new_password_hash(&input.password).await?;
+        let mut tx = conn.begin().await?;
         let user_id: Option<Uuid> = sqlx::query_scalar(
             "update password_reset_tokens set used_at = now() where id = $1 and used_at is null and expires_at > $2 returning user_id",
         )
         .bind(sha256_hex(&input.token))
         .bind(ctx.now)
-        .fetch_optional(&mut *conn)
+        .fetch_optional(&mut *tx)
         .await?;
         let user_id = user_id.ok_or_else(|| bad_request("This link has expired or was already used. Ask for a new one."))?;
-        sqlx::query(
-            "update users set password_hash = $2, password_changed_at = now(), failed_login_count = 0, locked_until = null where id = $1",
-        )
-        .bind(user_id)
-        .bind(hash)
-        .execute(&mut *conn)
-        .await?;
-        revoke_sessions(conn, user_id, None).await?;
-        audit(ctx, conn, Entry::new("auth.password_reset", "user", user_id)).await?;
+        let user = user_by_id(&mut tx, user_id)
+            .await?
+            .ok_or_else(|| bad_request("This link has expired or was already used. Ask for a new one."))?;
+        sqlx::query("update users set password_hash = $2, password_changed_at = now() where id = $1")
+            .bind(user_id)
+            .bind(hash)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("delete from login_failures where subject = $1").bind(login_subject(&user.email)).execute(&mut *tx).await?;
+        expire_account_links(&mut tx, user_id).await?;
+        revoke_sessions(&mut tx, user_id, None).await?;
+        let keys = revoke_api_keys(&mut tx, user_id).await?;
+        audit(ctx, &mut tx, Entry::new("auth.password_reset", "user", user_id).metadata(serde_json::json!({ "apiKeysRevoked": keys })))
+            .await?;
+        tx.commit().await?;
+        notify_keys_revoked(ctx, conn, &user, keys, "Your password was reset.").await?;
         Ok(Ok_::default())
     }
 }

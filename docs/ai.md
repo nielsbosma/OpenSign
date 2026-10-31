@@ -10,8 +10,8 @@ In **Settings → AI**:
 | --- | --- |
 | Provider | Anthropic, OpenAI, Berget AI (EU), Opper (EU), a LiteLLM proxy, or any other OpenAI-compatible server. |
 | API Key | The provider's key. Stored encrypted. |
-| Base URL | Only for LiteLLM and other compatible servers. |
-| Allow document text to be sent for reviews | Off by default. See [What leaves the server](#what-leaves-the-server). |
+| Base URL | Only for LiteLLM and other compatible servers. May be on your private network, but not a link-local or cloud metadata address. |
+| Allow document text to be sent for reviews | Off by default. Covers the assistant's reading of field values too. See [What leaves the server](#what-leaves-the-server). |
 | Monthly Token Budget | Tokens per calendar month across everyone. 0 means no limit. |
 | Model | Once the provider accepts your key, a searchable list of the chat models it offers, newest first. If the list cannot be fetched, type the model name, such as `claude-sonnet-5-5`, and the field shows the provider's error. |
 
@@ -27,9 +27,11 @@ Open the assistant from the sparkle button in the app's header. Ask in plain lan
 - "Remind everyone who has not signed this week."
 - "Create a draft NDA for Bo Berg."
 
-The assistant uses the same tools as the [MCP server](mcp.md), limited to what your role allows, and every action it takes is in the audit trail under your name. The app shows which tools it used.
+The assistant reads with the same tools as the [MCP server](mcp.md), limited to what your role allows. The app shows which tools it used.
 
-Because text inside documents could try to steer it, the assistant never gets tools that change who has access or that send things to people you did not pick: it cannot invite or change users or their email addresses, add, remove, test or resend webhooks, change or revoke API keys, hand out signing links, share documents, send test emails, change settings, open or rotate share links, or start an update.
+Text inside documents could try to steer it, so it does not change anything on its own. When it wants to create, send, remind, cancel, delete or change something, the panel shows **Needs Your Confirmation** with what would happen and every value that would be used. Nothing happens until you press **Confirm**, which makes the same call as doing it yourself in the app, and it is in the audit trail under your name. The assistant cannot press it for you.
+
+Some things it cannot even propose: it cannot invite or change users or their email addresses, see or change webhooks or automations, change or revoke API keys, hand out, see or share signing links, share documents, place a legal hold, send test emails, change settings, open or rotate share links, start an update, or handle whole files. Upload files and start bulk sends in the app.
 
 ## Document review
 
@@ -45,11 +47,11 @@ The latest review is kept with the document. Reviews need **Allow document text 
 
 ## What leaves the server
 
-- With **Allow document text** off, the text of your documents never leaves the server. The assistant still works, but only with what its tools return, such as titles, statuses and party names.
-- With it on, reviews send the document's text (up to about 180,000 characters), [Detect Fields with AI](text-tags.md#with-ai) sends the pages' text with positions (up to 30 pages and about 40,000 characters), and bulk send's AI column matching may include a few sample rows.
+- With **Allow document text** off, the text of your documents and the values in their fields never leave the server. The assistant still works, but only with what its tools return, such as titles, statuses and party names.
+- With it on, the assistant can also read field values, exports and previews, reviews send the document's text (up to about 180,000 characters), [Detect Fields with AI](text-tags.md#with-ai) sends the pages' text with positions (up to 30 pages and about 40,000 characters), and bulk send's AI column matching may include a few sample rows.
 - Bulk send's AI matching always sends the column names.
 
-Pick a provider and region that fit your data protection needs. Berget AI and Opper run in the EU, and a LiteLLM proxy lets you route to a model you host yourself. A LiteLLM or other OpenAI-compatible endpoint is the one outbound address an admin may point at a private network.
+Pick a provider and region that fit your data protection needs. Berget AI and Opper run in the EU, and a LiteLLM proxy lets you route to a model you host yourself. A LiteLLM or other OpenAI-compatible endpoint is the one outbound address an admin may point at a private network, though never at a link-local or cloud metadata address.
 
 ## Signers' own AI
 
@@ -58,3 +60,5 @@ Separately from these features, signers can give their own assistant a read-only
 ## Budget
 
 When the monthly budget is used up, AI features answer "This month's AI budget is used up" until the next month or until an admin raises it. Usage is also available as the `ai_usage` MCP tool.
+
+Whether or not a budget is set, one person can make 400 model calls an hour. After that their AI features pause for a while, so that one account cannot run up the bill alone.

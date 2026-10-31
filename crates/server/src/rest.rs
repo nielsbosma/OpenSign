@@ -15,8 +15,6 @@ use crate::error::{ApiError, json_error};
 use crate::security;
 use crate::{AppState, RequestId, auth, files};
 
-const BODY_LIMIT: usize = 40 * 1024 * 1024;
-
 /// One REST operation: a path over a service. Path parameters become input fields of the same name;
 /// `fixed` fields are set by the route itself. `creates` answers 201 instead of 200.
 pub struct Route {
@@ -302,7 +300,7 @@ async fn handle(
     let request_id = parts.extensions.get::<RequestId>().map(|r| r.0.clone()).unwrap_or_default();
     let fail = |e: AppError| ApiError(e, Some(request_id.clone())).into_response();
     let peer = parts.extensions.get::<axum::extract::ConnectInfo<std::net::SocketAddr>>().map(|c| c.0);
-    let ip = security::client_ip(&parts.headers, peer);
+    let ip = security::client_ip(&state, &parts.headers, peer).await;
     let ctx = match auth::context(&state, &parts.headers, ip.map(|i| i.to_string()), Surface::Api, request_id.clone()).await {
         Ok(ctx) => ctx,
         Err(e) => return fail(e),
@@ -311,7 +309,10 @@ async fn handle(
     if ctx.actor.as_ref().is_some_and(|a| a.credential != Credential::Session) && !service.meta().is_tool() {
         return fail(AppError::new(ErrorKind::Forbidden, "This call is only available signed in to the app"));
     }
-    let Ok(body) = to_bytes(body, BODY_LIMIT).await else {
+    if let Err(e) = opensign_core::service::authorize(service.meta(), &ctx) {
+        return fail(e);
+    }
+    let Ok(body) = to_bytes(body, crate::rpc::body_limit(route.service)).await else {
         return json_error(StatusCode::PAYLOAD_TOO_LARGE, "bad_request", "The request is too large");
     };
     let input = match input_for(&state, route, params, query, &body) {

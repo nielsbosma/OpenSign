@@ -57,7 +57,7 @@ pub struct ColumnMapping {
 #[serde(rename_all = "camelCase")]
 pub struct FileInput {
     pub template_id: Uuid,
-    /// A .csv, .xlsx, .xls or .ods file whose first row names the columns. Up to 1000 rows.
+    /// A .csv or .xlsx file whose first row names the columns. Up to 1000 rows.
     pub file_name: String,
     pub content_base64: String,
 }
@@ -267,7 +267,7 @@ async fn ai_suggest(ctx: &Ctx, conn: &mut PgConnection, sheet: &Sheet, targets: 
     Ok(true)
 }
 
-fn decode(file: &FileInput) -> Result<Sheet> {
+async fn decode(file: &FileInput) -> Result<Sheet> {
     let name = file.file_name.trim();
     if name.is_empty() || name.len() > 255 {
         return Err(bad_request("The file needs a name"));
@@ -276,7 +276,8 @@ fn decode(file: &FileInput) -> Result<Sheet> {
         return Err(bad_request("The file is larger than 5 MB"));
     }
     let bytes = B64.decode(file.content_base64.trim()).map_err(|_| bad_request("contentBase64 is not valid base64"))?;
-    sheet::read(name, &bytes)
+    let name = name.to_string();
+    tokio::task::spawn_blocking(move || sheet::read(&name, &bytes)).await.map_err(AppError::internal)?
 }
 
 fn check_mapping(mapping: &[ColumnMapping], sheet: &Sheet, targets: &[Target]) -> Result<HashMap<String, usize>> {
@@ -372,7 +373,7 @@ impl Service for Preview {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: PreviewInput) -> Result<PreviewOutput> {
         let t = template(ctx, conn, input.file.template_id).await?;
-        let sheet = decode(&input.file)?;
+        let sheet = decode(&input.file).await?;
         let targets = targets(&t);
         let names: Vec<String> = t.parties.iter().map(|p| p.name.clone()).collect();
         let mut mapping = suggest(&sheet.columns, &targets, &names);
@@ -449,7 +450,7 @@ impl Service for Start {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: StartInput) -> Result<BulkSend> {
         let t = template(ctx, conn, input.file.template_id).await?;
-        let sheet = decode(&input.file)?;
+        let sheet = decode(&input.file).await?;
         if sheet.rows.is_empty() {
             return Err(bad_request("The file has no rows below the header"));
         }

@@ -61,8 +61,15 @@ Host: localhost
     Ok(())
 }
 
+fn main() -> anyhow::Result<()> {
+    if std::env::args().nth(1).as_deref() == Some(opensign_pdf::WORKER_SUBCOMMAND) {
+        opensign_pdf::worker_main();
+    }
+    run()
+}
+
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn run() -> anyhow::Result<()> {
     if std::env::args().nth(1).as_deref() == Some("schema") {
         use std::io::Write;
         writeln!(std::io::stdout(), "{}", serde_json::to_string_pretty(&opensign_server::service_schemas())?)?;
@@ -83,6 +90,8 @@ async fn main() -> anyhow::Result<()> {
             anyhow::bail!("OpenSign cannot start until the environment is fixed");
         }
     };
+    let exe = std::env::current_exe().context("finding this program, to run PDF workers")?;
+    opensign_pdf::enable_worker(exe).map_err(|e| anyhow::anyhow!("the PDF worker does not start: {e}"))?;
     let keys = Keys::derive(&env.app_secret).context("APP_SECRET")?;
     let db = opensign_db::connect(&env.database_url, 20).await?;
     opensign_db::migrate(&db).await.context("database migrations")?;

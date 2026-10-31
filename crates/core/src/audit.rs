@@ -1,14 +1,16 @@
 use std::collections::BTreeSet;
 
-use chrono::{DateTime, Utc};
-use opensign_crypto::{KeyPurpose, Keys};
-use serde::Serialize;
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as B64;
+use chrono::{DateTime, Duration, Utc};
+use opensign_crypto::{KeyPurpose, Keys, constant_time_eq};
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
-use sha2::{Digest, Sha256};
 use sqlx::{Connection, PgConnection};
 
 use crate::context::Ctx;
-use crate::error::Result;
+use crate::error::{AppError, ErrorKind, Result};
+use crate::storage::Storage;
 
 const SECRET_KEYS: &[&str] = &[
     "password",
@@ -31,6 +33,12 @@ const SECRET_KEYS: &[&str] = &[
 const CHAIN_LOCK: i64 = 0x6f70_656e_7369_676e;
 
 pub const GENESIS: [u8; 32] = [0u8; 32];
+
+const WITNESS_HEAD: &str = "audit/anchor-head.json";
+/// Entries this long past the last anchor mean anchoring has stopped; the job runs far more often.
+const ANCHOR_STALE_HOURS: i64 = 3;
+/// A token's time and the row's time come from different clocks, but not a day apart.
+const ANCHOR_CLOCK_TOLERANCE_HOURS: i64 = 24;
 
 /// Masks secrets by key name. A set secret shows as "••••", so the log still says that it changed.
 pub fn redact(value: &Value, extra: &BTreeSet<&str>) -> Value {
@@ -112,11 +120,6 @@ pub fn chain_hash(keys: &Keys, prev: &[u8], fields: &ChainedFields<'_>) -> [u8; 
     keys.mac(KeyPurpose::AuditChain, &canonical(prev, fields))
 }
 
-/// The unkeyed links of entries written before the chain was keyed.
-fn legacy_chain_hash(prev: &[u8], fields: &ChainedFields<'_>) -> [u8; 32] {
-    Sha256::digest(canonical(prev, fields)).into()
-}
-
 fn timestamp(at: &DateTime<Utc>) -> String {
     at.to_rfc3339_opts(chrono::SecondsFormat::Micros, true)
 }
@@ -196,15 +199,62 @@ pub async fn audit(ctx: &Ctx, conn: &mut PgConnection, entry: Entry<'_>) -> Resu
     Ok(id)
 }
 
+/// What the copy of the latest anchor kept in the bucket says about the chain in the database.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WitnessStatus {
+    /// Not looked at, because the chain itself is already broken.
+    NotChecked,
+    /// No anchors and no copy yet.
+    None,
+    /// The copy matches the latest anchor.
+    Ok,
+    /// The copy matches an anchor, but newer anchors have no copy.
+    Behind,
+    /// Anchors exist but the bucket has no copy.
+    Missing,
+    /// The bucket did not answer.
+    Unreadable,
+    /// The copy is not genuine, or the anchor or entry it names is gone or different.
+    Mismatch,
+}
+
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 pub struct ChainReport {
     pub entries: i64,
+    /// False when an entry, an anchor or the bucket copy shows the trail was changed.
     pub valid: bool,
     /// The first entry whose stored hash does not match its contents or its predecessor.
     pub broken_at: Option<i64>,
     pub head: Option<String>,
     /// Hourly time-stamped heads that no longer match the entry they were taken from.
     pub broken_anchors: Vec<i64>,
+    /// Anchors with no time stamp token. OpenSign never writes these.
+    pub unsigned_anchors: Vec<i64>,
+    /// Anchors whose time stamp token has a bad signature, covers something else or names another time.
+    pub invalid_anchors: Vec<i64>,
+    pub last_anchor_at: Option<DateTime<Utc>>,
+    /// A time stamp authority is set, yet entries older than a few hours have no anchor. A warning:
+    /// an authority that is down causes this too.
+    pub anchor_stale: bool,
+    pub witness: WitnessStatus,
+}
+
+impl ChainReport {
+    fn broken(entries: i64, id: i64) -> Self {
+        ChainReport {
+            entries,
+            valid: false,
+            broken_at: Some(id),
+            head: None,
+            broken_anchors: Vec::new(),
+            unsigned_anchors: Vec::new(),
+            invalid_anchors: Vec::new(),
+            last_anchor_at: None,
+            anchor_stale: false,
+            witness: WitnessStatus::NotChecked,
+        }
+    }
 }
 
 #[derive(sqlx::FromRow)]
@@ -225,11 +275,24 @@ struct Row {
     hash_alg: String,
 }
 
+#[derive(sqlx::FromRow)]
+struct AnchorRow {
+    id: i64,
+    head_hash: Vec<u8>,
+    tsa_token: Option<Vec<u8>>,
+    created_at: DateTime<Utc>,
+}
+
+/// Whether a stored token is a genuine time stamp of this head, made around when the row says.
+fn anchor_token_ok(anchor: &AnchorRow, token: &[u8]) -> bool {
+    opensign_pdf::verify_timestamp_token(token, &anchor.head_hash)
+        .is_ok_and(|time| (time - anchor.created_at).abs() <= Duration::hours(ANCHOR_CLOCK_TOLERANCE_HOURS))
+}
+
 /// Recomputes the whole chain with the audit key, and checks the time-stamped anchors against it.
-/// Unkeyed entries are accepted only before the first keyed one.
+/// Only keyed entries count: an unkeyed one could have been written by anyone.
 pub async fn verify_chain(conn: &mut PgConnection, keys: &Keys) -> Result<ChainReport> {
     let mut expected_prev = GENESIS.to_vec();
-    let mut keyed = false;
     let mut entries = 0;
     let mut last_id = 0i64;
     loop {
@@ -254,16 +317,9 @@ pub async fn verify_chain(conn: &mut PgConnection, keys: &Keys) -> Result<ChainR
                 after: row.after.as_ref().unwrap_or(&null),
                 metadata: row.metadata.as_ref().unwrap_or(&null),
             };
-            let computed = match row.hash_alg.as_str() {
-                "hmac-sha256" => {
-                    keyed = true;
-                    Some(chain_hash(keys, &expected_prev, &fields))
-                }
-                "sha256" if !keyed => Some(legacy_chain_hash(&expected_prev, &fields)),
-                _ => None,
-            };
-            if row.prev_hash != expected_prev || computed.is_none_or(|c| row.hash != c) {
-                return Ok(ChainReport { entries, valid: false, broken_at: Some(row.id), head: None, broken_anchors: Vec::new() });
+            let keyed = row.hash_alg == "hmac-sha256";
+            if !keyed || row.prev_hash != expected_prev || row.hash != chain_hash(keys, &expected_prev, &fields) {
+                return Ok(ChainReport::broken(entries, row.id));
             }
             expected_prev = row.hash;
         }
@@ -273,13 +329,124 @@ pub async fn verify_chain(conn: &mut PgConnection, keys: &Keys) -> Result<ChainR
     )
     .fetch_all(&mut *conn)
     .await?;
+    let mut unsigned_anchors = Vec::new();
+    let mut invalid_anchors = Vec::new();
+    let mut last_anchor_at = None;
+    let mut last_anchor = 0i64;
+    loop {
+        let anchors: Vec<AnchorRow> =
+            sqlx::query_as("select id, head_hash, tsa_token, created_at from audit_anchors where id > $1 order by id limit 200")
+                .bind(last_anchor)
+                .fetch_all(&mut *conn)
+                .await?;
+        let Some(last) = anchors.last() else { break };
+        last_anchor = last.id;
+        last_anchor_at = Some(last.created_at);
+        let (unsigned, invalid) = tokio::task::spawn_blocking(move || {
+            let unsigned: Vec<i64> = anchors.iter().filter(|a| a.tsa_token.is_none()).map(|a| a.id).collect();
+            let invalid: Vec<i64> =
+                anchors.iter().filter(|a| a.tsa_token.as_deref().is_some_and(|t| !anchor_token_ok(a, t))).map(|a| a.id).collect();
+            (unsigned, invalid)
+        })
+        .await
+        .map_err(AppError::internal)?;
+        unsigned_anchors.extend(unsigned);
+        invalid_anchors.extend(invalid);
+    }
     Ok(ChainReport {
         entries,
-        valid: broken_anchors.is_empty(),
+        valid: broken_anchors.is_empty() && unsigned_anchors.is_empty() && invalid_anchors.is_empty(),
         broken_at: None,
         head: (entries > 0).then(|| hex::encode(&expected_prev)),
         broken_anchors,
+        unsigned_anchors,
+        invalid_anchors,
+        last_anchor_at,
+        anchor_stale: false,
+        witness: WitnessStatus::NotChecked,
     })
+}
+
+/// A copy of an anchor outside the database. Someone who holds only the database cannot move it,
+/// so removing the end of the trail, or the anchors themselves, shows.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Witness {
+    anchor_id: i64,
+    audit_id: i64,
+    head_hash: String,
+    token: String,
+    mac: String,
+}
+
+fn witness_mac(keys: &Keys, anchor_id: i64, audit_id: i64, head_hash: &str, token: &str) -> String {
+    let message = format!("audit-anchor-witness\0{anchor_id}\0{audit_id}\0{head_hash}\0{token}");
+    hex::encode(keys.mac(KeyPurpose::AuditChain, message.as_bytes()))
+}
+
+/// Writes the copy of an anchor, under its own name and as the latest one.
+pub async fn write_witness(storage: &Storage, keys: &Keys, anchor_id: i64, audit_id: i64, head: &[u8], token: &[u8]) -> Result<()> {
+    let head_hash = hex::encode(head);
+    let token = B64.encode(token);
+    let mac = witness_mac(keys, anchor_id, audit_id, &head_hash, &token);
+    let body = serde_json::to_vec(&Witness { anchor_id, audit_id, head_hash, token, mac }).map_err(AppError::internal)?;
+    storage.put_raw(&format!("audit/anchors/{anchor_id}.json"), body.clone()).await?;
+    storage.put_raw(WITNESS_HEAD, body).await
+}
+
+async fn check_witness(conn: &mut PgConnection, storage: &Storage, keys: &Keys) -> Result<WitnessStatus> {
+    let latest: Option<i64> = sqlx::query_scalar("select max(id) from audit_anchors").fetch_one(&mut *conn).await?;
+    let body = match storage.get_raw(WITNESS_HEAD).await {
+        Ok(body) => body,
+        Err(e) if e.kind == ErrorKind::NotFound => {
+            return Ok(if latest.is_some() { WitnessStatus::Missing } else { WitnessStatus::None });
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "could not read the audit anchor copy from the bucket");
+            return Ok(WitnessStatus::Unreadable);
+        }
+    };
+    let Ok(witness) = serde_json::from_slice::<Witness>(&body) else { return Ok(WitnessStatus::Mismatch) };
+    let expected = witness_mac(keys, witness.anchor_id, witness.audit_id, &witness.head_hash, &witness.token);
+    if !constant_time_eq(expected.as_bytes(), witness.mac.as_bytes()) {
+        return Ok(WitnessStatus::Mismatch);
+    }
+    let Ok(head) = hex::decode(&witness.head_hash) else { return Ok(WitnessStatus::Mismatch) };
+    let matches: bool = sqlx::query_scalar(
+        "select exists (select 1 from audit_anchors a join audit_log l on l.id = a.audit_id
+         where a.id = $1 and a.audit_id = $2 and a.head_hash = $3 and l.hash = $3)",
+    )
+    .bind(witness.anchor_id)
+    .bind(witness.audit_id)
+    .bind(&head)
+    .fetch_one(&mut *conn)
+    .await?;
+    if !matches {
+        return Ok(WitnessStatus::Mismatch);
+    }
+    Ok(if latest == Some(witness.anchor_id) { WitnessStatus::Ok } else { WitnessStatus::Behind })
+}
+
+/// The full check behind `audit.verify`: the chain and anchors, whether anchoring has stopped, and
+/// the copy of the latest anchor in the bucket.
+pub async fn verify_trail(ctx: &Ctx, conn: &mut PgConnection) -> Result<ChainReport> {
+    let mut report = verify_chain(conn, ctx.keys()).await?;
+    if report.broken_at.is_some() {
+        return Ok(report);
+    }
+    let signing: crate::settings::SigningSettings = crate::services::settings(ctx, conn).await?;
+    if !signing.tsa_url.trim().is_empty() {
+        report.anchor_stale = sqlx::query_scalar(
+            "select exists (select 1 from audit_log where occurred_at < $1
+             and id > coalesce((select max(audit_id) from audit_anchors), 0))",
+        )
+        .bind(ctx.now - Duration::hours(ANCHOR_STALE_HOURS))
+        .fetch_one(&mut *conn)
+        .await?;
+    }
+    report.witness = check_witness(conn, &ctx.app.storage, ctx.keys()).await?;
+    report.valid = report.valid && report.witness != WitnessStatus::Mismatch;
+    Ok(report)
 }
 
 #[cfg(test)]
@@ -319,6 +486,5 @@ mod tests {
         assert_ne!(a, chain_hash(&keys, &GENESIS, &fields("a.c")));
         assert_ne!(a, chain_hash(&keys, &[1u8; 32], &fields("a.b")));
         assert_ne!(a, chain_hash(&other, &GENESIS, &fields("a.b")));
-        assert_ne!(a, legacy_chain_hash(&GENESIS, &fields("a.b")));
     }
 }

@@ -3,7 +3,7 @@ use hmac::{Hmac, Mac};
 use opensign_crypto::KeyPurpose;
 use serde_json::{Value, json};
 use sha2::Sha256;
-use sqlx::PgConnection;
+use sqlx::{Connection, PgConnection};
 use uuid::Uuid;
 
 use super::{Delivery, DocumentRow, PartyRole, PartyRow, current_turn, parties, party, signer_url, status};
@@ -99,22 +99,26 @@ pub async fn notify_party(ctx: &Ctx, conn: &mut PgConnection, party_id: Uuid, re
                 .ok_or_else(|| AppError::internal(anyhow::anyhow!("party {} has SMS delivery without a phone", party.id)))?;
             let sms: SmsSettings = settings(ctx, conn).await?;
             let text = lang.invitation_sms(org_name(&org), &sender, &document.title, approve, &url);
+            let share_link = document.metadata["shareLink"].as_str().and_then(|s| Uuid::parse_str(s).ok());
+            crate::sms::reserve(conn, &sms, &phone, share_link, ctx.now).await?;
             crate::sms::send(&ctx.app, &sms, &phone, &text).await?;
         }
         _ => {}
     }
+    let mut tx = conn.begin().await?;
     sqlx::query("update parties set notified_at = $2, status = case when status = 'waiting' then 'notified' else status end, updated_at = now() where id = $1")
         .bind(party.id)
         .bind(ctx.now)
-        .execute(&mut *conn)
+        .execute(&mut *tx)
         .await?;
     audit(
         ctx,
-        conn,
+        &mut tx,
         Entry::new(if reminder { "party.reminded" } else { "party.notified" }, "document", document.id)
             .metadata(json!({ "party": party.id, "name": party.name, "channel": party.delivery })),
     )
     .await?;
+    tx.commit().await?;
     Ok(())
 }
 

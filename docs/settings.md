@@ -72,6 +72,8 @@ See [Sign-in, passkeys and two-factor](account-security.md).
 | AI Review Links Expire After (Days) | `OPENSIGN_SECURITY_REVIEW_LINK_DAYS` | 7. 0 turns signers' AI review links off; at most 30. See [The signing page](signing-page.md#review-with-your-ai). |
 | Allow Embedded Signing | `OPENSIGN_SECURITY_EMBED_SIGNING` | Off. Lets the sites below show the signing page in a frame. See [Embedded signing](embedding.md). |
 | Sites Allowed to Embed | `OPENSIGN_SECURITY_EMBED_ORIGINS` | None. Exact https origins, one per line; in the variable, separated by spaces or commas. |
+| Trusted Proxies | `OPENSIGN_SECURITY_TRUSTED_PROXIES` | `private`. Who may state a visitor's address in `X-Forwarded-For`: `private`, `none`, or a list of addresses and CIDR ranges. See [Deployment](deployment.md#behind-a-proxy). |
+| Allow New MCP Clients to Register | `OPENSIGN_SECURITY_ALLOW_CLIENT_REGISTRATION` | On. Off, only clients that registered earlier can connect. See [MCP](mcp.md). |
 
 ## Updates
 

@@ -108,6 +108,11 @@ pub struct SecuritySettings {
     pub embed_signing: bool,
     /// Origins such as `https://app.example.com`, exact, without paths or wildcards.
     pub embed_origins: Vec<String>,
+    /// Who may state the client's address in `X-Forwarded-For`: `private` (any proxy on a private
+    /// network), `none`, or a list of addresses and CIDR ranges.
+    pub trusted_proxies: String,
+    /// Lets new MCP clients register themselves. Clients that already registered keep working.
+    pub allow_client_registration: bool,
 }
 
 impl Default for SecuritySettings {
@@ -121,6 +126,8 @@ impl Default for SecuritySettings {
             review_link_days: 7,
             embed_signing: false,
             embed_origins: Vec::new(),
+            trusted_proxies: "private".into(),
+            allow_client_registration: true,
         }
     }
 }
@@ -139,6 +146,11 @@ impl SecuritySettings {
         self.embed_origins.iter().filter(|o| canonical_origin(o).as_deref() == Some(o.as_str())).cloned().collect()
     }
 
+    /// A value that cannot be read, which only a pinned variable can hold, believes no proxy.
+    pub fn trusted_proxies(&self) -> TrustedProxies {
+        TrustedProxies::parse(&self.trusted_proxies).unwrap_or(TrustedProxies::None)
+    }
+
     /// Where a signer may be sent after signing: only to a site allowed to embed.
     pub fn allows_redirect(&self, url: &str) -> bool {
         let Ok(parsed) = reqwest::Url::parse(url) else { return false };
@@ -146,6 +158,30 @@ impl SecuritySettings {
             && parsed.password().is_none()
             && url.len() <= 2000
             && self.embed_origins().contains(&parsed.origin().ascii_serialization())
+    }
+}
+
+/// Who may state the client's address for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TrustedProxies {
+    None,
+    Private,
+    List(Vec<ipnet::IpNet>),
+}
+
+impl TrustedProxies {
+    pub fn parse(text: &str) -> Result<Self> {
+        let entries: Vec<String> = text.split([',', ' ', '\n']).map(str::trim).filter(|e| !e.is_empty()).map(str::to_string).collect();
+        match entries.as_slice() {
+            [] => Err(bad_request("Enter private, none, or the addresses of your proxies")),
+            [one] if one.eq_ignore_ascii_case("private") => Ok(Self::Private),
+            [one] if one.eq_ignore_ascii_case("none") => Ok(Self::None),
+            _ => {
+                let nets = crate::auth::normalize_allowed_ips(&entries)
+                    .map_err(|_| bad_request("Enter private, none, or a list of addresses and CIDR ranges"))?;
+                Ok(Self::List(nets.iter().filter_map(|n| crate::auth::parse_net(n)).collect()))
+            }
+        }
     }
 }
 
@@ -209,11 +245,28 @@ pub struct SigningSettings {
     pub tsa_url: String,
     pub seal_name: String,
     pub reason: String,
+    /// SHA-256 fingerprints of the time stamp certificates to trust, separated by commas or new lines.
+    pub trusted_timestamp_authorities: String,
+}
+
+impl SigningSettings {
+    pub fn trusted_authorities(&self) -> std::collections::HashSet<String> {
+        self.trusted_timestamp_authorities
+            .split([',', '\n', '\r', ' '])
+            .filter(|s| !s.is_empty())
+            .map(|s| s.replace(':', "").to_ascii_lowercase())
+            .collect()
+    }
 }
 
 impl Default for SigningSettings {
     fn default() -> Self {
-        Self { tsa_url: "http://timestamp.digicert.com".into(), seal_name: String::new(), reason: "Signed with OpenSign".into() }
+        Self {
+            tsa_url: "http://timestamp.digicert.com".into(),
+            seal_name: String::new(),
+            reason: "Signed with OpenSign".into(),
+            trusted_timestamp_authorities: String::new(),
+        }
     }
 }
 
@@ -228,7 +281,7 @@ pub struct AiSettings {
     pub model: String,
     pub api_key: Option<String>,
     pub base_url: String,
-    /// Off: the assistant works, but document text never leaves the server.
+    /// Off: the assistant works, but document text and field values never leave the server.
     pub allow_document_text: bool,
     /// Tokens per calendar month across everyone; 0 means no limit.
     pub monthly_token_budget: u64,
@@ -240,7 +293,7 @@ impl SettingsGroup for AiSettings {
     const SECRET_TARGETS: &'static [(&'static str, &'static [&'static str])] = &[("apiKey", &["provider", "baseUrl"])];
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(default, rename_all = "camelCase")]
 pub struct SmsSettings {
     /// `46elks`, `twilio` or empty.
@@ -248,6 +301,29 @@ pub struct SmsSettings {
     pub username: String,
     pub password: Option<String>,
     pub sender: String,
+    /// Country calling codes that may receive SMS, such as `46, 47`. Empty allows every country.
+    pub allowed_countries: String,
+    /// Messages per hour across everyone; 0 means no limit.
+    pub hourly_limit: u32,
+    /// Messages per day across everyone; 0 means no limit.
+    pub daily_limit: u32,
+    /// Messages per hour for documents made from one share link; 0 means no limit.
+    pub share_link_hourly_limit: u32,
+}
+
+impl Default for SmsSettings {
+    fn default() -> Self {
+        Self {
+            provider: String::new(),
+            username: String::new(),
+            password: None,
+            sender: String::new(),
+            allowed_countries: String::new(),
+            hourly_limit: 200,
+            daily_limit: 1000,
+            share_link_hourly_limit: 30,
+        }
+    }
 }
 
 impl SettingsGroup for SmsSettings {

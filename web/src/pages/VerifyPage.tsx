@@ -13,7 +13,9 @@ type Signature = {
   coversWholeFile: boolean;
   onlyValidationDataAdded: boolean;
   intact: boolean;
+  trusted: boolean;
   timestamp?: string | null;
+  timestampTrusted: boolean;
   problems: string[];
 };
 
@@ -82,14 +84,22 @@ export function VerifyPage() {
                 {signatures.map((s, i) => (
                   <li key={i} className="rounded-md border px-3 py-2">
                     <div className="flex items-center gap-2 font-medium">
-                      {s.intact ? <CheckCircle2 className="size-4 text-success" /> : <XCircle className="size-4 text-warning" />}
+                      {s.intact && (s.trusted || s.kind === 'documentTimestamp') ? (
+                        <CheckCircle2 className="size-4 text-success" />
+                      ) : (
+                        <XCircle className="size-4 text-warning" />
+                      )}
                       {s.kind === 'documentTimestamp' ? t('Archive Time Stamp') : (s.signer ?? t('Digital Signature'))}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {[
                         s.kind === 'documentTimestamp' ? s.signer : s.reason,
                         s.timestamp ? t('timestamped {date}', { date: formatDateTime(s.timestamp) }) : null,
+                        s.timestampTrusted ? t('by a trusted timestamp authority') : null,
                         s.onlyValidationDataAdded ? t('only validation data was added after it') : null,
+                        s.kind === 'signature' && s.intact && !s.trusted
+                          ? t('Signed by someone other than this server. The file is intact, but nothing here confirms who they are.')
+                          : null,
                         ...s.problems,
                       ]
                         .filter(Boolean)

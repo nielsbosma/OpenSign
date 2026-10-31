@@ -22,6 +22,9 @@ const CODE_MINUTES: i64 = 5;
 const ACCESS_SECONDS: i64 = 3600;
 const REFRESH_DAYS: i64 = 30;
 const CONSENT_SECONDS: i64 = 600;
+/// Clients register themselves without signing in, so the table needs a ceiling. Unused ones are
+/// swept after a week.
+const MAX_CLIENTS: i64 = 100_000;
 
 pub fn mcp_url(app: &App) -> String {
     format!("{}/mcp", app.public_url())
@@ -43,8 +46,18 @@ fn check_redirect(uri: &str) -> Result<()> {
     Ok(())
 }
 
+/// `example.co.uk` for `a.b.example.co.uk`. A host with no public suffix, like an address or
+/// `localhost`, is shown as it is.
+pub fn registrable_domain(host: &str) -> String {
+    psl::domain_str(host).unwrap_or(host).to_string()
+}
+
 /// RFC 7591 registration. Only public clients with the authorization code grant.
 pub async fn register_client(conn: &mut PgConnection, request: &Value) -> Result<Value> {
+    let clients: i64 = sqlx::query_scalar("select count(*) from oauth_clients").fetch_one(&mut *conn).await?;
+    if clients >= MAX_CLIENTS {
+        return Err(oauth_error("temporarily_unavailable", "Too many clients are registered. Try again later."));
+    }
     let uris: Vec<String> =
         request["redirect_uris"].as_array().into_iter().flatten().filter_map(|u| u.as_str().map(str::to_string)).collect();
     if uris.is_empty() || uris.len() > 10 {
@@ -126,8 +139,8 @@ pub enum Authorize {
     Redirect(String),
 }
 
-/// Validates an authorization request. Errors before the client and redirect URI are known go back
-/// to the browser as `Err`; later errors go to the client's redirect URI.
+/// Validates an authorization request. Errors go back to the browser as `Err`, or to the redirect
+/// URI of a client someone has already approved.
 pub async fn authorize(app: &App, conn: &mut PgConnection, r: AuthorizeRequest<'_>) -> Result<Authorize> {
     let client_id = r.client_id.ok_or_else(|| bad_request("client_id is missing"))?;
     let client = client(conn, client_id).await?.ok_or_else(|| bad_request("This MCP client is not registered. Connect it again."))?;
@@ -136,7 +149,16 @@ pub async fn authorize(app: &App, conn: &mut PgConnection, r: AuthorizeRequest<'
         None if client.redirect_uris.len() == 1 => client.redirect_uris[0].clone(),
         _ => return Err(bad_request("The redirect URI is not registered for this client")),
     };
+    // Anyone can register a client, so sending the browser to its address on a bad request, before
+    // anyone has trusted it, would make this origin an open redirect. Such errors show here instead.
+    let trusted: bool = sqlx::query_scalar("select exists (select 1 from oauth_grants where client_id = $1)")
+        .bind(&client.client_id)
+        .fetch_one(&mut *conn)
+        .await?;
     let fail = |code: &str, description: &str| {
+        if !trusted {
+            return Err(oauth_error("invalid_request", format!("{description} ({code})")));
+        }
         let mut url = url::Url::parse(&redirect_uri).map_err(|_| bad_request("Invalid redirect URI"))?;
         url.query_pairs_mut().append_pair("error", code).append_pair("error_description", description);
         if let Some(state) = r.state {

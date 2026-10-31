@@ -43,6 +43,8 @@ Any admin setting can also be pinned with an `OPENSIGN_<GROUP>_<FIELD>` variable
 
 [Sliplane](https://sliplane.io) runs the whole stack with one click. The repository's `sliplane.yaml` describes it: a managed Postgres, a bucket, Gotenberg on the private network, and OpenSign with a freshly generated `APP_SECRET`. It asks for your Resend key (and optionally an AI provider) and shows what it creates and what it costs. When it finishes, **Open OpenSign** goes straight to setup with a generated `SETUP_CODE` filled in, so there is no code to find in the logs.
 
+Sliplane keeps Gotenberg off the public internet for incoming traffic, but it has no setting that stops the service reaching out. If you need a converter without outbound access, as recommended under [Running it safely](#running-it-safely), run Gotenberg on an internal network of your own, or leave `CONVERTER_URL` unset to accept PDFs only.
+
 **[Deploy to Sliplane](https://sliplane.opendeploy.cloud/?repo=https://github.com/nielsbosma/OpenSign)**
 
 ### From a terminal
@@ -114,6 +116,16 @@ networks:
 
 Put a reverse proxy with TLS (Caddy, Traefik, nginx) in front, and use a managed Postgres and bucket or add them to the file. The repository's own `docker-compose.yml` is for development and testing only.
 
+## Behind a proxy
+
+OpenSign records each visitor's address in the audit log and in sealed evidence, and limits requests by it. **Trusted Proxies** in **Settings → Security** says whose `X-Forwarded-For` header to believe:
+
+| Value | Use it when |
+| --- | --- |
+| `private` (the default) | The only way in is a platform proxy or load balancer on a private network that overwrites or appends the header. Any machine that reaches OpenSign directly from a private address, over a VPN or Tailscale for example, can state any address it likes. |
+| `none` | Nothing sits in front of OpenSign, so the connecting address is the visitor's. Behind a proxy this makes every visitor share the proxy's address and one rate limit. |
+| Addresses and CIDR ranges, such as `10.0.4.0/24` | You know your proxies' addresses. This is the tightest choice, and the right one if other machines on the private network can reach OpenSign. |
+
 ## Health checks
 
 - `GET /api/health`: the process is up. Returns `{"ok":true,"version":"…"}`.
@@ -132,7 +144,7 @@ Open `APP_URL` and enter the setup code from the container log. See [First-run s
 
 - Serve OpenSign over https only, and set `APP_URL` to that address.
 - Keep `APP_SECRET` in your platform's secret store, and back it up apart from the database.
-- Keep Gotenberg on a private network without internet access.
+- Keep Gotenberg on a private network without internet access. Sliplane cannot enforce the second part; see [Sliplane](#sliplane).
 - Turn on **Require two-factor authentication** in **Settings → Security**.
 - Back up Postgres and the bucket together. They are useless without each other, and both are useless without `APP_SECRET`.
 - Leave outbound internet open for the providers you use (email, SMS, eID, time stamps, OCSP and CRLs, AI, webhooks, the GitHub update check).

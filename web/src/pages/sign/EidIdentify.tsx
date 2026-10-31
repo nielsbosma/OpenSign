@@ -1,8 +1,9 @@
 import { Smartphone } from 'lucide-react';
 import QRCode from 'qrcode';
-import { useEffect, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { type AuthMethod, call, errorMessage } from '@/lib/api';
 import { FormError } from '../auth/AuthLayout';
 import { framed } from './embed';
@@ -45,6 +46,8 @@ export function EidIdentify({
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [showQr, setShowQr] = useState(method === 'freja');
+  const [needsCode, setNeedsCode] = useState(false);
+  const [code, setCode] = useState('');
   const onSessionRef = useRef(onSession);
   onSessionRef.current = onSession;
   const t = useTexts();
@@ -66,6 +69,10 @@ export function EidIdentify({
         if (status.status === 'failed') {
           setStarted(null);
           setError(status.message ?? t.eidFailed);
+          return;
+        }
+        if (status.needsCode) {
+          setNeedsCode(true);
           return;
         }
         setMessage(status.message ?? undefined);
@@ -90,9 +97,10 @@ export function EidIdentify({
     setError(undefined);
     setMessage(undefined);
     try {
-      const out = await call('signing.eid_start', { token, session, purpose });
+      const out = await call('signing.eid_start', { token, session, purpose, framed });
       if (out.redirectUrl && framed) {
-        // Identity providers refuse to run in frames, so the broker gets its own window and we wait for it here.
+        // Identity providers refuse to run in frames, so the broker gets its own window, through a page of ours that
+        // can leave a cookie there, and we wait for it here.
         window.open(out.redirectUrl, '_blank', 'noopener');
         setStarted({ id: out.id, popupUrl: out.redirectUrl });
         return;
@@ -117,8 +125,57 @@ export function EidIdentify({
     if (started) void call('signing.eid_cancel', { token, id: started.id }).catch(() => {});
     setStarted(null);
     setMessage(undefined);
+    setNeedsCode(false);
+    setCode('');
   };
 
+  const submitCode = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!id) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      const status = await call('signing.eid_status', { token, id, code: code.trim() });
+      if (status.status === 'complete' && status.session) {
+        onSessionRef.current(status.session);
+      } else if (status.status === 'failed') {
+        setNeedsCode(false);
+        setStarted(null);
+        setError(status.message ?? t.eidFailed);
+      } else {
+        setCode('');
+        setError(t.eidCodeWrong);
+      }
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (needsCode) {
+    return (
+      <form onSubmit={submitCode} className="grid gap-4">
+        <p>{t.eidCodeEnter}</p>
+        <FormError message={error} />
+        <Input
+          aria-label={t.eidCodeLabel}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={6}
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          autoFocus
+        />
+        <Button type="submit" disabled={busy || code.trim().length !== 6}>
+          {busy && <Spinner className="text-primary-foreground" />} {t.eidCodeSubmit}
+        </Button>
+        <Button type="button" variant="ghost" onClick={cancel}>
+          {t.cancel}
+        </Button>
+      </form>
+    );
+  }
   if (started?.popupUrl) {
     return (
       <div className="grid gap-4 text-center">

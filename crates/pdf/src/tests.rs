@@ -1,15 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
 use chrono::Utc;
-use cms::content_info::{CmsVersion, ContentInfo};
-use cms::signed_data::{EncapsulatedContentInfo, SignedData, SignerInfos};
-use const_oid::ObjectIdentifier;
-use const_oid::db::rfc5911::ID_SIGNED_DATA;
-use const_oid::db::rfc5912::ID_SHA_256;
-use der::asn1::{Any, GeneralizedTime, Int, OctetString, SetOfVec};
-use der::{Decode, Encode, Sequence};
 use lopdf::{Document, Object, Stream, StringFormat, dictionary};
-use spki::AlgorithmIdentifierOwned;
 
 use crate::*;
 
@@ -239,87 +231,6 @@ fn verify_detects_tampering_and_appended_updates() {
     let forged = finish(prepared, &identity, signed, None).unwrap();
     let checks = verify_signatures(&forged).unwrap();
     assert_eq!(checks[0].signature_valid, Some(false));
-}
-
-#[derive(Sequence)]
-struct Imprint {
-    hash_algorithm: AlgorithmIdentifierOwned,
-    hashed_message: OctetString,
-}
-
-#[derive(Sequence)]
-struct TstInfo {
-    version: u8,
-    policy: ObjectIdentifier,
-    message_imprint: Imprint,
-    serial_number: Int,
-    gen_time: GeneralizedTime,
-    nonce: Int,
-}
-
-#[derive(Sequence)]
-struct Status {
-    status: u8,
-}
-
-#[derive(Sequence)]
-struct Response {
-    status: Status,
-    token: ContentInfo,
-}
-
-/// A response shaped like a real TSA's but unsigned; `ltv_tests` has a signing one.
-fn fake_tsa(request: &[u8], digest: &[u8; 32], echo_nonce: bool) -> Vec<u8> {
-    let fields: Vec<Any> = Vec::from_der(request).unwrap();
-    let mut nonce: Int = fields[2].decode_as().unwrap();
-    if !echo_nonce {
-        nonce = Int::new(&[0x01, 0x02]).unwrap();
-    }
-    let info = TstInfo {
-        version: 1,
-        policy: ObjectIdentifier::new_unwrap("1.2.3.4"),
-        message_imprint: Imprint {
-            hash_algorithm: AlgorithmIdentifierOwned { oid: ID_SHA_256, parameters: None },
-            hashed_message: OctetString::new(digest.to_vec()).unwrap(),
-        },
-        serial_number: Int::new(&[7]).unwrap(),
-        gen_time: GeneralizedTime::from_unix_duration(std::time::Duration::from_secs(1_800_000_000)).unwrap(),
-        nonce,
-    };
-    let signed = SignedData {
-        version: CmsVersion::V3,
-        digest_algorithms: SetOfVec::try_from(vec![AlgorithmIdentifierOwned { oid: ID_SHA_256, parameters: None }]).unwrap(),
-        encap_content_info: EncapsulatedContentInfo {
-            econtent_type: ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.16.1.4"),
-            econtent: Some(Any::encode_from(&OctetString::new(info.to_der().unwrap()).unwrap()).unwrap()),
-        },
-        certificates: None,
-        crls: None,
-        signer_infos: SignerInfos::try_from(vec![]).unwrap(),
-    };
-    let token = ContentInfo { content_type: ID_SIGNED_DATA, content: Any::encode_from(&signed).unwrap() };
-    Response { status: Status { status: 0 }, token }.to_der().unwrap()
-}
-
-#[test]
-fn seals_with_a_time_stamp() {
-    let identity = generate_seal_identity("Acme AB", "SE", 2).unwrap();
-    let input = sanitize(&sample_pdf(false), Limits::default()).unwrap().pdf;
-    let nonce = [0xA5u8; 16];
-    let sealed = seal(&input, &identity, &options(), |digest| {
-        let request = build_timestamp_request(digest, &nonce);
-        let response = fake_tsa(&request, digest, true);
-        Ok(Some(parse_timestamp_response(&response, digest, &nonce).map_err(|e| PdfError::Timestamp(e.to_string()))?))
-    })
-    .unwrap();
-    let check = &verify_signatures(&sealed).unwrap()[0];
-    assert!(check.is_intact(), "{check:?}");
-    assert_eq!(check.timestamp.unwrap().timestamp(), 1_800_000_000);
-
-    let (sig, other) = ([1u8; 32], [2u8; 32]);
-    let request = build_timestamp_request(&sig, &nonce);
-    assert!(parse_timestamp_response(&fake_tsa(&request, &sig, false), &sig, &nonce).is_err(), "wrong nonce");
-    assert!(parse_timestamp_response(&fake_tsa(&request, &other, true), &sig, &nonce).is_err(), "wrong imprint");
 }
 
 #[test]

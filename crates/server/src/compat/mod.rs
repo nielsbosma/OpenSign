@@ -35,7 +35,7 @@ impl Api {
             headers.insert(header::USER_AGENT, agent.clone());
         }
         let peer = parts.extensions.get::<axum::extract::ConnectInfo<std::net::SocketAddr>>().map(|c| c.0);
-        let ip = security::client_ip(&parts.headers, peer);
+        let ip = security::client_ip(state, &parts.headers, peer).await;
         match auth::context(state, &headers, ip.map(|i| i.to_string()), Surface::Compat, request_id.clone()).await {
             Ok(ctx) if ctx.actor.is_some() => Ok(Api { state: state.clone(), ctx, request_id }),
             Ok(_) => Err((unauthorized(), request_id)),
@@ -114,6 +114,6 @@ pub fn log_internal(error: &AppError, request_id: &str) -> String {
 }
 
 /// Pages of the combined PDF, by the PDF's own dimensions in points.
-pub fn page_sizes(pdf: &[u8]) -> Result<Vec<(f64, f64)>, AppError> {
-    opensign_pdf::page_sizes(pdf).map_err(AppError::internal)
+pub async fn page_sizes(pdf: Vec<u8>) -> Result<Vec<(f64, f64)>, AppError> {
+    tokio::task::spawn_blocking(move || opensign_pdf::page_sizes(&pdf)).await.map_err(AppError::internal)?.map_err(AppError::internal)
 }

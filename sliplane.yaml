@@ -41,7 +41,7 @@ buckets:
 
 services:
   converter:
-    image: gotenberg/gotenberg:8
+    image: gotenberg/gotenberg:8@sha256:13672f317b443c793e972b1bd2155ec62a3e7b6891b411e8196442cc053ee5f5
     public: false
     port: 3000
     healthcheck: /health

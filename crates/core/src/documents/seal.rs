@@ -96,9 +96,13 @@ pub(crate) async fn timestamp(ctx: &Ctx, url: &str, digest: &[u8; 32]) -> Result
     if !response.status().is_success() {
         return Err(AppError::new(ErrorKind::Unavailable, format!("The time stamp authority answered {}", response.status())));
     }
-    let body = response.bytes().await.map_err(AppError::internal)?;
-    if body.len() > 64 * 1024 {
-        return Err(AppError::new(ErrorKind::Unavailable, "The time stamp response is too large"));
+    let mut response = response;
+    let mut body = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(AppError::internal)? {
+        if body.len() + chunk.len() > 64 * 1024 {
+            return Err(AppError::new(ErrorKind::Unavailable, "The time stamp response is too large"));
+        }
+        body.extend_from_slice(&chunk);
     }
     opensign_pdf::parse_timestamp_response(&body, digest, &nonce).map_err(|e| AppError::new(ErrorKind::Unavailable, e.to_string()))
 }
@@ -186,6 +190,7 @@ async fn evidence_events(conn: &mut PgConnection, document_id: Uuid) -> Result<V
                 "party.reminded" => format!("Reminder sent to {name}"),
                 "party.viewed" => format!("Opened by {name}{ip}"),
                 "party.in_person_started" => format!("In-person signing for {name} started by {actor} on their device"),
+                "party.link_issued" => format!("Signing link for {name} handed out by {actor}"),
                 "party.authenticated" => format!(
                     "{name} identified with {}",
                     metadata["method"].as_str().and_then(AuthMethod::parse).map(AuthMethod::label).unwrap_or("a code")
@@ -297,7 +302,7 @@ pub async fn seal_document(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid
                 authentication: auth_label(p),
                 signed_at: p.signed_at.map(|t| fmt_time(Some(t))),
                 ip: p.evidence.as_ref().and_then(|e| e["ip"].as_str()).map(str::to_string),
-                identity: super::open_identity(ctx.keys(), p),
+                identity: super::open_identity(ctx.keys(), p).map(|i| super::mask_identity(&i)),
             })
             .collect(),
         events: evidence_events(conn, document.id).await?,
@@ -334,16 +339,21 @@ pub async fn seal_document(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid
     };
     let timestamped = token.is_some();
     let sealed = opensign_pdf::finish(prepared, &identity, signed, token).map_err(pdf_err)?;
-    let (sealed, level, unchecked) = if timestamped {
+    let (sealed, level, unchecked, revoked) = if timestamped {
         match super::ltv::extend(ctx, sealed.clone(), &signing.tsa_url).await {
-            Ok(extended) => (extended.pdf, extended.level, extended.unchecked),
+            Ok(extended) => {
+                if !extended.revoked.is_empty() {
+                    tracing::warn!(document = %document.id, certificates = ?extended.revoked, "a responder reported a certificate as revoked");
+                }
+                (extended.pdf, extended.level, extended.unchecked, extended.revoked)
+            }
             Err(e) => {
                 tracing::warn!(document = %document.id, error = %e, "sealed without long-term validation data");
-                (sealed, super::ltv::Level::BT, Vec::new())
+                (sealed, super::ltv::Level::BT, Vec::new(), Vec::new())
             }
         }
     } else {
-        (sealed, super::ltv::Level::BB, Vec::new())
+        (sealed, super::ltv::Level::BB, Vec::new(), Vec::new())
     };
 
     let record = store_file(
@@ -373,7 +383,7 @@ pub async fn seal_document(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid
         ctx,
         conn,
         Entry::new("document.completed", "document", document.id)
-            .metadata(json!({ "sealedSha256": record.sha256, "timestamped": timestamped, "padesLevel": level.as_str(), "revocationUnchecked": unchecked })),
+            .metadata(json!({ "sealedSha256": record.sha256, "timestamped": timestamped, "padesLevel": level.as_str(), "revocationUnchecked": unchecked, "revoked": revoked })),
     )
     .await?;
     enqueue(conn, "notify_completed", json!({ "document": document.id }), None, Some(&format!("completed:{}", document.id))).await?;

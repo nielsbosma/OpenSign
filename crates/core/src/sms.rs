@@ -1,5 +1,9 @@
+use chrono::{DateTime, Utc};
+use sqlx::PgConnection;
+use uuid::Uuid;
+
 use crate::context::App;
-use crate::error::{AppError, ErrorKind, Result, bad_request};
+use crate::error::{AppError, ErrorKind, Result, bad_request, too_many};
 use crate::settings::SmsSettings;
 
 /// E.164: a plus sign and 8 to 15 digits. Spaces, dashes and brackets are dropped; a leading 00
@@ -20,6 +24,60 @@ pub fn is_configured(settings: &SmsSettings) -> bool {
     matches!(settings.provider.as_str(), "46elks" | "twilio")
         && !settings.username.is_empty()
         && settings.password.as_deref().is_some_and(|p| !p.is_empty())
+}
+
+/// Refuses a number in a country the install does not send to.
+pub fn check_country(settings: &SmsSettings, phone: &str) -> Result<()> {
+    let digits = phone.trim_start_matches('+');
+    let mut allowed =
+        settings.allowed_countries.split([',', ';', ' ']).map(|c| c.trim().trim_start_matches('+')).filter(|c| !c.is_empty()).peekable();
+    if allowed.peek().is_none() || allowed.any(|code| digits.starts_with(code)) {
+        return Ok(());
+    }
+    Err(bad_request("SMS cannot be sent to this country. Use a different phone number, or ask an admin to allow the country."))
+}
+
+/// Takes one message from the budgets and returns its entry, which `release` gives back if the
+/// message could not be sent. Concurrent callers can overshoot by a few messages, which is fine
+/// for a brake on cost.
+pub async fn reserve(
+    conn: &mut PgConnection,
+    settings: &SmsSettings,
+    phone: &str,
+    share_link: Option<Uuid>,
+    now: DateTime<Utc>,
+) -> Result<Uuid> {
+    check_country(settings, phone)?;
+    let id = Uuid::now_v7();
+    let taken = sqlx::query(
+        "insert into sms_log (id, share_link_id, sent_at) select $1, $2, $3
+         where ($4 = 0 or (select count(*) from sms_log where sent_at > $3 - interval '1 hour') < $4)
+           and ($5 = 0 or (select count(*) from sms_log where sent_at > $3 - interval '1 day') < $5)
+           and ($6 = 0 or $2::uuid is null or (select count(*) from sms_log where share_link_id = $2 and sent_at > $3 - interval '1 hour') < $6)",
+    )
+    .bind(id)
+    .bind(share_link)
+    .bind(now)
+    .bind(settings.hourly_limit as i64)
+    .bind(settings.daily_limit as i64)
+    .bind(settings.share_link_hourly_limit as i64)
+    .execute(&mut *conn)
+    .await?;
+    if taken.rows_affected() == 0 {
+        tracing::warn!(share_link = ?share_link, "an SMS budget in Admin settings was reached");
+        return Err(too_many("Too many text messages were sent just now. Try again later."));
+    }
+    Ok(id)
+}
+
+pub async fn release(conn: &mut PgConnection, id: Uuid) -> Result<()> {
+    sqlx::query("delete from sms_log where id = $1").bind(id).execute(&mut *conn).await?;
+    Ok(())
+}
+
+pub async fn prune(conn: &mut PgConnection, now: DateTime<Utc>) -> Result<()> {
+    sqlx::query("delete from sms_log where sent_at < $1 - interval '2 days'").bind(now).execute(&mut *conn).await?;
+    Ok(())
 }
 
 /// Sender ids: up to 11 letters and digits, or a phone number.
@@ -76,5 +134,14 @@ mod tests {
         assert_eq!(normalize_phone("0046701234567").ok().as_deref(), Some("+46701234567"));
         assert!(normalize_phone("070 123 45 67").is_err());
         assert!(normalize_phone("+46 70 123 45 67; rm").is_err());
+    }
+
+    #[test]
+    fn only_allowed_countries_pass() {
+        let settings = |allowed: &str| SmsSettings { allowed_countries: allowed.into(), ..SmsSettings::default() };
+        assert!(check_country(&settings(""), "+882123456789").is_ok());
+        assert!(check_country(&settings("46, +47"), "+46701234567").is_ok());
+        assert!(check_country(&settings("46, +47"), "+4712345678").is_ok());
+        assert!(check_country(&settings("46, 47"), "+882123456789").is_err());
     }
 }

@@ -1,10 +1,11 @@
 use lopdf::{Dictionary, Document, Object, ObjectId};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
+use crate::load::{MAX_STREAM_BYTES, load};
 use crate::{PdfError, Result};
 
 /// A page's visible area in PDF units (1/72 inch) and its rotation, as the viewer shows it.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PageBox {
     pub x: f64,
@@ -98,16 +99,16 @@ pub fn page_box(doc: &Document, page: ObjectId) -> Result<PageBox> {
 
 /// Displayed width and height of each page, in order. For files OpenSign produced or sanitized.
 pub fn page_sizes(pdf: &[u8]) -> Result<Vec<(f64, f64)>> {
-    let doc = Document::load_mem(pdf)?;
+    let doc = load(pdf)?;
     doc.get_pages().values().map(|&page| page_box(&doc, page).map(|b| b.displayed())).collect()
 }
 
 /// The text of each page, in order, for review by a language model. Best effort: PDFs drawn as
 /// images or with unusual font encodings give little or nothing.
 pub fn extract_text(pdf: &[u8]) -> Result<Vec<String>> {
-    let doc = Document::load_mem(pdf)?;
+    let doc = load(pdf)?;
     let pages: Vec<u32> = doc.get_pages().keys().copied().collect();
-    Ok(pages.iter().map(|&n| doc.extract_text(&[n]).unwrap_or_default()).collect())
+    Ok(pages.iter().map(|&n| doc.extract_text_with_limit(&[n], MAX_STREAM_BYTES).unwrap_or_default()).collect())
 }
 
 #[cfg(test)]

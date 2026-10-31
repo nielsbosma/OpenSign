@@ -144,7 +144,7 @@ async fn sessions_csrf_rate_limits_and_api_keys() {
     let (response, _) = client.call("auth.login", json!({ "email": "bo@example.com", "password": PASSWORD }), &[]).await;
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "other addresses are not throttled");
     let (response, _) = client.call("auth.login", json!({ "email": "ada@example.com", "password": PASSWORD }), &[]).await;
-    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS, "but the guessed account is locked for a while");
+    assert_eq!(response.status(), StatusCode::OK, "and one address cannot lock the owner out");
 
     let (response, body) = client.send(Request::get("/api/nothing-here").body(Body::empty()).unwrap()).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
@@ -537,4 +537,97 @@ async fn logos_are_checked_and_served_publicly() {
 
     let (_, removed) = client.call("branding.remove_logo", json!({}), &auth).await;
     assert!(removed["logoUrl"].is_null());
+}
+
+#[tokio::test]
+async fn bodies_are_refused_before_they_are_read() {
+    let Some(app) = app().await else { return };
+    let client = Client { router: router(AppState::new(app.clone())), ip: "203.0.113.20" };
+    let setup = json!({ "setupCode": app.keys.setup_code(), "orgName": "Acme AB", "name": "Ada", "email": "ada@example.com", "password": PASSWORD });
+    client.call("setup.create_first_admin", setup, &[]).await;
+
+    let big = vec![b'['; 3 * 1024 * 1024];
+    let send_big = |name: &str| client.rpc(name).body(Body::from(big.clone())).unwrap();
+    let (response, _) = client.send(send_big("documents.list")).await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "no credentials: the size does not matter");
+    let (response, _) = client.send(send_big("documents.upload")).await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let (response, _) = client.send(send_big("setup.status")).await;
+    assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE, "a public call takes two megabytes at most");
+
+    let upload = Request::post(format!("/api/documents/{}/files", uuid::Uuid::nil()))
+        .header(header::CONTENT_TYPE, "multipart/form-data; boundary=x")
+        .header("x-forwarded-for", client.ip)
+        .body(Body::from("--x--"))
+        .unwrap();
+    let (response, _) = client.send(upload).await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn public_calls_refuse_other_sites() {
+    let Some(app) = app().await else { return };
+    let client = Client { router: router(AppState::new(app.clone())), ip: "203.0.113.21" };
+    let setup = json!({ "setupCode": app.keys.setup_code(), "orgName": "Acme AB", "name": "Ada", "email": "ada@example.com", "password": PASSWORD });
+    client.call("setup.create_first_admin", setup, &[]).await;
+    let login = json!({ "email": "ada@example.com", "password": PASSWORD });
+
+    let form = Request::post("/api/rpc/auth.login")
+        .header(header::CONTENT_TYPE, "text/plain")
+        .header("x-forwarded-for", client.ip)
+        .body(Body::from(login.to_string()))
+        .unwrap();
+    let (response, _) = client.send(form).await;
+    assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    let untyped = Request::post("/api/rpc/auth.login").header("x-forwarded-for", client.ip).body(Body::from(login.to_string())).unwrap();
+    let (response, _) = client.send(untyped).await;
+    assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    let (response, _) = client.call("auth.login", login.clone(), &[("sec-fetch-site", "cross-site")]).await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let (response, _) = client.call("auth.login", login, &[("sec-fetch-site", "same-origin")]).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let empty = Request::post("/api/rpc/setup.status").header("x-forwarded-for", client.ip).body(Body::empty()).unwrap();
+    let (response, _) = client.send(empty).await;
+    assert_eq!(response.status(), StatusCode::OK, "no body needs no content type");
+}
+
+#[tokio::test]
+async fn file_routes_ask_for_the_required_two_factor() {
+    let Some(app) = app().await else { return };
+    let client = Client { router: router(AppState::new(app.clone())), ip: "203.0.113.22" };
+    let setup = json!({ "setupCode": app.keys.setup_code(), "orgName": "Acme AB", "name": "Ada", "email": "ada@example.com", "password": PASSWORD });
+    client.call("setup.create_first_admin", setup, &[]).await;
+    let (response, _) = client.call("auth.login", json!({ "email": "ada@example.com", "password": PASSWORD }), &[]).await;
+    let cookie = cookie_of(&response);
+    let auth: [(&str, &str); 2] = [("cookie", &cookie), ("origin", ORIGIN)];
+    let (_, doc) = client.call("documents.create", json!({ "title": "Agreement" }), &auth).await;
+    let id = doc["id"].as_str().unwrap().to_string();
+    let (response, _) = client.call("settings.update", json!({ "group": "security", "values": { "enforceTwoFactor": true } }), &auth).await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    for path in
+        [format!("/api/documents/{id}/file"), format!("/api/documents/{id}/preview"), format!("/api/documents/{id}/attachments/{id}")]
+    {
+        let get = Request::get(&path).header("cookie", &cookie).header("x-forwarded-for", client.ip).body(Body::empty()).unwrap();
+        let (response, body) = client.send(get).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{path}: {body}");
+    }
+    let upload = Request::post(format!("/api/documents/{id}/files"))
+        .header("cookie", &cookie)
+        .header("origin", ORIGIN)
+        .header(header::CONTENT_TYPE, "multipart/form-data; boundary=x")
+        .header("x-forwarded-for", client.ip)
+        .body(Body::from("--x--"))
+        .unwrap();
+    let (response, _) = client.send(upload).await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[test]
+fn every_large_body_names_a_real_service() {
+    let names: Vec<&str> = opensign_core::services::registry().into_iter().map(|s| s.meta().name).collect();
+    for name in ["documents.upload", "documents.replace_file", "documents.verify", "bulk.preview", "bulk.start", "branding.set_logo"] {
+        assert!(names.contains(&name), "{name}");
+        assert!(opensign_server::rpc::body_limit(name) > opensign_server::rpc::body_limit("documents.list"), "{name}");
+    }
 }

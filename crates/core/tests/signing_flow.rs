@@ -498,15 +498,44 @@ async fn sends_signs_seals_and_verifies() {
         std::fs::write(path, &sealed).unwrap();
     }
     let mut conn = app.db.acquire().await.unwrap();
-    let verified = docs::verify_pdf(&mut conn, sealed.clone()).await.unwrap();
+    let verified = docs::verify_pdf(&sender, &mut conn, sealed.clone()).await.unwrap();
     assert_eq!(verified.document.map(|d| d.id), Some(id));
     assert_eq!(verified.signatures.len(), if live { 2 } else { 1 }, "{:?}", verified.signatures);
+
+    let mut stamped = verified.signatures[0].clone();
+    stamped.timestamp = Some(chrono::Utc::now());
+    stamped.timestamp_authority_sha256 = Some("ab".repeat(32));
+    let listed = opensign_core::settings::SigningSettings {
+        trusted_timestamp_authorities: format!("{}, {}", "cd".repeat(32), "AB:".repeat(32).trim_end_matches(':')),
+        ..Default::default()
+    };
+    app.settings.save(&mut conn, &app.keys, &listed, None).await.unwrap();
+    let compared = docs::compare_with_seals(&sender, &mut conn, String::new(), vec![stamped.clone()]).await.unwrap();
+    assert!(compared.signatures[0].timestamp_trusted, "a listed authority counts");
+    stamped.timestamp_authority_sha256 = Some("ef".repeat(32));
+    let compared = docs::compare_with_seals(&sender, &mut conn, String::new(), vec![stamped]).await.unwrap();
+    assert!(!compared.signatures[0].timestamp_trusted, "any other does not");
+    app.settings.save(&mut conn, &app.keys, &opensign_core::settings::SigningSettings::default(), None).await.unwrap();
     assert!(verified.signatures.iter().all(|s| s.is_intact() && s.problems.is_empty()), "{:?}", verified.signatures);
+    assert!(verified.signatures[0].trusted, "the seal is this server's own");
+
+    let cleaned = opensign_pdf::sanitize(&sealed, opensign_pdf::Limits::default()).unwrap();
+    let stranger = opensign_pdf::generate_seal_identity("Stranger", "SE", 1).unwrap();
+    let options = opensign_pdf::SealOptions {
+        name: "Stranger".into(),
+        reason: "x".into(),
+        location: String::new(),
+        signing_time: chrono::Utc::now(),
+    };
+    let foreign = opensign_pdf::seal(&cleaned.pdf, &stranger, &options, |_| Ok(None)).unwrap();
+    let verified = docs::verify_pdf(&sender, &mut conn, foreign).await.unwrap();
+    assert!(verified.signatures[0].intact && !verified.signatures[0].trusted, "intact says nothing about who signed");
+    assert!(verified.document.is_none());
 
     let mut tampered = sealed;
     let n = tampered.len();
     tampered[n / 3] ^= 0x20;
-    if let Ok(result) = docs::verify_pdf(&mut conn, tampered).await {
+    if let Ok(result) = docs::verify_pdf(&sender, &mut conn, tampered).await {
         assert!(result.document.is_none());
         assert!(result.signatures.iter().all(|s| !s.is_intact()));
     }

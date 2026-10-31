@@ -2,16 +2,20 @@ use std::collections::BTreeSet;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
-use opensign_crypto::{hash_password, random_token, sha256_hex};
+use opensign_crypto::{random_token, sha256_hex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sqlx::PgConnection;
+use sqlx::{Connection, PgConnection};
 use uuid::Uuid;
 
+use super::auth::{notify_keys_revoked, send_in_background};
 use super::{Empty, Ok_, settings};
 use crate::audit::{Entry, audit};
-use crate::auth::{API_KEY_PREFIX, ips_no_wider, normalize_allowed_ips, normalize_email, revoke_sessions, user_by_email, user_by_id};
+use crate::auth::{
+    API_KEY_PREFIX, expire_account_links, ips_no_wider, new_password_hash, normalize_allowed_ips, normalize_email, require_step_up,
+    revoke_api_keys, revoke_sessions, user_by_email, user_by_id,
+};
 use crate::context::{Credential, Ctx};
 use crate::email::{self, Message};
 use crate::error::{AppError, ErrorKind, Result, bad_request, conflict, forbidden, not_found};
@@ -85,7 +89,8 @@ impl Service for Invite {
         Access::Permission(Permission::UsersManage),
     )
     .tool()
-    .open_world();
+    .open_world()
+    .without_transaction();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: InviteInput) -> Result<InviteView> {
         let email = normalize_email(&input.email)?;
@@ -95,9 +100,10 @@ impl Service for Invite {
         let token = random_token();
         let id = Uuid::now_v7();
         let expires_at = ctx.now + Duration::days(INVITE_DAYS);
+        let mut tx = conn.begin().await?;
         sqlx::query("update invites set revoked_at = now() where lower(email) = $1 and accepted_at is null and revoked_at is null")
             .bind(&email)
-            .execute(&mut *conn)
+            .execute(&mut *tx)
             .await?;
         sqlx::query("insert into invites (id, email, name, role, token_hash, invited_by, expires_at) values ($1, $2, $3, $4, $5, $6, $7)")
             .bind(id)
@@ -107,9 +113,11 @@ impl Service for Invite {
             .bind(sha256_hex(&token))
             .bind(ctx.actor()?.user_id)
             .bind(expires_at)
-            .execute(&mut *conn)
+            .execute(&mut *tx)
             .await?;
-        audit(ctx, conn, Entry::new("users.invite", "invite", id).after(serde_json::json!({ "email": email, "role": input.role }))).await?;
+        audit(ctx, &mut tx, Entry::new("users.invite", "invite", id).after(serde_json::json!({ "email": email, "role": input.role })))
+            .await?;
+        tx.commit().await?;
         let email_settings: EmailSettings = settings(ctx, conn).await?;
         let org: OrgSettings = settings(ctx, conn).await?;
         let inviter = ctx.actor()?.name.clone();
@@ -205,13 +213,14 @@ impl Service for AcceptInvite {
     const META: Meta = Meta::mutation("users.accept_invite", "Create an account from an invitation link.", Access::Public);
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: AcceptInput) -> Result<Ok_> {
-        let hash = hash_password(&input.password).map_err(|e| bad_request(e.to_string()))?;
+        let hash = new_password_hash(&input.password).await?;
         let name = input.name.trim();
         if name.is_empty() || name.len() > 200 {
             return Err(bad_request("Enter your name"));
         }
         let invite: Option<(Uuid, String, String)> = sqlx::query_as(
-            "select id, email, role from invites where token_hash = $1 and accepted_at is null and revoked_at is null and expires_at > $2 for update",
+            "select i.id, i.email, i.role from invites i where i.token_hash = $1 and i.accepted_at is null and i.revoked_at is null and i.expires_at > $2
+               and (i.invited_by is null or exists (select 1 from users u where u.id = i.invited_by and u.active)) for update of i",
         )
         .bind(sha256_hex(&input.token))
         .bind(ctx.now)
@@ -251,11 +260,12 @@ pub struct UpdateInput {
 
 pub struct Update;
 
-async fn other_active_admins(conn: &mut PgConnection, except: Uuid) -> Result<i64> {
-    Ok(sqlx::query_scalar("select count(*) from users where role = 'admin' and active and id <> $1")
-        .bind(except)
-        .fetch_one(&mut *conn)
-        .await?)
+/// Locks every admin row, in one order, so two admins demoting each other at once take turns and
+/// the second one sees the first one's change.
+async fn other_active_admins(conn: &mut PgConnection, except: Uuid) -> Result<usize> {
+    let admins: Vec<Uuid> =
+        sqlx::query_scalar("select id from users where role = 'admin' and active order by id for update").fetch_all(&mut *conn).await?;
+    Ok(admins.into_iter().filter(|id| *id != except).count())
 }
 
 #[async_trait]
@@ -289,6 +299,7 @@ impl Service for Update {
             .bind(active)
             .execute(&mut *conn)
             .await?;
+        let mut invites_revoked = 0;
         if !active || role != user.role {
             revoke_sessions(conn, user.id, None).await?;
             sqlx::query("update api_keys set revoked_at = now() where user_id = $1 and revoked_at is null and $2")
@@ -296,13 +307,21 @@ impl Service for Update {
                 .bind(!active)
                 .execute(&mut *conn)
                 .await?;
+            // What they invited people to do is no longer theirs to grant.
+            invites_revoked =
+                sqlx::query("update invites set revoked_at = now() where invited_by = $1 and accepted_at is null and revoked_at is null")
+                    .bind(user.id)
+                    .execute(&mut *conn)
+                    .await?
+                    .rows_affected();
         }
         audit(
             ctx,
             conn,
             Entry::new("users.update", "user", user.id)
                 .before(serde_json::json!({ "name": user.name, "role": user.role, "active": user.active }))
-                .after(serde_json::json!({ "name": name, "role": role, "active": active })),
+                .after(serde_json::json!({ "name": name, "role": role, "active": active }))
+                .metadata(serde_json::json!({ "invitesRevoked": invites_revoked })),
         )
         .await?;
         Ok(UserView {
@@ -338,7 +357,8 @@ impl Service for ChangeEmail {
     )
     .tool()
     .destructive()
-    .open_world();
+    .open_world()
+    .without_transaction();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ChangeEmailInput) -> Result<Ok_> {
         let actor = ctx.actor()?;
@@ -361,9 +381,10 @@ impl Service for ChangeEmail {
         if recent >= 5 {
             return Err(AppError::new(ErrorKind::TooManyRequests, "Too many email changes for this person. Try again in an hour."));
         }
+        let mut tx = conn.begin().await?;
         sqlx::query("update email_change_tokens set used_at = now() where user_id = $1 and used_at is null")
             .bind(user.id)
-            .execute(&mut *conn)
+            .execute(&mut *tx)
             .await?;
         let token = random_token();
         sqlx::query("insert into email_change_tokens (id, user_id, new_email, requested_by, expires_at) values ($1, $2, $3, $4, $5)")
@@ -372,16 +393,17 @@ impl Service for ChangeEmail {
             .bind(&email)
             .bind(actor.user_id)
             .bind(ctx.now + Duration::hours(EMAIL_CHANGE_HOURS))
-            .execute(&mut *conn)
+            .execute(&mut *tx)
             .await?;
         audit(
             ctx,
-            conn,
+            &mut tx,
             Entry::new("users.email_change_requested", "user", user.id)
                 .before(json!({ "email": user.email }))
                 .after(json!({ "email": email })),
         )
         .await?;
+        tx.commit().await?;
         let email_settings: EmailSettings = settings(ctx, conn).await?;
         let org: OrgSettings = settings(ctx, conn).await?;
         email::send(
@@ -429,36 +451,37 @@ impl Service for ConfirmEmailChange {
         "auth.confirm_email_change",
         "Finish changing a sign-in email with the link sent to the new address.",
         Access::Public,
-    );
+    )
+    .without_transaction();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: TokenInput) -> Result<EmailView> {
+        let mut tx = conn.begin().await?;
         let row: Option<(Uuid, String)> = sqlx::query_as(
             "update email_change_tokens set used_at = now() where id = $1 and used_at is null and expires_at > $2 returning user_id, new_email",
         )
         .bind(sha256_hex(&input.token))
         .bind(ctx.now)
-        .fetch_optional(&mut *conn)
+        .fetch_optional(&mut *tx)
         .await?;
         let expired = || bad_request("This link has expired or was already used. Ask for a new one.");
         let (user_id, email) = row.ok_or_else(expired)?;
-        let user = user_by_id(conn, user_id).await?.filter(|u| u.active).ok_or_else(expired)?;
-        if user_by_email(conn, &email).await?.is_some_and(|u| u.id != user.id) {
+        let user = user_by_id(&mut tx, user_id).await?.filter(|u| u.active).ok_or_else(expired)?;
+        if user_by_email(&mut tx, &email).await?.is_some_and(|u| u.id != user.id) {
             return Err(conflict("Someone with that email already has an account"));
         }
-        sqlx::query("update users set email = $2, updated_at = now() where id = $1").bind(user.id).bind(&email).execute(&mut *conn).await?;
+        sqlx::query("update users set email = $2, updated_at = now() where id = $1").bind(user.id).bind(&email).execute(&mut *tx).await?;
+        expire_account_links(&mut tx, user.id).await?;
         audit(
             ctx,
-            conn,
+            &mut tx,
             Entry::new("users.email_changed", "user", user.id).before(json!({ "email": user.email })).after(json!({ "email": email })),
         )
         .await?;
-        let email_settings: EmailSettings = settings(ctx, conn).await?;
-        let org: OrgSettings = settings(ctx, conn).await?;
-        let notice = email::send(
-            &ctx.app,
-            &email_settings,
-            &org,
-            &Message {
+        tx.commit().await?;
+        send_in_background(
+            ctx,
+            conn,
+            Message {
                 to: user.email.clone(),
                 to_name: Some(user.name.clone()),
                 subject: "Your OpenSign email was changed".into(),
@@ -472,10 +495,7 @@ impl Service for ConfirmEmailChange {
                 lang: crate::i18n::Lang::En,
             },
         )
-        .await;
-        if let Err(error) = notice {
-            tracing::warn!(error = %error, "email change notice failed");
-        }
+        .await?;
         Ok(EmailView { email })
     }
 }
@@ -491,24 +511,33 @@ impl Service for ResetTwoFactor {
         "Turn off someone's two-factor when they lost their phone. They set it up again at next sign-in if it is required.",
         Access::Permission(Permission::UsersManage),
     )
-    .not_a_tool("Turning off someone's two-factor weakens their sign-in, so an admin does it in the app.");
+    .not_a_tool("Turning off someone's two-factor weakens their sign-in, so an admin does it in the app.")
+    .without_transaction();
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: IdInput) -> Result<Ok_> {
         if input.id == ctx.actor()?.user_id {
             return Err(bad_request("Ask another admin to reset your own two-factor"));
         }
-        let done = sqlx::query(
-            "update users set totp_secret = null, totp_pending_secret = null, totp_enabled_at = null, totp_last_step = null where id = $1",
+        let mut tx = conn.begin().await?;
+        let user = user_by_id(&mut tx, input.id).await?.ok_or_else(|| not_found("User"))?;
+        sqlx::query(
+            "update users set totp_secret = null, totp_pending_secret = null, totp_enabled_at = null, totp_last_step = null, has_passkey = false where id = $1",
         )
         .bind(input.id)
-        .execute(&mut *conn)
+        .execute(&mut *tx)
         .await?;
-        if done.rows_affected() == 0 {
-            return Err(not_found("User"));
-        }
-        sqlx::query("delete from recovery_codes where user_id = $1").bind(input.id).execute(&mut *conn).await?;
-        revoke_sessions(conn, input.id, None).await?;
-        audit(ctx, conn, Entry::new("users.reset_two_factor", "user", input.id)).await?;
+        sqlx::query("delete from recovery_codes where user_id = $1").bind(input.id).execute(&mut *tx).await?;
+        let passkeys = sqlx::query("delete from passkeys where user_id = $1").bind(input.id).execute(&mut *tx).await?.rows_affected();
+        revoke_sessions(&mut tx, input.id, None).await?;
+        let keys = revoke_api_keys(&mut tx, input.id).await?;
+        audit(
+            ctx,
+            &mut tx,
+            Entry::new("users.reset_two_factor", "user", input.id).metadata(json!({ "passkeysRemoved": passkeys, "apiKeysRevoked": keys })),
+        )
+        .await?;
+        tx.commit().await?;
+        notify_keys_revoked(ctx, conn, &user, keys, "An admin reset your two-factor sign-in.").await?;
         Ok(Ok_::default())
     }
 }
@@ -548,6 +577,7 @@ impl Service for CreateApiKey {
         if actor.credential != Credential::Session {
             return Err(AppError::new(ErrorKind::Forbidden, "Create API keys in the app, signed in"));
         }
+        require_step_up(ctx, conn).await?;
         let name = key_name(&input.name)?;
         let permissions = key_permissions(actor, &input.permissions)?;
         let allowed_ips = normalize_allowed_ips(&input.allowed_ips)?;

@@ -48,22 +48,74 @@ impl Resolve for FilteringResolver {
     fn resolve(&self, name: Name) -> Resolving {
         Box::pin(async move {
             let host = name.as_str().to_string();
-            let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host.as_str(), 0)).await?.filter(|a| !is_forbidden(a.ip())).collect();
+            // The same answer for a name that does not exist as for one on a private network, since
+            // delivery errors are shown to people who should not learn the internal DNS from them.
+            let refused = || -> Box<dyn std::error::Error + Send + Sync> { format!("{host} has no public address").into() };
+            let found = tokio::net::lookup_host((host.as_str(), 0)).await.map_err(|_| refused())?;
+            let addrs: Vec<SocketAddr> = found.filter(|a| !is_forbidden(a.ip())).collect();
             if addrs.is_empty() {
-                return Err(format!("{host} resolves only to private or reserved addresses").into());
+                return Err(refused());
             }
             Ok(Box::new(addrs.into_iter()) as Addrs)
         })
     }
 }
 
+/// Link-local and cloud metadata addresses. A self-hosted AI proxy may be on the private network,
+/// but nothing legitimate is here, and these answer with the host's credentials.
+fn is_metadata(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => v4.is_link_local() || matches!(v4.octets(), [100, 100, 100, 200] | [192, 0, 0, 192] | [168, 63, 129, 16]),
+        IpAddr::V6(v6) => {
+            v6.to_ipv4_mapped().is_some_and(|v4| is_metadata(IpAddr::V4(v4)))
+                || (v6.segments()[0] & 0xffc0) == 0xfe80
+                || v6.segments()[..3] == [0xfd00, 0x0ec2, 0]
+        }
+    }
+}
+
+struct ProxyResolver;
+
+impl Resolve for ProxyResolver {
+    fn resolve(&self, name: Name) -> Resolving {
+        Box::pin(async move {
+            let host = name.as_str().to_string();
+            let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host.as_str(), 0)).await?.filter(|a| !is_metadata(a.ip())).collect();
+            if addrs.is_empty() {
+                return Err(format!("{host} has no usable address").into());
+            }
+            Ok(Box::new(addrs.into_iter()) as Addrs)
+        })
+    }
+}
+
+/// The address of a self-hosted AI proxy. Literal IPs bypass DNS, so they are checked here too.
+pub fn check_ai_proxy_url(url: &str) -> Result<reqwest::Url, String> {
+    let parsed = reqwest::Url::parse(url).map_err(|_| "Enter the proxy's http or https address".to_string())?;
+    if !matches!(parsed.scheme(), "http" | "https") || !parsed.username().is_empty() {
+        return Err("Enter the proxy's http or https address".into());
+    }
+    let literal = match parsed.host() {
+        Some(url::Host::Ipv4(ip)) => Some(IpAddr::V4(ip)),
+        Some(url::Host::Ipv6(ip)) => Some(IpAddr::V6(ip)),
+        _ => None,
+    };
+    if literal.is_some_and(is_metadata) {
+        return Err("That address is not allowed for an AI proxy".into());
+    }
+    Ok(parsed)
+}
+
 /// HTTP clients for the rest of the app. `public` filters destinations after DNS resolution, so a
 /// hostname that points at 169.254.169.254 or 10.0.0.1 is refused; it follows no redirects.
 /// `internal` is for addresses the operator configured (the converter, development mail).
+/// `ai_proxy` is for a self-hosted AI proxy: the private network, but not metadata addresses.
+/// None honors proxy variables in the environment: a proxy would resolve names itself, past the filter.
 #[derive(Clone)]
 pub struct SafeHttp {
     pub public: reqwest::Client,
     pub internal: reqwest::Client,
+    pub ai_proxy: reqwest::Client,
 }
 
 impl SafeHttp {
@@ -76,6 +128,7 @@ impl SafeHttp {
             .connect_timeout(Duration::from_secs(5))
             .timeout(Duration::from_secs(30))
             .https_only(false)
+            .no_proxy()
             .build()
             .expect("HTTP client");
         let internal = reqwest::Client::builder()
@@ -83,9 +136,19 @@ impl SafeHttp {
             .redirect(reqwest::redirect::Policy::none())
             .connect_timeout(Duration::from_secs(5))
             .timeout(Duration::from_secs(120))
+            .no_proxy()
             .build()
             .expect("HTTP client");
-        Self { public, internal }
+        let ai_proxy = reqwest::Client::builder()
+            .user_agent(&ua)
+            .dns_resolver(Arc::new(ProxyResolver))
+            .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(180))
+            .no_proxy()
+            .build()
+            .expect("HTTP client");
+        Self { public, internal, ai_proxy }
     }
 }
 
@@ -107,6 +170,7 @@ pub fn client_with_certificate(identity_pem: &str, roots: Option<&str>) -> Resul
         .https_only(true)
         .connect_timeout(Duration::from_secs(5))
         .timeout(Duration::from_secs(20))
+        .no_proxy()
         .identity(identity);
     if let Some(roots) = roots.filter(|r| !r.trim().is_empty()) {
         let certs = reqwest::Certificate::from_pem_bundle(roots.as_bytes()).map_err(|_| "The CA certificate must be PEM".to_string())?;
@@ -220,6 +284,34 @@ mod tests {
     async fn refuses_hostnames_that_resolve_privately() {
         let http = SafeHttp::new();
         let err = http.public.get("http://localhost:9/").send().await.expect_err("blocked");
-        assert!(format!("{err:?}").contains("private or reserved"));
+        assert!(format!("{err:?}").contains("no public address"));
+    }
+
+    #[tokio::test]
+    async fn a_private_name_and_a_missing_one_look_the_same() {
+        let http = SafeHttp::new();
+        for host in ["localhost", "no-such-name.invalid"] {
+            let err = http.public.get(format!("http://{host}:9/")).send().await.expect_err("blocked");
+            assert!(format!("{err:?}").contains(&format!("{host} has no public address")), "{err:?}");
+        }
+    }
+
+    #[test]
+    fn an_ai_proxy_may_be_private_but_not_a_metadata_address() {
+        for good in ["http://10.0.0.5:4000", "http://192.168.1.2/v1", "http://127.0.0.1:4000", "https://litellm.internal"] {
+            assert!(check_ai_proxy_url(good).is_ok(), "{good}");
+        }
+        for bad in [
+            "http://169.254.169.254/latest",
+            "http://[fe80::1]/",
+            "http://[::ffff:169.254.169.254]/",
+            "http://[fd00:ec2::254]/",
+            "http://100.100.100.200/",
+            "http://168.63.129.16/",
+            "ftp://10.0.0.5/",
+            "http://user@10.0.0.5/",
+        ] {
+            assert!(check_ai_proxy_url(bad).is_err(), "{bad}");
+        }
     }
 }

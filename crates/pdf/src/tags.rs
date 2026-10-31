@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use lopdf::content::{Content, Operation};
 use lopdf::{Object, Stream};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::Result;
 use crate::text::{Glyph, load, page_content, walk};
@@ -12,7 +12,7 @@ const MAX_TAGS: usize = 1000;
 
 /// A `{{…}}` text tag found on a page. The box is in fractions of the displayed page, origin
 /// top-left, covering the tag's text.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TextTag {
     /// Zero-based page within the file.

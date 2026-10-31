@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use sqlx::PgConnection;
 
 use crate::context::Ctx;
-use crate::error::{AppError, ErrorKind, Result};
+use crate::error::{AppError, ErrorKind, Result, bad_request};
 use crate::settings::AiSettings;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,6 +52,8 @@ impl Reply {
     }
 }
 
+const MAX_CALLS_PER_HOUR: i64 = 400;
+
 pub fn is_configured(settings: &AiSettings) -> bool {
     !settings.provider.is_empty() && !settings.model.is_empty()
 }
@@ -64,13 +66,14 @@ fn base_url(settings: &AiSettings) -> Result<String> {
         "berget" => "https://api.berget.ai/v1".into(),
         "opper" => "https://api.opper.ai/v3/compat".into(),
         "litellm" if !trimmed.is_empty() => {
-            if trimmed.ends_with("/v1") {
-                trimmed.into()
-            } else {
-                format!("{trimmed}/v1")
-            }
+            crate::net::check_ai_proxy_url(trimmed).map_err(bad_request)?;
+            if trimmed.ends_with("/v1") { trimmed.into() } else { format!("{trimmed}/v1") }
         }
-        "anthropic" | "openai" | "openai-compatible" if !trimmed.is_empty() => trimmed.into(),
+        "openai-compatible" if !trimmed.is_empty() => {
+            crate::net::check_ai_proxy_url(trimmed).map_err(bad_request)?;
+            trimmed.into()
+        }
+        "anthropic" | "openai" if !trimmed.is_empty() => trimmed.into(),
         _ => return Err(AppError::new(ErrorKind::Unavailable, "The AI provider is not set up. An Admin can do that in Settings, AI.")),
     })
 }
@@ -78,12 +81,14 @@ fn base_url(settings: &AiSettings) -> Result<String> {
 /// Operator-run proxies may live on the private network; the public providers never do.
 fn client<'a>(ctx: &'a Ctx, settings: &AiSettings) -> &'a reqwest::Client {
     match settings.provider.as_str() {
-        "litellm" | "openai-compatible" => &ctx.app.http.internal,
+        "litellm" | "openai-compatible" => &ctx.app.http.ai_proxy,
         _ => &ctx.app.http.public,
     }
 }
 
-fn describe(status: u16, body: &str) -> String {
+fn describe(settings: &AiSettings, status: u16, body: &str) -> String {
+    // A proxy's address can point anywhere on the private network, so what answers there stays out of messages.
+    let body = if matches!(settings.provider.as_str(), "litellm" | "openai-compatible") { "" } else { body };
     match status {
         401 | 403 => format!("The AI provider refused the key (HTTP {status}). An Admin should check it in Settings, AI."),
         404 => "The AI provider does not know that model or address (HTTP 404).".into(),
@@ -123,7 +128,7 @@ pub async fn list_models(ctx: &Ctx, settings: &AiSettings) -> Result<Vec<Model>>
     let status = response.status().as_u16();
     let text = response.text().await.unwrap_or_default();
     if !(200..300).contains(&status) {
-        return Err(AppError::new(ErrorKind::Unavailable, describe(status, &text)));
+        return Err(AppError::new(ErrorKind::Unavailable, describe(settings, status, &text)));
     }
     let value: Value = serde_json::from_str(&text)
         .map_err(|e| AppError::new(ErrorKind::Unavailable, "The AI provider sent an unreadable model list").with_cause(e))?;
@@ -226,6 +231,7 @@ pub async fn complete(ctx: &Ctx, conn: &mut PgConnection, settings: &AiSettings,
         return Err(AppError::new(ErrorKind::Unavailable, "The AI features are off. An Admin can set up a provider in Settings, AI."));
     }
     check_budget(conn, settings).await?;
+    check_caller_rate(ctx, conn).await?;
     let base = base_url(settings)?;
     let anthropic = settings.provider == "anthropic";
     let (url, body) = if anthropic {
@@ -255,7 +261,7 @@ pub async fn complete(ctx: &Ctx, conn: &mut PgConnection, settings: &AiSettings,
     let status = response.status().as_u16();
     let text = response.text().await.unwrap_or_default();
     if !(200..300).contains(&status) {
-        return Err(AppError::new(ErrorKind::Unavailable, describe(status, &text)));
+        return Err(AppError::new(ErrorKind::Unavailable, describe(settings, status, &text)));
     }
     let value: Value = serde_json::from_str(&text)
         .map_err(|e| AppError::new(ErrorKind::Unavailable, "The AI provider sent an unreadable reply").with_cause(e))?;
@@ -321,6 +327,19 @@ pub async fn tokens_this_month(conn: &mut PgConnection) -> Result<i64> {
         .bind(start)
         .fetch_one(&mut *conn)
         .await?)
+}
+
+/// One person cannot run up the install's bill alone, whether or not a monthly budget is set.
+async fn check_caller_rate(ctx: &Ctx, conn: &mut PgConnection) -> Result<()> {
+    let Some(actor) = &ctx.actor else { return Ok(()) };
+    let calls: i64 = sqlx::query_scalar("select count(*) from ai_usage where user_id = $1 and created_at > now() - interval '1 hour'")
+        .bind(actor.user_id)
+        .fetch_one(&mut *conn)
+        .await?;
+    if calls >= MAX_CALLS_PER_HOUR {
+        return Err(AppError::new(ErrorKind::TooManyRequests, "You have used the AI features a lot this past hour. Try again later."));
+    }
+    Ok(())
 }
 
 async fn check_budget(conn: &mut PgConnection, settings: &AiSettings) -> Result<()> {
