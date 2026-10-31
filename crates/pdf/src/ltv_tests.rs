@@ -531,6 +531,108 @@ fn raw_update(pdf: &[u8], objects: &[(u32, &str)], free: &[u32], trailer_extra: 
     out
 }
 
+fn assert_refused(pdf: &[u8]) {
+    for check in verify_signatures(pdf).unwrap_or_default() {
+        assert!(!check.intact && !check.only_validation_data_added, "{check:?}");
+    }
+}
+
+const HIDDEN: &str = "5000 0 obj\n<</Length 44>>stream\nBT /F1 24 Tf 72 600 Td (Pay 1000000) Tj ET   \nendstream\nendobj\n";
+
+#[test]
+fn bytes_after_the_seal_that_no_table_lists_break_it() {
+    let sealed = sealed_with_timestamp().sealed;
+    assert!(verify_signatures(&raw_update(&sealed, &[], &[], "")).unwrap()[0].only_validation_data_added);
+
+    let mut after_the_end = raw_update(&sealed, &[], &[], "");
+    after_the_end.extend_from_slice(HIDDEN.as_bytes());
+    assert_refused(&after_the_end);
+
+    let mut before_a_table = sealed.clone();
+    before_a_table.extend_from_slice(HIDDEN.as_bytes());
+    assert_refused(&raw_update(&before_a_table, &[], &[], ""));
+}
+
+#[test]
+fn an_update_the_newest_table_skips_breaks_the_seal() {
+    let sealed = sealed_with_timestamp().sealed;
+    let doc = Document::load_mem(&sealed).unwrap();
+    let root = doc.trailer.get(b"Root").unwrap().as_reference().unwrap().0;
+    let mut out = raw_update(&sealed, &[(5001, "<</Unused true>>")], &[], "");
+    let start = out.len();
+    out.extend_from_slice(
+        format!(
+            "xref\n0 1\n0000000000 65535 f \ntrailer\n<</Size {}/Root {root} 0 R/Prev {}>>\nstartxref\n{start}\n%%EOF\n",
+            doc.max_id + 1,
+            doc.xref_start
+        )
+        .as_bytes(),
+    );
+    assert_refused(&out);
+}
+
+#[test]
+fn an_update_must_end_where_its_table_says() {
+    let sealed = sealed_with_timestamp().sealed;
+    let doc = Document::load_mem(&sealed).unwrap();
+    let root = doc.trailer.get(b"Root").unwrap().as_reference().unwrap().0;
+    let older = raw_update(&sealed, &[], &[], "");
+    let keyword = older.windows(9).rposition(|w| w == b"startxref").unwrap();
+    let own = older[..keyword].windows(5).rposition(|w| w == b"\nxref").unwrap() + 1;
+    let mut out = older[..keyword].to_vec();
+    out.extend_from_slice(format!("startxref\n{}\n%%EOF\n", doc.xref_start).as_bytes());
+    let start = out.len();
+    out.extend_from_slice(
+        format!(
+            "xref\n0 1\n0000000000 65535 f \ntrailer\n<</Size {}/Root {root} 0 R/Prev {own}>>\nstartxref\n{start}\n%%EOF\n",
+            doc.max_id + 1
+        )
+        .as_bytes(),
+    );
+    assert_refused(&out);
+}
+
+#[test]
+fn keys_a_plain_search_would_misread_in_a_trailer_are_refused() {
+    let sealed = sealed_with_timestamp().sealed;
+    for extra in ["/Prev 5", "/X<</Y 1>>", "%comment\n"] {
+        assert_refused(&raw_update(&sealed, &[], &[], extra));
+    }
+    let prev = Document::load_mem(&sealed).unwrap().xref_start;
+    let updated = raw_update(&sealed, &[], &[], "");
+    let needle = format!("/Prev {prev}");
+    let at = updated.windows(needle.len()).rposition(|w| w == needle.as_bytes()).unwrap();
+    let mut out = updated[..at].to_vec();
+    out.extend_from_slice(format!("/Note({needle})").as_bytes());
+    out.extend_from_slice(&updated[at + needle.len()..]);
+    assert_refused(&out);
+}
+
+#[test]
+fn an_index_a_plain_search_would_misread_in_a_cross_reference_stream_is_refused() {
+    let sealed = sealed_with_timestamp().sealed;
+    let doc = Document::load_mem(&sealed).unwrap();
+    let root = doc.trailer.get(b"Root").unwrap().as_reference().unwrap().0;
+    let own = doc.max_id + 2;
+    let mut out = sealed.clone();
+    let hidden = out.len();
+    out.extend_from_slice(b"5000 0 obj\n<</Length 44>>stream\nBT /F1 24 Tf 72 600 Td (Pay 1000000) Tj ET   \nendstream\nendobj\n");
+    let start = out.len();
+    let mut entries = vec![1u8];
+    entries.extend_from_slice(&(hidden as u32).to_be_bytes());
+    entries.extend_from_slice(&[0, 0]);
+    let dict = format!(
+        "<</Type/XRef/Size {}/W[1 4 2]/Index [5000 1]/Note(/Index[0 1])/Root {root} 0 R/Prev {}/Length {}>>",
+        own + 1,
+        doc.xref_start,
+        entries.len()
+    );
+    out.extend_from_slice(format!("{own} 0 obj{dict}stream\n").as_bytes());
+    out.extend_from_slice(&entries);
+    out.extend_from_slice(format!("\nendstream\nendobj\nstartxref\n{start}\n%%EOF\n").as_bytes());
+    assert_refused(&out);
+}
+
 #[test]
 fn an_update_that_frees_an_object_breaks_the_seal() {
     let sealed = sealed_with_timestamp().sealed;

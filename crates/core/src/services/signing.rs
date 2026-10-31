@@ -689,7 +689,9 @@ impl Service for Sign {
                 .bind(dropped.is_some())
                 .execute(&mut *conn)
                 .await?;
-            retire_file(conn, dropped).await?;
+            if !document.legal_hold {
+                retire_file(conn, dropped).await?;
+            }
         }
 
         let method = session.as_ref().map_or(party.auth_to_sign(), |s| s.a);
@@ -800,6 +802,9 @@ async fn attachment_party(ctx: &Ctx, conn: &mut PgConnection, token: &str, sessi
     if document.status != status::PENDING || !party.must_act() || party.signed_at.is_some() || party.declined_at.is_some() {
         return Err(conflict("Attachments can no longer be changed"));
     }
+    if document.legal_hold {
+        return Err(conflict("This document is on legal hold, so its attachments cannot be changed"));
+    }
     if !current_turn(document, &parties(conn, document.id).await?).contains(&party.id) {
         return Err(conflict("It is not your turn yet. You will get an email when it is."));
     }
@@ -819,27 +824,8 @@ async fn request_of(conn: &mut PgConnection, party_id: Uuid, id: Uuid) -> Result
     attachments::for_party(conn, party_id).await?.into_iter().find(|r| r.id == id).ok_or_else(|| crate::error::not_found("Attachment"))
 }
 
-/// Destroys files nothing refers to any more: the row goes with its wrapped key, so the body is
-/// unreadable at once, and a job removes the object.
 async fn destroy_unreferenced(conn: &mut PgConnection, ids: &[Uuid]) -> Result<()> {
-    let keys: Vec<String> = sqlx::query_scalar(
-        "delete from files f where f.id = any($1)
-           and not exists (select 1 from documents d where d.source_file_id = f.id or d.sealed_file_id = f.id)
-           and not exists (select 1 from document_files x where x.file_id = f.id)
-           and not exists (select 1 from attachment_requests a where a.file_id = f.id)
-           and not exists (select 1 from fields x where x.file_id = f.id)
-           and not exists (select 1 from template_version_files x where x.file_id = f.id)
-           and not exists (select 1 from users u where u.signature_file_id = f.id)
-           and not exists (select 1 from parties p where p.signature->>'imageFileId' = f.id::text)
-         returning storage_key",
-    )
-    .bind(ids)
-    .fetch_all(&mut *conn)
-    .await?;
-    if !keys.is_empty() {
-        enqueue(conn, "delete_objects", json!({ "keys": keys }), None, None).await?;
-    }
-    Ok(())
+    crate::documents::delete_unused_files(conn, ids).await.map(|_| ())
 }
 
 /// For a file just replaced or removed; call it after the row that pointed at it has changed.

@@ -32,6 +32,8 @@ pub const WORKER_SUBCOMMAND: &str = "pdf-worker";
 const TIMEOUT: Duration = Duration::from_secs(60);
 const QUEUE_WAIT: Duration = Duration::from_secs(30);
 const MAX_MESSAGE_BYTES: u64 = 1024 * 1024 * 1024;
+const PUBLIC_TIMEOUT: Duration = Duration::from_secs(20);
+const PUBLIC_ANSWER_BYTES: u64 = 8 * 1024 * 1024;
 const STACK_BYTES: usize = 64 * 1024 * 1024;
 #[cfg(unix)]
 const MEMORY_BYTES: u64 = 2 * 1024 * 1024 * 1024;
@@ -39,7 +41,7 @@ const MEMORY_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const CPU_SECONDS: u64 = 120;
 
 const FAILED: &str = "This PDF could not be processed";
-const BUSY: &str = "The server is busy. Try again in a moment.";
+pub const BUSY: &str = "The server is busy. Try again in a moment.";
 
 /// A PDF on the wire, as base64 inside the JSON message.
 struct Blob<'a>(Cow<'a, [u8]>);
@@ -93,6 +95,7 @@ struct Worker {
     running: Mutex<usize>,
     freed: Condvar,
     max_running: usize,
+    public_running: Mutex<usize>,
 }
 
 static WORKER: OnceLock<Worker> = OnceLock::new();
@@ -100,7 +103,7 @@ static WORKER: OnceLock<Worker> = OnceLock::new();
 /// Sends every later call to a child process running `exe` and checks that it answers.
 pub fn enable_worker(exe: PathBuf) -> Result<()> {
     let max_running = std::thread::available_parallelism().map_or(2, |n| n.get().max(2));
-    WORKER.get_or_init(|| Worker { exe, running: Mutex::new(0), freed: Condvar::new(), max_running });
+    WORKER.get_or_init(|| Worker { exe, running: Mutex::new(0), freed: Condvar::new(), max_running, public_running: Mutex::new(0) });
     probe(Probe::Ping, Duration::from_secs(10))
 }
 
@@ -117,6 +120,14 @@ impl Drop for Slot<'_> {
         let mut running = self.0.running.lock().unwrap_or_else(|e| e.into_inner());
         *running -= 1;
         self.0.freed.notify_one();
+    }
+}
+
+struct PublicSlot<'a>(&'a Worker);
+
+impl Drop for PublicSlot<'_> {
+    fn drop(&mut self) {
+        *self.0.public_running.lock().unwrap_or_else(|e| e.into_inner()) -= 1;
     }
 }
 
@@ -143,7 +154,22 @@ impl Worker {
         Ok(Slot(self))
     }
 
+    /// Anyone may call the public routes, so they get at most half the workers and never queue:
+    /// signing and sending must still find one free.
+    fn public_slot(&self) -> Result<PublicSlot<'_>> {
+        let mut running = self.public_running.lock().unwrap_or_else(|e| e.into_inner());
+        if *running >= (self.max_running / 2).max(1) {
+            return Err(PdfError::Rejected(BUSY.into()));
+        }
+        *running += 1;
+        Ok(PublicSlot(self))
+    }
+
     fn call<T: DeserializeOwned>(&self, request: &Request, timeout: Duration) -> Result<T> {
+        self.call_within(request, timeout, MAX_MESSAGE_BYTES)
+    }
+
+    fn call_within<T: DeserializeOwned>(&self, request: &Request, timeout: Duration, max_answer: u64) -> Result<T> {
         let _slot = self.slot()?;
         let failed = |reason: &str| {
             tracing::warn!(reason, "a PDF worker failed");
@@ -170,7 +196,7 @@ impl Worker {
             let (send, receive) = mpsc::channel();
             scope.spawn(move || {
                 let mut answer = Vec::new();
-                let read = stdout.take(MAX_MESSAGE_BYTES + 1).read_to_end(&mut answer);
+                let read = stdout.take(max_answer + 1).read_to_end(&mut answer);
                 let _ = send.send(read.map(|_| answer));
             });
             let answer = receive.recv_timeout(timeout);
@@ -181,7 +207,7 @@ impl Worker {
             answer
         });
         let answer = match answer {
-            Ok(Ok(answer)) if answer.len() as u64 <= MAX_MESSAGE_BYTES => answer,
+            Ok(Ok(answer)) if answer.len() as u64 <= max_answer => answer,
             Ok(_) => return Err(failed("its answer could not be read")),
             Err(_) => return Err(failed("it took too long")),
         };
@@ -211,6 +237,13 @@ pub fn sanitize(input: &[u8], limits: Limits) -> Result<Sanitized> {
 pub fn verify_signatures(pdf: &[u8]) -> Result<Vec<SignatureCheck>> {
     let Some(worker) = worker() else { return crate::verify::verify_signatures(pdf) };
     worker.call(&Request::Verify(Blob::of(pdf)), TIMEOUT)
+}
+
+/// `verify_signatures` for a file from someone who has not signed in.
+pub fn verify_signatures_public(pdf: &[u8]) -> Result<Vec<SignatureCheck>> {
+    let Some(worker) = worker() else { return crate::verify::verify_signatures(pdf) };
+    let _slot = worker.public_slot()?;
+    worker.call_within(&Request::Verify(Blob::of(pdf)), PUBLIC_TIMEOUT, PUBLIC_ANSWER_BYTES)
 }
 
 /// The text of each page, in order, for review by a language model. Best effort: PDFs drawn as

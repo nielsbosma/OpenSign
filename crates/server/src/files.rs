@@ -384,8 +384,9 @@ pub async fn verify(State(state): State<AppState>, request: Request) -> Response
         return ApiError(bad_request("The file is too large"), None).into_response();
     };
     let result = async {
+        let (sha256, signatures) = docs::read_signatures_public(body.to_vec()).await?;
         let mut conn = caller.ctx.db().acquire().await?;
-        docs::verify_pdf(&mut conn, body.to_vec()).await
+        docs::compare_with_seals(&mut conn, sha256, signatures).await
     }
     .await;
     match result {
@@ -454,7 +455,9 @@ pub async fn eid_callback(State(app_state): State<AppState>, Query(q): Query<Eid
     }
     .await;
     let location = match result {
-        Ok(id) => format!("/sign?eid={id}"),
+        // In the fragment, so that it reaches no log; the page takes it off the address at once.
+        Ok(opensign_core::services::eid::Returned { code: Some(code), .. }) => format!("/sign/eid#done={code}"),
+        Ok(returned) => format!("/sign?eid={}", returned.id),
         Err(_) => "/sign?eid=invalid".to_string(),
     };
     let mut response = axum::http::StatusCode::SEE_OTHER.into_response();

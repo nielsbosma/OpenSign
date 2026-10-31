@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 import { type FormEvent, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { CopyButton, Field, Loading, Spinner } from '@/components/common';
+import { needsStepUp, StepUpDialog } from '@/components/StepUpDialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -70,6 +71,7 @@ function PasskeysCard() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [stepUp, setStepUp] = useState(false);
 
   const close = () => {
     setAdding(false);
@@ -78,8 +80,8 @@ function PasskeysCard() {
     setError(undefined);
   };
 
-  const add = async (e: FormEvent) => {
-    e.preventDefault();
+  const add = async (e?: FormEvent) => {
+    e?.preventDefault();
     setError(undefined);
     setBusy(true);
     try {
@@ -91,7 +93,8 @@ function PasskeysCard() {
       close();
       toast.success(t('Passkey added. You can now sign in with it.'));
     } catch (e) {
-      setError(passkeyCanceled(e) ? t('The passkey was not created.') : errorMessage(e));
+      if (needsStepUp(e)) setStepUp(true);
+      else setError(passkeyCanceled(e) ? t('The passkey was not created.') : errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -145,7 +148,6 @@ function PasskeysCard() {
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                required
               />
             </Field>
             <DialogFooter>
@@ -159,6 +161,14 @@ function PasskeysCard() {
           </form>
         </DialogContent>
       </Dialog>
+      <StepUpDialog
+        open={stepUp}
+        onOpenChange={setStepUp}
+        onConfirmed={() => {
+          setStepUp(false);
+          void add();
+        }}
+      />
     </SettingsCard>
   );
 }

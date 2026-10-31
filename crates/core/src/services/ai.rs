@@ -413,7 +413,9 @@ fn proposal_summary(tool: &str) -> &'static str {
 
 fn flatten(value: &Value, label: String, out: &mut Vec<ProposalDetail>) {
     match value {
-        Value::Null => {}
+        Value::Null => out.push(ProposalDetail { label, value: "(none)".into() }),
+        Value::Object(map) if map.is_empty() => out.push(ProposalDetail { label, value: "(none)".into() }),
+        Value::Array(items) if items.is_empty() => out.push(ProposalDetail { label, value: "(none)".into() }),
         Value::Object(map) => map.iter().for_each(|(key, v)| {
             flatten(v, if label.is_empty() { key.clone() } else { format!("{label} / {key}") }, out);
         }),
@@ -441,7 +443,12 @@ async fn propose(
     }
     let meta = service.meta();
     let mut details = Vec::new();
+    // Keys the service does not read would otherwise name a document it will not touch.
+    let schema = serde_json::to_value(service.input_schema()).unwrap_or_default();
     for key in ["id", "documentId", "templateId"] {
+        if schema["properties"].get(key).is_none() {
+            continue;
+        }
         let Some(id) = input[key].as_str().and_then(|v| v.parse::<Uuid>().ok()) else { continue };
         if !meta.name.starts_with("folders.")
             && let Ok(document) = load_document(ctx, conn, id, Need::Read).await

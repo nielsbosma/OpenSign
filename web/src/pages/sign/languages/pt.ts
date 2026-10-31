@@ -122,6 +122,13 @@ export const pt: Texts = {
   embedRefusedNote: 'Abra o seu link de assinatura diretamente no navegador.',
   eidPopup: (label) => `Conclua a identificação com ${label} na janela que foi aberta.`,
   eidPopupBlocked: 'Permita pop-ups para este site e tente novamente.',
+  eidCodeTitle: 'O Seu Código',
+  eidCodeNote:
+    'Introduza este código na página de assinatura onde começou e depois feche esta janela. Nunca o dê a ninguém. Se não foi você que iniciou isto, feche esta janela.',
+  eidCodeEnter: 'Introduza o código mostrado na janela onde se identificou.',
+  eidCodeLabel: 'Código',
+  eidCodeSubmit: 'Continuar',
+  eidCodeWrong: 'Esse código não está correto. Verifique-o e tente novamente.',
   eidWindowDone: 'Identificação concluída',
   eidWindowDoneNote: 'Você pode fechar esta janela e voltar à página de assinatura.',
   eidContinue: (label, title, organisation) => `${organisation} pede que você se identifique com ${label} para “${title}”.`,

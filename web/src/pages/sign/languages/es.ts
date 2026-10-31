@@ -122,6 +122,13 @@ export const es: Texts = {
   embedRefusedNote: 'Abre tu enlace de firma directamente en el navegador.',
   eidPopup: (label) => `Termina de identificarte con ${label} en la ventana que se abrió.`,
   eidPopupBlocked: 'Permite las ventanas emergentes para este sitio e inténtalo de nuevo.',
+  eidCodeTitle: 'Tu código',
+  eidCodeNote:
+    'Introduce este código en la página de firma donde empezaste y luego cierra esta ventana. Nunca se lo des a nadie. Si no iniciaste esto tú, cierra esta ventana.',
+  eidCodeEnter: 'Introduce el código que aparece en la ventana donde te identificaste.',
+  eidCodeLabel: 'Código',
+  eidCodeSubmit: 'Continuar',
+  eidCodeWrong: 'Ese código no es correcto. Compruébalo e inténtalo de nuevo.',
   eidWindowDone: 'Identificación completada',
   eidWindowDoneNote: 'Puedes cerrar esta ventana y volver a la página de firma.',
   eidContinue: (label, title, organisation) => `${organisation} te pide que te identifiques con ${label} para «${title}».`,

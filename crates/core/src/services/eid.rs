@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Duration, Utc};
-use opensign_crypto::{KeyPurpose, constant_time_eq, random_token};
+use opensign_crypto::{KeyPurpose, constant_time_eq, random_bytes, random_token};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -42,6 +42,10 @@ pub fn state_mac(ctx: &Ctx, state: &str) -> String {
 
 fn browser_mac(ctx: &Ctx, binding: &str) -> String {
     hex::encode(ctx.keys().mac(KeyPurpose::TokenMac, format!("eid-browser:{binding}").as_bytes()))
+}
+
+fn release_mac(ctx: &Ctx, id: Uuid, code: &str) -> String {
+    hex::encode(ctx.keys().mac(KeyPurpose::TokenMac, format!("eid-release:{id}:{code}").as_bytes()))
 }
 
 fn number_context(id: Uuid) -> String {
@@ -224,6 +228,7 @@ impl Service for Start {
         let mut secrets = Secrets { qr_start_token: None, qr_start_secret: None, nonce: None, verifier: None, authorize_url: None };
         let mut state_mac_value = None;
         let mut browser_mac_value = None;
+        let mut framed = false;
         let (reference, started) = match provider {
             "se_bankid" => {
                 let number = swedish(expected.as_deref(), ctx.now.year())?;
@@ -304,6 +309,7 @@ impl Service for Start {
                         return Err(bad_request("This signing link cannot identify from inside a frame. Open it on its own."));
                     }
                     secrets.authorize_url = Some(url);
+                    framed = true;
                     let ticket = ContinueTicket { s: id, p: party.id, v: party.link_version };
                     let ticket = ctx.keys().sign_token(CONTINUE_TICKET, &ticket, (expires_at - ctx.now).num_seconds(), ctx.now.timestamp());
                     (format!("{}/sign/eid#{ticket}", ctx.app.public_url()), None)
@@ -323,8 +329,8 @@ impl Service for Start {
             &serde_json::to_string(&secrets).map_err(AppError::internal)?,
         );
         sqlx::query(
-            "insert into eid_sessions (id, party_id, provider, purpose, reference, state_mac, secrets, expires_at, created_at, browser_mac)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+            "insert into eid_sessions (id, party_id, provider, purpose, reference, state_mac, secrets, expires_at, created_at, browser_mac, framed)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
         )
         .bind(id)
         .bind(party.id)
@@ -336,6 +342,7 @@ impl Service for Start {
         .bind(started.expires_at)
         .bind(ctx.now)
         .bind(browser_mac_value)
+        .bind(framed)
         .execute(&mut *conn)
         .await?;
         audit(
@@ -354,6 +361,9 @@ impl Service for Start {
 pub struct StatusInput {
     pub token: String,
     pub id: Uuid,
+    /// The code the window showed, when the status asks for one with `needsCode`.
+    #[serde(default)]
+    pub code: Option<String>,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -368,6 +378,9 @@ pub struct EidStatus {
     /// Set once, when complete: pass it as `session` with the next calls.
     pub session: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
+    /// The person finished in another window, and the session comes only with the code shown there.
+    #[serde(default)]
+    pub needs_code: bool,
 }
 
 #[derive(sqlx::FromRow)]
@@ -382,9 +395,12 @@ struct Row {
     expires_at: DateTime<Utc>,
     created_at: DateTime<Utc>,
     consumed_at: Option<DateTime<Utc>>,
+    framed: bool,
+    release_mac: Option<String>,
 }
 
-const ROW_COLUMNS: &str = "id, provider, purpose, reference, secrets, status, message, expires_at, created_at, consumed_at";
+const ROW_COLUMNS: &str =
+    "id, provider, purpose, reference, secrets, status, message, expires_at, created_at, consumed_at, framed, release_mac";
 
 fn secrets(ctx: &Ctx, row: &Row) -> Result<Secrets> {
     let sealed = row.secrets.as_deref().ok_or_else(|| AppError::internal(anyhow::anyhow!("eID session without secrets")))?;
@@ -393,7 +409,7 @@ fn secrets(ctx: &Ctx, row: &Row) -> Result<Secrets> {
 }
 
 fn failed(message: impl Into<String>) -> EidStatus {
-    EidStatus { status: "failed".into(), message: Some(message.into()), qr: None, session: None, expires_at: None }
+    EidStatus { status: "failed".into(), message: Some(message.into()), qr: None, session: None, expires_at: None, needs_code: false }
 }
 
 async fn fail(conn: &mut PgConnection, id: Uuid, message: &str) -> Result<EidStatus> {
@@ -484,6 +500,7 @@ impl Service for Status {
                 qr,
                 session: None,
                 expires_at: Some(row.expires_at),
+                needs_code: false,
             };
             let lang = party.lang(&document);
             let eid: EidSettings = settings(ctx, conn).await?;
@@ -513,6 +530,34 @@ impl Service for Status {
             if let Err(message) = complete(ctx, conn, &party, row.id, &row.provider, &identity, &evidence).await? {
                 return Ok(failed(message));
             }
+        }
+        // The window may have reached someone else than whoever holds this frame, by a forwarded link.
+        if row.framed && !release(ctx, conn, &row, &party, input.code.as_deref()).await? {
+            if row.release_mac.is_none() || input.code.is_none() {
+                return Ok(EidStatus {
+                    status: "pending".into(),
+                    message: None,
+                    qr: None,
+                    session: None,
+                    expires_at: Some(row.expires_at),
+                    needs_code: true,
+                });
+            }
+            let left: Option<i32> = sqlx::query_scalar("select release_attempts from eid_sessions where id = $1 and status = 'complete'")
+                .bind(row.id)
+                .fetch_optional(&mut *conn)
+                .await?;
+            return Ok(match left {
+                Some(_) => EidStatus {
+                    status: "pending".into(),
+                    message: None,
+                    qr: None,
+                    session: None,
+                    expires_at: Some(row.expires_at),
+                    needs_code: true,
+                },
+                None => failed(TOO_MANY_CODES),
+            });
         }
         let consumed: Option<Value> = sqlx::query_scalar(
             "update eid_sessions set consumed_at = $2 where id = $1 and status = 'complete' and consumed_at is null returning identity",
@@ -546,8 +591,42 @@ impl Service for Status {
             qr: None,
             session: Some(issue_session(ctx, &party, method, Some(proof), purpose == Purpose::Sign)),
             expires_at: Some(ctx.now + Duration::minutes(SESSION_MINUTES)),
+            needs_code: false,
         })
     }
+}
+
+const MAX_RELEASE_ATTEMPTS: i32 = 5;
+const TOO_MANY_CODES: &str = "That was the wrong code too many times. Start again.";
+
+/// Whether `code` is the one the window showed. Wrong guesses are counted, and too many throw the
+/// identification away.
+async fn release(ctx: &Ctx, conn: &mut PgConnection, row: &Row, party: &PartyRow, code: Option<&str>) -> Result<bool> {
+    let (Some(mac), Some(code)) = (&row.release_mac, code) else { return Ok(false) };
+    if constant_time_eq(release_mac(ctx, row.id, code.trim()).as_bytes(), mac.as_bytes()) {
+        return Ok(true);
+    }
+    let attempts: Option<i32> = sqlx::query_scalar(
+        "update eid_sessions set release_attempts = release_attempts + 1 where id = $1 and status = 'complete' returning release_attempts",
+    )
+    .bind(row.id)
+    .fetch_optional(&mut *conn)
+    .await?;
+    audit(
+        ctx,
+        conn,
+        Entry::new("party.eid_code_refused", "document", party.document_id)
+            .metadata(json!({ "party": party.id, "name": party.name, "method": row.provider })),
+    )
+    .await?;
+    if attempts.is_some_and(|n| n >= MAX_RELEASE_ATTEMPTS) {
+        sqlx::query("update eid_sessions set status = 'failed', message = $2, identity = null, evidence = null, release_mac = null, secrets = null where id = $1")
+            .bind(row.id)
+            .bind(TOO_MANY_CODES)
+            .execute(&mut *conn)
+            .await?;
+    }
+    Ok(false)
 }
 
 pub struct Cancel;
@@ -687,10 +766,17 @@ impl Service for Continue {
     }
 }
 
-type CallbackRow = (Uuid, Uuid, String, Option<String>, DateTime<Utc>, Option<String>);
+type CallbackRow = (Uuid, Uuid, String, Option<String>, DateTime<Utc>, Option<String>, bool);
 
-/// The broker or TIC Identity sends the browser back here. Returns the eID session to resume on the
-/// signing page.
+/// Where the browser goes after the callback.
+pub struct Returned {
+    /// The eID session to resume on the signing page.
+    pub id: Uuid,
+    /// For a framed signing page: what to show the person, to enter in the frame.
+    pub code: Option<String>,
+}
+
+/// The broker or TIC Identity sends the browser back here.
 pub async fn broker_callback(
     ctx: &Ctx,
     conn: &mut PgConnection,
@@ -698,15 +784,15 @@ pub async fn broker_callback(
     browser: Option<&str>,
     code: Option<&str>,
     error: Option<&str>,
-) -> Result<Uuid> {
+) -> Result<Returned> {
     let row: Option<CallbackRow> = sqlx::query_as(
         "update eid_sessions set state_mac = null where state_mac = $1 and provider in ('broker', 'tic') and status = 'pending'
-         returning id, party_id, provider, secrets, expires_at, browser_mac",
+         returning id, party_id, provider, secrets, expires_at, browser_mac, framed",
     )
     .bind(state_mac(ctx, state))
     .fetch_optional(&mut *conn)
     .await?;
-    let Some((id, party_id, provider, sealed, expires_at, bound_to)) = row else {
+    let Some((id, party_id, provider, sealed, expires_at, bound_to, framed)) = row else {
         return Err(bad_request("This identification is not valid or was already used. Go back to the signing link and start again."));
     };
     let party: PartyRow =
@@ -778,6 +864,16 @@ pub async fn broker_callback(
             tracing::warn!(error = %e, "eID broker callback failed");
         }
         fail(conn, id, &message).await?;
+        return Ok(Returned { id, code: None });
     }
-    Ok(id)
+    if !framed {
+        return Ok(Returned { id, code: None });
+    }
+    let code = format!("{:06}", u32::from_be_bytes(random_bytes::<4>()) % 1_000_000);
+    sqlx::query("update eid_sessions set release_mac = $2 where id = $1")
+        .bind(id)
+        .bind(release_mac(ctx, id, &code))
+        .execute(&mut *conn)
+        .await?;
+    Ok(Returned { id, code: Some(code) })
 }

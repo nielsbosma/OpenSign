@@ -169,7 +169,7 @@ async fn bankid_identifies_the_right_person_only() {
     assert!(started.qr.as_deref().unwrap().starts_with("bankid.qr-token.0."));
     assert_eq!(standin.lock().unwrap().requirement, Some(json!({ "personalNumber": "199001010017" })), "only Anna's BankID can answer");
 
-    let status = |id| call::<eid::Status>(&signer, StatusInput { token: token.clone(), id });
+    let status = |id| call::<eid::Status>(&signer, StatusInput { token: token.clone(), id, code: None });
     let pending = status(started.id).await.unwrap();
     assert_eq!(pending.status, "pending");
     assert_eq!(pending.message.as_deref(), Some("Start your BankID app."));
@@ -186,7 +186,8 @@ async fn bankid_identifies_the_right_person_only() {
     assert!(again.session.is_none() && again.status == "failed", "a session is handed out once");
 
     let other =
-        call::<eid::Status>(&signer, StatusInput { token: sent_document(&app, &sender, "900101-0017").await, id: started.id }).await;
+        call::<eid::Status>(&signer, StatusInput { token: sent_document(&app, &sender, "900101-0017").await, id: started.id, code: None })
+            .await;
     assert!(other.is_err(), "another party's link cannot pick up this identification");
 
     let view =
@@ -202,7 +203,7 @@ async fn bankid_identifies_the_right_person_only() {
             .unwrap();
     let text = standin.lock().unwrap().visible.clone().unwrap();
     assert!(text.contains("Lease"), "BankID shows what is being signed: {text}");
-    call::<eid::Cancel>(&signer, StatusInput { token: token.clone(), id: signing.id }).await.unwrap();
+    call::<eid::Cancel>(&signer, StatusInput { token: token.clone(), id: signing.id, code: None }).await.unwrap();
     assert_eq!(status(signing.id).await.unwrap().status, "failed");
 
     // Someone else's BankID is refused even if BankID itself accepted them.
@@ -211,7 +212,7 @@ async fn bankid_identifies_the_right_person_only() {
     let started = call::<eid::Start>(&signer, StartInput { token: token.clone(), session: None, purpose: Purpose::View, framed: false })
         .await
         .unwrap();
-    let status = |id| call::<eid::Status>(&signer, StatusInput { token: token.clone(), id });
+    let status = |id| call::<eid::Status>(&signer, StatusInput { token: token.clone(), id, code: None });
     status(started.id).await.unwrap();
     let refused = status(started.id).await.unwrap();
     assert_eq!(refused.status, "failed");
@@ -315,11 +316,11 @@ async fn bankid_through_tic_identifies_the_right_person_only() {
                 s.nonce = query["nonce"].clone();
             }
             let mut conn = app.db.acquire().await.unwrap();
-            let id = eid::broker_callback(&signer, &mut conn, &query["state"], Some(&browser), Some("code-1"), None).await.unwrap();
+            let id = eid::broker_callback(&signer, &mut conn, &query["state"], Some(&browser), Some("code-1"), None).await.unwrap().id;
             assert_eq!(id, started.id);
             let replay = eid::broker_callback(&signer, &mut conn, &query["state"], Some(&browser), Some("code-1"), None).await;
             assert!(replay.is_err(), "a state is used once");
-            call::<eid::Status>(&signer, StatusInput { token, id }).await.unwrap()
+            call::<eid::Status>(&signer, StatusInput { token, id, code: None }).await.unwrap()
         }
     };
 
@@ -349,7 +350,7 @@ async fn bankid_through_tic_identifies_the_right_person_only() {
         let mut conn = app.db.acquire().await.unwrap();
         assert!(eid::broker_callback(&signer, &mut conn, &query["state"], other, Some("code-1"), None).await.is_err());
         assert_eq!(standin.lock().unwrap().exchanges, exchanges, "the code is not even exchanged");
-        let status = call::<eid::Status>(&signer, StatusInput { token, id: started.id }).await.unwrap();
+        let status = call::<eid::Status>(&signer, StatusInput { token, id: started.id, code: None }).await.unwrap();
         assert_eq!(status.status, "failed");
         assert!(status.session.is_none());
         let late =
@@ -392,14 +393,24 @@ async fn bankid_through_tic_identifies_the_right_person_only() {
         s.challenge = query["code_challenge"].clone();
         s.nonce = query["nonce"].clone();
     }
+    let release_code;
     {
         let mut conn = app.db.acquire().await.unwrap();
-        eid::broker_callback(&signer, &mut conn, &query["state"], go.browser_binding.as_deref(), Some("code-1"), None).await.unwrap();
+        let returned =
+            eid::broker_callback(&signer, &mut conn, &query["state"], go.browser_binding.as_deref(), Some("code-1"), None).await.unwrap();
+        release_code = returned.code.unwrap();
         let cleared = SecuritySettings::default();
         app.settings.save(&mut conn, &app.keys, &cleared, None).await.unwrap();
     }
-    let done = call::<eid::Status>(&signer, StatusInput { token, id: started.id }).await.unwrap();
+    let waiting = call::<eid::Status>(&signer, StatusInput { token: token.clone(), id: started.id, code: None }).await.unwrap();
+    assert!(waiting.needs_code && waiting.session.is_none(), "holding the frame is not enough");
+    let wrong = if release_code == "000000" { "000001" } else { "000000" };
+    let guess = |code: &str| StatusInput { token: token.clone(), id: started.id, code: Some(code.to_string()) };
+    let waiting = call::<eid::Status>(&signer, guess(wrong)).await.unwrap();
+    assert!(waiting.needs_code && waiting.session.is_none());
+    let done = call::<eid::Status>(&signer, guess(&release_code)).await.unwrap();
     assert_eq!(done.status, "complete", "{:?}", done.message);
+    assert!(done.session.is_some());
     assert!(refused.message.unwrap().contains("someone other than"));
     *TEST_ISSUER.lock().unwrap() = None;
 }

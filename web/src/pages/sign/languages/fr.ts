@@ -123,6 +123,13 @@ export const fr: Texts = {
   embedRefusedNote: 'Ouvrez plutôt votre lien de signature directement dans votre navigateur.',
   eidPopup: (label) => `Terminez votre identification avec ${label} dans la fenêtre qui s’est ouverte.`,
   eidPopupBlocked: 'Autorisez les fenêtres pop-up pour ce site, puis réessayez.',
+  eidCodeTitle: 'Votre code',
+  eidCodeNote:
+    'Saisissez ce code sur la page de signature où vous avez commencé, puis fermez cette fenêtre. Ne le donnez jamais à personne. Si vous n’êtes pas à l’origine de cette démarche, fermez cette fenêtre.',
+  eidCodeEnter: 'Saisissez le code affiché dans la fenêtre où vous vous êtes identifié.',
+  eidCodeLabel: 'Code',
+  eidCodeSubmit: 'Continuer',
+  eidCodeWrong: 'Ce code n’est pas correct. Vérifiez-le et réessayez.',
   eidWindowDone: 'Identification terminée',
   eidWindowDoneNote: 'Vous pouvez fermer cette fenêtre et revenir à la page de signature.',
   eidContinue: (label, title, organisation) => `${organisation} vous demande de vous identifier avec ${label} pour « ${title} ».`,

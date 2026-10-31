@@ -32,12 +32,12 @@ pub use evidence::{EvidenceAttachment, EvidenceEvent, EvidenceParty, EvidenceRep
 pub use form::{FormField, FormKind};
 pub use geometry::PageBox;
 pub use hidden::HiddenText;
+pub use isolated::{
+    BUSY, WORKER_SUBCOMMAND, detect_fields, enable_worker, extract_text, hidden_text, merge, page_sizes, page_text, sanitize, stamp,
+    take_text_tags, verify_signatures, verify_signatures_public, worker_main,
+};
 #[doc(hidden)]
 pub use isolated::{Probe, probe};
-pub use isolated::{
-    WORKER_SUBCOMMAND, detect_fields, enable_worker, extract_text, hidden_text, merge, page_sizes, page_text, sanitize, stamp,
-    take_text_tags, verify_signatures, worker_main,
-};
 pub use ltv::{
     Revocation, RevocationCheck, RevocationStatus, ValidationData, ValidationPlan, add_validation_data, finish_document_timestamp,
     parse_issuer_certificates, plan as plan_validation, prepare_document_timestamp,

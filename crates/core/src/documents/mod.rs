@@ -567,6 +567,7 @@ pub async fn delete_unused_files(conn: &mut PgConnection, file_ids: &[Uuid]) -> 
            and not exists (select 1 from attachment_requests a where a.file_id = f.id)
            and not exists (select 1 from fields x where x.file_id = f.id)
            and not exists (select 1 from template_version_files x where x.file_id = f.id)
+           and not exists (select 1 from users u where u.signature_file_id = f.id)
            and not exists (select 1 from parties p where p.signature->>'imageFileId' = f.id::text)
          returning storage_key",
     )

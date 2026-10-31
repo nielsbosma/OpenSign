@@ -5,7 +5,7 @@ A signing service is only worth what its evidence is worth. OpenSign is built on
 ## What OpenSign protects against
 
 - **The internet**: password guessing, stolen session cookies, cross-site requests, malicious uploads, server-side request forgery through anything that fetches a URL, and people who hold or guess a signing link.
-- **A partial compromise**: someone who can read the database or the bucket, but not `APP_SECRET`, cannot read documents or secrets, forge signer sessions, or rewrite the audit trail without it showing.
+- **A partial compromise**: someone who can read the database or the bucket, but not `APP_SECRET`, cannot read documents or secrets or forge signer sessions. Write access to the database is otherwise out of scope, with one exception: the audit trail cannot be rewritten, or shortened behind its last anchor, without it showing.
 - **Insiders without the right role**: every operation is checked on the server against the caller's role and the document's sharing, however it arrives.
 
 It does not protect against someone who holds `APP_SECRET` together with the database, or who controls the host.
@@ -19,7 +19,7 @@ It does not protect against someone who holds `APP_SECRET` together with the dat
 
 ## Accounts
 
-- Passwords are normalized and hashed with Argon2id. Failed sign-ins lock the account for a growing period, and every attempt is recorded.
+- Passwords are normalized and hashed with Argon2id. Failed sign-ins lock the sign-in for that email and address for a growing period, failures from several addresses lock the account, and every attempt is recorded.
 - Two-factor sign-in with an authenticator app (with single-use recovery codes) or passkeys, which an admin can require for everyone.
 - Passkeys are verified in OpenSign itself: user verification required, origin and relying party checked, single-use short-lived challenges, increasing signature counters.
 - Session cookies are `HttpOnly`, `SameSite=Lax`, `__Host-` prefixed and `Secure` on https, stored only as a keyed hash, with absolute and idle expiry. Cookie-authenticated writes must come from the install's own origin.
@@ -30,14 +30,14 @@ See [Sign-in, passkeys and two-factor](account-security.md).
 
 ## Permissions
 
-Roles are enforced in the service layer, which every entry point uses: the web app, REST, the Scrive and DocuSign APIs, MCP and the AI assistant. The app only hides what the server would refuse anyway. MCP and the assistant act with the user's own permissions, and the assistant never gets tools that change who has access, add webhooks, change settings or hand out signing links. Secrets in settings can be cleared but never set through MCP or an API key, see [MCP](mcp.md#settings-and-secrets). See [Users and roles](users-and-roles.md).
+Roles are enforced in the service layer, which every entry point uses: the web app, REST, the Scrive and DocuSign APIs, MCP and the AI assistant. The app only hides what the server would refuse anyway. MCP and the assistant act with the user's own permissions, and on its own the assistant only reads. Anything that changes data is shown to you and runs only when you confirm it, and it never gets tools that change who has access, touch webhooks or credentials, change settings or hand out signing links. Secrets in settings can be cleared but never set through MCP or an API key, see [MCP](mcp.md#settings-and-secrets). See [Users and roles](users-and-roles.md).
 
 ## Signing links
 
 - A link is the party id plus a keyed MAC over it and a link version. It sits in the URL fragment, so it never reaches server logs or `Referer` headers, and the signing page removes it from the address bar.
 - Issuing a new link, canceling or finishing the document invalidates old links.
 - Signer actions never use a signed-in user's session.
-- SMS codes are 6 digits, stored as a MAC, valid 10 minutes, with 5 attempts and at most 5 codes per hour.
+- SMS codes are 6 digits, stored as a MAC, valid 10 minutes, with 5 attempts and at most 5 codes per hour, with an optional country allowlist and budgets in Admin settings.
 - Everything a signer can reach is rate-limited and bounded.
 - Signers' AI review links are separate read-only tokens, stored as a MAC, tied to the signing link's version, capped at 100 fetches, expiring within days, and audited on every use. See [The signing page](signing-page.md#review-with-your-ai).
 
@@ -68,7 +68,7 @@ Append-only by database trigger, hash-chained with a secret key, and time-stampe
 
 - A strict Content Security Policy (`script-src 'self'`, no inline script, `frame-ancestors 'none'`) against clickjacking, HSTS on https, `nosniff`, `no-referrer`, cross-origin isolation headers and a tight permissions policy (only the signing page may use the camera, for [webcam photos](identification.md#webcam-photo)). The web app loads nothing from other origins.
 - No page can be shown in another site's frame, with one opt-in exception: when an admin turns on [embedded signing](embedding.md), the signing page names the listed sites in `frame-ancestors`. Every other page stays `frame-ancestors 'none'`, the list holds exact https origins without wildcards, and links sent by email or SMS still refuse to render in a frame.
-- Rate limits per address on sign-in, codes, signing, uploads and verification, on top of the account lockouts.
+- Rate limits per address on sign-in, codes, signing, uploads and verification, on top of the account lockouts. The client address comes from `X-Forwarded-For` only as the **Trusted Proxies** setting allows.
 - Outbound requests to anything configurable (webhooks, AI endpoints, eID brokers, time stamp authorities) resolve DNS first, refuse private, loopback, link-local and metadata addresses, and follow no redirects. The one exception is a self-hosted AI proxy, which an admin may point at the private network.
 - Webhooks are signed per webhook. See [Webhooks](webhooks.md).
 

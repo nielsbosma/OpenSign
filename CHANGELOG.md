@@ -4,6 +4,34 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Security
+
+A security review of 0.1.0 led to this round of hardening. Update as soon as you can.
+
+- PDFs are parsed in a separate process with memory and time limits, and every parser has limits on what it reads. Spreadsheet import and formula evaluation are bounded as well.
+- Signature verification reads the raw update chain of the file, accounts for every byte after a signature, and reports `trusted` separately from intact. Public verification has its own worker limit and answers 503 when busy. The PDF sanitizer is stricter.
+- The audit chain only accepts keyed entries. `audit.verify` checks each anchor's time stamp and a keyed copy of the latest anchor in the bucket.
+- The assistant only reads on its own. Anything that changes data becomes a proposal the signed-in user confirms, and turning document text off now covers every tool.
+- Sign-in: passkey accounts need the passkey after the password, the two-factor requirement also covers file routes, lockouts are per email and address, and password hashing is capped.
+- Broker and TIC Identity results are bound to the browser that started them. From a framed signing page, the person also enters a code shown in the identification window. Sealed evidence masks personal numbers and phone numbers.
+- Files replaced on a draft or by a signer are destroyed. Legal hold also refuses edits and canceling.
+
+### Changed
+
+- Creating an API key or approving an MCP client can ask for your password or passkey again. Password and two-factor resets revoke API keys and tell the owner.
+- `/api/rpc` requires `Content-Type: application/json` when there is a body, and bodies are limited to 2 MB except on upload-like services.
+- Production refuses example and predictable `APP_SECRET` values. If yours is one, plan a migration before updating: changing it makes existing data unreadable.
+- Bulk send reads CSV and `.xlsx` only; `.xls` and `.ods` are refused.
+- Formulas are limited to 64 operators and chains of 32 fields.
+- Sender-defined text patterns are checked by the server when signing, not while typing.
+- Deleting a canceled document that someone already signed needs permission to manage all documents.
+- Proxy environment variables are ignored for outbound requests.
+
+### Added
+
+- Admin settings: **Trusted Proxies**, a switch for dynamic MCP client registration, an SMS country allowlist and SMS budgets.
+- A per-user hourly limit on assistant model calls.
+
 ## [0.1.0] - 2026-10-29
 
 The first release: electronic signatures you run yourself, in one Docker image with Postgres and an S3 bucket.

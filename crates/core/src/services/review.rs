@@ -307,11 +307,12 @@ pub async fn markdown(ctx: &Ctx, conn: &mut PgConnection, token: &str) -> Result
     let shared = open_link(ctx, conn, token, "text").await?;
     let Shared { document, party, expires_at, file, .. } = &shared;
     let pdf = read_file(&ctx.app.storage, ctx.keys(), file).await?;
-    let (pages, hidden) = tokio::task::spawn_blocking(move || {
-        (opensign_pdf::extract_text(&pdf).unwrap_or_default(), opensign_pdf::hidden_text(&pdf).unwrap_or_default())
-    })
-    .await
-    .map_err(AppError::internal)?;
+    let (pages, hidden) =
+        tokio::task::spawn_blocking(move || (opensign_pdf::extract_text(&pdf).unwrap_or_default(), opensign_pdf::hidden_text(&pdf)))
+            .await
+            .map_err(AppError::internal)?;
+    let hidden_checked = hidden.is_ok();
+    let hidden = hidden.unwrap_or_default();
     let org: OrgSettings = settings(ctx, conn).await?;
     let sender: Option<String> = match document.owner_id {
         Some(id) => sqlx::query_scalar("select name from users where id = $1").bind(id).fetch_optional(&mut *conn).await?,
@@ -358,7 +359,9 @@ pub async fn markdown(ctx: &Ctx, conn: &mut PgConnection, token: &str) -> Result
     out.push_str(&format!("- This link stops working: {}\n\n", expires_at.format("%Y-%m-%d %H:%M UTC")));
 
     out.push_str("## Warnings\n\n");
-    if hidden.is_empty() {
+    if !hidden_checked {
+        out.push_str("- The check for hidden text failed, so this copy may hold text a reader would not see.\n");
+    } else if hidden.is_empty() {
         out.push_str("- No hidden text was found on the pages.\n");
     } else {
         for h in &hidden {

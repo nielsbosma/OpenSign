@@ -2071,6 +2071,8 @@ export type SigningDeclineInput = {
 export type SigningDeclineOutput = Ok_;
 
 export type SigningEidCancelInput = {
+  /** The code the window showed, when the status asks for one with `needsCode`. */
+  code?: string | null;
   id: string;
   token: string;
 };
@@ -2124,6 +2126,8 @@ export type Started2 = {
 };
 
 export type SigningEidStatusInput = {
+  /** The code the window showed, when the status asks for one with `needsCode`. */
+  code?: string | null;
   id: string;
   token: string;
 };
@@ -2134,6 +2138,8 @@ export type EidStatus = {
   expiresAt?: string | null;
   /** What to tell the person. */
   message?: string | null;
+  /** The person finished in another window, and the session comes only with the code shown there. */
+  needsCode?: boolean;
   /** The QR code to show now, while pending. */
   qr?: string | null;
   /** Set once, when complete: pass it as `session` with the next calls. */

@@ -1,4 +1,4 @@
-import { XCircle } from 'lucide-react';
+import { CheckCircle2, XCircle } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
@@ -30,11 +30,13 @@ export function EidContinuePage() {
 
 function Flow({ onLanguage }: { onLanguage: (language: string) => void }) {
   const t = useTexts();
-  const [ticket] = useState(() => {
+  const [hash] = useState(() => {
     const value = decodeURIComponent(window.location.hash.slice(1));
     if (value) history.replaceState(null, '', window.location.pathname);
     return value;
   });
+  const releaseCode = hash.startsWith('done=') ? hash.slice('done='.length) : undefined;
+  const ticket = releaseCode ? '' : hash;
   const [pending, setPending] = useState<Pending>();
   const [error, setError] = useState<string>();
   const [formError, setFormError] = useState<string>();
@@ -62,6 +64,18 @@ function Flow({ onLanguage }: { onLanguage: (language: string) => void }) {
     }
   };
 
+  if (releaseCode) {
+    return (
+      <Shell>
+        <Message icon={<CheckCircle2 className="size-10 text-success" />} title={t.eidCodeTitle}>
+          <span className="my-3 block font-mono text-3xl tracking-widest" dir="ltr">
+            {releaseCode}
+          </span>
+          {t.eidCodeNote}
+        </Message>
+      </Shell>
+    );
+  }
   if (!ticket || error) {
     return (
       <Shell>

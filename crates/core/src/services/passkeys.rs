@@ -104,7 +104,9 @@ impl Service for BeginRegistration {
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: BeginInput) -> Result<Ceremony> {
         let actor = ctx.actor()?;
         let user = user_by_id(conn, actor.user_id).await?.ok_or_else(unauthorized)?;
-        if user.password_hash.is_some() && !confirm_password(ctx, conn, &user, input.current_password.as_deref()).await? {
+        if user.password_hash.is_none() {
+            crate::auth::require_step_up(ctx, conn).await?;
+        } else if !confirm_password(ctx, conn, &user, input.current_password.as_deref()).await? {
             return Err(bad_request("Your password is not right"));
         }
         let count: i64 = sqlx::query_scalar("select count(*) from passkeys where user_id = $1").bind(user.id).fetch_one(&mut *conn).await?;

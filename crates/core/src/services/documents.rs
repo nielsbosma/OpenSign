@@ -2288,16 +2288,42 @@ pub struct VerifyOutput {
     pub document: Option<VerifiedDocument>,
 }
 
+/// A PDF's signatures, read in a worker. For the public route, which must not hold a database
+/// connection while it waits: anyone can send a file that takes the whole deadline.
+pub async fn read_signatures_public(bytes: Vec<u8>) -> Result<(String, Vec<opensign_pdf::SignatureCheck>)> {
+    if !bytes.windows(5).take(1024).any(|w| w == b"%PDF-") {
+        return Err(bad_request("This is not a PDF file"));
+    }
+    let sha256 = sha256_hex(&bytes);
+    let signatures = tokio::task::spawn_blocking(move || opensign_pdf::verify_signatures_public(&bytes))
+        .await
+        .map_err(AppError::internal)?
+        .map_err(|e| match e {
+            opensign_pdf::PdfError::Rejected(message) if message == opensign_pdf::BUSY => AppError::new(ErrorKind::Unavailable, message),
+            _ => bad_request("This PDF could not be read"),
+        })?;
+    Ok((sha256, signatures))
+}
+
 /// Checks a PDF's signatures and whether this server sealed exactly these bytes.
 pub async fn verify_pdf(conn: &mut PgConnection, bytes: Vec<u8>) -> Result<VerifyOutput> {
     if !bytes.windows(5).take(1024).any(|w| w == b"%PDF-") {
         return Err(bad_request("This is not a PDF file"));
     }
     let sha256 = sha256_hex(&bytes);
-    let mut signatures = tokio::task::spawn_blocking(move || opensign_pdf::verify_signatures(&bytes))
+    let signatures = tokio::task::spawn_blocking(move || opensign_pdf::verify_signatures(&bytes))
         .await
         .map_err(AppError::internal)?
         .map_err(|_| bad_request("This PDF could not be read"))?;
+    compare_with_seals(conn, sha256, signatures).await
+}
+
+/// Says which of the signatures are this server's own, and which document they sealed.
+pub async fn compare_with_seals(
+    conn: &mut PgConnection,
+    sha256: String,
+    mut signatures: Vec<opensign_pdf::SignatureCheck>,
+) -> Result<VerifyOutput> {
     let chains: Vec<Vec<String>> = sqlx::query_scalar("select chain from seal_identities").fetch_all(&mut *conn).await?;
     let ours: HashSet<String> =
         chains.iter().filter_map(|chain| chain.first()).filter_map(|leaf| B64.decode(leaf).ok()).map(|der| sha256_hex(&der)).collect();

@@ -117,9 +117,9 @@ pub fn forwarded_client(proxies: &TrustedProxies, headers: &HeaderMap, peer: Opt
     if matches!(proxies, TrustedProxies::None) || !peer.is_none_or(trusted) {
         return peer;
     }
-    let Some(forwarded) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) else { return peer };
     let mut client = peer;
-    for entry in forwarded.rsplit(',') {
+    let lines: Vec<_> = headers.get_all("x-forwarded-for").iter().collect();
+    for entry in lines.iter().rev().flat_map(|line| line.to_str().unwrap_or("-").rsplit(',')) {
         let Ok(ip) = entry.trim().parse::<IpAddr>() else { break };
         let ip = ip.to_canonical();
         client = Some(ip);
