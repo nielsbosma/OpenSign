@@ -538,6 +538,28 @@ pub async fn view(ctx: &Ctx, conn: &mut PgConnection, document: DocumentRow) -> 
     })
 }
 
+/// Deletes those of the files that nothing refers to any more. The row holds the wrapped key, so the
+/// body is unreadable from here on; a job then removes the object from the bucket.
+pub async fn delete_unused_files(conn: &mut PgConnection, file_ids: &[Uuid]) -> Result<usize> {
+    let keys: Vec<String> = sqlx::query_scalar(
+        "delete from files f where f.id = any($1)
+           and not exists (select 1 from documents d where d.source_file_id = f.id or d.sealed_file_id = f.id)
+           and not exists (select 1 from document_files x where x.file_id = f.id)
+           and not exists (select 1 from attachment_requests a where a.file_id = f.id)
+           and not exists (select 1 from fields x where x.file_id = f.id)
+           and not exists (select 1 from template_version_files x where x.file_id = f.id)
+           and not exists (select 1 from parties p where p.signature->>'imageFileId' = f.id::text)
+         returning storage_key",
+    )
+    .bind(file_ids)
+    .fetch_all(&mut *conn)
+    .await?;
+    if !keys.is_empty() {
+        crate::jobs::enqueue(conn, "delete_objects", serde_json::json!({ "keys": keys }), None, None).await?;
+    }
+    Ok(keys.len())
+}
+
 /// Deletes a document with everything that belongs to it. File rows go in the same transaction,
 /// which destroys their wrapped keys, so the encrypted bodies are unreadable at once; the bucket
 /// objects are removed by a job after commit. Files another document still uses are kept.
@@ -561,28 +583,13 @@ pub async fn purge(ctx: &Ctx, conn: &mut PgConnection, document: &DocumentRow, r
     .fetch_all(&mut *conn)
     .await?;
     sqlx::query("delete from documents where id = $1").bind(document.id).execute(&mut *conn).await?;
-    let keys: Vec<String> = sqlx::query_scalar(
-        "delete from files f where f.id = any($1)
-           and not exists (select 1 from documents d where d.source_file_id = f.id or d.sealed_file_id = f.id)
-           and not exists (select 1 from document_files x where x.file_id = f.id)
-           and not exists (select 1 from attachment_requests a where a.file_id = f.id)
-           and not exists (select 1 from fields x where x.file_id = f.id)
-           and not exists (select 1 from template_version_files x where x.file_id = f.id)
-           and not exists (select 1 from parties p where p.signature->>'imageFileId' = f.id::text)
-         returning storage_key",
-    )
-    .bind(&file_ids)
-    .fetch_all(&mut *conn)
-    .await?;
-    if !keys.is_empty() {
-        crate::jobs::enqueue(conn, "delete_objects", serde_json::json!({ "keys": keys }), None, None).await?;
-    }
+    let deleted = delete_unused_files(conn, &file_ids).await?;
     crate::audit::audit(
         ctx,
         conn,
         crate::audit::Entry::new("document.deleted", "document", document.id)
             .before(serde_json::json!({ "title": document.title, "status": document.status, "sealedSha256": document.sealed_sha256 }))
-            .metadata(serde_json::json!({ "reason": reason, "filesDeleted": keys.len() })),
+            .metadata(serde_json::json!({ "reason": reason, "filesDeleted": deleted })),
     )
     .await?;
     Ok(())

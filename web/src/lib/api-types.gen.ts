@@ -168,10 +168,26 @@ export type Action = {
   tool: string;
 };
 
+/** Something the assistant wants done. Nothing has happened: confirming it calls the service as the signed-in user. The summary and details are built from the input by the server, not by the model. */
+export type Proposal = {
+  destructive: boolean;
+  details: Array<ProposalDetail>;
+  input: unknown;
+  summary: string;
+  /** The service to call, by its dotted name. */
+  tool: string;
+};
+
+export type ProposalDetail = {
+  label: string;
+  value: string;
+};
+
 export type AiChatOutput = ChatOutput;
 
 export type ChatOutput = {
   actions: Array<Action>;
+  proposals: Array<Proposal>;
   reply: string;
 };
 
@@ -761,7 +777,7 @@ export type BulkListOutput = Array<BulkSend>;
 
 export type BulkPreviewInput = {
   contentBase64: string;
-  /** A .csv, .xlsx, .xls or .ods file whose first row names the columns. Up to 1000 rows. */
+  /** A .csv or .xlsx file whose first row names the columns. Up to 1000 rows. */
   fileName: string;
   templateId: string;
   /** Ask the AI provider to match columns the built-in rules could not. Sends the column names, and a few sample rows only if an Admin allows document text to leave the server. */
@@ -803,7 +819,7 @@ export type PreviewOutput = {
 
 export type BulkStartInput = {
   contentBase64: string;
-  /** A .csv, .xlsx, .xls or .ods file whose first row names the columns. Up to 1000 rows. */
+  /** A .csv or .xlsx file whose first row names the columns. Up to 1000 rows. */
   fileName: string;
   mapping: Array<ColumnMapping>;
   templateId: string;

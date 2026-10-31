@@ -41,11 +41,28 @@ pub struct IdInput {
     pub id: Uuid,
 }
 
+const ON_HOLD: &str = "This document is on legal hold and cannot be changed";
+
 pub(crate) fn require_draft(document: &DocumentRow) -> Result<()> {
+    if document.legal_hold {
+        return Err(conflict(ON_HOLD));
+    }
     if document.status != status::DRAFT {
         return Err(conflict("Only drafts can be changed. Cancel the document and make a copy to change it."));
     }
     Ok(())
+}
+
+/// `require_draft` on the row as it is now, holding it until the transaction ends, so a change
+/// cannot slip in while the document is being sent.
+pub(crate) async fn lock_draft(conn: &mut PgConnection, id: Uuid) -> Result<()> {
+    let row: Option<(String, bool)> =
+        sqlx::query_as("select status, legal_hold from documents where id = $1 for update").bind(id).fetch_optional(&mut *conn).await?;
+    match row {
+        Some((_, true)) => Err(conflict(ON_HOLD)),
+        Some((state, false)) if state == status::DRAFT => Ok(()),
+        _ => Err(conflict("Only drafts can be changed. Cancel the document and make a copy to change it.")),
+    }
 }
 
 fn clean_text(value: &str, what: &str, max: usize) -> Result<String> {
@@ -622,11 +639,7 @@ pub async fn add_file(ctx: &Ctx, document_id: Uuid, name: &str, bytes: Vec<u8>, 
     }
 
     let mut tx = ctx.db().begin().await?;
-    let state: Option<String> =
-        sqlx::query_scalar("select status from documents where id = $1 for update").bind(document_id).fetch_optional(&mut *tx).await?;
-    if state.as_deref() != Some(status::DRAFT) {
-        return Err(conflict("Only drafts can be changed"));
-    }
+    lock_draft(&mut tx, document_id).await?;
     let name = pdf_name(name);
     let file = store_file(
         &mut tx,
@@ -748,11 +761,7 @@ pub async fn replace_file(ctx: &Ctx, document_id: Uuid, file_id: Uuid, name: &st
     let tagged = found.iter().any(|(_, tag)| *tag);
 
     let mut tx = ctx.db().begin().await?;
-    let state: Option<String> =
-        sqlx::query_scalar("select status from documents where id = $1 for update").bind(document_id).fetch_optional(&mut *tx).await?;
-    if state.as_deref() != Some(status::DRAFT) {
-        return Err(conflict("Only drafts can be changed"));
-    }
+    lock_draft(&mut tx, document_id).await?;
     let now: Vec<Uuid> = files(&mut tx, document_id).await?.iter().map(|f| f.id).collect();
     if now != records.iter().map(|f| f.id).collect::<Vec<_>>() {
         return Err(conflict("The files changed while the new one was uploading. Try again."));
@@ -821,6 +830,7 @@ pub async fn replace_file(ctx: &Ctx, document_id: Uuid, file_id: Uuid, name: &st
         })),
     )
     .await?;
+    crate::documents::delete_unused_files(&mut tx, &[file_id]).await?;
     tx.commit().await?;
     Ok(ReplaceOutput { file, pages: clean.pages.len(), removed: clean.removed, moved, fields: fields_out })
 }
@@ -880,7 +890,7 @@ impl Service for RemoveFile {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: RemoveFileInput) -> Result<DocumentView> {
         let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
-        require_draft(&document)?;
+        lock_draft(conn, document.id).await?;
         let done = sqlx::query("delete from document_files where document_id = $1 and file_id = $2")
             .bind(document.id)
             .bind(input.file_id)
@@ -889,6 +899,7 @@ impl Service for RemoveFile {
         if done.rows_affected() == 0 {
             return Err(not_found("File"));
         }
+        crate::documents::delete_unused_files(conn, &[input.file_id]).await?;
         audit(ctx, conn, Entry::new("document.file_removed", "document", document.id).metadata(json!({ "file": input.file_id }))).await?;
         reload(ctx, conn, document.id).await
     }
@@ -928,7 +939,7 @@ impl Service for Update {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: UpdateInput) -> Result<DocumentView> {
         let document = load_document(ctx, conn, input.id, Need::Edit).await?;
-        require_draft(&document)?;
+        lock_draft(conn, document.id).await?;
         if let Some(at) = input.expires_at
             && at <= ctx.now + Duration::hours(1)
         {
@@ -1092,7 +1103,7 @@ impl Service for SetParties {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SetPartiesInput) -> Result<Vec<PartyView>> {
         let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
-        require_draft(&document)?;
+        lock_draft(conn, document.id).await?;
         if input.parties.len() > MAX_PARTIES {
             return Err(bad_request(format!("A document can have at most {MAX_PARTIES} parties")));
         }
@@ -1435,7 +1446,7 @@ impl Service for SetFields {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SetFieldsInput) -> Result<DocumentView> {
         let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
-        require_draft(&document)?;
+        lock_draft(conn, document.id).await?;
         if input.fields.len() > MAX_FIELDS {
             return Err(bad_request(format!("A document can have at most {MAX_FIELDS} fields")));
         }
@@ -1563,8 +1574,13 @@ impl Service for Send {
         if document.is_template {
             return Err(bad_request("Templates cannot be sent. Create a document from it first."));
         }
-        let state: String =
-            sqlx::query_scalar("select status from documents where id = $1 for update").bind(document.id).fetch_one(&mut *conn).await?;
+        let (state, on_hold): (String, bool) = sqlx::query_as("select status, legal_hold from documents where id = $1 for update")
+            .bind(document.id)
+            .fetch_one(&mut *conn)
+            .await?;
+        if on_hold {
+            return Err(conflict(ON_HOLD));
+        }
         if state != status::DRAFT {
             return Err(conflict("Only drafts can be sent"));
         }
@@ -1663,12 +1679,11 @@ impl Service for Send {
             json!({ "documentId": document.id, "title": document.title, "externalId": document.external_id }),
         )
         .await?;
-        let links = parties(conn, document.id)
-            .await?
-            .iter()
-            .filter(|p| p.delivery == Delivery::Link.as_str())
-            .map(|p| SignerLink { party_id: p.id, name: p.name.clone(), url: signer_url(ctx, ctx.keys(), p) })
-            .collect();
+        let mut links = Vec::new();
+        for p in parties(conn, document.id).await?.iter().filter(|p| p.delivery == Delivery::Link.as_str()) {
+            audit_link_issued(ctx, conn, document.id, p, "send").await?;
+            links.push(SignerLink { party_id: p.id, name: p.name.clone(), url: signer_url(ctx, ctx.keys(), p) });
+        }
         Ok(SendOutput { document: view(ctx, conn, document).await?, links })
     }
 }
@@ -1696,8 +1711,11 @@ impl Service for Cancel {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CancelInput) -> Result<DocumentView> {
         let document = load_document(ctx, conn, input.id, Need::Edit).await?;
+        if document.legal_hold {
+            return Err(conflict(ON_HOLD));
+        }
         let done = sqlx::query(
-            "update documents set status = 'canceled', canceled_at = $2, updated_at = now() where id = $1 and status = 'pending'",
+            "update documents set status = 'canceled', canceled_at = $2, updated_at = now() where id = $1 and status = 'pending' and not legal_hold",
         )
         .bind(document.id)
         .bind(ctx.now)
@@ -1764,7 +1782,11 @@ impl Service for Delete {
         if document.status == status::PENDING {
             return Err(conflict("Cancel the document before deleting it"));
         }
-        if document.status == status::COMPLETED && !ctx.can(Permission::DocumentsManageAll) {
+        let signed: bool = sqlx::query_scalar("select exists (select 1 from parties where document_id = $1 and signed_at is not null)")
+            .bind(document.id)
+            .fetch_one(&mut *conn)
+            .await?;
+        if (document.status == status::COMPLETED || signed) && !ctx.can(Permission::DocumentsManageAll) {
             return Err(forbidden());
         }
         crate::documents::purge(ctx, conn, &document, "manual").await?;
@@ -1944,6 +1966,8 @@ pub async fn preview_pdf(ctx: &Ctx, id: Uuid, version: Option<i32>) -> Result<(S
         None => {
             if let Some(file_id) = document.sealed_file_id.or(document.source_file_id) {
                 let record = file_record(&mut conn, file_id).await?;
+                audit(ctx, &mut conn, Entry::new("document.downloaded", "document", document.id).metadata(json!({ "version": "preview" })))
+                    .await?;
                 return Ok((name, read_file(&ctx.app.storage, ctx.keys(), &record).await?));
             }
             files(&mut conn, document.id).await?
@@ -2134,7 +2158,7 @@ impl Service for SignMyself {
         if document.is_template {
             return Err(bad_request("Templates cannot be signed. Create a document from it first."));
         }
-        require_draft(&document)?;
+        lock_draft(conn, document.id).await?;
         if input.auth_to_sign == AuthMethod::None {
             return Err(bad_request("authToSign is standard, sms_pin, se_bankid, freja or broker"));
         }
@@ -2216,12 +2240,26 @@ pub async fn handed_over_links(ctx: &Ctx, conn: &mut PgConnection, id: Uuid) -> 
         Ok(d) if d.status == status::PENDING => d,
         _ => return Ok(Vec::new()),
     };
-    Ok(parties(conn, document.id)
+    let mut links = Vec::new();
+    for p in parties(conn, document.id)
         .await?
         .iter()
         .filter(|p| p.delivery == "link" && p.must_act() && p.signed_at.is_none() && p.declined_at.is_none())
-        .map(|p| (p.id, signer_url(ctx, ctx.keys(), p)))
-        .collect())
+    {
+        audit_link_issued(ctx, conn, document.id, p, "read").await?;
+        links.push((p.id, signer_url(ctx, ctx.keys(), p)));
+    }
+    Ok(links)
+}
+
+async fn audit_link_issued(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid, party: &PartyRow, via: &str) -> Result<()> {
+    audit(
+        ctx,
+        conn,
+        Entry::new("party.link_issued", "document", document_id).metadata(json!({ "party": party.id, "name": party.name, "via": via })),
+    )
+    .await?;
+    Ok(())
 }
 
 #[derive(Deserialize, JsonSchema)]

@@ -1,10 +1,11 @@
 use async_trait::async_trait;
 use schemars::{JsonSchema, Schema};
+use serde::Deserialize;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use sqlx::PgConnection;
 
-use crate::context::{Actor, Ctx};
+use crate::context::{Actor, Ctx, Surface};
 use crate::error::{AppError, ErrorKind, Result, bad_request, forbidden, unauthorized};
 use crate::permissions::Permission;
 
@@ -155,6 +156,11 @@ pub fn authorize(meta: &Meta, ctx: &Ctx) -> Result<()> {
     if !can_access(meta.access, ctx) {
         return Err(forbidden());
     }
+    // Text in documents can steer the assistant, so what it runs on its own is decided here and not
+    // by which tools it was offered.
+    if ctx.surface == Surface::Ai && !crate::services::ai::runs_on_its_own(meta.name) {
+        return Err(forbidden());
+    }
     Ok(())
 }
 
@@ -178,6 +184,8 @@ pub trait DynService: Send + Sync {
     fn meta(&self) -> &Meta;
     fn input_schema(&self) -> Schema;
     fn output_schema(&self) -> Schema;
+    /// Whether the caller may call this with this input, without running it.
+    fn check(&self, ctx: &Ctx, input: &serde_json::Value) -> Result<()>;
     async fn invoke(&self, ctx: &Ctx, input: serde_json::Value) -> Result<serde_json::Value>;
 }
 
@@ -195,6 +203,11 @@ impl<S: Service> DynService for Erased<S> {
 
     fn output_schema(&self) -> Schema {
         schemars::schema_for!(S::Output)
+    }
+
+    fn check(&self, ctx: &Ctx, input: &serde_json::Value) -> Result<()> {
+        authorize(&S::META, ctx)?;
+        S::Input::deserialize(input).map(|_| ()).map_err(|e| bad_request(format!("Invalid input: {e}")))
     }
 
     async fn invoke(&self, ctx: &Ctx, input: serde_json::Value) -> Result<serde_json::Value> {

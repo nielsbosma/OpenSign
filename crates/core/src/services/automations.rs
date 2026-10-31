@@ -593,7 +593,8 @@ impl Service for Create {
 fn rule_audit(view: &AutomationView) -> Value {
     json!({
         "name": view.name, "event": view.event, "app": view.app, "tool": view.tool, "active": view.active,
-        "templates": view.template_ids, "folders": view.folder_ids, "arguments": view.arguments,
+        "templates": view.template_ids, "folders": view.folder_ids,
+        "arguments": view.arguments.as_object().map(|a| a.keys().cloned().collect::<Vec<_>>()),
     })
 }
 

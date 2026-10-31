@@ -233,10 +233,7 @@ pub(crate) fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
         // A LiteLLM or other self-hosted proxy usually runs next to OpenSign on the private network.
         "ai" if matches!(value["provider"].as_str(), Some("litellm" | "openai-compatible")) => {
             match value["baseUrl"].as_str().filter(|u| !u.is_empty()) {
-                Some(u) => match reqwest::Url::parse(u) {
-                    Ok(parsed) if matches!(parsed.scheme(), "http" | "https") && parsed.username().is_empty() => Ok(()),
-                    _ => Err(bad_request("Enter the proxy's http or https address")),
-                },
+                Some(u) => crate::net::check_ai_proxy_url(u).map(|_| ()).map_err(bad_request),
                 None => Err(bad_request("Enter the address of the OpenAI-compatible endpoint")),
             }
         }

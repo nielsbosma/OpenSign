@@ -115,7 +115,7 @@ impl Service for Create {
             .bind(ctx.actor()?.user_id)
             .execute(&mut *conn)
             .await?;
-        audit(ctx, conn, Entry::new("webhooks.create", "webhook", id).after(json!({ "url": url, "events": events }))).await?;
+        audit(ctx, conn, Entry::new("webhooks.create", "webhook", id).after(json!({ "url": audit_url(&url), "events": events }))).await?;
         let webhook = WebhookView { id, url, events, active: true, created_at: ctx.now, last_status: None, last_error: None, failed: 0 };
         Ok(CreatedWebhook { webhook, secret })
     }
@@ -144,8 +144,22 @@ impl Service for Delete {
         let url: Option<String> =
             sqlx::query_scalar("delete from webhooks where id = $1 returning url").bind(input.id).fetch_optional(&mut *conn).await?;
         let url = url.ok_or_else(|| not_found("Webhook"))?;
-        audit(ctx, conn, Entry::new("webhooks.delete", "webhook", input.id).before(json!({ "url": url }))).await?;
+        audit(ctx, conn, Entry::new("webhooks.delete", "webhook", input.id).before(json!({ "url": audit_url(&url) }))).await?;
         Ok(Ok_::default())
+    }
+}
+
+/// Scheme and host only: endpoints often carry a token in the path, and the audit log has readers
+/// who may not manage webhooks.
+fn audit_url(url: &str) -> String {
+    reqwest::Url::parse(url).map_or_else(|_| String::new(), |u| u.origin().ascii_serialization())
+}
+
+#[cfg(test)]
+mod audit_url_tests {
+    #[test]
+    fn keeps_only_the_origin() {
+        assert_eq!(super::audit_url("https://hooks.example.test/services/T0/B0/abc?k=1"), "https://hooks.example.test");
     }
 }
 

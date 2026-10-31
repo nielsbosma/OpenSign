@@ -191,7 +191,7 @@ Editing calls work on drafts and templates. Once a document is sent they answer 
 | Method | Path | |
 | --- | --- | --- |
 | GET | `/bulk-sends` | Recent bulk sends you started, or all with `documents.read_all` |
-| POST | `/bulk-sends/preview` | Read a CSV, Excel or OpenDocument file for a template. Body `templateId`, `fileName`, `contentBase64`, `useAi`. Returns columns, sample rows, targets, a suggested mapping and rows that would fail. Sends nothing |
+| POST | `/bulk-sends/preview` | Read a CSV or Excel (`.xlsx`) file for a template. Body `templateId`, `fileName`, `contentBase64`, `useAi`. Returns columns, sample rows, targets, a suggested mapping and rows that would fail. Sends nothing |
 | POST | `/bulk-sends` | Send the template to every row (up to 1,000). Body as preview plus `mapping: [{ column, target }]` and `titlePattern`. Refuses the whole file if any row cannot be sent |
 | GET | `/bulk-sends/{id}` | One bulk send with every row's outcome |
 | POST | `/bulk-sends/{id}/cancel` | Skip rows not sent yet |

@@ -10,8 +10,7 @@ import { type BulkPreviewOutput, type ColumnMapping, call, errorMessage, useApi 
 import { msg, t } from '@/lib/i18n';
 import { FormError } from '../auth/AuthLayout';
 
-const ACCEPT =
-  '.csv,.tsv,.txt,.xlsx,.xls,.ods,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel';
+const ACCEPT = '.csv,.tsv,.txt,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const IGNORE = '__ignore';
 
 async function toBase64(file: File) {

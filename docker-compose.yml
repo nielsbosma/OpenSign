@@ -17,7 +17,7 @@ services:
       POSTGRES_PASSWORD: opensign
       POSTGRES_DB: opensign
     ports:
-      - "5480:5432"
+      - "127.0.0.1:5480:5432"
     volumes:
       - postgres:/var/lib/postgresql/data
       - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -33,7 +33,7 @@ services:
       RUSTFS_ACCESS_KEY: opensign
       RUSTFS_SECRET_KEY: opensign-secret
     ports:
-      - "9310:9000"
+      - "127.0.0.1:9310:9000"
     volumes:
       - s3:/data
 
@@ -52,7 +52,7 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     ports:
-      - "8026:8025"
+      - "127.0.0.1:8026:8025"
     healthcheck:
       test: ["CMD", "/mailpit", "readyz"]
       interval: 2s
@@ -71,7 +71,7 @@ services:
       - --webhook-disable=true
       - --prometheus-disable-collect=true
     ports:
-      - "3320:3000"
+      - "127.0.0.1:3320:3000"
 
   app:
     profiles: [prod]
@@ -91,7 +91,7 @@ services:
       CONVERTER_URL: http://converter:3000
       ROLE: ${OPENSIGN_ROLE:-all}
     ports:
-      - "8090:3000"
+      - "127.0.0.1:8090:3000"
     depends_on:
       postgres:
         condition: service_healthy
