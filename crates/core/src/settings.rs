@@ -228,7 +228,7 @@ pub struct AiSettings {
     pub model: String,
     pub api_key: Option<String>,
     pub base_url: String,
-    /// Off: the assistant works, but document text never leaves the server.
+    /// Off: the assistant works, but document text and field values never leave the server.
     pub allow_document_text: bool,
     /// Tokens per calendar month across everyone; 0 means no limit.
     pub monthly_token_budget: u64,

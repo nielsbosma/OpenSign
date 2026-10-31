@@ -293,6 +293,6 @@ Deliveries older than 30 days are removed from the log. The log needs the **webh
 | `The endpoint answered 401` or `403` | Your endpoint refused the request. Check that it reads the raw body and uses the right secret. |
 | `The endpoint answered 3xx` | Redirects are not followed. Use the final URL, including `https` and any trailing slash your server expects. |
 | A timeout | Your endpoint took more than 10 seconds. Answer first, then do the work. |
-| A refused address | The host resolves to a private or reserved address. Webhooks only go to the public internet. |
+| A refused address | The host has no public address: the name does not exist, or it resolves to a private or reserved address. Webhooks only go to the public internet. |
 | Nothing arrives | Check that the webhook subscribes to the event, then open its **Deliveries**. A pending delivery shows its last error and the next try; a failed one can be resent once your endpoint is fixed. |
 | Your endpoint answers `2xx` but rejects the event | Open the delivery and compare its payload and your endpoint's answer. Resend it once fixed. |

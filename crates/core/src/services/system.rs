@@ -255,7 +255,7 @@ impl Service for Update {
         let updates: UpdateSettings = settings(ctx, conn).await?;
         let hook = updates.deploy_hook_url.filter(|u| !u.is_empty()).ok_or_else(|| bad_request("Set a deploy hook in Settings first"))?;
         let url = crate::net::check_public_url(&hook).map_err(bad_request)?;
-        let target = latest_release(ctx, false).await.ok().flatten().map(|r| r.version);
+        let target = if updates.check_for_updates { latest_release(ctx, false).await.ok().flatten().map(|r| r.version) } else { None };
         let response = ctx
             .app
             .http
