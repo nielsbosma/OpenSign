@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use cms::cert::CertificateChoices;
@@ -9,21 +9,29 @@ use const_oid::db::rfc5912::ID_SHA_256;
 use der::asn1::OctetString;
 use der::{Decode, Encode, SliceReader};
 use lopdf::{Dictionary, Document, Object, ObjectId};
-use serde::Serialize;
+use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
 use x509_cert::Certificate;
 use x509_cert::ext::pkix::SubjectKeyIdentifier;
 
-use crate::Result;
+use crate::load::load;
+use crate::revisions::appended_objects;
 use crate::seal::ID_AA_SIGNATURE_TIME_STAMP_TOKEN;
+use crate::{PdfError, Result};
+
+const MAX_SIGNATURES: usize = 32;
+
+/// Spelled out, serde's derive would borrow the value from its input, which never lives that long.
+type StaticStr = &'static str;
 
 /// What a reader can say about one signature without trust lists: whether the bytes it covers are
 /// intact and the cryptography checks out. Whether the signer is trusted is a separate question.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SignatureCheck {
     /// `signature`, or `documentTimestamp` for an archive time stamp over the whole file.
-    pub kind: &'static str,
+    #[serde(deserialize_with = "known_kind")]
+    pub kind: StaticStr,
     pub signer: Option<String>,
     pub reason: Option<String>,
     /// True when the signature covers every byte of the file except its own hole.
@@ -38,7 +46,21 @@ pub struct SignatureCheck {
     pub timestamp: Option<DateTime<Utc>>,
     /// The overall verdict: the bytes are as signed and the cryptography checks out.
     pub intact: bool,
+    /// SHA-256 of the signer's certificate, when the signature verifies with it.
+    pub signer_certificate_sha256: Option<String>,
+    /// True when the signer is one of this server's seal identities. Anyone can make a signature
+    /// that is intact; only this says who made it. Filled in by the caller, who has the identities.
+    #[serde(default)]
+    pub trusted: bool,
     pub problems: Vec<String>,
+}
+
+fn known_kind<'de, D: Deserializer<'de>>(deserializer: D) -> std::result::Result<&'static str, D::Error> {
+    match String::deserialize(deserializer)?.as_str() {
+        "signature" => Ok("signature"),
+        "documentTimestamp" => Ok("documentTimestamp"),
+        _ => Err(serde::de::Error::custom("unknown signature kind")),
+    }
 }
 
 impl SignatureCheck {
@@ -62,7 +84,7 @@ fn text(dict: &lopdf::Dictionary, key: &[u8]) -> Option<String> {
 
 /// Checks every signature and document time stamp in the file, in the order they were added.
 pub fn verify_signatures(pdf: &[u8]) -> Result<Vec<SignatureCheck>> {
-    let doc = Document::load_mem(pdf)?;
+    let doc = load(pdf)?;
     let mut found = Vec::new();
     for object in doc.objects.values() {
         let Ok(dict) = object.as_dict() else { continue };
@@ -71,18 +93,22 @@ pub fn verify_signatures(pdf: &[u8]) -> Result<Vec<SignatureCheck>> {
             found.push((byte_range(dict).map(|r| r[2].saturating_add(r[3])).unwrap_or(usize::MAX), dict));
         }
     }
+    if found.len() > MAX_SIGNATURES {
+        return Err(PdfError::Rejected("The PDF has too many signatures".into()));
+    }
     found.sort_by_key(|(end, _)| *end);
+    let mut changes = HashMap::new();
     Ok(found
         .into_iter()
         .map(|(_, dict)| {
-            let mut check = check_one(pdf, dict);
+            let mut check = check_one(pdf, &doc, dict, &mut changes);
             check.intact = check.is_intact();
             check
         })
         .collect())
 }
 
-fn check_one(pdf: &[u8], dict: &lopdf::Dictionary) -> SignatureCheck {
+fn check_one(pdf: &[u8], doc: &Document, dict: &lopdf::Dictionary, changes: &mut HashMap<usize, Result<(), String>>) -> SignatureCheck {
     let document_timestamp = dict.get(b"Type").and_then(Object::as_name).is_ok_and(|n| n == b"DocTimeStamp");
     let mut check = SignatureCheck {
         kind: if document_timestamp { "documentTimestamp" } else { "signature" },
@@ -94,6 +120,8 @@ fn check_one(pdf: &[u8], dict: &lopdf::Dictionary) -> SignatureCheck {
         signature_valid: None,
         timestamp: None,
         intact: false,
+        signer_certificate_sha256: None,
+        trusted: false,
         problems: Vec::new(),
     };
     let Some([start, first_len, second_start, second_len]) = byte_range(dict) else {
@@ -108,13 +136,19 @@ fn check_one(pdf: &[u8], dict: &lopdf::Dictionary) -> SignatureCheck {
     let hole = &pdf[first_len..second_start];
     let hole_ok =
         hole.len() >= 2 && hole[0] == b'<' && hole[hole.len() - 1] == b'>' && hole[1..hole.len() - 1].iter().all(u8::is_ascii_hexdigit);
-    if !hole_ok {
+    let Ok(Object::String(contents, _)) = dict.get(b"Contents") else {
+        check.problems.push("the signature has no value".into());
+        return check;
+    };
+    // Otherwise the bytes the range leaves out and the value checked below could be two different things.
+    if !hole_ok || hex::decode(&hole[1..hole.len() - 1]).ok().as_ref() != Some(contents) {
         check.problems.push("the excluded range is not just the signature value".into());
         return check;
     }
     check.covers_whole_file = second_end == Some(pdf.len());
     if !check.covers_whole_file {
-        match later_changes(pdf, second_start + second_len) {
+        let end = second_start + second_len;
+        match changes.entry(end).or_insert_with(|| later_changes(pdf, end, doc)) {
             Ok(()) => check.only_validation_data_added = true,
             Err(problem) => check.problems.push(format!("the file was changed after this signature: {problem}")),
         }
@@ -124,10 +158,6 @@ fn check_one(pdf: &[u8], dict: &lopdf::Dictionary) -> SignatureCheck {
     hasher.update(&pdf[second_start..second_start + second_len]);
     let digest: [u8; 32] = hasher.finalize().into();
 
-    let Ok(Object::String(contents, _)) = dict.get(b"Contents") else {
-        check.problems.push("the signature has no value".into());
-        return check;
-    };
     let result =
         if document_timestamp { check_document_timestamp(contents, &digest, &mut check) } else { check_cms(contents, &digest, &mut check) };
     if let Err(problem) = result {
@@ -165,22 +195,30 @@ fn check_document_timestamp(contents: &[u8], digest: &[u8; 32], check: &mut Sign
     let mut reader = SliceReader::new(contents).map_err(|e| e.to_string())?;
     let info = ContentInfo::decode(&mut reader).map_err(|e| format!("the time stamp is not CMS: {e}"))?;
     let token = info.to_der().map_err(|e| e.to_string())?;
-    match crate::tsa::digest_time(&token, digest) {
+    let time = match crate::tsa::digest_time(&token, digest) {
         Ok(time) => {
             check.digest_matches = true;
-            check.timestamp = Some(time);
+            Some(time)
         }
-        Err(e) => check.problems.push(e.to_string()),
-    }
+        Err(e) => {
+            check.problems.push(e.to_string());
+            None
+        }
+    };
     if let Ok(signed) = info.content.decode_as::<SignedData>()
         && let Some(signer) = signed.signer_infos.0.iter().next()
     {
         check.signer = signer_certificate(&certificates(&signed), &signer.sid).map(|c| c.tbs_certificate.subject.to_string());
     }
-    let valid = crate::tsa::token_signature_valid(&token)?;
-    check.signature_valid = Some(valid);
-    if !valid {
-        check.problems.push("the time stamp authority's signature does not verify".into());
+    match crate::tsa::check_authority(&token) {
+        Ok(()) => {
+            check.signature_valid = Some(true);
+            check.timestamp = time;
+        }
+        Err(problem) => {
+            check.signature_valid = Some(false);
+            check.problems.push(problem);
+        }
     }
     Ok(())
 }
@@ -216,35 +254,114 @@ fn appended(before: Vec<Object>, after: Vec<Object>) -> Result<Vec<Object>, Stri
     Ok(after[before.len()..].to_vec())
 }
 
-/// An invisible signature widget whose value is a document time stamp.
-fn is_timestamp_widget(doc: &Document, object: &Object) -> bool {
-    let Ok(widget) = resolve(doc, object).as_dict().cloned() else { return false };
-    let name = |key: &[u8]| widget.get(key).and_then(Object::as_name).ok().map(<[u8]>::to_vec);
-    let invisible = widget.get(b"Rect").and_then(Object::as_array).is_ok_and(|r| {
-        let v: Vec<f32> = r.iter().filter_map(|o| o.as_float().ok()).collect();
-        v.len() == 4 && (v[0] == v[2] || v[1] == v[3])
-    });
-    let value_is_timestamp = widget
-        .get(b"V")
-        .ok()
-        .map(|v| resolve(doc, v))
-        .is_some_and(|v| v.as_dict().is_ok_and(|d| d.get(b"Type").and_then(Object::as_name).is_ok_and(|t| t == b"DocTimeStamp")));
-    name(b"Subtype").as_deref() == Some(b"Widget".as_slice())
-        && name(b"FT").as_deref() == Some(b"Sig".as_slice())
-        && !widget.has(b"AP")
-        && invisible
-        && value_is_timestamp
+/// `dict` has these keys and no others.
+fn has_exactly(dict: &Dictionary, keys: &[&[u8]]) -> bool {
+    dict.len() == keys.len() && keys.iter().all(|key| dict.has(key))
+}
+
+fn name_is(dict: &Dictionary, key: &[u8], value: &[u8]) -> bool {
+    dict.get(key).and_then(Object::as_name).is_ok_and(|n| n == value)
+}
+
+/// The invisible field OpenSign adds for a document time stamp, key for key: anything more on it
+/// (an appearance, an action) would be a change a reader can see or trigger. Returns the objects it is made of.
+fn timestamp_widget(doc: &Document, object: &Object, pages: &HashSet<ObjectId>) -> Option<[ObjectId; 2]> {
+    let id = object.as_reference().ok()?;
+    let widget = doc.get_dictionary(id).ok()?;
+    if !has_exactly(widget, &[b"Type", b"Subtype", b"FT", b"T", b"V", b"Rect", b"F", b"P"])
+        || !name_is(widget, b"Type", b"Annot")
+        || !name_is(widget, b"Subtype", b"Widget")
+        || !name_is(widget, b"FT", b"Sig")
+        || !matches!(widget.get(b"T"), Ok(Object::String(..)))
+        || widget.get(b"F").and_then(Object::as_i64).ok()? != 132
+        || !widget.get(b"P").and_then(Object::as_reference).is_ok_and(|p| pages.contains(&p))
+    {
+        return None;
+    }
+    let rect: Vec<f32> = widget.get(b"Rect").and_then(Object::as_array).ok()?.iter().filter_map(|o| o.as_float().ok()).collect();
+    if rect != [0.0, 0.0, 0.0, 0.0] {
+        return None;
+    }
+    let value = widget.get(b"V").and_then(Object::as_reference).ok()?;
+    let sig = doc.get_dictionary(value).ok()?;
+    let plain = has_exactly(sig, &[b"Type", b"Filter", b"SubFilter", b"ByteRange", b"Contents"])
+        && name_is(sig, b"Type", b"DocTimeStamp")
+        && name_is(sig, b"Filter", b"Adobe.PPKLite")
+        && name_is(sig, b"SubFilter", b"ETSI.RFC3161")
+        && byte_range(sig).is_some()
+        && matches!(sig.get(b"Contents"), Ok(Object::String(..)));
+    plain.then_some([id, value])
+}
+
+/// The document security store as OpenSign writes it: lists of plain streams and nothing else.
+/// Adds its objects to `allowed`.
+fn check_security_store(doc: &Document, catalog: &Dictionary, allowed: &mut HashSet<ObjectId>) -> Result<(), String> {
+    let refused = || "the document security store holds something other than validation data".to_string();
+    let Ok(store) = catalog.get(b"DSS") else { return Ok(()) };
+    let store = match store {
+        Object::Reference(id) => {
+            allowed.insert(*id);
+            doc.get_dictionary(*id).map_err(|_| refused())?
+        }
+        other => other.as_dict().map_err(|_| refused())?,
+    };
+    for (key, list) in store.iter() {
+        if !matches!(key.as_slice(), b"Certs" | b"OCSPs" | b"CRLs") {
+            return Err(refused());
+        }
+        for item in list.as_array().map_err(|_| refused())? {
+            let id = item.as_reference().map_err(|_| refused())?;
+            let stream = doc.get_object(id).and_then(Object::as_stream).map_err(|_| refused())?;
+            if stream.dict.iter().any(|(key, _)| !matches!(key.as_slice(), b"Length" | b"Filter")) {
+                return Err(refused());
+            }
+            allowed.insert(id);
+        }
+    }
+    Ok(())
+}
+
+fn check_extensions(catalog: &Dictionary) -> Result<(), String> {
+    let Ok(extensions) = catalog.get(b"Extensions") else { return Ok(()) };
+    let plain =
+        extensions.as_dict().ok().filter(|e| has_exactly(e, &[b"ESIC"])).and_then(|e| e.get(b"ESIC").ok()).and_then(|e| e.as_dict().ok());
+    if plain.is_some_and(|esic| has_exactly(esic, &[b"BaseVersion", b"ExtensionLevel"])) {
+        Ok(())
+    } else {
+        Err("the document's extensions were changed".into())
+    }
+}
+
+/// Numbers the signed revision refers to but does not define. A later update defining one would
+/// change what the signed objects mean without changing any of them.
+fn undefined_references(object: &Object, defined: &Document, found: &mut HashSet<ObjectId>, depth: usize) {
+    if depth > 64 {
+        return;
+    }
+    match object {
+        Object::Reference(id) if !defined.objects.contains_key(id) => {
+            found.insert(*id);
+        }
+        Object::Array(items) => items.iter().for_each(|o| undefined_references(o, defined, found, depth + 1)),
+        Object::Dictionary(dict) => dict.iter().for_each(|(_, o)| undefined_references(o, defined, found, depth + 1)),
+        Object::Stream(stream) => stream.dict.iter().for_each(|(_, o)| undefined_references(o, defined, found, depth + 1)),
+        _ => {}
+    }
 }
 
 /// Compares the revision a signature covers with the whole file. Allowed: a document security
-/// store and the extensions entry in the catalog, and new invisible document time stamp fields.
-/// Every other object must be exactly what was signed.
-fn later_changes(pdf: &[u8], end: usize) -> Result<(), String> {
-    let signed = Document::load_mem(&pdf[..end]).map_err(|_| "the signed revision cannot be read".to_string())?;
-    let last = Document::load_mem(pdf).map_err(|_| "the file cannot be read".to_string())?;
+/// store and the extensions entry in the catalog, and new invisible document time stamp fields,
+/// each exactly as OpenSign writes them. Every other object must be exactly what was signed, and
+/// nothing else may be added, not even something no signed object seems to use.
+fn later_changes(pdf: &[u8], end: usize, last: &Document) -> Result<(), String> {
+    let written = appended_objects(pdf, end)?;
+    let signed = load(&pdf[..end]).map_err(|_| "the signed revision cannot be read".to_string())?;
+    if signed.xref_recovery.is_some() || last.xref_recovery.is_some() {
+        return Err("the file's cross-reference table is damaged".into());
+    }
     let root = |d: &Document| d.trailer.get(b"Root").and_then(Object::as_reference).ok();
     let root_id = root(&signed).ok_or("the signed revision has no catalog")?;
-    if root(&last) != Some(root_id) || signed.trailer.get(b"Info").ok() != last.trailer.get(b"Info").ok() {
+    if root(last) != Some(root_id) || signed.trailer.get(b"Info").ok() != last.trailer.get(b"Info").ok() {
         return Err("the document catalog was replaced".into());
     }
     let pages: HashSet<ObjectId> = signed.get_pages().values().copied().collect();
@@ -252,6 +369,7 @@ fn later_changes(pdf: &[u8], end: usize) -> Result<(), String> {
         return Err("pages were added or removed".into());
     }
     let mut added = Vec::new();
+    let mut allowed = HashSet::new();
     for (id, before) in &signed.objects {
         let after = last.objects.get(id).ok_or("an object was removed")?;
         if before == after {
@@ -259,26 +377,45 @@ fn later_changes(pdf: &[u8], end: usize) -> Result<(), String> {
         }
         let (Ok(b), Ok(a)) = (before.as_dict(), after.as_dict()) else { return Err("an object was changed".into()) };
         if *id == root_id {
-            let allowed: [&[u8]; 3] = [b"DSS", b"Extensions", b"AcroForm"];
-            if without(b, &allowed) != without(a, &allowed) {
+            let changeable: [&[u8]; 3] = [b"DSS", b"Extensions", b"AcroForm"];
+            if without(b, &changeable) != without(a, &changeable) {
                 return Err("the document catalog was changed".into());
             }
-            let (form_b, form_a) = (resolved_dict(&signed, b, b"AcroForm"), resolved_dict(&last, a, b"AcroForm"));
+            check_security_store(last, a, &mut allowed)?;
+            check_extensions(a)?;
+            let (form_b, form_a) = (resolved_dict(&signed, b, b"AcroForm"), resolved_dict(last, a, b"AcroForm"));
             if without(&form_b, &[b"Fields", b"SigFlags"]) != without(&form_a, &[b"Fields", b"SigFlags"]) {
                 return Err("the form was changed".into());
             }
-            added.extend(appended(resolved_array(&signed, &form_b, b"Fields"), resolved_array(&last, &form_a, b"Fields"))?);
+            added.extend(appended(resolved_array(&signed, &form_b, b"Fields"), resolved_array(last, &form_a, b"Fields"))?);
         } else if pages.contains(id) {
             if without(b, &[b"Annots"]) != without(a, &[b"Annots"]) {
                 return Err("a page was changed".into());
             }
-            added.extend(appended(resolved_array(&signed, b, b"Annots"), resolved_array(&last, a, b"Annots"))?);
+            added.extend(appended(resolved_array(&signed, b, b"Annots"), resolved_array(last, a, b"Annots"))?);
         } else {
             return Err("an object was changed".into());
         }
     }
-    if !added.iter().all(|o| is_timestamp_widget(&last, o)) {
-        return Err("something other than a document time stamp was added".into());
+    for object in &added {
+        let parts = timestamp_widget(last, object, &pages).ok_or("something other than a document time stamp was added")?;
+        allowed.extend(parts);
+    }
+    allowed.extend(written.xref_streams.iter().map(|number| (*number, 0)));
+    let new: Vec<ObjectId> = last.objects.keys().filter(|id| !signed.objects.contains_key(id)).copied().collect();
+    if new.iter().any(|id| !allowed.contains(id)) {
+        return Err("something other than validation data or a document time stamp was added".into());
+    }
+    let numbers: HashSet<u32> = last.objects.keys().map(|(number, _)| *number).collect();
+    if written.objects.iter().any(|number| !numbers.contains(number)) {
+        return Err("an update holds an object that cannot be read".into());
+    }
+    if !new.is_empty() {
+        let mut undefined = HashSet::new();
+        signed.objects.values().for_each(|o| undefined_references(o, &signed, &mut undefined, 0));
+        if new.iter().any(|id| undefined.contains(id)) {
+            return Err("an update defines an object the signed revision refers to".into());
+        }
     }
     Ok(())
 }
@@ -316,7 +453,9 @@ fn check_cms(contents: &[u8], digest: &[u8; 32], check: &mut SignatureCheck) -> 
         signer.signature.as_bytes(),
     );
     check.signature_valid = Some(valid);
-    if !valid {
+    if valid {
+        check.signer_certificate_sha256 = Some(hex::encode(Sha256::digest(cert.to_der().map_err(|e| e.to_string())?)));
+    } else {
         check.problems.push("the signature does not verify, or uses an algorithm OpenSign does not check".into());
     }
 
@@ -328,12 +467,11 @@ fn check_cms(contents: &[u8], digest: &[u8; 32], check: &mut SignatureCheck) -> 
         .and_then(|a| a.values.get(0))
     {
         let token = token.to_der().map_err(|e| e.to_string())?;
-        match crate::tsa::token_time(&token, signer.signature.as_bytes()) {
-            Ok(time) => check.timestamp = Some(time),
-            Err(e) => check.problems.push(e.to_string()),
-        }
-        if crate::tsa::token_signature_valid(&token) != Ok(true) {
-            check.problems.push("the time stamp authority's signature does not verify".into());
+        // A time only counts once its token has been checked: this one is also shown to people.
+        match (crate::tsa::token_time(&token, signer.signature.as_bytes()), crate::tsa::check_authority(&token)) {
+            (Ok(time), Ok(())) => check.timestamp = Some(time),
+            (Err(e), _) => check.problems.push(e.to_string()),
+            (_, Err(problem)) => check.problems.push(problem),
         }
     }
     Ok(())

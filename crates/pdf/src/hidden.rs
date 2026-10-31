@@ -1,13 +1,14 @@
+use lopdf::Object;
 use lopdf::content::Content;
-use lopdf::{Document, Object};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::Result;
+use crate::load::{MAX_STREAM_BYTES, load};
 
 /// Text a reader of the page would not see, which can carry instructions meant for an AI reading
 /// the document. A heuristic over the page's own content stream: text in form XObjects is not
 /// checked, and white text on a dark background is reported too.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HiddenText {
     /// 1-based.
@@ -94,10 +95,11 @@ fn scan_page(content: &[u8]) -> Option<(u32, u32, u32)> {
 
 /// The pages that draw text a reader would not see. Pages whose content cannot be read are skipped.
 pub fn hidden_text(pdf: &[u8]) -> Result<Vec<HiddenText>> {
-    let doc = Document::load_mem(pdf)?;
+    let doc = load(pdf)?;
     let mut found = Vec::new();
     for (number, id) in doc.get_pages() {
-        if let Some((invisible, white, tiny)) = scan_page(&doc.get_page_content(id))
+        let Ok(content) = doc.get_page_content_with_limit(id, MAX_STREAM_BYTES) else { continue };
+        if let Some((invisible, white, tiny)) = scan_page(&content)
             && invisible + white + tiny > 0
         {
             found.push(HiddenText { page: number, invisible, white, tiny });

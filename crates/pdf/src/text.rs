@@ -7,8 +7,8 @@ use std::collections::HashMap;
 use lopdf::content::{Content, Operation};
 use lopdf::{Dictionary, Document, Object, ObjectId};
 
+use crate::Result;
 use crate::geometry::{PageBox, page_box};
-use crate::{PdfError, Result};
 
 const MAX_OPERATIONS: usize = 1_000_000;
 const MAX_GLYPHS: usize = 300_000;
@@ -743,8 +743,7 @@ pub(crate) fn layout(doc: &Document) -> Result<Vec<PageLayout>> {
 }
 
 pub(crate) fn load(pdf: &[u8]) -> Result<Document> {
-    let options = lopdf::LoadOptions { max_decompressed_size: Some(MAX_CONTENT_BYTES), ..Default::default() };
-    Document::load_mem_with_options(pdf, options).map_err(|e| PdfError::Malformed(e.to_string()))
+    crate::load::load_with(pdf, MAX_CONTENT_BYTES)
 }
 
 #[cfg(test)]

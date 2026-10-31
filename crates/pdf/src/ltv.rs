@@ -11,7 +11,7 @@ use cms::cert::CertificateChoices;
 use cms::content_info::ContentInfo;
 use cms::signed_data::SignedData;
 use const_oid::db::rfc5911::ID_SIGNED_DATA;
-use const_oid::db::rfc5912::{ID_KP_OCSP_SIGNING, ID_SHA_1};
+use const_oid::db::rfc5912::{ID_CE_DELTA_CRL_INDICATOR, ID_CE_ISSUING_DISTRIBUTION_POINT, ID_KP_OCSP_SIGNING, ID_SHA_1};
 use const_oid::db::rfc6960::{ID_PKIX_OCSP_BASIC, ID_PKIX_OCSP_NOCHECK};
 use der::asn1::{Null, OctetString};
 use der::{Decode, Encode};
@@ -105,7 +105,7 @@ fn certificates_of(signed: &SignedData) -> impl Iterator<Item = &Certificate> {
 /// Certificates from every signature and document time stamp in the file, and from the time
 /// stamp tokens inside signatures.
 fn embedded_certificates(pdf: &[u8]) -> Result<Vec<Certificate>> {
-    let doc = Document::load_mem(pdf)?;
+    let doc = crate::load::load(pdf)?;
     let mut out = Vec::new();
     for object in doc.objects.values() {
         let Ok(dict) = object.as_dict() else { continue };
@@ -280,6 +280,16 @@ impl RevocationCheck {
         if tbs.issuer != self.issuer.tbs_certificate.subject {
             return Err("the CRL is from another issuer".into());
         }
+        // A CRL with one of these covers only part of what the issuer revoked, so not being listed
+        // in it says nothing.
+        if tbs
+            .crl_extensions
+            .iter()
+            .flatten()
+            .any(|e| e.extn_id == ID_CE_ISSUING_DISTRIBUTION_POINT || e.extn_id == ID_CE_DELTA_CRL_INDICATOR)
+        {
+            return Err("the CRL is only partial".into());
+        }
         let message = tbs.to_der().map_err(|e| e.to_string())?;
         if !verify_signature(
             &self.issuer.tbs_certificate.subject_public_key_info,
@@ -318,7 +328,7 @@ fn root_id(doc: &Document) -> Result<ObjectId> {
 /// Adds the certificates, OCSP responses and CRLs to the document security store in an
 /// incremental update, skipping anything already there.
 pub fn add_validation_data(pdf: &[u8], data: &ValidationData) -> Result<Vec<u8>> {
-    let prev = Document::load_mem(pdf)?;
+    let prev = crate::load::load(pdf)?;
     let root = root_id(&prev)?;
     let catalog = prev.get_dictionary(root)?.clone();
     let existing = catalog.get(b"DSS").ok().and_then(|d| resolve(&prev, d).as_dict().ok()).cloned().unwrap_or_default();
@@ -365,7 +375,7 @@ pub fn add_validation_data(pdf: &[u8], data: &ValidationData) -> Result<Vec<u8>>
 /// Adds an invisible document time stamp field in an incremental update and returns the file
 /// with its hole and the digest to time-stamp (RFC 3161, SHA-256).
 pub fn prepare_document_timestamp(pdf: &[u8]) -> Result<Prepared> {
-    let prev = Document::load_mem(pdf)?;
+    let prev = crate::load::load(pdf)?;
     let root = root_id(&prev)?;
     let first_page = *prev.get_pages().values().next().ok_or_else(|| PdfError::Malformed("no pages".into()))?;
     let mut catalog = prev.get_dictionary(root)?.clone();
@@ -376,7 +386,8 @@ pub fn prepare_document_timestamp(pdf: &[u8]) -> Result<Prepared> {
     let number = fields.len() + 1;
 
     let mut update = IncrementalDocument::create_from(pdf.to_vec(), prev);
-    let placeholder = || Object::Integer(9_999_999_999);
+    let range = crate::seal::range_placeholder();
+    let placeholder = || Object::Integer(range);
     let sig = update.new_document.add_object(dictionary! {
         "Type" => "DocTimeStamp",
         "Filter" => "Adobe.PPKLite",
@@ -405,11 +416,12 @@ pub fn prepare_document_timestamp(pdf: &[u8]) -> Result<Prepared> {
 
     let mut out = Vec::with_capacity(pdf.len() + TIMESTAMP_BYTES * 2 + 2048);
     update.save_to(&mut out).map_err(|e| PdfError::Malformed(e.to_string()))?;
-    fill_byte_range(out, pdf.len(), TIMESTAMP_BYTES)
+    fill_byte_range(out, pdf.len(), TIMESTAMP_BYTES, range)
 }
 
 /// Writes the time stamp token (a CMS ContentInfo) into the prepared hole.
 pub fn finish_document_timestamp(prepared: Prepared, token: &[u8]) -> Result<Vec<u8>> {
     crate::tsa::token_fields(token, &prepared.digest).map_err(|e| PdfError::Timestamp(e.to_string()))?;
+    crate::tsa::check_authority(token).map_err(PdfError::Timestamp)?;
     fill_hole(prepared, token)
 }

@@ -150,7 +150,7 @@ fn qr(url: &str, x: f64, y: f64, size: f64) -> Vec<u8> {
 /// document hashes, a QR code to the verification page) and attaches the same data as
 /// `evidence.json`, so the signed PDF carries its own evidence.
 pub fn append_evidence(pdf: &[u8], report: &EvidenceReport) -> Result<Vec<u8>> {
-    let mut doc = Document::load_mem(pdf)?;
+    let mut doc = crate::load::load(pdf)?;
     let mut w = Writer::new();
     let mut images = Vec::new();
     if let Some(logo) = report.logo_png.as_deref()
@@ -223,7 +223,7 @@ pub fn append_evidence(pdf: &[u8], report: &EvidenceReport) -> Result<Vec<u8>> {
         FONT,
         8.5,
         0.0,
-        "This file is sealed with an electronic seal (PAdES) and a qualified time stamp. Any change to it after sealing invalidates the seal. The full evidence is attached as evidence.json.",
+        "This file is sealed with an electronic seal (PAdES), with a time stamp when the time stamp authority answered. Any change to it after sealing invalidates the seal. The full evidence is attached as evidence.json.",
         0.25,
     );
 

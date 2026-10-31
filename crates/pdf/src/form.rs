@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use lopdf::{Dictionary, Document, Object, ObjectId};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::geometry::{PageBox, page_box};
 
@@ -9,7 +9,7 @@ const MAX_FORM_FIELDS: usize = 1000;
 const MAX_DEPTH: usize = 16;
 const MAX_NODES: usize = 20_000;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FormKind {
     Text,
@@ -22,7 +22,7 @@ pub enum FormKind {
 
 /// One widget of a fillable PDF form, read before the form is removed. The box is in fractions of
 /// the displayed page, origin top-left.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FormField {
     /// The field's full name, parts joined with dots.

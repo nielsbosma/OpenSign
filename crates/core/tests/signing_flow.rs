@@ -502,6 +502,20 @@ async fn sends_signs_seals_and_verifies() {
     assert_eq!(verified.document.map(|d| d.id), Some(id));
     assert_eq!(verified.signatures.len(), if live { 2 } else { 1 }, "{:?}", verified.signatures);
     assert!(verified.signatures.iter().all(|s| s.is_intact() && s.problems.is_empty()), "{:?}", verified.signatures);
+    assert!(verified.signatures[0].trusted, "the seal is this server's own");
+
+    let cleaned = opensign_pdf::sanitize(&sealed, opensign_pdf::Limits::default()).unwrap();
+    let stranger = opensign_pdf::generate_seal_identity("Stranger", "SE", 1).unwrap();
+    let options = opensign_pdf::SealOptions {
+        name: "Stranger".into(),
+        reason: "x".into(),
+        location: String::new(),
+        signing_time: chrono::Utc::now(),
+    };
+    let foreign = opensign_pdf::seal(&cleaned.pdf, &stranger, &options, |_| Ok(None)).unwrap();
+    let verified = docs::verify_pdf(&mut conn, foreign).await.unwrap();
+    assert!(verified.signatures[0].intact && !verified.signatures[0].trusted, "intact says nothing about who signed");
+    assert!(verified.document.is_none());
 
     let mut tampered = sealed;
     let n = tampered.len();

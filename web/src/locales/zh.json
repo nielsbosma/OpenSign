@@ -534,6 +534,7 @@
   "Sign in with your fingerprint, face or device PIN instead of a password and code. Works with iCloud Keychain, Google Password Manager, Windows Hello and security keys.": "使用指纹、面容或设备 PIN 登录，无需密码和验证码。支持 iCloud 钥匙串、Google 密码管理工具、Windows Hello 和安全密钥。",
   "Signature": "签名",
   "Signature Reason": "签名原因",
+  "Signed by someone other than this server. The file is intact, but nothing here confirms who they are.": "由本服务器以外的人签署。文件完好，但这里无法确认签署者的身份。",
   "Signed": "已签署",
   "Signed PDF": "已签署的 PDF",
   "Signers can give their own AI a read-only copy of a document. 0 turns this off; at most 30.": "签署人可以将文档的只读副本提供给自己的 AI。0 表示关闭；最多 30。",

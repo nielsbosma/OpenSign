@@ -1,5 +1,6 @@
 use lopdf::{Dictionary, Document, Object, ObjectId, dictionary};
 
+use crate::load::load;
 use crate::{PdfError, Result};
 
 const INHERITED: &[&[u8]] = &[b"Resources", b"MediaBox", b"CropBox", b"Rotate"];
@@ -38,7 +39,7 @@ pub fn merge(files: &[Vec<u8>]) -> Result<Vec<u8>> {
     let pages_root = out.new_object_id();
     let mut kids = Vec::new();
     for bytes in files {
-        let mut doc = Document::load_mem(bytes)?;
+        let mut doc = load(bytes)?;
         doc.renumber_objects_with(out.max_id + 1);
         let pages: Vec<ObjectId> = doc.get_pages().into_values().collect();
         for page in &pages {

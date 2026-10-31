@@ -534,6 +534,7 @@
   "Sign in with your fingerprint, face or device PIN instead of a password and code. Works with iCloud Keychain, Google Password Manager, Windows Hello and security keys.": "سجّل الدخول ببصمة إصبعك أو وجهك أو رمز PIN للجهاز بدلًا من كلمة المرور والرمز. يعمل مع سلسلة مفاتيح iCloud ومدير كلمات المرور من Google وWindows Hello ومفاتيح الأمان.",
   "Signature": "التوقيع",
   "Signature Reason": "سبب التوقيع",
+  "Signed by someone other than this server. The file is intact, but nothing here confirms who they are.": "وقّعه طرف غير هذا الخادم. الملف سليم، لكن لا شيء هنا يؤكد هوية الموقّع.",
   "Signed": "موقّع",
   "Signed PDF": "ملف PDF الموقّع",
   "Signers can give their own AI a read-only copy of a document. 0 turns this off; at most 30.": "يمكن للموقّعين منح الذكاء الاصطناعي الخاص بهم نسخة للقراءة فقط من المستند. 0 يوقف ذلك؛ 30 كحد أقصى.",
