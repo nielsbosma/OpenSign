@@ -269,7 +269,7 @@ Parties upload to an image or file field with `POST /api/sign/field-file` (multi
 
 ## Calls by name
 
-The web app calls services by name at `POST /api/rpc/{service}` with a JSON body. An API key works there too, for every service that is also an MCP tool. That reaches the few services without a REST route, such as `documents.check` (check a draft before sending) and `documents.auth_methods` (which identification methods are set up). Prefer REST where a route exists: this route has no idempotency keys and is not in the OpenAPI document.
+The web app calls services by name at `POST /api/rpc/{service}` with a JSON body and `Content-Type: application/json`, which this route requires. An API key works there too, for every service that is also an MCP tool. That reaches the few services without a REST route, such as `documents.check` (check a draft before sending) and `documents.auth_methods` (which identification methods are set up). Prefer REST where a route exists: this route has no idempotency keys and is not in the OpenAPI document.
 
 ```sh
 curl -X POST $OS/api/rpc/documents.check -H "Authorization: Bearer $KEY" \
@@ -286,13 +286,16 @@ Rate limits are per client address, as a token bucket:
 | upload | 30 | 10 | File uploads |
 | verify | 10 | 10 | `POST /verify` |
 | oauth | 30 | 20 | OAuth token and revoke |
-| auth | 10 | 10 | Sign-in and client registration |
+| oauth_register | 1 | 10 | Client registration |
+| auth | 10 | 10 | Sign-in and confirming a password |
+
+IPv6 addresses are limited per /64. Each replica also handles at most 512 requests at once and answers `503` beyond that.
 
 | Body | Limit |
 | --- | --- |
-| JSON body | 40 MB |
+| JSON body | 2 MB. 40 MB for the calls that carry a document (`documents.upload`, `documents.replace_file`, `documents.verify`), 8 MB for a bulk send file, 4 MB for a logo |
 | Multipart upload | 110 MB (and the install's **Largest Upload** setting) |
 | PDF to verify | 40 MB |
 | Scrive and DocuSign bodies | 60 MB |
-| MCP and `/api/rpc` | 40 MB |
+| MCP | 40 MB |
 | Bulk send file | 1,000 rows |

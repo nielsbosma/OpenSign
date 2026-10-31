@@ -1081,5 +1081,18 @@
   "Delete a folder": "एक फ़ोल्डर हटाएँ",
   "Change a folder": "एक फ़ोल्डर बदलें",
   "Restore an earlier version of this template": "इस टेम्पलेट का पिछला संस्करण पुनर्स्थापित करें",
-  "Save a new version of this template": "इस टेम्पलेट का नया संस्करण सहेजें"
+  "Save a new version of this template": "इस टेम्पलेट का नया संस्करण सहेजें",
+  "Use Your Passkey": "अपनी पासकी का उपयोग करें",
+  "Your password was right. This account signs in with its passkey too.": "आपका पासवर्ड सही था। इस खाते में साइन इन करने के लिए उसकी पासकी भी चाहिए।",
+  "Use Passkey": "पासकी का उपयोग करें",
+  "Use a Passkey": "पासकी का उपयोग करें",
+  "Confirm It Is You": "पुष्टि करें कि यह आप हैं",
+  "Confirm with your password or passkey before you continue. This lasts for ten minutes.": "जारी रखने से पहले अपने पासवर्ड या पासकी से पुष्टि करें। यह दस मिनट तक मान्य रहता है।",
+  "Unverified App": "असत्यापित ऐप",
+  "Access goes to {domain}": "पहुंच {domain} को मिलेगी",
+  "Anyone can register an app under any name. Allow it only if you started this and you expect that domain.": "कोई भी किसी भी नाम से ऐप पंजीकृत कर सकता है। इसे तभी अनुमति दें जब आपने यह शुरू किया हो और आपको वही डोमेन अपेक्षित हो।",
+  "Trusted Proxies": "विश्वसनीय प्रॉक्सी",
+  "Who may state a visitor's address: private for any proxy on a private network, none when OpenSign faces the internet directly, or the addresses and ranges of your own proxies.": "आगंतुक का पता कौन बता सकता है: निजी नेटवर्क की किसी भी प्रॉक्सी के लिए private, जब OpenSign सीधे इंटरनेट से जुड़ा हो तब none, या आपकी अपनी प्रॉक्सी के पते और रेंज।",
+  "Allow New MCP Clients to Register": "नए MCP क्लाइंट को पंजीकरण की अनुमति दें",
+  "Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.": "Claude जैसे ऐप पहली बार कनेक्ट होने पर स्वयं पंजीकृत होते हैं। बंद होने पर केवल पहले से पंजीकृत ऐप ही कनेक्ट हो सकते हैं।"
 }

@@ -31,6 +31,8 @@ pub struct AppState {
     pub app: Arc<App>,
     pub services: Arc<HashMap<&'static str, Box<dyn DynService>>>,
     pub limiter: Arc<security::RateLimiter>,
+    pub proxies: Arc<security::ProxyPolicy>,
+    pub in_flight: Arc<tokio::sync::Semaphore>,
     pub https: bool,
 }
 
@@ -38,7 +40,14 @@ impl AppState {
     pub fn new(app: Arc<App>) -> Self {
         let services = opensign_core::services::registry().into_iter().map(|s| (s.meta().name, s)).collect();
         let https = app.env.app_url.as_deref().is_some_and(|u| u.starts_with("https://"));
-        Self { app, services: Arc::new(services), limiter: Arc::default(), https }
+        Self {
+            app,
+            services: Arc::new(services),
+            limiter: Arc::default(),
+            proxies: Arc::default(),
+            in_flight: Arc::new(tokio::sync::Semaphore::new(security::MAX_IN_FLIGHT)),
+            https,
+        }
     }
 }
 
@@ -149,5 +158,8 @@ pub fn router(state: AppState) -> Router {
         let spa = ServeDir::new(&dist).fallback(ServeFile::new(dist.join("index.html")));
         app = app.fallback_service(spa).layer(middleware::from_fn(no_cache_html));
     }
-    app.layer(middleware::from_fn_with_state(state.clone(), security::headers)).layer(middleware::from_fn(request_id)).with_state(state)
+    app.layer(middleware::from_fn_with_state(state.clone(), security::in_flight))
+        .layer(middleware::from_fn_with_state(state.clone(), security::headers))
+        .layer(middleware::from_fn(request_id))
+        .with_state(state)
 }

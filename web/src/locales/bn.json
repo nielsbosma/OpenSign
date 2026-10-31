@@ -1081,5 +1081,18 @@
   "Delete a folder": "একটি ফোল্ডার মুছুন",
   "Change a folder": "একটি ফোল্ডার পরিবর্তন করুন",
   "Restore an earlier version of this template": "এই টেমপ্লেটের একটি আগের সংস্করণ পুনরুদ্ধার করুন",
-  "Save a new version of this template": "এই টেমপ্লেটের একটি নতুন সংস্করণ সংরক্ষণ করুন"
+  "Save a new version of this template": "এই টেমপ্লেটের একটি নতুন সংস্করণ সংরক্ষণ করুন",
+  "Use Your Passkey": "আপনার পাসকি ব্যবহার করুন",
+  "Your password was right. This account signs in with its passkey too.": "আপনার পাসওয়ার্ড সঠিক। এই অ্যাকাউন্টে সাইন ইন করতে পাসকিও লাগে।",
+  "Use Passkey": "পাসকি ব্যবহার করুন",
+  "Use a Passkey": "একটি পাসকি ব্যবহার করুন",
+  "Confirm It Is You": "নিশ্চিত করুন যে এটি আপনি",
+  "Confirm with your password or passkey before you continue. This lasts for ten minutes.": "চালিয়ে যাওয়ার আগে আপনার পাসওয়ার্ড বা পাসকি দিয়ে নিশ্চিত করুন। এটি দশ মিনিট কার্যকর থাকে।",
+  "Unverified App": "অযাচাইকৃত অ্যাপ",
+  "Access goes to {domain}": "অ্যাক্সেস যাবে {domain}-এ",
+  "Anyone can register an app under any name. Allow it only if you started this and you expect that domain.": "যে কেউ যেকোনো নামে অ্যাপ নিবন্ধন করতে পারে। আপনি নিজে এটি শুরু করে থাকলে এবং এই ডোমেইনই প্রত্যাশিত হলে তবেই অনুমতি দিন।",
+  "Trusted Proxies": "বিশ্বস্ত প্রক্সি",
+  "Who may state a visitor's address: private for any proxy on a private network, none when OpenSign faces the internet directly, or the addresses and ranges of your own proxies.": "কে ভিজিটরের ঠিকানা জানাতে পারে: ব্যক্তিগত নেটওয়ার্কের যেকোনো প্রক্সির জন্য private, OpenSign সরাসরি ইন্টারনেটে থাকলে none, অথবা আপনার নিজের প্রক্সির ঠিকানা ও রেঞ্জ।",
+  "Allow New MCP Clients to Register": "নতুন MCP ক্লায়েন্টকে নিবন্ধনের অনুমতি দিন",
+  "Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.": "Claude-এর মতো অ্যাপ প্রথমবার সংযোগের সময় নিজেরাই নিবন্ধিত হয়। বন্ধ থাকলে শুধু আগে নিবন্ধিত অ্যাপই সংযোগ করতে পারে।"
 }

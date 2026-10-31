@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use opensign_crypto::{constant_time_eq, hash_password};
+use opensign_crypto::constant_time_eq;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sqlx::PgConnection;
@@ -83,7 +83,7 @@ impl Service for Complete {
             return Err(bad_request("Enter your name and your organisation's name"));
         }
         let email = normalize_email(&input.email)?;
-        let hash = hash_password(&input.password).map_err(|e| bad_request(e.to_string()))?;
+        let hash = crate::auth::new_password_hash(&input.password).await?;
         let id = Uuid::now_v7();
         sqlx::query("insert into users (id, email, name, password_hash, role) values ($1, $2, $3, $4, $5)")
             .bind(id)

@@ -1081,5 +1081,18 @@
   "Delete a folder": "Ta bort en mapp",
   "Change a folder": "Ändra en mapp",
   "Restore an earlier version of this template": "Återställ en tidigare version av den här mallen",
-  "Save a new version of this template": "Spara en ny version av den här mallen"
+  "Save a new version of this template": "Spara en ny version av den här mallen",
+  "Use Your Passkey": "Använd din nyckel",
+  "Your password was right. This account signs in with its passkey too.": "Lösenordet stämmer. Det här kontot loggar också in med sin nyckel.",
+  "Use Passkey": "Använd nyckel",
+  "Use a Passkey": "Använd en nyckel",
+  "Confirm It Is You": "Bekräfta att det är du",
+  "Confirm with your password or passkey before you continue. This lasts for ten minutes.": "Bekräfta med ditt lösenord eller din nyckel innan du fortsätter. Det gäller i tio minuter.",
+  "Unverified App": "Overifierad app",
+  "Access goes to {domain}": "Åtkomsten går till {domain}",
+  "Anyone can register an app under any name. Allow it only if you started this and you expect that domain.": "Vem som helst kan registrera en app under vilket namn som helst. Tillåt den bara om du själv startade det här och väntar dig den domänen.",
+  "Trusted Proxies": "Betrodda proxyservrar",
+  "Who may state a visitor's address: private for any proxy on a private network, none when OpenSign faces the internet directly, or the addresses and ranges of your own proxies.": "Vem som får ange en besökares adress: private för alla proxyservrar på ett privat nät, none när OpenSign nås direkt från internet, eller adresser och intervall för dina egna proxyservrar.",
+  "Allow New MCP Clients to Register": "Tillåt att nya MCP-klienter registrerar sig",
+  "Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.": "Appar som Claude registrerar sig själva första gången de ansluter. Avstängt kan bara de som redan har registrerat sig ansluta."
 }

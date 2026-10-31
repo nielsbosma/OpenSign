@@ -116,6 +116,16 @@ networks:
 
 Put a reverse proxy with TLS (Caddy, Traefik, nginx) in front, and use a managed Postgres and bucket or add them to the file. The repository's own `docker-compose.yml` is for development and testing only.
 
+## Behind a proxy
+
+OpenSign records each visitor's address in the audit log and in sealed evidence, and limits requests by it. **Trusted Proxies** in **Settings → Security** says whose `X-Forwarded-For` header to believe:
+
+| Value | Use it when |
+| --- | --- |
+| `private` (the default) | The only way in is a platform proxy or load balancer on a private network that overwrites or appends the header. Any machine that reaches OpenSign directly from a private address, over a VPN or Tailscale for example, can state any address it likes. |
+| `none` | Nothing sits in front of OpenSign, so the connecting address is the visitor's. Behind a proxy this makes every visitor share the proxy's address and one rate limit. |
+| Addresses and CIDR ranges, such as `10.0.4.0/24` | You know your proxies' addresses. This is the tightest choice, and the right one if other machines on the private network can reach OpenSign. |
+
 ## Health checks
 
 - `GET /api/health`: the process is up. Returns `{"ok":true,"version":"…"}`.

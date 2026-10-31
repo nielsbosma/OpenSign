@@ -93,8 +93,8 @@ async fn oauth_and_mcp() {
         )
     };
     let (response, _) = send(&router, Request::get(authorize("plain")).body(Body::empty()).unwrap()).await;
-    let location = response.headers().get(header::LOCATION).unwrap().to_str().unwrap().to_string();
-    assert!(location.starts_with(REDIRECT) && location.contains("error=invalid_request"), "plain PKCE is refused: {location}");
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST, "plain PKCE is refused, here: nobody has approved this client yet");
+    assert!(response.headers().get(header::LOCATION).is_none());
     let (response, _) = send(&router, Request::get(authorize("S256").replace(&client_id, "unknown")).body(Body::empty()).unwrap()).await;
     assert_eq!(response.status(), StatusCode::BAD_REQUEST, "an unknown client is not redirected anywhere");
 
@@ -152,6 +152,9 @@ async fn oauth_and_mcp() {
     let refresh = tokens["refresh_token"].as_str().unwrap().to_string();
     let (_, again) = send(&router, post_form("/oauth/token", &exchange)).await;
     assert_eq!(again["error"], "invalid_grant", "codes work once");
+    let (response, _) = send(&router, Request::get(authorize("plain")).body(Body::empty()).unwrap()).await;
+    let location = response.headers().get(header::LOCATION).unwrap().to_str().unwrap().to_string();
+    assert!(location.starts_with(REDIRECT) && location.contains("error=invalid_request"), "an approved client hears why: {location}");
 
     let (_, init) = mcp(&router, &access, json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "test", "version": "1" } } })).await;
     assert_eq!(init["result"]["protocolVersion"], "2025-06-18");
@@ -366,4 +369,48 @@ async fn agent_tools() {
     let late = Request::put(path_of(link["url"].as_str().unwrap())).header("x-forwarded-for", IP).body(Body::from(pdf_fixture())).unwrap();
     let (response, _) = send(&router, late).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND, "revoking the key also stops its upload links");
+}
+
+#[tokio::test]
+async fn consent_names_the_domain_and_registration_can_be_closed() {
+    let Some(app) = app().await else { return };
+    let router = router(AppState::new(app.clone()));
+    let first = json!({ "setupCode": app.keys.setup_code(), "orgName": "Acme AB", "name": "Ada Admin", "email": "ada@example.com", "password": PASSWORD });
+    send(&router, post_json("/api/rpc/setup.create_first_admin", first, &[])).await;
+    let (response, _) =
+        send(&router, post_json("/api/rpc/auth.login", json!({ "email": "ada@example.com", "password": PASSWORD }), &[])).await;
+    let cookie = response.headers().get(header::SET_COOKIE).unwrap().to_str().unwrap().split(';').next().unwrap().to_string();
+    let session = [("cookie", cookie.as_str()), ("origin", ORIGIN)];
+
+    let long = "https://claude.ai.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.example.co.uk/cb";
+    let (_, client) = send(&router, post_json("/oauth/register", json!({ "client_name": "Claude", "redirect_uris": [long] }), &[])).await;
+    let client_id = client["client_id"].as_str().unwrap();
+    let verifier = "a-long-random-verifier-string-that-is-at-least-43-characters-long";
+    let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
+    let (response, _) = send(
+        &router,
+        Request::get(format!(
+            "/oauth/authorize?response_type=code&client_id={client_id}&code_challenge={challenge}&code_challenge_method=S256"
+        ))
+        .body(Body::empty())
+        .unwrap(),
+    )
+    .await;
+    let location = response.headers().get(header::LOCATION).unwrap().to_str().unwrap().to_string();
+    let request = query_param(&location, "request").unwrap();
+    let (_, view) = send(&router, post_json("/api/rpc/oauth.describe", json!({ "request": request }), &session)).await;
+    assert_eq!(view["redirectDomain"], "example.co.uk", "{view}");
+
+    let (_, _) = send(
+        &router,
+        post_json("/api/rpc/settings.update", json!({ "group": "security", "values": { "allowClientRegistration": false } }), &session),
+    )
+    .await;
+    let (_, metadata) = send(&router, Request::get("/.well-known/oauth-authorization-server").body(Body::empty()).unwrap()).await;
+    assert!(metadata.get("registration_endpoint").is_none(), "{metadata}");
+    let (response, refused) = send(&router, post_json("/oauth/register", json!({ "redirect_uris": ["https://ok.example/cb"] }), &[])).await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(refused["error"], "access_denied");
+    let (_, view) = send(&router, post_json("/api/rpc/oauth.describe", json!({ "request": request }), &session)).await;
+    assert_eq!(view["clientName"], "Claude", "clients that registered earlier keep working");
 }

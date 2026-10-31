@@ -1081,5 +1081,18 @@
   "Delete a folder": "Удалить папку",
   "Change a folder": "Изменить папку",
   "Restore an earlier version of this template": "Восстановить более раннюю версию этого шаблона",
-  "Save a new version of this template": "Сохранить новую версию этого шаблона"
+  "Save a new version of this template": "Сохранить новую версию этого шаблона",
+  "Use Your Passkey": "Используйте ключ доступа",
+  "Your password was right. This account signs in with its passkey too.": "Пароль верный. Для входа в эту учётную запись также нужен её ключ доступа.",
+  "Use Passkey": "Использовать ключ доступа",
+  "Use a Passkey": "Использовать ключ доступа",
+  "Confirm It Is You": "Подтвердите, что это вы",
+  "Confirm with your password or passkey before you continue. This lasts for ten minutes.": "Прежде чем продолжить, подтвердите паролем или ключом доступа. Подтверждение действует десять минут.",
+  "Unverified App": "Непроверенное приложение",
+  "Access goes to {domain}": "Доступ получит {domain}",
+  "Anyone can register an app under any name. Allow it only if you started this and you expect that domain.": "Кто угодно может зарегистрировать приложение под любым именем. Разрешайте, только если вы сами начали подключение и ожидаете этот домен.",
+  "Trusted Proxies": "Доверенные прокси",
+  "Who may state a visitor's address: private for any proxy on a private network, none when OpenSign faces the internet directly, or the addresses and ranges of your own proxies.": "Кто может сообщать адрес посетителя: private — любой прокси в частной сети, none — если OpenSign напрямую доступен из интернета, либо адреса и диапазоны ваших прокси.",
+  "Allow New MCP Clients to Register": "Разрешить регистрацию новых клиентов MCP",
+  "Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.": "Приложения вроде Claude регистрируются сами при первом подключении. Если выключено, подключиться могут только уже зарегистрированные."
 }

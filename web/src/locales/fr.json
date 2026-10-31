@@ -1081,5 +1081,18 @@
   "Delete a folder": "Supprimer un dossier",
   "Change a folder": "Modifier un dossier",
   "Restore an earlier version of this template": "Restaurer une version antérieure de ce modèle",
-  "Save a new version of this template": "Enregistrer une nouvelle version de ce modèle"
+  "Save a new version of this template": "Enregistrer une nouvelle version de ce modèle",
+  "Use Your Passkey": "Utilisez votre clé d'accès",
+  "Your password was right. This account signs in with its passkey too.": "Votre mot de passe est correct. Ce compte se connecte aussi avec sa clé d'accès.",
+  "Use Passkey": "Utiliser la clé d'accès",
+  "Use a Passkey": "Utiliser une clé d'accès",
+  "Confirm It Is You": "Confirmez que c'est bien vous",
+  "Confirm with your password or passkey before you continue. This lasts for ten minutes.": "Confirmez avec votre mot de passe ou votre clé d'accès avant de continuer. Cela reste valable dix minutes.",
+  "Unverified App": "Application non vérifiée",
+  "Access goes to {domain}": "L'accès est donné à {domain}",
+  "Anyone can register an app under any name. Allow it only if you started this and you expect that domain.": "N'importe qui peut enregistrer une application sous n'importe quel nom. Autorisez-la seulement si vous êtes à l'origine de cette demande et si vous attendez ce domaine.",
+  "Trusted Proxies": "Proxys de confiance",
+  "Who may state a visitor's address: private for any proxy on a private network, none when OpenSign faces the internet directly, or the addresses and ranges of your own proxies.": "Qui peut indiquer l'adresse d'un visiteur : private pour tout proxy sur un réseau privé, none quand OpenSign est directement exposé à Internet, ou les adresses et plages de vos propres proxys.",
+  "Allow New MCP Clients to Register": "Autoriser l'enregistrement de nouveaux clients MCP",
+  "Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.": "Les applications comme Claude s'enregistrent elles-mêmes à leur première connexion. Désactivé, seules celles déjà enregistrées peuvent se connecter."
 }

@@ -1081,5 +1081,18 @@
   "Delete a folder": "ایک فولڈر حذف کریں",
   "Change a folder": "ایک فولڈر تبدیل کریں",
   "Restore an earlier version of this template": "اس ٹیمپلیٹ کا پچھلا ورژن بحال کریں",
-  "Save a new version of this template": "اس ٹیمپلیٹ کا نیا ورژن محفوظ کریں"
+  "Save a new version of this template": "اس ٹیمپلیٹ کا نیا ورژن محفوظ کریں",
+  "Use Your Passkey": "اپنی پاس کی استعمال کریں",
+  "Your password was right. This account signs in with its passkey too.": "آپ کا پاس ورڈ درست تھا۔ اس اکاؤنٹ میں سائن ان کے لیے اس کی پاس کی بھی درکار ہے۔",
+  "Use Passkey": "پاس کی استعمال کریں",
+  "Use a Passkey": "پاس کی استعمال کریں",
+  "Confirm It Is You": "تصدیق کریں کہ یہ آپ ہیں",
+  "Confirm with your password or passkey before you continue. This lasts for ten minutes.": "جاری رکھنے سے پہلے اپنے پاس ورڈ یا پاس کی سے تصدیق کریں۔ یہ دس منٹ تک کارآمد رہتی ہے۔",
+  "Unverified App": "غیر تصدیق شدہ ایپ",
+  "Access goes to {domain}": "رسائی {domain} کو ملے گی",
+  "Anyone can register an app under any name. Allow it only if you started this and you expect that domain.": "کوئی بھی کسی بھی نام سے ایپ رجسٹر کر سکتا ہے۔ اجازت صرف تب دیں جب یہ آپ نے شروع کیا ہو اور آپ کو یہی ڈومین متوقع ہو۔",
+  "Trusted Proxies": "قابل اعتماد پراکسی",
+  "Who may state a visitor's address: private for any proxy on a private network, none when OpenSign faces the internet directly, or the addresses and ranges of your own proxies.": "وزیٹر کا پتہ کون بتا سکتا ہے: نجی نیٹ ورک کی کسی بھی پراکسی کے لیے private، جب OpenSign براہ راست انٹرنیٹ پر ہو تو none، یا آپ کی اپنی پراکسیوں کے پتے اور رینج۔",
+  "Allow New MCP Clients to Register": "نئے MCP کلائنٹس کو رجسٹر ہونے دیں",
+  "Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.": "Claude جیسی ایپس پہلی بار جڑنے پر خود رجسٹر ہو جاتی ہیں۔ بند ہونے پر صرف پہلے سے رجسٹر شدہ ایپس جڑ سکتی ہیں۔"
 }

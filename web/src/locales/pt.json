@@ -1081,5 +1081,18 @@
   "Delete a folder": "Excluir uma pasta",
   "Change a folder": "Alterar uma pasta",
   "Restore an earlier version of this template": "Restaurar uma versão anterior deste modelo",
-  "Save a new version of this template": "Salvar uma nova versão deste modelo"
+  "Save a new version of this template": "Salvar uma nova versão deste modelo",
+  "Use Your Passkey": "Use sua chave de acesso",
+  "Your password was right. This account signs in with its passkey too.": "Sua senha está certa. Esta conta também entra com a chave de acesso.",
+  "Use Passkey": "Usar chave de acesso",
+  "Use a Passkey": "Usar uma chave de acesso",
+  "Confirm It Is You": "Confirme que é você",
+  "Confirm with your password or passkey before you continue. This lasts for ten minutes.": "Confirme com sua senha ou chave de acesso antes de continuar. Isso vale por dez minutos.",
+  "Unverified App": "Aplicativo não verificado",
+  "Access goes to {domain}": "O acesso vai para {domain}",
+  "Anyone can register an app under any name. Allow it only if you started this and you expect that domain.": "Qualquer pessoa pode registrar um aplicativo com qualquer nome. Permita apenas se foi você quem iniciou isto e se espera esse domínio.",
+  "Trusted Proxies": "Proxies Confiáveis",
+  "Who may state a visitor's address: private for any proxy on a private network, none when OpenSign faces the internet directly, or the addresses and ranges of your own proxies.": "Quem pode informar o endereço de um visitante: private para qualquer proxy em uma rede privada, none quando o OpenSign fica diretamente na internet, ou os endereços e intervalos dos seus próprios proxies.",
+  "Allow New MCP Clients to Register": "Permitir o Registro de Novos Clientes MCP",
+  "Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.": "Aplicativos como o Claude se registram sozinhos na primeira conexão. Desligado, só os que já se registraram podem se conectar."
 }

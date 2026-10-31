@@ -271,6 +271,7 @@ pub(crate) fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
         }
         "security" => {
             let security: SecuritySettings = serde_json::from_value(value.clone()).map_err(AppError::internal)?;
+            crate::settings::TrustedProxies::parse(&security.trusted_proxies)?;
             if security.embed_origins.len() > 20 {
                 return Err(bad_request("List at most 20 sites allowed to embed"));
             }

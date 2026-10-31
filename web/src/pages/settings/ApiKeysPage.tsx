@@ -2,6 +2,7 @@ import { KeyRound, Pencil, Plus, Trash2 } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { Link } from 'react-router';
 import { ConfirmButton, CopyButton, EmptyState, Field, IconButton, Loading } from '@/components/common';
+import { needsStepUp, StepUpDialog } from '@/components/StepUpDialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -147,6 +148,7 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
   const [ips, setIps] = useState('');
   const [key, setKey] = useState<string | null>(null);
   const [error, setError] = useState<string>();
+  const [stepUp, setStepUp] = useState(false);
   const create = useApiMutation('api_keys.create', { invalidates: ['api_keys.'], silent: true, onSuccess: (out) => setKey(out.key) });
   const close = (open: boolean) => {
     onOpenChange(open);
@@ -156,8 +158,7 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
       setError(undefined);
     }
   };
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
+  const save = () => {
     setError(undefined);
     create.mutate(
       {
@@ -166,8 +167,12 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
         expiresInDays: days ? Number(days) : null,
         allowedIps: parseIps(ips),
       },
-      { onError: (e) => setError(e.message) },
+      { onError: (e) => (needsStepUp(e) ? setStepUp(true) : setError(e.message)) },
     );
+  };
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    save();
   };
   return (
     <Dialog open={open} onOpenChange={close}>
@@ -224,6 +229,14 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
           </form>
         )}
       </DialogContent>
+      <StepUpDialog
+        open={stepUp}
+        onOpenChange={setStepUp}
+        onConfirmed={() => {
+          setStepUp(false);
+          save();
+        }}
+      />
     </Dialog>
   );
 }

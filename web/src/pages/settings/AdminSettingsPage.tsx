@@ -131,6 +131,21 @@ const GROUPS: Record<Group, { title: string; description: string; help?: string;
         hint: msg('One per line, with https and without a path. Only links you hand over yourself can be signed in a frame.'),
         when: 'embedSigning',
       },
+      {
+        key: 'trustedProxies',
+        label: msg('Trusted Proxies'),
+        type: 'text',
+        placeholder: 'private',
+        hint: msg(
+          "Who may state a visitor's address: private for any proxy on a private network, none when OpenSign faces the internet directly, or the addresses and ranges of your own proxies.",
+        ),
+      },
+      {
+        key: 'allowClientRegistration',
+        label: msg('Allow New MCP Clients to Register'),
+        type: 'bool',
+        hint: msg('Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.'),
+      },
     ],
   },
   automations: {

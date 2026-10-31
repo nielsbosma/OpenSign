@@ -6,9 +6,9 @@ Your account is protected by a password and, ideally, a second factor: an authen
 
 - At least 12 characters. Long passphrases are welcome.
 - Passwords are hashed with Argon2id. Nobody, including admins, can read them.
-- After repeated failed sign-ins the account is locked for a while, starting at one minute and growing to an hour. Every attempt is recorded.
+- After repeated failed sign-ins from one address, that address is locked for this account for a while, starting at one minute and growing to an hour. A day without failures forgets them. Only failures from several addresses at once can lock the account for everyone, and a passkey signs in even then. Every attempt is recorded.
 - **Change Password** asks for the current one and signs out your other sessions.
-- **Forgot Your Password?** on the sign-in page emails a reset link that works for an hour.
+- **Forgot Your Password?** on the sign-in page emails a reset link that works for an hour. A reset signs out every session and revokes your API keys, and you get an email if any were revoked. If your account has a passkey, you still need it to sign in afterwards.
 
 ## Two-factor with an authenticator app
 
@@ -26,6 +26,12 @@ A passkey lets you sign in with Face ID, Touch ID, Windows Hello, your phone or 
 2. Follow your browser's prompt.
 
 Then choose **Sign In with a Passkey** on the sign-in page. A passkey always verifies you on the device (with a fingerprint, face or PIN), so it counts as two-factor on its own and no code is asked for. You can add several and remove any of them.
+
+Once your account has a passkey and no authenticator app, your password alone no longer signs you in: after the password you are asked for the passkey too. If you lose every passkey, an admin can reset your two-factor, which removes them.
+
+## Confirming it is you
+
+Creating an API key or connecting an app gives lasting access, so OpenSign asks for your password or a passkey first, unless you signed in or confirmed in the last ten minutes.
 
 ## Requiring two-factor for everyone
 

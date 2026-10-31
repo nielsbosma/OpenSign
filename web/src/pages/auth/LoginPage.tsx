@@ -5,7 +5,7 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { Field, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { call, errorMessage, useApiMutation } from '@/lib/api';
+import { call, errorMessage, type Output, useApiMutation } from '@/lib/api';
 import { t } from '@/lib/i18n';
 import { getPasskey, passkeyCanceled, passkeysSupported } from '@/lib/passkeys';
 import { useSession } from '@/lib/session';
@@ -25,6 +25,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [challenge, setChallenge] = useState<string | null>(null);
+  const [ceremony, setCeremony] = useState<Extract<Output<'auth.login'>, { status: 'passkey_required' }>['ceremony'] | null>(null);
   const [error, setError] = useState<string>();
   const [passkeyBusy, setPasskeyBusy] = useState(false);
 
@@ -34,7 +35,11 @@ export function LoginPage() {
   };
   const login = useApiMutation('auth.login', {
     silent: true,
-    onSuccess: (result) => (result.status === 'two_factor_required' ? setChallenge(result.challenge) : void done()),
+    onSuccess: (result) => {
+      if (result.status === 'two_factor_required') setChallenge(result.challenge);
+      else if (result.status === 'passkey_required') setCeremony(result.ceremony);
+      else void done();
+    },
   });
   const verify = useApiMutation('auth.verify_two_factor', { silent: true, onSuccess: () => void done() });
 
@@ -56,6 +61,25 @@ export function LoginPage() {
       await done();
     } catch (e) {
       if (!passkeyCanceled(e)) setError(errorMessage(e));
+    } finally {
+      setPasskeyBusy(false);
+    }
+  };
+
+  const finishWithPasskey = async () => {
+    if (!ceremony) return;
+    setError(undefined);
+    setPasskeyBusy(true);
+    try {
+      const response = await getPasskey(ceremony.options as Record<string, unknown>);
+      await call('auth.passkey_sign_in', { state: ceremony.state, ...response });
+      await done();
+    } catch (e) {
+      if (!passkeyCanceled(e)) {
+        // The request was good for this one attempt.
+        setCeremony(null);
+        setError(errorMessage(e));
+      }
     } finally {
       setPasskeyBusy(false);
     }
@@ -92,6 +116,22 @@ export function LoginPage() {
             {t('Back')}
           </Button>
         </form>
+      </AuthLayout>
+    );
+  }
+
+  if (ceremony) {
+    return (
+      <AuthLayout title={t('Use Your Passkey')} description={t('Your password was right. This account signs in with its passkey too.')}>
+        <div className="grid gap-4">
+          <FormError message={error} />
+          <Button disabled={passkeyBusy} onClick={() => void finishWithPasskey()} autoFocus>
+            {passkeyBusy ? <Spinner className="text-primary-foreground" /> : <KeyRound />} {t('Use Passkey')}
+          </Button>
+          <Button type="button" variant="ghost" onClick={() => setCeremony(null)}>
+            {t('Back')}
+          </Button>
+        </div>
       </AuthLayout>
     );
   }

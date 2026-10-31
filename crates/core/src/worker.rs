@@ -107,6 +107,18 @@ async fn sweep(ctx: &Ctx, conn: &mut sqlx::PgConnection) -> Result<()> {
     sqlx::query("delete from idempotency_keys where created_at < $1 - interval '1 day'").bind(ctx.now).execute(&mut *conn).await?;
     sqlx::query("delete from webhook_deliveries where created_at < $1 - interval '30 days'").bind(ctx.now).execute(&mut *conn).await?;
     sqlx::query("delete from used_tokens where expires_at < $1").bind(ctx.now).execute(&mut *conn).await?;
+    sqlx::query("delete from login_failures where last_failed_at < $1 - interval '2 days' and (locked_until is null or locked_until < $1)")
+        .bind(ctx.now)
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query(
+        "delete from oauth_clients c where c.created_at < $1 - interval '7 days'
+           and not exists (select 1 from oauth_grants g where g.client_id = c.client_id)
+           and not exists (select 1 from oauth_codes o where o.client_id = c.client_id)",
+    )
+    .bind(ctx.now)
+    .execute(&mut *conn)
+    .await?;
     enqueue(conn, "retention", json!({}), None, Some("retention")).await?;
     enqueue(conn, "anchor_audit", json!({}), None, Some("anchor_audit")).await
 }

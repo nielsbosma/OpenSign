@@ -51,7 +51,7 @@ export async function getPasskey(options: Json) {
   const publicKey = {
     ...options,
     challenge: fromBase64Url(options.challenge as string),
-    allowCredentials: [],
+    allowCredentials: ((options.allowCredentials as Json[]) ?? []).map((c) => ({ ...c, id: fromBase64Url(c.id as string) })),
   } as unknown as PublicKeyCredentialRequestOptions;
   const credential = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential | null;
   if (!credential) throw new DOMException('No passkey was chosen', 'NotAllowedError');

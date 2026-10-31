@@ -108,6 +108,11 @@ pub struct SecuritySettings {
     pub embed_signing: bool,
     /// Origins such as `https://app.example.com`, exact, without paths or wildcards.
     pub embed_origins: Vec<String>,
+    /// Who may state the client's address in `X-Forwarded-For`: `private` (any proxy on a private
+    /// network), `none`, or a list of addresses and CIDR ranges.
+    pub trusted_proxies: String,
+    /// Lets new MCP clients register themselves. Clients that already registered keep working.
+    pub allow_client_registration: bool,
 }
 
 impl Default for SecuritySettings {
@@ -121,6 +126,8 @@ impl Default for SecuritySettings {
             review_link_days: 7,
             embed_signing: false,
             embed_origins: Vec::new(),
+            trusted_proxies: "private".into(),
+            allow_client_registration: true,
         }
     }
 }
@@ -139,6 +146,11 @@ impl SecuritySettings {
         self.embed_origins.iter().filter(|o| canonical_origin(o).as_deref() == Some(o.as_str())).cloned().collect()
     }
 
+    /// A value that cannot be read, which only a pinned variable can hold, believes no proxy.
+    pub fn trusted_proxies(&self) -> TrustedProxies {
+        TrustedProxies::parse(&self.trusted_proxies).unwrap_or(TrustedProxies::None)
+    }
+
     /// Where a signer may be sent after signing: only to a site allowed to embed.
     pub fn allows_redirect(&self, url: &str) -> bool {
         let Ok(parsed) = reqwest::Url::parse(url) else { return false };
@@ -146,6 +158,30 @@ impl SecuritySettings {
             && parsed.password().is_none()
             && url.len() <= 2000
             && self.embed_origins().contains(&parsed.origin().ascii_serialization())
+    }
+}
+
+/// Who may state the client's address for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TrustedProxies {
+    None,
+    Private,
+    List(Vec<ipnet::IpNet>),
+}
+
+impl TrustedProxies {
+    pub fn parse(text: &str) -> Result<Self> {
+        let entries: Vec<String> = text.split([',', ' ', '\n']).map(str::trim).filter(|e| !e.is_empty()).map(str::to_string).collect();
+        match entries.as_slice() {
+            [] => Err(bad_request("Enter private, none, or the addresses of your proxies")),
+            [one] if one.eq_ignore_ascii_case("private") => Ok(Self::Private),
+            [one] if one.eq_ignore_ascii_case("none") => Ok(Self::None),
+            _ => {
+                let nets = crate::auth::normalize_allowed_ips(&entries)
+                    .map_err(|_| bad_request("Enter private, none, or a list of addresses and CIDR ranges"))?;
+                Ok(Self::List(nets.iter().filter_map(|n| crate::auth::parse_net(n)).collect()))
+            }
+        }
     }
 }
 
