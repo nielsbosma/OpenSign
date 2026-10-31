@@ -2419,6 +2419,8 @@ dependencies = [
  "opensign-db",
  "opensign-pdf",
  "png",
+ "rand 0.8.8",
+ "rsa",
  "serde",
  "serde_json",
  "sha2 0.10.9",

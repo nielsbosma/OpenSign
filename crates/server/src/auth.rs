@@ -59,6 +59,31 @@ pub fn eid_cookie(headers: &HeaderMap, state: &AppState) -> Option<String> {
     })
 }
 
+fn sso_cookie_name(state: &AppState) -> &'static str {
+    if state.https { "__Host-opensign_sso" } else { "opensign_sso" }
+}
+
+/// Ties a single sign-on to the browser it started in, so nobody can sign a visitor in to their own account.
+pub fn set_sso_cookie(state: &AppState, value: &str) -> HeaderValue {
+    let secure = if state.https { "; Secure" } else { "" };
+    HeaderValue::from_str(&format!("{}={value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600{secure}", sso_cookie_name(state)))
+        .unwrap_or_else(|_| HeaderValue::from_static(""))
+}
+
+pub fn clear_sso_cookie(state: &AppState) -> HeaderValue {
+    let secure = if state.https { "; Secure" } else { "" };
+    HeaderValue::from_str(&format!("{}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0{secure}", sso_cookie_name(state)))
+        .unwrap_or_else(|_| HeaderValue::from_static(""))
+}
+
+pub fn sso_cookie(headers: &HeaderMap, state: &AppState) -> Option<String> {
+    let name = sso_cookie_name(state);
+    headers.get_all(header::COOKIE).iter().filter_map(|v| v.to_str().ok()).flat_map(|v| v.split(';')).find_map(|pair| {
+        let (key, value) = pair.trim().split_once('=')?;
+        (key == name && !value.is_empty()).then(|| value.to_string())
+    })
+}
+
 /// The service context for a request: an API key in `Authorization: Bearer`, or the session cookie.
 /// A bearer token that does not check out is refused outright rather than ignored.
 pub async fn context(state: &AppState, headers: &HeaderMap, ip: Option<String>, surface: Surface, request_id: String) -> Result<Ctx> {

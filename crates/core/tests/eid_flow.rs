@@ -310,6 +310,7 @@ async fn bankid_through_tic_identifies_the_right_person_only() {
             let query: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
             assert_eq!(query["scope"], "openid profile nin");
             assert_eq!(query["code_challenge_method"], "S256");
+            assert_eq!(query["prompt"], "login", "identifying always asks again");
             {
                 let mut s = standin.lock().unwrap();
                 s.challenge = query["code_challenge"].clone();

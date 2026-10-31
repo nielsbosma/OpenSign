@@ -170,7 +170,7 @@ fn oidc_provider(ctx: &Ctx, eid: &EidSettings, provider: &str) -> Result<oidc::P
         issuer: eid.broker_issuer.clone(),
         client_id: eid.broker_client_id.clone(),
         client_secret: eid.broker_client_secret.clone().unwrap_or_default(),
-        scope: "openid",
+        scope: "openid".into(),
         acr_values: eid.broker_acr_values.clone(),
         require_public: true,
     })
@@ -294,9 +294,10 @@ impl Service for Start {
                         state: &state,
                         nonce: &nonce,
                         verifier: &verifier,
-                        scope: oidc.scope,
+                        scope: &oidc.scope,
                         acr_values: &oidc.acr_values,
                         login_hint: None,
+                        prompt: Some("login"),
                     },
                 )?;
                 state_mac_value = Some(state_mac(ctx, &state));

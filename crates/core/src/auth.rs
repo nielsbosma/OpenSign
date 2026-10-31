@@ -30,6 +30,23 @@ pub struct UserRow {
     pub created_at: DateTime<Utc>,
     pub language: Option<String>,
     pub has_passkey: bool,
+    /// Signs in only through the identity provider: no password, passkey, API key or MCP.
+    pub sso: bool,
+}
+
+impl UserRow {
+    /// For anything an account of this kind does not have. Refuse before a password check, which
+    /// would count as a failed sign-in and could lock the account.
+    pub fn refuse_sso(&self) -> Result<()> {
+        if self.sso {
+            return Err(AppError::new(
+                ErrorKind::Forbidden,
+                "This account signs in through your organisation's single sign-on, so this is not available.",
+            )
+            .with_code("sso_account"));
+        }
+        Ok(())
+    }
 }
 
 pub async fn user_by_id(conn: &mut PgConnection, id: Uuid) -> Result<Option<UserRow>> {
@@ -118,7 +135,8 @@ pub fn actor_for(user: &UserRow, security: &SecuritySettings, credential: Creden
         name: user.name.clone(),
         role,
         permissions: role.permissions(),
-        must_enable_two_factor: security.enforce_two_factor && user.totp_enabled_at.is_none() && !user.has_passkey,
+        // For a single sign-on account this depends on the session; see `load_session`.
+        must_enable_two_factor: security.enforce_two_factor && !user.sso && user.totp_enabled_at.is_none() && !user.has_passkey,
         credential,
     })
 }
@@ -175,6 +193,7 @@ struct SessionRow {
     user_id: Uuid,
     expires_at: DateTime<Utc>,
     last_seen_at: DateTime<Utc>,
+    sso_mfa: Option<bool>,
 }
 
 /// Resolves a session cookie. Expired (absolute or idle) sessions are deleted on sight.
@@ -188,10 +207,11 @@ pub async fn load_session(
         return Ok(None);
     }
     let id = sha256_hex(token);
-    let Some(session) = sqlx::query_as::<_, SessionRow>("select id, user_id, expires_at, last_seen_at from sessions where id = $1")
-        .bind(&id)
-        .fetch_optional(&mut *conn)
-        .await?
+    let Some(session) =
+        sqlx::query_as::<_, SessionRow>("select id, user_id, expires_at, last_seen_at, sso_mfa from sessions where id = $1")
+            .bind(&id)
+            .fetch_optional(&mut *conn)
+            .await?
     else {
         return Ok(None);
     };
@@ -201,7 +221,9 @@ pub async fn load_session(
         return Ok(None);
     }
     let Some(user) = user_by_id(conn, session.user_id).await? else { return Ok(None) };
-    let Some(actor) = actor_for(&user, security, Credential::Session) else { return Ok(None) };
+    let Some(mut actor) = actor_for(&user, security, Credential::Session) else { return Ok(None) };
+    // Only the provider can prove a second factor here, and only at sign-in.
+    actor.must_enable_two_factor |= user.sso && security.enforce_two_factor && session.sso_mfa != Some(true);
     if now - session.last_seen_at > Duration::seconds(60) {
         sqlx::query("update sessions set last_seen_at = $2 where id = $1").bind(&session.id).bind(now).execute(&mut *conn).await?;
     }
@@ -285,7 +307,7 @@ pub async fn load_api_key(
     if !ip_allowed(&row.allowed_ips, ip) {
         return Ok(None);
     }
-    let Some(user) = user_by_id(conn, row.user_id).await? else { return Ok(None) };
+    let Some(user) = user_by_id(conn, row.user_id).await?.filter(|u| !u.sso) else { return Ok(None) };
     let Some(mut actor) = actor_for(&user, security, Credential::ApiKey(row.id)) else { return Ok(None) };
     let scopes: std::collections::BTreeSet<Permission> = row.permissions.iter().filter_map(|p| Permission::parse(p)).collect();
     actor.permissions = actor.permissions.intersection(&scopes).copied().collect();

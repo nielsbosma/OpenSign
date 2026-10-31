@@ -16,7 +16,7 @@ use crate::context::Ctx;
 use crate::email::{self, Message};
 use crate::error::{AppError, ErrorKind, Result, bad_request, unauthorized};
 use crate::service::{Access, Meta, Service};
-use crate::settings::{EmailSettings, OrgSettings, SecuritySettings};
+use crate::settings::{EmailSettings, OrgSettings, SecuritySettings, SsoSettings};
 
 const MAX_FAILURES: i32 = 5;
 const CHALLENGE_MINUTES: i64 = 5;
@@ -66,7 +66,20 @@ pub enum LoginResult {
     },
 }
 
+/// While only admins keep a local sign-in, everyone else goes through the provider, where a
+/// deactivated person is refused. Called once the credential is proven, so it tells nobody who has an account.
+pub(crate) async fn local_sign_in_allowed(ctx: &Ctx, conn: &mut PgConnection, user: &UserRow) -> Result<()> {
+    let sso: SsoSettings = settings(ctx, conn).await?;
+    if sso.admins_only_passwords() && user.role != crate::permissions::Role::Admin.as_str() {
+        return Err(
+            AppError::new(ErrorKind::Forbidden, "Use single sign-on. Only admins sign in with a password here.").with_code("sso_required")
+        );
+    }
+    Ok(())
+}
+
 pub(crate) async fn start_session(ctx: &Ctx, conn: &mut PgConnection, user: &UserRow) -> Result<LoginResult> {
+    local_sign_in_allowed(ctx, conn, user).await?;
     let security: SecuritySettings = settings(ctx, conn).await?;
     let session = create_session(conn, user.id, &security, ctx.ip.as_deref(), ctx.user_agent.as_deref(), ctx.now).await?;
     sqlx::query("update users set last_login_at = $2 where id = $1").bind(user.id).bind(ctx.now).execute(&mut *conn).await?;
@@ -264,6 +277,7 @@ impl Service for Login {
         {
             sqlx::query("update users set password_hash = $2 where id = $1").bind(user.id).bind(new_hash).execute(&mut *conn).await?;
         }
+        local_sign_in_allowed(ctx, conn, &user).await?;
         if user.totp_enabled_at.is_some() {
             let challenge = random_token();
             sqlx::query("insert into login_challenges (id, user_id, expires_at) values ($1, $2, $3)")
@@ -381,6 +395,8 @@ pub struct Me {
     pub permissions: Vec<crate::permissions::Permission>,
     pub two_factor_enabled: bool,
     pub must_enable_two_factor: bool,
+    /// Signs in through the identity provider, so it has no password, passkeys, API keys or MCP.
+    pub sso: bool,
     /// The running OpenSign version.
     pub version: String,
     /// The language the app is shown in, if the user chose one.
@@ -408,6 +424,7 @@ impl Service for WhoAmI {
             permissions: actor.permissions.iter().copied().collect(),
             two_factor_enabled: user.totp_enabled_at.is_some(),
             must_enable_two_factor: actor.must_enable_two_factor,
+            sso: user.sso,
             version: crate::env::app_version().to_string(),
             language: user.language,
         })
@@ -459,6 +476,7 @@ impl Service for BeginTwoFactor {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<TwoFactorSetup> {
         let actor = ctx.actor()?;
+        user_by_id(conn, actor.user_id).await?.ok_or_else(unauthorized)?.refuse_sso()?;
         let enabled: bool =
             sqlx::query_scalar("select totp_secret is not null from users where id = $1").bind(actor.user_id).fetch_one(&mut *conn).await?;
         if enabled {
@@ -500,6 +518,7 @@ impl Service for ConfirmTwoFactor {
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: CodeInput) -> Result<RecoveryCodes> {
         let actor = ctx.actor()?;
         let user = user_by_id(conn, actor.user_id).await?.ok_or_else(unauthorized)?;
+        user.refuse_sso()?;
         let sealed = user.totp_pending_secret.ok_or_else(|| bad_request("Start the two-factor setup first"))?;
         let context = format!("user:{}:totp", user.id);
         let secret = ctx.keys().decrypt_str(KeyPurpose::Settings, &context, &sealed)?;
@@ -577,6 +596,7 @@ impl Service for ChangePassword {
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ChangePasswordInput) -> Result<Ok_> {
         let actor = ctx.actor()?;
         let user = user_by_id(conn, actor.user_id).await?.ok_or_else(unauthorized)?;
+        user.refuse_sso()?;
         if !confirm_password(ctx, conn, &user, Some(&input.current_password)).await? {
             return Err(bad_request("Your current password is not right"));
         }
@@ -610,7 +630,11 @@ impl Service for RequestPasswordReset {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: EmailInput) -> Result<Ok_> {
         let Ok(email) = normalize_email(&input.email) else { return Ok(Ok_::default()) };
-        let Some(user) = user_by_email(conn, &email).await?.filter(|u| u.active) else { return Ok(Ok_::default()) };
+        // The same answer as for anyone else, but no link: a reset would give the account a password.
+        let Some(user) = user_by_email(conn, &email).await?.filter(|u| u.active && !u.sso) else { return Ok(Ok_::default()) };
+        if local_sign_in_allowed(ctx, conn, &user).await.is_err() {
+            return Ok(Ok_::default());
+        }
         let recent: i64 =
             sqlx::query_scalar("select count(*) from password_reset_tokens where user_id = $1 and created_at > now() - interval '1 hour'")
                 .bind(user.id)
@@ -679,6 +703,7 @@ impl Service for ResetPassword {
         let user_id = user_id.ok_or_else(|| bad_request("This link has expired or was already used. Ask for a new one."))?;
         let user = user_by_id(&mut tx, user_id)
             .await?
+            .filter(|u| !u.sso)
             .ok_or_else(|| bad_request("This link has expired or was already used. Ask for a new one."))?;
         sqlx::query("update users set password_hash = $2, password_changed_at = now() where id = $1")
             .bind(user_id)

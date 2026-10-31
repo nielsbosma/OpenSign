@@ -399,7 +399,7 @@ pub async fn load_access_token(
     if resource.is_some_and(|r| r.trim_end_matches('/') != mcp_url(app)) {
         return Ok(None);
     }
-    let Some(user) = user_by_id(conn, user_id).await? else { return Ok(None) };
+    let Some(user) = user_by_id(conn, user_id).await?.filter(|u| !u.sso) else { return Ok(None) };
     let Some(actor) = actor_for(&user, security, Credential::OAuth) else { return Ok(None) };
     if last_used.is_none_or(|t| now - t > Duration::seconds(60)) {
         sqlx::query("update oauth_grants set last_used_at = $2 where id = $1").bind(id).bind(now).execute(&mut *conn).await?;

@@ -44,7 +44,7 @@ pub fn provider(settings: &EidSettings, http: &reqwest::Client) -> Result<Provid
         issuer,
         client_id: settings.tic_client_id.trim().to_string(),
         client_secret: settings.tic_client_secret.clone().unwrap_or_default(),
-        scope: SCOPE,
+        scope: SCOPE.into(),
         acr_values: String::new(),
         require_public: true,
     };

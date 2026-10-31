@@ -39,6 +39,8 @@ export type Me = {
   name: string;
   permissions: Array<Permission>;
   role: Role;
+  /** Signs in through the identity provider, so it has no password, passkeys, API keys or MCP. */
+  sso: boolean;
   twoFactorEnabled: boolean;
   /** The running OpenSign version. */
   version: string;
@@ -437,6 +439,27 @@ export type AuthResetPasswordInput = {
 };
 
 export type AuthResetPasswordOutput = Ok_;
+
+export type AuthSsoStartInput = Record<string, unknown>;
+
+export type AuthSsoStartOutput = SsoStarted;
+
+export type SsoStarted = {
+  /** Becomes a cookie in the RPC layer and is removed from the answer: the provider's answer counts only in the browser that holds it. */
+  browserBinding?: string | null;
+  /** Send the browser here to sign in at the provider. */
+  redirectUrl: string;
+};
+
+export type AuthSsoStatusInput = Record<string, unknown>;
+
+export type AuthSsoStatusOutput = SsoStatus;
+
+export type SsoStatus = {
+  /** The button's text. Empty means the app's general one. */
+  buttonLabel: string;
+  enabled: boolean;
+};
 
 export type AuthVerifyTwoFactorInput = {
   challenge: string;
@@ -1905,7 +1928,7 @@ export type SealRegenerateInput = Record<string, unknown>;
 
 export type SealRegenerateOutput = SealInfo;
 
-export type Group = "org" | "email" | "security" | "retention" | "updates" | "signing" | "ai" | "sms" | "eid" | "automations";
+export type Group = "org" | "email" | "security" | "retention" | "updates" | "signing" | "ai" | "sms" | "eid" | "sso" | "automations";
 
 export type SettingsGetInput = {
   group: Group;
@@ -2509,6 +2532,8 @@ export type UserView = {
   lastLoginAt?: string | null;
   name: string;
   role: string;
+  /** Signs in through the identity provider, which also decides the email. */
+  sso: boolean;
   twoFactorEnabled: boolean;
 };
 
@@ -2654,6 +2679,8 @@ export interface Services {
   "auth.passkey_sign_in": { kind: "mutation"; input: AuthPasskeySignInInput; output: AuthPasskeySignInOutput };
   "auth.request_password_reset": { kind: "mutation"; input: AuthRequestPasswordResetInput; output: AuthRequestPasswordResetOutput };
   "auth.reset_password": { kind: "mutation"; input: AuthResetPasswordInput; output: AuthResetPasswordOutput };
+  "auth.sso_start": { kind: "mutation"; input: AuthSsoStartInput; output: AuthSsoStartOutput };
+  "auth.sso_status": { kind: "query"; input: AuthSsoStatusInput; output: AuthSsoStatusOutput };
   "auth.verify_two_factor": { kind: "mutation"; input: AuthVerifyTwoFactorInput; output: AuthVerifyTwoFactorOutput };
   "automations.apps": { kind: "query"; input: AutomationsAppsInput; output: AutomationsAppsOutput };
   "automations.connect": { kind: "mutation"; input: AutomationsConnectInput; output: AutomationsConnectOutput };

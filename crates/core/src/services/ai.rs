@@ -438,6 +438,10 @@ async fn propose(
         return Err(bad_request("Too many proposals at once. Wait for the user to answer these."));
     }
     service.check(ctx, &input)?;
+    // Confirming a proposal runs in the app, where this group can be changed; it is still not the assistant's to suggest.
+    if service.meta().name == "settings.update" && input["group"] == "sso" {
+        return Err(bad_request("Single sign-on is changed in Admin settings, by a person."));
+    }
     if input.to_string().len() > MAX_PROPOSAL_BYTES {
         return Err(bad_request("This is too much to show the user at once. Ask them to do it in the app."));
     }

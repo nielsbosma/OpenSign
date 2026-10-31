@@ -1,18 +1,47 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { KeyRound } from 'lucide-react';
+import { Building2, KeyRound } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { Field, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { call, errorMessage, type Output, useApiMutation } from '@/lib/api';
-import { t } from '@/lib/i18n';
+import { ApiError, call, errorMessage, type Output, useApi, useApiMutation } from '@/lib/api';
+import { msg, t } from '@/lib/i18n';
 import { getPasskey, passkeyCanceled, passkeysSupported } from '@/lib/passkeys';
 import { useSession } from '@/lib/session';
 import { AuthLayout, FormError } from './AuthLayout';
 
 export function safeNext(next: string | null) {
   return next?.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : '/';
+}
+
+/** Why the server sent someone back from the identity provider. */
+const SSO_REFUSALS: Record<string, string> = {
+  disabled: msg('Single sign-on is not available right now. Ask your admin.'),
+  expired: msg('That sign-in expired or was already used. Start again.'),
+  other_browser: msg('Finish signing in in the same browser where you started. Start again here.'),
+  denied: msg('The identity provider did not let you in. Ask your admin if you should have access.'),
+  failed: msg('The sign-in could not be completed. Try again, or ask your admin.'),
+  email_unverified: msg('Your identity provider has not confirmed your email address, so you cannot sign in here.'),
+  mfa_required: msg(
+    'Sign-in needs a second factor, and your identity provider did not report one. Turn on two-factor there and sign in again.',
+  ),
+  inactive: msg('This account is deactivated. Ask your admin.'),
+  admin_account: msg('This email belongs to an admin account, which cannot use single sign-on. Sign in with its password.'),
+  email_conflict: msg('This email is already used by another account. Ask your admin.'),
+};
+
+const SSO_NEXT = 'opensign.sso_next';
+
+/** Where someone was going when they left for the identity provider, once. */
+export function takeSsoNext() {
+  try {
+    const next = sessionStorage.getItem(SSO_NEXT);
+    sessionStorage.removeItem(SSO_NEXT);
+    return next ? safeNext(next) : null;
+  } catch {
+    return null;
+  }
 }
 
 export function LoginPage() {
@@ -26,8 +55,13 @@ export function LoginPage() {
   const [code, setCode] = useState('');
   const [challenge, setChallenge] = useState<string | null>(null);
   const [ceremony, setCeremony] = useState<Extract<Output<'auth.login'>, { status: 'passkey_required' }>['ceremony'] | null>(null);
-  const [error, setError] = useState<string>();
+  const refusal = params.get('sso');
+  const [error, setError] = useState<string | undefined>(() =>
+    refusal ? t((Object.hasOwn(SSO_REFUSALS, refusal) && SSO_REFUSALS[refusal]) || SSO_REFUSALS.failed!) : undefined,
+  );
   const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [ssoBusy, setSsoBusy] = useState(false);
+  const sso = useApi('auth.sso_status', undefined, { retry: false });
 
   const done = async () => {
     await queryClient.invalidateQueries();
@@ -48,7 +82,33 @@ export function LoginPage() {
   const submitPassword = (e: FormEvent) => {
     e.preventDefault();
     setError(undefined);
-    login.mutate({ email: email.trim(), password }, { onError: (e) => setError(e.message) });
+    login.mutate(
+      { email: email.trim(), password },
+      {
+        onError: (e) =>
+          setError(
+            e instanceof ApiError && e.code === 'sso_required'
+              ? t('Use single sign-on. Only admins sign in with a password here.')
+              : e.message,
+          ),
+      },
+    );
+  };
+
+  // A click, never a redirect by itself: otherwise signing out would sign straight back in.
+  const signInWithSso = async () => {
+    setError(undefined);
+    setSsoBusy(true);
+    try {
+      const { redirectUrl } = await call('auth.sso_start', {});
+      try {
+        if (next !== '/') sessionStorage.setItem(SSO_NEXT, next);
+      } catch {}
+      window.location.assign(redirectUrl);
+    } catch (e) {
+      setError(errorMessage(e));
+      setSsoBusy(false);
+    }
   };
 
   const signInWithPasskey = async () => {
@@ -140,6 +200,12 @@ export function LoginPage() {
     <AuthLayout title={t('Sign In')}>
       <form onSubmit={submitPassword} className="grid gap-4">
         <FormError message={error} />
+        {sso.data?.enabled && (
+          <Button type="button" disabled={ssoBusy} onClick={() => void signInWithSso()}>
+            {ssoBusy ? <Spinner className="text-primary-foreground" /> : <Building2 />}{' '}
+            {sso.data.buttonLabel || t('Sign In with Single Sign-On')}
+          </Button>
+        )}
         <Field label={t('Email')} htmlFor="email">
           <Input
             id="email"
@@ -161,7 +227,7 @@ export function LoginPage() {
             required
           />
         </Field>
-        <Button type="submit" disabled={login.isPending}>
+        <Button type="submit" variant={sso.data?.enabled ? 'outline' : 'default'} disabled={login.isPending}>
           {login.isPending && <Spinner className="text-primary-foreground" />} {t('Sign In')}
         </Button>
         {passkeysSupported() && (

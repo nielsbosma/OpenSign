@@ -25,6 +25,7 @@ It does not protect against someone who holds `APP_SECRET` together with the dat
 - Session cookies are `HttpOnly`, `SameSite=Lax`, `__Host-` prefixed and `Secure` on https, stored only as a keyed hash, with absolute and idle expiry. Cookie-authenticated writes must come from the install's own origin.
 - The first admin can only be created with a one-time code from the server log.
 - API keys and OAuth tokens are stored as hashes. MCP uses OAuth 2.1 with PKCE (S256 only), exact redirect URIs, audience-bound access tokens and rotating refresh tokens with reuse detection.
+- [Single sign-on](single-sign-on.md) uses the authorization code flow with PKCE, state, nonce and full ID token checks, tied to the browser that started it by a cookie. Accounts are identified by issuer and subject and the email must be verified. Roles never come from the provider, new accounts are never admins, and admin accounts are never linked automatically. These accounts hold no password, passkey, API key or MCP access. A block at the provider takes effect when the session expires.
 
 See [Sign-in, passkeys and two-factor](account-security.md).
 
@@ -69,7 +70,7 @@ Append-only by database trigger, hash-chained with a secret key, and time-stampe
 - A strict Content Security Policy (`script-src 'self'`, no inline script, `frame-ancestors 'none'`) against clickjacking, HSTS on https, `nosniff`, `no-referrer`, cross-origin isolation headers and a tight permissions policy (only the signing page may use the camera, for [webcam photos](identification.md#webcam-photo)). The web app loads nothing from other origins.
 - No page can be shown in another site's frame, with one opt-in exception: when an admin turns on [embedded signing](embedding.md), the signing page names the listed sites in `frame-ancestors`. Every other page stays `frame-ancestors 'none'`, the list holds exact https origins without wildcards, and links sent by email or SMS still refuse to render in a frame.
 - Rate limits per address on sign-in, codes, signing, uploads and verification, on top of the account lockouts. The client address comes from `X-Forwarded-For` only as the **Trusted Proxies** setting allows.
-- Outbound requests to anything configurable (webhooks, AI endpoints, eID brokers, time stamp authorities) resolve DNS first, refuse private, loopback, link-local and metadata addresses, and follow no redirects. The one exception is a self-hosted AI proxy, which an admin may point at the private network.
+- Outbound requests to anything configurable (webhooks, AI endpoints, eID brokers, identity providers, time stamp authorities) resolve DNS first, refuse private, loopback, link-local and metadata addresses, and follow no redirects. The one exception is a self-hosted AI proxy, which an admin may point at the private network.
 - Webhooks are signed per webhook. See [Webhooks](webhooks.md).
 
 ## Supply chain

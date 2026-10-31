@@ -99,7 +99,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
   );
 }
 
-export type EditableUser = { id: string; name: string; email: string };
+export type EditableUser = { id: string; name: string; email: string; sso?: boolean };
 
 export function EditUserDialog({ user, onOpenChange }: { user: EditableUser | null; onOpenChange: (open: boolean) => void }) {
   const [name, setName] = useState('');
@@ -122,7 +122,7 @@ export function EditUserDialog({ user, onOpenChange }: { user: EditableUser | nu
     const newEmail = email.trim();
     try {
       if (name.trim() && name.trim() !== user.name) await update.mutateAsync({ id: user.id, name: name.trim() });
-      if (newEmail.toLowerCase() !== user.email.toLowerCase()) {
+      if (!user.sso && newEmail.toLowerCase() !== user.email.toLowerCase()) {
         await changeEmail.mutateAsync({ id: user.id, email: newEmail });
         toast.success(t('We sent a confirmation link to {email}. The email changes once it is opened.', { email: newEmail }));
       }
@@ -143,8 +143,12 @@ export function EditUserDialog({ user, onOpenChange }: { user: EditableUser | nu
           <Field label={t('Name')} htmlFor="edit-name">
             <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
           </Field>
-          <Field label={t('Email')} htmlFor="edit-email">
-            <Input id="edit-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <Field
+            label={t('Email')}
+            htmlFor="edit-email"
+            hint={user?.sso ? t('This email comes from the identity provider. Change it there.') : undefined}
+          >
+            <Input id="edit-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={user?.sso} required />
           </Field>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -211,6 +215,7 @@ export function UsersPage() {
                         <span className="capitalize">{u.role}</span>
                         {!u.active && <Badge variant="outline">{t('Deactivated')}</Badge>}
                         {u.twoFactorEnabled && <Badge variant="secondary">{t('2FA')}</Badge>}
+                        {u.sso && <Badge variant="secondary">{t('SSO')}</Badge>}
                       </div>
                     </TableCell>
                     <TableCell className="hidden text-muted-foreground md:table-cell">

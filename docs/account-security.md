@@ -37,6 +37,10 @@ Creating an API key or connecting an app gives lasting access, so OpenSign asks 
 
 An admin can turn on **Require two-factor authentication for everyone** in **Settings → Security**. Anyone without an authenticator app or a passkey is then asked to set one up before they can do anything else. MCP clients signed in as such an account are refused until they do. We recommend turning this on.
 
+## Single sign-on
+
+If your organisation uses [single sign-on](single-sign-on.md), choose its button on the sign-in page. Your identity provider then handles your password, second factor and email, and **Settings → Account** has no passkeys, authenticator app or password for you. API keys and MCP clients are not available to these accounts.
+
 ## Language
 
 Under **Settings → Account and Security**, pick the language OpenSign is shown in for you: English, Chinese (Simplified), Hindi, Spanish, French, Arabic, Bengali, Portuguese, Russian, Urdu or Swedish. Before you sign in, the app follows your browser, and the sign-in page has a picker. This does not change what signers see; they get the language set on their document or party. Some messages from the server are still in English.

@@ -104,6 +104,7 @@ impl Service for BeginRegistration {
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: BeginInput) -> Result<Ceremony> {
         let actor = ctx.actor()?;
         let user = user_by_id(conn, actor.user_id).await?.ok_or_else(unauthorized)?;
+        user.refuse_sso()?;
         if user.password_hash.is_none() {
             crate::auth::require_step_up(ctx, conn).await?;
         } else if !confirm_password(ctx, conn, &user, input.current_password.as_deref()).await? {
@@ -177,6 +178,7 @@ impl Service for FinishRegistration {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: FinishRegistrationInput) -> Result<PasskeyView> {
         let actor = ctx.actor()?;
+        user_by_id(conn, actor.user_id).await?.ok_or_else(unauthorized)?.refuse_sso()?;
         let (challenge, owner) = take_challenge(ctx, conn, &input.state, &["register"]).await?;
         if owner != Some(actor.user_id) {
             return Err(unauthorized());
@@ -394,6 +396,7 @@ impl Service for BeginStepUp {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: super::Empty) -> Result<StepUpOptions> {
         let user = user_by_id(conn, ctx.actor()?.user_id).await?.ok_or_else(unauthorized)?;
+        user.refuse_sso()?;
         let passkey = if user.has_passkey { Some(own_passkey_ceremony(ctx, conn, user.id, "step_up").await?) } else { None };
         Ok(StepUpOptions { has_password: user.password_hash.is_some(), passkey })
     }
@@ -434,6 +437,7 @@ impl Service for StepUp {
         let actor = ctx.actor()?;
         let session = ctx.session_id.as_deref().ok_or_else(crate::error::forbidden)?;
         let user = user_by_id(conn, actor.user_id).await?.ok_or_else(unauthorized)?;
+        user.refuse_sso()?;
         let method = if let Some(passkey) = &input.passkey {
             let failed = || AppError::new(ErrorKind::Unauthorized, "That passkey does not belong to your account");
             let (challenge, owner) = take_challenge(ctx, conn, &passkey.state, &["step_up"]).await?;

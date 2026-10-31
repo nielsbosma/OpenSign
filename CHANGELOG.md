@@ -33,6 +33,7 @@ A security review of 0.1.0 led to this round of hardening. Update as soon as you
 
 ### Added
 
+- Single sign-on with OpenID Connect, for Microsoft Entra ID, Google, Okta and other providers. Accounts are created at first sign-in, never as admins, and admins can keep the only password sign-in. See the [single sign-on](docs/single-sign-on.md) page.
 - `documents.party_identity` shows how a party identified with the number in full, for anyone who may see all documents, and audits each use.
 - Admin settings: **Trusted Timestamp Authorities**, **Trusted Proxies**, a switch for dynamic MCP client registration, an SMS country allowlist and SMS budgets.
 - A per-user hourly limit on assistant model calls.

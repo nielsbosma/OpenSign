@@ -469,6 +469,38 @@ pub async fn eid_callback(State(app_state): State<AppState>, Query(q): Query<Eid
     response
 }
 
+/// `GET /api/auth/sso/callback`: the identity provider returns the browser here. A refusal goes to
+/// the sign-in page as a fixed code it has a translated text for.
+pub async fn sso_callback(State(app_state): State<AppState>, Query(q): Query<EidCallback>, parts: Parts) -> Response {
+    let caller = match caller(&app_state, &parts, Surface::Web, Some(security::AUTH)).await {
+        Ok(c) => c,
+        Err(r) => return *r,
+    };
+    let browser = auth::sso_cookie(&parts.headers, &app_state);
+    let outcome = opensign_core::services::sso::callback(
+        &caller.ctx,
+        q.state.as_deref().unwrap_or_default(),
+        browser.as_deref(),
+        q.code.as_deref(),
+        q.error.as_deref(),
+    )
+    .await;
+    let mut response = axum::http::StatusCode::SEE_OTHER.into_response();
+    let location = match outcome {
+        Ok(session) => {
+            response.headers_mut().append(header::SET_COOKIE, auth::set_cookie(&app_state, &session.token, session.expires_at));
+            "/".to_string()
+        }
+        Err(code) => format!("/login?sso={code}"),
+    };
+    if let Ok(value) = HeaderValue::from_str(&location) {
+        response.headers_mut().insert(header::LOCATION, value);
+    }
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response.headers_mut().append(header::SET_COOKIE, auth::clear_sso_cookie(&app_state));
+    response
+}
+
 fn review_headers(response: &mut Response) {
     let h = response.headers_mut();
     h.insert(header::CACHE_CONTROL, HeaderValue::from_static("private, no-store"));

@@ -125,6 +125,7 @@ pub fn router(state: AppState) -> Router {
         .route("/sign/field-file", post(files::signer_field_file).layer(DefaultBodyLimit::max(11 * 1024 * 1024)))
         .route("/documents/{id}/attachments/{request}", get(files::document_attachment))
         .route("/eid/callback", get(files::eid_callback))
+        .route("/auth/sso/callback", get(files::sso_callback))
         .route("/verify", post(files::verify))
         .route("/logo/{file}", get(files::logo))
         .route(

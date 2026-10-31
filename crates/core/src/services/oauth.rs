@@ -27,6 +27,11 @@ fn session_only(ctx: &Ctx) -> Result<()> {
     Ok(())
 }
 
+/// An MCP grant would outlive the person being blocked at the identity provider.
+async fn refuse_sso(ctx: &Ctx, conn: &mut PgConnection) -> Result<()> {
+    crate::auth::user_by_id(conn, ctx.actor()?.user_id).await?.ok_or_else(crate::error::unauthorized)?.refuse_sso()
+}
+
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ConsentView {
@@ -51,6 +56,7 @@ impl Service for Describe {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: RequestInput) -> Result<ConsentView> {
         session_only(ctx)?;
+        refuse_sso(ctx, conn).await?;
         let pending = decode_pending(&ctx.app, &input.request, ctx.now)?;
         let client = oauth::client(conn, &pending.client_id).await?.ok_or_else(|| not_found("Client"))?;
         let redirect_host = url::Url::parse(&pending.redirect_uri).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
@@ -85,6 +91,7 @@ impl Service for Approve {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: RequestInput) -> Result<RedirectOutput> {
         session_only(ctx)?;
+        refuse_sso(ctx, conn).await?;
         crate::auth::require_step_up(ctx, conn).await?;
         let actor = ctx.actor()?;
         let pending = decode_pending(&ctx.app, &input.request, ctx.now)?;
