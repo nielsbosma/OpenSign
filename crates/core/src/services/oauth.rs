@@ -34,6 +34,9 @@ pub struct ConsentView {
     pub client_uri: Option<String>,
     /// Where the browser goes after approval. Show it, so a look-alike client name cannot hide it.
     pub redirect_host: String,
+    /// The part of that host someone had to register, such as `example.co.uk`. Whoever holds it
+    /// receives the access; the labels in front of it can say anything.
+    pub redirect_domain: String,
 }
 
 pub struct Describe;
@@ -51,7 +54,13 @@ impl Service for Describe {
         let pending = decode_pending(&ctx.app, &input.request, ctx.now)?;
         let client = oauth::client(conn, &pending.client_id).await?.ok_or_else(|| not_found("Client"))?;
         let redirect_host = url::Url::parse(&pending.redirect_uri).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
-        Ok(ConsentView { client_name: client.name, client_uri: client.metadata["client_uri"].as_str().map(str::to_string), redirect_host })
+        let redirect_domain = oauth::registrable_domain(&redirect_host);
+        Ok(ConsentView {
+            client_name: client.name,
+            client_uri: client.metadata["client_uri"].as_str().map(str::to_string),
+            redirect_host,
+            redirect_domain,
+        })
     }
 }
 
@@ -76,6 +85,7 @@ impl Service for Approve {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: RequestInput) -> Result<RedirectOutput> {
         session_only(ctx)?;
+        crate::auth::require_step_up(ctx, conn).await?;
         let actor = ctx.actor()?;
         let pending = decode_pending(&ctx.app, &input.request, ctx.now)?;
         let code = issue_code(conn, &pending, actor.user_id, ctx.now).await?;

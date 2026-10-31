@@ -131,6 +131,35 @@ export type AccountSignatureInput = Record<string, unknown>;
 
 export type AccountSignatureOutput = SavedSignature;
 
+export type SignInInput = {
+  authenticatorData: string;
+  clientDataJson: string;
+  /** The credential's rawId, base64url. */
+  credentialId: string;
+  signature: string;
+  state: string;
+  userHandle?: string | null;
+};
+
+export type AccountStepUpInput = {
+  /** Your password. Leave out when you confirm with a passkey. */
+  currentPassword?: string | null;
+  /** The browser's passkey response. Leave out when you confirm with your password. */
+  passkey?: SignInInput | null;
+};
+
+export type AccountStepUpOutput = Ok_;
+
+export type AccountStepUpBeginInput = Record<string, unknown>;
+
+export type AccountStepUpBeginOutput = StepUpOptions;
+
+export type StepUpOptions = {
+  hasPassword: boolean;
+  /** Present when the account has a passkey. */
+  passkey?: Ceremony | null;
+};
+
 export type AccountTwoFactorBeginInput = Record<string, unknown>;
 
 export type AccountTwoFactorBeginOutput = TwoFactorSetup;
@@ -333,6 +362,9 @@ export type AuthLoginOutput = {
 } | {
   challenge: string;
   status: "two_factor_required";
+} | {
+  ceremony: Ceremony;
+  status: "passkey_required";
 };
 
 export type AuthLogoutInput = Record<string, unknown>;
@@ -360,6 +392,9 @@ export type AuthPasskeySignInOutput = {
 } | {
   challenge: string;
   status: "two_factor_required";
+} | {
+  ceremony: Ceremony;
+  status: "passkey_required";
 };
 
 export type AuthRequestPasswordResetInput = {
@@ -388,6 +423,9 @@ export type AuthVerifyTwoFactorOutput = {
 } | {
   challenge: string;
   status: "two_factor_required";
+} | {
+  ceremony: Ceremony;
+  status: "passkey_required";
 };
 
 export type AutomationsAppsInput = {
@@ -1793,6 +1831,8 @@ export type OauthDescribeOutput = ConsentView;
 export type ConsentView = {
   clientName: string;
   clientUri?: string | null;
+  /** The part of that host someone had to register, such as `example.co.uk`. Whoever holds it receives the access; the labels in front of it can say anything. */
+  redirectDomain: string;
   /** Where the browser goes after approval. Show it, so a look-alike client name cannot hide it. */
   redirectHost: string;
 };
@@ -2522,6 +2562,8 @@ export interface Services {
   "account.set_language": { kind: "mutation"; input: AccountSetLanguageInput; output: AccountSetLanguageOutput };
   "account.set_signature": { kind: "mutation"; input: AccountSetSignatureInput; output: AccountSetSignatureOutput };
   "account.signature": { kind: "query"; input: AccountSignatureInput; output: AccountSignatureOutput };
+  "account.step_up": { kind: "mutation"; input: AccountStepUpInput; output: AccountStepUpOutput };
+  "account.step_up_begin": { kind: "mutation"; input: AccountStepUpBeginInput; output: AccountStepUpBeginOutput };
   "account.two_factor_begin": { kind: "mutation"; input: AccountTwoFactorBeginInput; output: AccountTwoFactorBeginOutput };
   "account.two_factor_confirm": { kind: "mutation"; input: AccountTwoFactorConfirmInput; output: AccountTwoFactorConfirmOutput };
   "ai.chat": { kind: "mutation"; input: AiChatInput; output: AiChatOutput };

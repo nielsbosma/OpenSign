@@ -13,6 +13,7 @@ export class ApiError extends Error {
     message: string,
     readonly status: number,
     readonly kind: string,
+    readonly code?: string,
   ) {
     super(message);
   }
@@ -27,7 +28,7 @@ async function parse(response: Response) {
     if (response.ok) throw new ApiError('The server sent a response that could not be read', response.status, 'internal');
   }
   if (!response.ok) {
-    throw new ApiError(body?.error ?? response.statusText ?? 'Something went wrong', response.status, body?.kind ?? 'internal');
+    throw new ApiError(body?.error ?? response.statusText ?? 'Something went wrong', response.status, body?.kind ?? 'internal', body?.code);
   }
   return body;
 }

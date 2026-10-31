@@ -119,6 +119,11 @@ impl Service for CreateUploadUrl {
     }
 }
 
+/// That an upload link is genuine and in date, to look at before taking the file's bytes.
+pub fn check_upload_link(app: &App, token: &str) -> Result<()> {
+    app.keys.verify_token::<UploadClaim>(UPLOAD, token, Utc::now().timestamp()).map(|_| ()).map_err(|_| expired())
+}
+
 /// Opens an upload link: spends it, rebuilds the caller who made it, and adds the file to the draft.
 pub async fn upload(app: std::sync::Arc<App>, token: &str, ip: Option<String>, request_id: String, bytes: Vec<u8>) -> Result<UploadOutput> {
     let mut ctx = Ctx::new(app, Surface::Api);

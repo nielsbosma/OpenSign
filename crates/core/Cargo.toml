@@ -21,6 +21,7 @@ bytes = { workspace = true }
 chrono = { workspace = true }
 hex = { workspace = true }
 ipnet = "2"
+psl = "2"
 hmac = { workspace = true }
 object_store = { version = "0.14", default-features = false, features = ["aws"] }
 reqwest = { workspace = true }

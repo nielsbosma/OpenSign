@@ -322,8 +322,7 @@ async fn parallel_guesses_all_count_toward_the_lockout() {
     for guess in guesses {
         assert!(guess.await.unwrap().is_err());
     }
-    let failures: i32 =
-        sqlx::query_scalar("select failed_login_count from users where email = 'ada@example.com'").fetch_one(&app.db).await.unwrap();
+    let failures: i32 = sqlx::query_scalar("select max(failures) from login_failures").fetch_one(&app.db).await.unwrap();
     assert!(failures >= 5, "every guess before the lock counted: {failures}");
     assert_eq!(kind(call::<auth::Login>(&anon, login("ada@example.com", PASSWORD)).await), ErrorKind::TooManyRequests);
 }
@@ -392,6 +391,11 @@ mod passkey {
         /// (clientDataJSON, authenticatorData, signature), base64url.
         pub fn get(&mut self, options: &serde_json::Value) -> (String, String, String) {
             self.count += 1;
+            self.assert(options)
+        }
+
+        /// Signs without moving the counter on.
+        pub fn assert(&self, options: &serde_json::Value) -> (String, String, String) {
             let client = self.client("webauthn.get", options);
             let data = self.auth_data(0x05, &[]);
             let mut signed = data.clone();
@@ -492,4 +496,309 @@ fn begin_options_with_other_challenge(options: &serde_json::Value) -> serde_json
     let mut changed = options.clone();
     changed["challenge"] = serde_json::json!("c29tZXRoaW5nLWVsc2U");
     changed
+}
+
+async fn first_admin(app: &Arc<App>) -> Ctx {
+    let anon = web(app);
+    let input = setup::CompleteInput {
+        setup_code: app.keys.setup_code(),
+        org_name: "Acme AB".into(),
+        name: "Ada Admin".into(),
+        email: "ada@example.com".into(),
+        password: PASSWORD.into(),
+    };
+    call::<setup::Complete>(&anon, input).await.unwrap();
+    signed_in(app, call::<auth::Login>(&anon, login("ada@example.com", PASSWORD)).await.unwrap()).await
+}
+
+fn device_for(app: &Arc<App>, seed: u8) -> passkey::Authenticator {
+    let url = url::Url::parse(&app.public_url()).unwrap();
+    passkey::Authenticator {
+        key: p256::ecdsa::SigningKey::from_slice(&[seed; 32]).unwrap(),
+        id: format!("credential-{seed}").into_bytes(),
+        count: 0,
+        rp_id: url.host_str().unwrap().to_string(),
+        origin: url.origin().ascii_serialization(),
+    }
+}
+
+async fn add_passkey(ctx: &Ctx, device: &passkey::Authenticator) {
+    use opensign_core::services::passkeys;
+    let begin = call::<passkeys::BeginRegistration>(ctx, passkeys::BeginInput { current_password: Some(PASSWORD.into()) }).await.unwrap();
+    let (client, attestation) = device.create(&begin.options);
+    let finish = passkeys::FinishRegistrationInput {
+        state: begin.state,
+        name: "Laptop".into(),
+        client_data_json: client,
+        attestation_object: attestation,
+        transports: vec![],
+    };
+    call::<passkeys::FinishRegistration>(ctx, finish).await.unwrap();
+}
+
+fn assertion(
+    device: &mut passkey::Authenticator,
+    state: String,
+    options: &serde_json::Value,
+) -> opensign_core::services::passkeys::SignInInput {
+    use base64::Engine;
+    let (client, data, signature) = device.get(options);
+    opensign_core::services::passkeys::SignInInput {
+        state,
+        credential_id: base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&device.id),
+        client_data_json: client,
+        authenticator_data: data,
+        signature,
+        user_handle: None,
+    }
+}
+
+fn from_address(app: &Arc<App>, ip: &str) -> Ctx {
+    let mut ctx = web(app);
+    ctx.ip = Some(ip.into());
+    ctx
+}
+
+async fn second_admin(app: &Arc<App>, email: &str) -> uuid::Uuid {
+    let id = uuid::Uuid::now_v7();
+    let hash = opensign_crypto::hash_password(PASSWORD).unwrap();
+    sqlx::query("insert into users (id, email, name, password_hash, role) values ($1, $2, 'Someone', $3, $4)")
+        .bind(id)
+        .bind(email)
+        .bind(hash)
+        .bind(Role::Admin.as_str())
+        .execute(&app.db)
+        .await
+        .unwrap();
+    id
+}
+
+#[tokio::test]
+async fn a_password_alone_does_not_pass_an_account_with_a_passkey() {
+    use opensign_core::services::passkeys;
+    let Some(app) = app().await else { return };
+    let admin = first_admin(&app).await;
+    let mut device = device_for(&app, 11);
+    add_passkey(&admin, &device).await;
+    let other_admin = second_admin(&app, "bo@example.com").await;
+    let bo = signed_in(&app, call::<auth::Login>(&web(&app), login("bo@example.com", PASSWORD)).await.unwrap()).await;
+    assert_eq!(bo.actor.as_ref().unwrap().user_id, other_admin);
+    let mut bos_device = device_for(&app, 12);
+    add_passkey(&bo, &bos_device).await;
+
+    let anon = web(&app);
+    let LoginResult::PasskeyRequired { ceremony } = call::<auth::Login>(&anon, login("ada@example.com", PASSWORD)).await.unwrap() else {
+        panic!("the password alone must not start a session");
+    };
+    assert_eq!(ceremony.options["allowCredentials"].as_array().unwrap().len(), 1);
+    let foreign = assertion(&mut bos_device, ceremony.state, &ceremony.options);
+    assert_eq!(kind(call::<passkeys::SignIn>(&anon, foreign).await), ErrorKind::Unauthorized, "only this account's passkey");
+
+    let LoginResult::PasskeyRequired { ceremony } = call::<auth::Login>(&anon, login("ada@example.com", PASSWORD)).await.unwrap() else {
+        panic!("expected a passkey step");
+    };
+    let own = assertion(&mut device, ceremony.state, &ceremony.options);
+    let session = signed_in(&app, call::<passkeys::SignIn>(&anon, own).await.unwrap()).await;
+    assert_eq!(session.actor.as_ref().unwrap().email, "ada@example.com");
+
+    // An admin's reset clears the passkey: the lost device stops working and the password signs in again.
+    call::<users::ResetTwoFactor>(&bo, users::IdInput { id: admin.actor.as_ref().unwrap().user_id }).await.unwrap();
+    let begin = call::<passkeys::BeginSignIn>(&anon, Empty {}).await.unwrap();
+    let lost = assertion(&mut device, begin.state, &begin.options);
+    assert_eq!(kind(call::<passkeys::SignIn>(&anon, lost).await), ErrorKind::Unauthorized);
+    assert!(matches!(call::<auth::Login>(&anon, login("ada@example.com", PASSWORD)).await.unwrap(), LoginResult::SignedIn { .. }));
+}
+
+#[tokio::test]
+async fn one_address_cannot_lock_the_owner_out() {
+    use opensign_core::services::passkeys;
+    let Some(app) = app().await else { return };
+    let admin = first_admin(&app).await;
+    let mut device = device_for(&app, 13);
+    add_passkey(&admin, &device).await;
+
+    let guesser = from_address(&app, "198.51.100.1");
+    for _ in 0..5 {
+        assert_eq!(kind(call::<auth::Login>(&guesser, login("ada@example.com", "wrong guess")).await), ErrorKind::Unauthorized);
+    }
+    assert_eq!(
+        kind(call::<auth::Login>(&guesser, login("ada@example.com", PASSWORD)).await),
+        ErrorKind::TooManyRequests,
+        "the guessing address is locked even with the right password"
+    );
+    let LoginResult::PasskeyRequired { .. } = call::<auth::Login>(&web(&app), login("ada@example.com", PASSWORD)).await.unwrap() else {
+        panic!("the owner's own address is unaffected");
+    };
+
+    // An IPv6 customer rotating inside their /64 is still one address.
+    let v6 = |host: &str| from_address(&app, &format!("2001:db8:5:5::{host}"));
+    for host in ["1", "2", "3", "4", "5"] {
+        assert_eq!(kind(call::<auth::Login>(&v6(host), login("nobody@example.com", "wrong guess")).await), ErrorKind::Unauthorized);
+    }
+    assert_eq!(
+        kind(call::<auth::Login>(&v6("6"), login("nobody@example.com", "wrong guess")).await),
+        ErrorKind::TooManyRequests,
+        "an unknown email throttles exactly like a real one"
+    );
+
+    // Many addresses together do lock the account, and a passkey still gets through.
+    for address in 2..=5 {
+        let guesser = from_address(&app, &format!("198.51.100.{address}"));
+        for _ in 0..5 {
+            let _ = call::<auth::Login>(&guesser, login("ada@example.com", "wrong guess")).await;
+        }
+    }
+    assert_eq!(kind(call::<auth::Login>(&web(&app), login("ada@example.com", PASSWORD)).await), ErrorKind::TooManyRequests);
+    let anon = web(&app);
+    let begin = call::<passkeys::BeginSignIn>(&anon, Empty {}).await.unwrap();
+    let own = assertion(&mut device, begin.state, &begin.options);
+    assert!(matches!(call::<passkeys::SignIn>(&anon, own).await.unwrap(), LoginResult::SignedIn { .. }));
+
+    // A quiet day forgets it all.
+    sqlx::query("update login_failures set last_failed_at = last_failed_at - interval '25 hours', locked_until = null")
+        .execute(&app.db)
+        .await
+        .unwrap();
+    assert_eq!(kind(call::<auth::Login>(&guesser, login("ada@example.com", "wrong guess")).await), ErrorKind::Unauthorized);
+    let counted: i32 =
+        sqlx::query_scalar("select failures from login_failures where address = '198.51.100.1'").fetch_one(&app.db).await.unwrap();
+    assert_eq!(counted, 1);
+}
+
+#[tokio::test]
+async fn lasting_access_needs_a_fresh_confirmation() {
+    use opensign_core::services::passkeys;
+    let Some(app) = app().await else { return };
+    let admin = first_admin(&app).await;
+    let key = || users::CreateApiKeyInput {
+        name: "CRM".into(),
+        permissions: vec![Permission::DocumentsCreate],
+        expires_in_days: None,
+        allowed_ips: vec![],
+    };
+    call::<users::CreateApiKey>(&admin, key()).await.expect("signing in just now counts");
+
+    sqlx::query("update sessions set elevated_until = now() - interval '1 minute'").execute(&app.db).await.unwrap();
+    let refused = call::<users::CreateApiKey>(&admin, key()).await.err().unwrap();
+    assert_eq!(refused.code, Some("step_up_required"));
+
+    let wrong = passkeys::StepUpInput { current_password: Some("wrong".into()), passkey: None };
+    assert_eq!(kind(call::<passkeys::StepUp>(&admin, wrong).await), ErrorKind::BadRequest);
+    let total: i32 = sqlx::query_scalar("select max(failures) from login_failures").fetch_one(&app.db).await.unwrap();
+    assert_eq!(total, 1, "wrong guesses here count like those at the sign-in page");
+    let nothing = passkeys::StepUpInput { current_password: None, passkey: None };
+    assert!(call::<passkeys::StepUp>(&admin, nothing).await.is_err());
+    assert!(call::<users::CreateApiKey>(&admin, key()).await.is_err());
+
+    let right = passkeys::StepUpInput { current_password: Some(PASSWORD.into()), passkey: None };
+    call::<passkeys::StepUp>(&admin, right).await.unwrap();
+    call::<users::CreateApiKey>(&admin, key()).await.unwrap();
+
+    let mut device = device_for(&app, 14);
+    add_passkey(&admin, &device).await;
+    sqlx::query("update sessions set elevated_until = null").execute(&app.db).await.unwrap();
+    let options = call::<passkeys::BeginStepUp>(&admin, Empty {}).await.unwrap();
+    assert!(options.has_password);
+    let ceremony = options.passkey.unwrap();
+    let confirm = assertion(&mut device, ceremony.state, &ceremony.options);
+    call::<passkeys::StepUp>(&admin, passkeys::StepUpInput { current_password: None, passkey: Some(confirm) }).await.unwrap();
+    call::<users::CreateApiKey>(&admin, key()).await.unwrap();
+}
+
+#[tokio::test]
+async fn resets_end_api_keys_and_old_links() {
+    let Some(app) = app().await else { return };
+    let admin = first_admin(&app).await;
+    let admin_id = admin.actor.as_ref().unwrap().user_id;
+    let key = users::CreateApiKeyInput {
+        name: "CRM".into(),
+        permissions: vec![Permission::DocumentsCreate],
+        expires_in_days: None,
+        allowed_ips: vec![],
+    };
+    let created = call::<users::CreateApiKey>(&admin, key).await.unwrap();
+    let live = |app: Arc<App>, key: String| async move {
+        let mut conn = app.db.acquire().await.unwrap();
+        load_api_key(&mut conn, &key, None, &SecuritySettings::default(), opensign_core::context::now()).await.unwrap().is_some()
+    };
+    assert!(live(app.clone(), created.key.clone()).await);
+
+    for token in ["old-link", "newer-link"] {
+        sqlx::query("insert into password_reset_tokens (id, user_id, expires_at) values ($1, $2, now() + interval '1 hour')")
+            .bind(sha256_hex(token))
+            .bind(admin_id)
+            .execute(&app.db)
+            .await
+            .unwrap();
+    }
+    let anon = web(&app);
+    let reset = |token: &str| auth::ResetPasswordInput { token: token.into(), password: "another long enough password 7".into() };
+    call::<auth::ResetPassword>(&anon, reset("newer-link")).await.unwrap();
+    assert!(!live(app.clone(), created.key).await, "a key made with a stolen session does not outlast the reset");
+    assert!(call::<auth::ResetPassword>(&anon, reset("old-link")).await.is_err(), "the other link died with the change");
+}
+
+#[tokio::test]
+async fn invites_end_with_the_inviter_and_admins_cannot_all_leave() {
+    let Some(app) = app().await else { return };
+    let admin = first_admin(&app).await;
+    let bo = second_admin(&app, "bo@example.com").await;
+    let bo_session = signed_in(&app, call::<auth::Login>(&web(&app), login("bo@example.com", PASSWORD)).await.unwrap()).await;
+    // The invitation stands whether or not the mail goes out; this test knows no mail server.
+    let _ = call::<users::Invite>(&bo_session, users::InviteInput { email: "new@example.com".into(), name: None, role: Role::Admin }).await;
+    let invited = sqlx::query("update invites set token_hash = $1").bind(sha256_hex("invite-token")).execute(&app.db).await.unwrap();
+    assert_eq!(invited.rows_affected(), 1);
+
+    let demote = users::UpdateInput { id: bo, name: None, role: Some(Role::Sender), active: None };
+    call::<users::Update>(&admin, demote).await.unwrap();
+    let accept = users::AcceptInput { token: "invite-token".into(), name: "New".into(), password: PASSWORD.into() };
+    assert!(call::<users::AcceptInvite>(&web(&app), accept).await.is_err(), "the demoted admin's invitation is gone");
+
+    let promote = users::UpdateInput { id: bo, name: None, role: Some(Role::Admin), active: None };
+    call::<users::Update>(&admin, promote).await.unwrap();
+    let bo_session = signed_in(&app, call::<auth::Login>(&web(&app), login("bo@example.com", PASSWORD)).await.unwrap()).await;
+    let ada = admin.actor.as_ref().unwrap().user_id;
+    let (first, second) = tokio::join!(
+        call::<users::Update>(&admin, users::UpdateInput { id: bo, name: None, role: Some(Role::Sender), active: None }),
+        call::<users::Update>(&bo_session, users::UpdateInput { id: ada, name: None, role: Some(Role::Sender), active: None }),
+    );
+    assert!(first.is_ok() != second.is_ok(), "exactly one of two admins demoting each other goes through");
+    let admins: i64 = sqlx::query_scalar("select count(*) from users where role = 'admin' and active").fetch_one(&app.db).await.unwrap();
+    assert_eq!(admins, 1);
+}
+
+#[tokio::test]
+async fn a_passkey_counter_that_stops_growing_is_refused() {
+    use opensign_core::services::passkeys;
+    let Some(app) = app().await else { return };
+    let admin = first_admin(&app).await;
+    let mut device = device_for(&app, 15);
+    add_passkey(&admin, &device).await;
+    let anon = web(&app);
+    let answer = |device: &passkey::Authenticator, state: String, options: &serde_json::Value| {
+        use base64::Engine;
+        let (client, data, signature) = device.assert(options);
+        passkeys::SignInInput {
+            state,
+            credential_id: base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&device.id),
+            client_data_json: client,
+            authenticator_data: data,
+            signature,
+            user_handle: None,
+        }
+    };
+
+    let begin = call::<passkeys::BeginSignIn>(&anon, Empty {}).await.unwrap();
+    let no_counter = answer(&device, begin.state, &begin.options);
+    call::<passkeys::SignIn>(&anon, no_counter).await.expect("an authenticator without a counter reports 0");
+
+    device.count = 5;
+    let begin = call::<passkeys::BeginSignIn>(&anon, Empty {}).await.unwrap();
+    let counting = answer(&device, begin.state, &begin.options);
+    call::<passkeys::SignIn>(&anon, counting).await.unwrap();
+
+    device.count = 0;
+    let begin = call::<passkeys::BeginSignIn>(&anon, Empty {}).await.unwrap();
+    let copied = answer(&device, begin.state, &begin.options);
+    assert_eq!(kind(call::<passkeys::SignIn>(&anon, copied).await), ErrorKind::Unauthorized, "once counted, 0 is not higher");
 }

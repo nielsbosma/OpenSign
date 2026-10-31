@@ -52,7 +52,7 @@ struct Caller {
 async fn caller(state: &AppState, parts: &Parts, surface: Surface, limit: Option<Limit>) -> Result<Caller, Box<Response>> {
     let request_id = parts.extensions.get::<RequestId>().map(|r| r.0.clone()).unwrap_or_default();
     let peer = parts.extensions.get::<ConnectInfo<SocketAddr>>().map(|c| c.0);
-    let ip = security::client_ip(&parts.headers, peer);
+    let ip = security::client_ip(state, &parts.headers, peer).await;
     if let Some(limit) = limit
         && !state.limiter.allow(limit, ip)
     {
@@ -62,6 +62,29 @@ async fn caller(state: &AppState, parts: &Parts, surface: Surface, limit: Option
         .await
         .map(|ctx| Caller { ctx, request_id: request_id.clone() })
         .map_err(|e| Box::new(ApiError(e, Some(request_id)).into_response()))
+}
+
+/// A signed-in person on the file routes, which are outside the services: the same check as
+/// `service::authorize`, including the two-factor setup an admin requires first.
+fn member(ctx: &Ctx) -> Result<(), opensign_core::AppError> {
+    let actor = ctx.actor()?;
+    if actor.must_enable_two_factor {
+        return Err(opensign_core::AppError::new(
+            opensign_core::ErrorKind::Forbidden,
+            "Set up two-factor authentication first. Your administrator requires it.",
+        ));
+    }
+    Ok(())
+}
+
+/// May add files to documents. Decided before the upload is read, so nobody else can make the
+/// server hold one in memory.
+fn may_upload(ctx: &Ctx) -> Result<(), opensign_core::AppError> {
+    member(ctx)?;
+    if !ctx.can(opensign_core::Permission::DocumentsCreate) {
+        return Err(opensign_core::error::forbidden());
+    }
+    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -81,7 +104,7 @@ pub async fn document_file(State(state): State<AppState>, Path(id): Path<Uuid>, 
         Some(_) => return ApiError(bad_request("version is signed or original"), None).into_response(),
     };
     let result = async {
-        caller.ctx.actor()?;
+        member(&caller.ctx)?;
         let mut conn = caller.ctx.db().acquire().await?;
         let record = docs::document_file(&caller.ctx, &mut conn, id, version).await?;
         let body = read_file(&caller.ctx.app.storage, caller.ctx.keys(), &record).await?;
@@ -106,7 +129,7 @@ pub async fn preview(State(state): State<AppState>, Path(id): Path<Uuid>, Query(
         Err(r) => return *r,
     };
     let result = async {
-        caller.ctx.actor()?;
+        member(&caller.ctx)?;
         docs::preview_pdf(&caller.ctx, id, q.version).await
     }
     .await;
@@ -138,6 +161,9 @@ pub async fn upload(State(state): State<AppState>, Path(id): Path<Uuid>, request
         Err(r) => return *r,
     };
     let fail = |e| ApiError(e, Some(caller.request_id.clone())).into_response();
+    if let Err(e) = may_upload(&caller.ctx) {
+        return fail(e);
+    }
     let mut multipart = match Multipart::from_request(Request::from_parts(parts, body), &state).await {
         Ok(m) => m,
         Err(_) => return fail(bad_request("Send the file as multipart/form-data")),
@@ -163,12 +189,6 @@ pub async fn upload(State(state): State<AppState>, Path(id): Path<Uuid>, request
         }
     }
     let Some((name, bytes)) = file else { return fail(bad_request("Attach the document as the `file` field")) };
-    if let Err(e) = caller.ctx.actor() {
-        return fail(e);
-    }
-    if !caller.ctx.can(opensign_core::Permission::DocumentsCreate) {
-        return fail(opensign_core::error::forbidden());
-    }
     match docs::add_file(&caller.ctx, id, &name, bytes, options).await {
         Ok(output) => Json(output).into_response(),
         Err(e) => fail(e),
@@ -183,11 +203,8 @@ pub async fn replace(State(state): State<AppState>, Path((id, file_id)): Path<(U
         Err(r) => return *r,
     };
     let result = async {
+        may_upload(&caller.ctx)?;
         let (name, bytes) = multipart_file(&state, parts, body).await?;
-        caller.ctx.actor()?;
-        if !caller.ctx.can(opensign_core::Permission::DocumentsCreate) {
-            return Err(opensign_core::error::forbidden());
-        }
         docs::replace_file(&caller.ctx, id, file_id, &name, bytes).await
     }
     .await;
@@ -220,7 +237,7 @@ pub async fn document_attachment(State(state): State<AppState>, Path((id, reques
         Err(r) => return *r,
     };
     let result = async {
-        caller.ctx.actor()?;
+        member(&caller.ctx)?;
         let mut conn = caller.ctx.db().acquire().await?;
         let record = docs::attachment_file(&caller.ctx, &mut conn, id, request).await?;
         let body = read_file(&caller.ctx.app.storage, caller.ctx.keys(), &record).await?;
@@ -506,7 +523,7 @@ pub async fn review_pdf(State(state): State<AppState>, Path(token): Path<String>
 
 /// `GET /api/transfers/<token>`: a download link from `documents.download_url`.
 pub async fn transfer_download(State(state): State<AppState>, Path(token): Path<String>, parts: Parts) -> Response {
-    let ip = security::client_ip(&parts.headers, parts.extensions.get::<ConnectInfo<SocketAddr>>().map(|c| c.0));
+    let ip = security::client_ip(&state, &parts.headers, parts.extensions.get::<ConnectInfo<SocketAddr>>().map(|c| c.0)).await;
     if !state.limiter.allow(security::UPLOAD, ip) {
         return security::too_many();
     }
@@ -526,9 +543,12 @@ pub async fn transfer_download(State(state): State<AppState>, Path(token): Path<
 pub async fn transfer_upload(State(state): State<AppState>, Path(token): Path<String>, request: Request) -> Response {
     let (parts, body) = request.into_parts();
     let request_id = parts.extensions.get::<RequestId>().map(|r| r.0.clone()).unwrap_or_default();
-    let ip = security::client_ip(&parts.headers, parts.extensions.get::<ConnectInfo<SocketAddr>>().map(|c| c.0));
+    let ip = security::client_ip(&state, &parts.headers, parts.extensions.get::<ConnectInfo<SocketAddr>>().map(|c| c.0)).await;
     if !state.limiter.allow(security::UPLOAD, ip) {
         return security::too_many();
+    }
+    if let Err(e) = transfers::check_upload_link(&state.app, &token) {
+        return ApiError(e, Some(request_id)).into_response();
     }
     let Ok(bytes) = to_bytes(body, transfers::MAX_UPLOAD_BYTES).await else {
         return ApiError(bad_request("The upload was interrupted or is too large"), Some(request_id)).into_response();

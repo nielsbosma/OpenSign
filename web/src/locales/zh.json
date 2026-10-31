@@ -1055,5 +1055,18 @@
   "Runs queued again: {count}": "已重新加入队列的运行：{count}",
   "Run {count} Failed Again": "再次运行 {count} 个失败项",
   "No runs yet": "尚无运行记录",
-  "Run": "运行"
+  "Run": "运行",
+  "Use Your Passkey": "使用您的通行密钥",
+  "Your password was right. This account signs in with its passkey too.": "密码正确。此账户还需要使用通行密钥登录。",
+  "Use Passkey": "使用通行密钥",
+  "Use a Passkey": "使用通行密钥",
+  "Confirm It Is You": "确认是您本人",
+  "Confirm with your password or passkey before you continue. This lasts for ten minutes.": "请先用密码或通行密钥确认后再继续。确认有效期为十分钟。",
+  "Unverified App": "未经验证的应用",
+  "Access goes to {domain}": "访问权限将授予 {domain}",
+  "Anyone can register an app under any name. Allow it only if you started this and you expect that domain.": "任何人都可以用任意名称注册应用。只有在此操作由您发起且您认可该域名时才允许。",
+  "Trusted Proxies": "受信任的代理",
+  "Who may state a visitor's address: private for any proxy on a private network, none when OpenSign faces the internet directly, or the addresses and ranges of your own proxies.": "谁可以声明访问者的地址:private 表示专用网络上的任何代理,none 表示 OpenSign 直接面向互联网,或填写您自己代理的地址和范围。",
+  "Allow New MCP Clients to Register": "允许新的 MCP 客户端注册",
+  "Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.": "Claude 等应用在首次连接时会自行注册。关闭后,只有之前已注册的应用才能连接。"
 }

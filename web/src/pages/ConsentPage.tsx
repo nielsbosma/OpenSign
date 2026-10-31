@@ -2,6 +2,8 @@ import { Plug } from 'lucide-react';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { Spinner } from '@/components/common';
+import { needsStepUp, StepUpDialog } from '@/components/StepUpDialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { call, errorMessage, useApi } from '@/lib/api';
 import { t } from '@/lib/i18n';
@@ -16,6 +18,7 @@ export function ConsentPage() {
   const describe = useApi('oauth.describe', { request }, { enabled: !!request, retry: false });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [stepUp, setStepUp] = useState(false);
 
   const decide = async (approve: boolean) => {
     setBusy(true);
@@ -24,7 +27,8 @@ export function ConsentPage() {
       const out = await call(approve ? 'oauth.approve' : 'oauth.deny', { request });
       window.location.assign(out.redirectUrl);
     } catch (e) {
-      setError(errorMessage(e));
+      if (needsStepUp(e)) setStepUp(true);
+      else setError(errorMessage(e));
       setBusy(false);
     }
   };
@@ -50,10 +54,17 @@ export function ConsentPage() {
         <div className="flex items-center gap-3 rounded-md border p-3">
           <Plug className="size-5 shrink-0 text-primary" />
           <div className="min-w-0">
-            <div className="truncate font-medium">{client.clientName}</div>
-            <div className="truncate text-xs text-muted-foreground">{t('Returns to {host}', { host: client.redirectHost })}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="break-words font-medium">{client.clientName}</span>
+              <Badge variant="outline">{t('Unverified App')}</Badge>
+            </div>
+            <div className="break-all font-medium">{t('Access goes to {domain}', { domain: client.redirectDomain })}</div>
+            <div className="break-all text-xs text-muted-foreground">{t('Returns to {host}', { host: client.redirectHost })}</div>
           </div>
         </div>
+        <p className="text-muted-foreground">
+          {t('Anyone can register an app under any name. Allow it only if you started this and you expect that domain.')}
+        </p>
         <p className="text-muted-foreground">
           {t(
             'It can do anything you can do in OpenSign as {name}, including reading and sending documents, until you disconnect it in Settings.',
@@ -68,6 +79,14 @@ export function ConsentPage() {
           {t('Deny')}
         </Button>
       </div>
+      <StepUpDialog
+        open={stepUp}
+        onOpenChange={setStepUp}
+        onConfirmed={() => {
+          setStepUp(false);
+          void decide(true);
+        }}
+      />
     </AuthLayout>
   );
 }

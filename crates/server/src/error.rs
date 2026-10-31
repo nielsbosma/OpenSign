@@ -31,6 +31,9 @@ impl IntoResponse for ApiError {
             };
             return json_error(status, &kind, &message);
         }
+        if let Some(code) = error.code {
+            return (status, Json(json!({ "error": error.message, "kind": kind, "code": code }))).into_response();
+        }
         json_error(status, &kind, &error.message)
     }
 }

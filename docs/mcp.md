@@ -27,8 +27,8 @@ If two-factor sign-in is required on the install and you have not set it up yet,
 | --- | --- |
 | `/.well-known/oauth-protected-resource` | RFC 9728 resource metadata. A `401` points here |
 | `/.well-known/oauth-authorization-server` | RFC 8414 server metadata |
-| `POST /oauth/register` | Dynamic client registration (public clients, no secret) |
-| `GET /oauth/authorize` | Authorization code with PKCE (S256 only); the user approves on a consent page |
+| `POST /oauth/register` | Dynamic client registration (public clients, no secret). Turned off with **Allow New MCP Clients to Register** in **Settings → Security**; a client that was never approved is removed after a week |
+| `GET /oauth/authorize` | Authorization code with PKCE (S256 only); the user approves on a consent page, which shows the domain that gets access, and confirms their password or passkey if they signed in more than ten minutes ago. A bad request is shown in the browser until someone has approved the client |
 | `POST /oauth/token` | `authorization_code` and `refresh_token` grants |
 | `POST /oauth/revoke` | Token revocation |
 

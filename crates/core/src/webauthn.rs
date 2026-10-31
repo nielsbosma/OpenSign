@@ -143,7 +143,8 @@ pub fn verify_assertion(
     if !PublicKey::from_cose(&key)?.verify(&signed, signature) {
         return Err(AppError::new(ErrorKind::Unauthorized, "The passkey could not be verified"));
     }
-    if data.sign_count != 0 && data.sign_count <= stored_count {
+    // Authenticators without a counter always report 0; once a counter has been seen it must grow.
+    if (stored_count > 0 || data.sign_count > 0) && data.sign_count <= stored_count {
         return Err(AppError::new(ErrorKind::Unauthorized, "This passkey may have been copied. Remove it and add it again."));
     }
     Ok(data.sign_count)

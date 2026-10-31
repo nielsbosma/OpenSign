@@ -1055,5 +1055,18 @@
   "Runs queued again: {count}": "Ejecuciones en cola de nuevo: {count}",
   "Run {count} Failed Again": "Ejecutar de nuevo {count} fallidas",
   "No runs yet": "Aún no hay ejecuciones",
-  "Run": "Ejecución"
+  "Run": "Ejecución",
+  "Use Your Passkey": "Usa tu clave de acceso",
+  "Your password was right. This account signs in with its passkey too.": "Tu contraseña es correcta. Esta cuenta también inicia sesión con su clave de acceso.",
+  "Use Passkey": "Usar clave de acceso",
+  "Use a Passkey": "Usar una clave de acceso",
+  "Confirm It Is You": "Confirma que eres tú",
+  "Confirm with your password or passkey before you continue. This lasts for ten minutes.": "Confirma con tu contraseña o clave de acceso antes de continuar. Dura diez minutos.",
+  "Unverified App": "Aplicación no verificada",
+  "Access goes to {domain}": "El acceso va a {domain}",
+  "Anyone can register an app under any name. Allow it only if you started this and you expect that domain.": "Cualquiera puede registrar una aplicación con cualquier nombre. Permítela solo si lo iniciaste tú y esperas ese dominio.",
+  "Trusted Proxies": "Proxies de confianza",
+  "Who may state a visitor's address: private for any proxy on a private network, none when OpenSign faces the internet directly, or the addresses and ranges of your own proxies.": "Quién puede indicar la dirección de un visitante: private para cualquier proxy en una red privada, none cuando OpenSign da directamente a internet, o las direcciones y rangos de tus propios proxies.",
+  "Allow New MCP Clients to Register": "Permitir que se registren nuevos clientes MCP",
+  "Apps like Claude register themselves the first time they connect. Off, only those that registered earlier can connect.": "Las aplicaciones como Claude se registran solas la primera vez que se conectan. Desactivado, solo pueden conectarse las que ya se registraron."
 }
