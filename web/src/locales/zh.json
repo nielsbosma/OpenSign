@@ -1055,5 +1055,7 @@
   "Runs queued again: {count}": "已重新加入队列的运行：{count}",
   "Run {count} Failed Again": "再次运行 {count} 个失败项",
   "No runs yet": "尚无运行记录",
-  "Run": "运行"
+  "Run": "运行",
+  "API Key SID": "API 密钥 SID",
+  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "仅限 Twilio。使用 API 密钥时，请将其密钥填入上方字段。留空则使用 Auth Token。"
 }

@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- SMS through Twilio with an API key instead of the Auth Token, and with a Messaging Service as the sender.
+
 ## [0.1.0] - 2026-10-29
 
 The first release: electronic signatures you run yourself, in one Docker image with Postgres and an S3 bucket.

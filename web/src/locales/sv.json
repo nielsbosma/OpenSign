@@ -1055,5 +1055,7 @@
   "Runs queued again: {count}": "Körningar köade igen: {count}",
   "Run {count} Failed Again": "Kör {count} misslyckade igen",
   "No runs yet": "Inga körningar än",
-  "Run": "Körning"
+  "Run": "Körning",
+  "API Key SID": "SID för API-nyckel",
+  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "Bara Twilio. Med en API-nyckel skriver du dess hemlighet i fältet ovanför. Lämna tomt för att använda Auth Token."
 }
