@@ -3,7 +3,7 @@ use hmac::{Hmac, Mac};
 use opensign_crypto::KeyPurpose;
 use serde_json::{Value, json};
 use sha2::Sha256;
-use sqlx::PgConnection;
+use sqlx::{Connection, PgConnection};
 use uuid::Uuid;
 
 use super::{Delivery, DocumentRow, PartyRole, PartyRow, current_turn, parties, party, signer_url, status};
@@ -105,18 +105,20 @@ pub async fn notify_party(ctx: &Ctx, conn: &mut PgConnection, party_id: Uuid, re
         }
         _ => {}
     }
+    let mut tx = conn.begin().await?;
     sqlx::query("update parties set notified_at = $2, status = case when status = 'waiting' then 'notified' else status end, updated_at = now() where id = $1")
         .bind(party.id)
         .bind(ctx.now)
-        .execute(&mut *conn)
+        .execute(&mut *tx)
         .await?;
     audit(
         ctx,
-        conn,
+        &mut tx,
         Entry::new(if reminder { "party.reminded" } else { "party.notified" }, "document", document.id)
             .metadata(json!({ "party": party.id, "name": party.name, "channel": party.delivery })),
     )
     .await?;
+    tx.commit().await?;
     Ok(())
 }
 

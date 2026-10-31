@@ -44,6 +44,13 @@ pub struct SignatureCheck {
     /// checks RSA of 2048 bits or more and ECDSA P-256 or P-384, with SHA-2).
     pub signature_valid: Option<bool>,
     pub timestamp: Option<DateTime<Utc>>,
+    /// SHA-256 of the certificate that signed the checked time stamp.
+    #[serde(default)]
+    pub timestamp_authority_sha256: Option<String>,
+    /// True when that certificate is on the install's list. Anyone can run a time stamp authority, so
+    /// without this a time says only that the token checks out. Filled in by the caller.
+    #[serde(default)]
+    pub timestamp_trusted: bool,
     /// The overall verdict: the bytes are as signed and the cryptography checks out.
     pub intact: bool,
     /// SHA-256 of the signer's certificate, when the signature verifies with it.
@@ -119,6 +126,8 @@ fn check_one(pdf: &[u8], doc: &Document, dict: &lopdf::Dictionary, changes: &mut
         digest_matches: false,
         signature_valid: None,
         timestamp: None,
+        timestamp_authority_sha256: None,
+        timestamp_trusted: false,
         intact: false,
         signer_certificate_sha256: None,
         trusted: false,
@@ -213,6 +222,7 @@ fn check_document_timestamp(contents: &[u8], digest: &[u8; 32], check: &mut Sign
     match crate::tsa::check_authority(&token) {
         Ok(()) => {
             check.signature_valid = Some(true);
+            check.timestamp_authority_sha256 = time.and(crate::tsa::authority_fingerprint(&token));
             check.timestamp = time;
         }
         Err(problem) => {
@@ -469,7 +479,10 @@ fn check_cms(contents: &[u8], digest: &[u8; 32], check: &mut SignatureCheck) -> 
         let token = token.to_der().map_err(|e| e.to_string())?;
         // A time only counts once its token has been checked: this one is also shown to people.
         match (crate::tsa::token_time(&token, signer.signature.as_bytes()), crate::tsa::check_authority(&token)) {
-            (Ok(time), Ok(())) => check.timestamp = Some(time),
+            (Ok(time), Ok(())) => {
+                check.timestamp = Some(time);
+                check.timestamp_authority_sha256 = crate::tsa::authority_fingerprint(&token);
+            }
             (Err(e), _) => check.problems.push(e.to_string()),
             (_, Err(problem)) => check.problems.push(problem),
         }

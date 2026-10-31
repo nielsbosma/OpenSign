@@ -2306,7 +2306,7 @@ pub async fn read_signatures_public(bytes: Vec<u8>) -> Result<(String, Vec<opens
 }
 
 /// Checks a PDF's signatures and whether this server sealed exactly these bytes.
-pub async fn verify_pdf(conn: &mut PgConnection, bytes: Vec<u8>) -> Result<VerifyOutput> {
+pub async fn verify_pdf(ctx: &Ctx, conn: &mut PgConnection, bytes: Vec<u8>) -> Result<VerifyOutput> {
     if !bytes.windows(5).take(1024).any(|w| w == b"%PDF-") {
         return Err(bad_request("This is not a PDF file"));
     }
@@ -2315,11 +2315,12 @@ pub async fn verify_pdf(conn: &mut PgConnection, bytes: Vec<u8>) -> Result<Verif
         .await
         .map_err(AppError::internal)?
         .map_err(|_| bad_request("This PDF could not be read"))?;
-    compare_with_seals(conn, sha256, signatures).await
+    compare_with_seals(ctx, conn, sha256, signatures).await
 }
 
 /// Says which of the signatures are this server's own, and which document they sealed.
 pub async fn compare_with_seals(
+    ctx: &Ctx,
     conn: &mut PgConnection,
     sha256: String,
     mut signatures: Vec<opensign_pdf::SignatureCheck>,
@@ -2327,8 +2328,12 @@ pub async fn compare_with_seals(
     let chains: Vec<Vec<String>> = sqlx::query_scalar("select chain from seal_identities").fetch_all(&mut *conn).await?;
     let ours: HashSet<String> =
         chains.iter().filter_map(|chain| chain.first()).filter_map(|leaf| B64.decode(leaf).ok()).map(|der| sha256_hex(&der)).collect();
+    let signing: crate::settings::SigningSettings = settings(ctx, conn).await?;
+    let authorities = signing.trusted_authorities();
     for signature in &mut signatures {
         signature.trusted = signature.intact && signature.signer_certificate_sha256.as_ref().is_some_and(|sha| ours.contains(sha));
+        signature.timestamp_trusted =
+            signature.timestamp.is_some() && signature.timestamp_authority_sha256.as_ref().is_some_and(|sha| authorities.contains(sha));
     }
     // A matching hash alone would also vouch for a stored file whose seal no longer holds.
     let document = if signatures.iter().any(|s| s.trusted) {
@@ -2345,6 +2350,54 @@ pub async fn compare_with_seals(
     Ok(VerifyOutput { sha256, signatures, document })
 }
 
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PartyIdentityInput {
+    pub document_id: Uuid,
+    pub party_id: Uuid,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PartyIdentityOutput {
+    /// How the party identified, with the personal number or phone number in full. Null when they have not signed.
+    pub identity: Option<String>,
+}
+
+pub struct PartyIdentity;
+
+#[async_trait]
+impl Service for PartyIdentity {
+    type Input = PartyIdentityInput;
+    type Output = PartyIdentityOutput;
+    const META: Meta = Meta::mutation(
+        "documents.party_identity",
+        "Show how a party identified with their personal number or phone number in full, which the sealed evidence masks. Use it only when that is needed, for example in a dispute. Every use is audited.",
+        Access::Permission(Permission::DocumentsReadAll),
+    )
+    .not_a_tool("It returns personal numbers.");
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: PartyIdentityInput) -> Result<PartyIdentityOutput> {
+        let document = load_document(ctx, conn, input.document_id, Need::Read).await?;
+        let evidence: Option<Value> = sqlx::query_scalar("select evidence from parties where id = $1 and document_id = $2")
+            .bind(input.party_id)
+            .bind(document.id)
+            .fetch_optional(&mut *conn)
+            .await?
+            .ok_or_else(|| crate::error::not_found("Party"))?;
+        let sealed = evidence.as_ref().and_then(|e| e["identityFull"].as_str().or(e["identity"].as_str()));
+        let identity = sealed
+            .map(|s| {
+                crate::documents::open_sealed_identity(ctx.keys(), input.party_id, s)
+                    .ok_or_else(|| AppError::internal(anyhow::anyhow!("party identity cannot be opened")))
+            })
+            .transpose()?;
+        audit(ctx, conn, Entry::new("document.party_identity_read", "document", document.id).metadata(json!({ "party": input.party_id })))
+            .await?;
+        Ok(PartyIdentityOutput { identity })
+    }
+}
+
 pub struct Verify;
 
 #[async_trait]
@@ -2358,12 +2411,12 @@ impl Service for Verify {
     )
     .tool();
 
-    async fn run(_ctx: &Ctx, conn: &mut PgConnection, input: VerifyInput) -> Result<VerifyOutput> {
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: VerifyInput) -> Result<VerifyOutput> {
         if input.content_base64.len() > 70 * 1024 * 1024 {
             return Err(bad_request("The file is too large"));
         }
         let bytes = B64.decode(input.content_base64.trim()).map_err(|_| bad_request("contentBase64 is not valid base64"))?;
-        verify_pdf(conn, bytes).await
+        verify_pdf(ctx, conn, bytes).await
     }
 }
 

@@ -223,6 +223,13 @@ const GROUPS: Record<Group, { title: string; description: string; help?: string;
       { key: 'sealName', label: msg('Seal Name'), hint: msg('Shown as the signer of the seal. Empty: the organisation name.') },
       { key: 'reason', label: msg('Signature Reason') },
       { key: 'tsaUrl', label: msg('Timestamp Authority (RFC 3161)'), placeholder: 'http://timestamp.digicert.com' },
+      {
+        key: 'trustedTimestampAuthorities',
+        label: msg('Trusted Timestamp Authorities'),
+        hint: msg(
+          'SHA-256 fingerprints of the certificates to trust, separated by commas. Verify then says which time stamps come from them.',
+        ),
+      },
     ],
   },
   ai: {

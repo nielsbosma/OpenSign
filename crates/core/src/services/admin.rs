@@ -222,6 +222,12 @@ async fn update<G: SettingsGroup>(ctx: &Ctx, conn: &mut PgConnection, patch: &Va
 
 pub(crate) fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
     let value = serde_json::to_value(group).map_err(AppError::internal)?;
+    if let Ok(signing) = serde_json::from_value::<SigningSettings>(value.clone())
+        && G::NAME == "signing"
+        && signing.trusted_authorities().iter().any(|sha| sha.len() != 64 || !sha.bytes().all(|b| b.is_ascii_hexdigit()))
+    {
+        return Err(bad_request("Each trusted time stamp authority is a SHA-256 fingerprint of 64 hex characters"));
+    }
     let url = |field: &str| -> Result<()> {
         if let Some(u) = value.get(field).and_then(Value::as_str).filter(|u| !u.is_empty()) {
             crate::net::check_outbound_url(u, G::NAME == "signing").map_err(bad_request)?;

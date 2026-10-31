@@ -245,11 +245,28 @@ pub struct SigningSettings {
     pub tsa_url: String,
     pub seal_name: String,
     pub reason: String,
+    /// SHA-256 fingerprints of the time stamp certificates to trust, separated by commas or new lines.
+    pub trusted_timestamp_authorities: String,
+}
+
+impl SigningSettings {
+    pub fn trusted_authorities(&self) -> std::collections::HashSet<String> {
+        self.trusted_timestamp_authorities
+            .split([',', '\n', '\r', ' '])
+            .filter(|s| !s.is_empty())
+            .map(|s| s.replace(':', "").to_ascii_lowercase())
+            .collect()
+    }
 }
 
 impl Default for SigningSettings {
     fn default() -> Self {
-        Self { tsa_url: "http://timestamp.digicert.com".into(), seal_name: String::new(), reason: "Signed with OpenSign".into() }
+        Self {
+            tsa_url: "http://timestamp.digicert.com".into(),
+            seal_name: String::new(),
+            reason: "Signed with OpenSign".into(),
+            trusted_timestamp_authorities: String::new(),
+        }
     }
 }
 

@@ -15,6 +15,7 @@ type Signature = {
   intact: boolean;
   trusted: boolean;
   timestamp?: string | null;
+  timestampTrusted: boolean;
   problems: string[];
 };
 
@@ -94,6 +95,7 @@ export function VerifyPage() {
                       {[
                         s.kind === 'documentTimestamp' ? s.signer : s.reason,
                         s.timestamp ? t('timestamped {date}', { date: formatDateTime(s.timestamp) }) : null,
+                        s.timestampTrusted ? t('by a trusted timestamp authority') : null,
                         s.onlyValidationDataAdded ? t('only validation data was added after it') : null,
                         s.kind === 'signature' && s.intact && !s.trusted
                           ? t('Signed by someone other than this server. The file is intact, but nothing here confirms who they are.')

@@ -1390,6 +1390,18 @@ export type MoveOutput = {
   moved: number;
 };
 
+export type DocumentsPartyIdentityInput = {
+  documentId: string;
+  partyId: string;
+};
+
+export type DocumentsPartyIdentityOutput = PartyIdentityOutput;
+
+export type PartyIdentityOutput = {
+  /** How the party identified, with the personal number or phone number in full. Null when they have not signed. */
+  identity?: string | null;
+};
+
 export type DocumentsRemindInput = {
   id: string;
 };
@@ -2685,6 +2697,7 @@ export interface Services {
   "documents.legal_hold": { kind: "mutation"; input: DocumentsLegalHoldInput; output: DocumentsLegalHoldOutput };
   "documents.list": { kind: "query"; input: DocumentsListInput; output: DocumentsListOutput };
   "documents.move": { kind: "mutation"; input: DocumentsMoveInput; output: DocumentsMoveOutput };
+  "documents.party_identity": { kind: "mutation"; input: DocumentsPartyIdentityInput; output: DocumentsPartyIdentityOutput };
   "documents.remind": { kind: "mutation"; input: DocumentsRemindInput; output: DocumentsRemindOutput };
   "documents.remove_file": { kind: "mutation"; input: DocumentsRemoveFileInput; output: DocumentsRemoveFileOutput };
   "documents.replace_file": { kind: "mutation"; input: DocumentsReplaceFileInput; output: DocumentsReplaceFileOutput };

@@ -278,6 +278,10 @@ pub fn seal_identity(keys: &Keys, party_id: Uuid, identity: &str) -> String {
     keys.encrypt_str(KeyPurpose::Settings, &identity_context(party_id), identity)
 }
 
+pub fn open_sealed_identity(keys: &Keys, party_id: Uuid, sealed: &str) -> Option<String> {
+    keys.decrypt_str(KeyPurpose::Settings, &identity_context(party_id), sealed).ok().map(|s| s.to_string())
+}
+
 fn mask_tail(value: &str, keep: usize) -> String {
     let length = value.chars().count();
     value.chars().enumerate().map(|(i, c)| if i + keep < length && c.is_ascii_alphanumeric() { 'x' } else { c }).collect()

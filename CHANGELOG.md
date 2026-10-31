@@ -16,6 +16,10 @@ A security review of 0.1.0 led to this round of hardening. Update as soon as you
 - Broker and TIC Identity results are bound to the browser that started them. From a framed signing page, the person also enters a code shown in the identification window. Sealed evidence masks personal numbers and phone numbers.
 - Files replaced on a draft or by a signer are destroyed. Legal hold also refuses edits and canceling.
 
+### Fixed
+
+- The assistant no longer turns the whole page blank when a message arrives, in browsers where `scrollIntoView` returns a promise.
+
 ### Changed
 
 - Creating an API key or approving an MCP client can ask for your password or passkey again. Password and two-factor resets revoke API keys and tell the owner.
@@ -29,7 +33,8 @@ A security review of 0.1.0 led to this round of hardening. Update as soon as you
 
 ### Added
 
-- Admin settings: **Trusted Proxies**, a switch for dynamic MCP client registration, an SMS country allowlist and SMS budgets.
+- `documents.party_identity` shows how a party identified with the number in full, for anyone who may see all documents, and audits each use.
+- Admin settings: **Trusted Timestamp Authorities**, **Trusted Proxies**, a switch for dynamic MCP client registration, an SMS country allowlist and SMS budgets.
 - A per-user hourly limit on assistant model calls.
 
 ## [0.1.0] - 2026-10-29

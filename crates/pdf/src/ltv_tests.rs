@@ -540,6 +540,18 @@ fn assert_refused(pdf: &[u8]) {
 const HIDDEN: &str = "5000 0 obj\n<</Length 44>>stream\nBT /F1 24 Tf 72 600 Td (Pay 1000000) Tj ET   \nendstream\nendobj\n";
 
 #[test]
+fn a_time_stamp_names_its_authority() {
+    let sealed = sealed_with_timestamp().sealed;
+    let checks = verify_signatures(&sealed).unwrap();
+    assert!(
+        checks.iter().all(|c| c.timestamp.is_none() || c.timestamp_authority_sha256.as_ref().is_some_and(|sha| sha.len() == 64)),
+        "{checks:?}"
+    );
+    assert!(checks.iter().any(|c| c.timestamp_authority_sha256.is_some()), "{checks:?}");
+    assert!(checks.iter().all(|c| !c.timestamp_trusted), "only the caller, with the list, can say");
+}
+
+#[test]
 fn bytes_after_the_seal_that_no_table_lists_break_it() {
     let sealed = sealed_with_timestamp().sealed;
     assert!(verify_signatures(&raw_update(&sealed, &[], &[], "")).unwrap()[0].only_validation_data_added);

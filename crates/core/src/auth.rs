@@ -5,6 +5,7 @@ use chrono::{DateTime, Duration, Utc};
 use ipnet::IpNet;
 use opensign_crypto::{burn_password_check, constant_time_eq, hash_password, random_token, sha256_hex, verify_password};
 use sqlx::PgConnection;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Semaphore;
 use uuid::Uuid;
 
@@ -60,10 +61,28 @@ pub fn normalize_email(email: &str) -> Result<String> {
 /// sign-ins from using up the memory or stalling everything else on the async workers.
 static PASSWORD_WORK: Semaphore = Semaphore::const_new(4);
 const PASSWORD_QUEUE: StdDuration = StdDuration::from_secs(10);
+/// Each one waiting holds a database connection, so a flood must not be able to take the whole pool.
+const PASSWORD_WAITING: usize = 8;
+static WAITING: AtomicUsize = AtomicUsize::new(0);
+
+struct InQueue<'a>(&'a AtomicUsize);
+
+impl Drop for InQueue<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+fn join_queue(waiting: &AtomicUsize, limit: usize) -> Option<InQueue<'_>> {
+    let place = InQueue(waiting);
+    (waiting.fetch_add(1, Ordering::SeqCst) < limit).then_some(place)
+}
 
 async fn password_work<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> Result<T> {
     let busy = || AppError::new(ErrorKind::Unavailable, "Too many sign-ins right now. Try again in a moment.");
+    let in_queue = join_queue(&WAITING, PASSWORD_WAITING).ok_or_else(busy)?;
     let permit = tokio::time::timeout(PASSWORD_QUEUE, PASSWORD_WORK.acquire()).await.map_err(|_| busy())?.map_err(|_| busy())?;
+    drop(in_queue);
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
         work()
@@ -355,5 +374,20 @@ mod tests {
         assert!(ips_no_wider(&s(&["10.0.0.0/8"]), &s(&["10.1.0.0/16", "10.0.0.5"])));
         assert!(!ips_no_wider(&s(&["10.1.0.0/16"]), &s(&["10.0.0.0/8"])));
         assert!(!ips_no_wider(&s(&["10.0.0.1"]), &s(&["10.0.0.1", "10.0.0.2"])));
+    }
+}
+
+#[cfg(test)]
+mod queue_tests {
+    use super::*;
+
+    #[test]
+    fn the_password_queue_is_bounded_and_gives_places_back() {
+        let waiting = AtomicUsize::new(0);
+        let first = join_queue(&waiting, 1);
+        assert!(first.is_some());
+        assert!(join_queue(&waiting, 1).is_none());
+        drop(first);
+        assert!(join_queue(&waiting, 1).is_some());
     }
 }

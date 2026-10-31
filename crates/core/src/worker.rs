@@ -21,9 +21,14 @@ fn id(job: &Job, key: &str) -> Result<Uuid> {
 }
 
 async fn run(ctx: &Ctx, job: &Job) -> Result<()> {
+    // Sending can take as long as the mail or SMS provider likes: no row stays locked meanwhile,
+    // or the party could not sign until it answers.
+    if job.kind == "notify_party" {
+        let mut conn = ctx.db().acquire().await?;
+        return notify::notify_party(ctx, &mut conn, id(job, "party")?, job.payload["reminder"].as_bool().unwrap_or(false)).await;
+    }
     let mut tx = ctx.db().begin().await?;
     match job.kind.as_str() {
-        "notify_party" => notify::notify_party(ctx, &mut tx, id(job, "party")?, job.payload["reminder"].as_bool().unwrap_or(false)).await?,
         "seal_document" => seal::seal_document(ctx, &mut tx, id(job, "document")?, job.attempts).await?,
         "notify_completed" => {
             let to = job.payload["to"].as_str().and_then(notify::Recipient::parse);

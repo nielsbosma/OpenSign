@@ -54,3 +54,7 @@ In **Settings → Signing and Seal**:
 - **Webhooks**: `document.completed` carries the sealed file's SHA-256. See [Webhooks](webhooks.md).
 
 Every download is recorded in the audit trail.
+
+## Trusted Timestamp Authorities
+
+Anyone can run a time stamp authority, so a checked time stamp alone only says that its token is sound. To have the verify page say which time stamps you trust, list the SHA-256 fingerprints of their certificates under **Trusted Timestamp Authorities** in Admin settings → Signing and Seal. The list is empty by default.

@@ -60,7 +60,9 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
   });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll when a message arrives
-  useEffect(() => end.current?.scrollIntoView({ block: 'end' }), [turns.length, chat.isPending]);
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: 'end' });
+  }, [turns.length, chat.isPending]);
 
   const busy = Object.values(answers).includes('busy');
   const answer = (key: string, value: Answer) => setAnswers((prev) => ({ ...prev, [key]: value }));

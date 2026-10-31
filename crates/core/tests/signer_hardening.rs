@@ -289,6 +289,23 @@ async fn sealed_evidence_shows_masked_numbers_and_a_handed_out_link() {
     let stored = serde_json::to_string(me.evidence.as_ref().unwrap()).unwrap();
     assert!(!stored.contains("46701234567"), "the full number stays encrypted");
     assert!(me.evidence.as_ref().unwrap()["identityFull"].is_string());
+    drop(conn);
+    let reveal = || docs::PartyIdentityInput { document_id: id, party_id: party };
+    assert!(call::<docs::PartyIdentity>(&sender, reveal()).await.is_err(), "the sender alone may not read the number");
+    let mut admin = sender.actor().unwrap().clone();
+    admin.role = Role::Admin;
+    admin.permissions = Role::Admin.permissions();
+    let admin = Ctx::new(app.clone(), Surface::Api).with_actor(admin);
+    let shown = call::<docs::PartyIdentity>(&admin, reveal()).await.unwrap();
+    assert!(shown.identity.unwrap().contains("46701234567"));
+    let mut conn = app.db.acquire().await.unwrap();
+    let audited: i64 =
+        sqlx::query_scalar("select count(*) from audit_log where action = 'document.party_identity_read' and entity_id = $1")
+            .bind(id.to_string())
+            .fetch_one(&mut *conn)
+            .await
+            .unwrap();
+    assert_eq!(audited, 1);
 
     let download = call::<docs::Download>(&sender, docs::DownloadInput { id, version: Some(Version::Signed) }).await.unwrap();
     let text = opensign_pdf::extract_text(&B64.decode(download.content_base64).unwrap()).unwrap().join("\n");

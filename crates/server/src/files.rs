@@ -386,7 +386,7 @@ pub async fn verify(State(state): State<AppState>, request: Request) -> Response
     let result = async {
         let (sha256, signatures) = docs::read_signatures_public(body.to_vec()).await?;
         let mut conn = caller.ctx.db().acquire().await?;
-        docs::compare_with_seals(&mut conn, sha256, signatures).await
+        docs::compare_with_seals(&caller.ctx, &mut conn, sha256, signatures).await
     }
     .await;
     match result {

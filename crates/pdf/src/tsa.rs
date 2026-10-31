@@ -167,6 +167,16 @@ pub fn verify_timestamp_token(token_der: &[u8], data: &[u8]) -> Result<DateTime<
     Ok(time)
 }
 
+/// SHA-256 of the certificate named by a token's only signer.
+pub(crate) fn authority_fingerprint(token_der: &[u8]) -> Option<String> {
+    let info = ContentInfo::from_der(token_der).ok()?;
+    let signed: SignedData = info.content.decode_as().ok()?;
+    let [signer] = signed.signer_infos.0.as_slice() else { return None };
+    let certs = crate::verify::certificates(&signed);
+    let cert = crate::verify::signer_certificate(&certs, &signer.sid)?;
+    Some(hex::encode(Sha256::digest(cert.to_der().ok()?)))
+}
+
 /// Checks the TSA's signature on a token: the signed attributes carry the digest of the TSTInfo
 /// and verify with the key of the certificate the token names.
 pub(crate) fn token_signature_valid(token_der: &[u8]) -> Result<bool, String> {
