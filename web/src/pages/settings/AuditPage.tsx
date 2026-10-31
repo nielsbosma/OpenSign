@@ -17,6 +17,9 @@ export function AuditPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const chain = useApi('audit.verify', undefined, { enabled: false });
   const entries = [...(first.data ?? []), ...more];
+  const report = chain.data;
+  const badAnchors = report ? report.broken_anchors.length + report.unsigned_anchors.length + report.invalid_anchors.length : 0;
+  const copyProblem = report && ['missing', 'behind', 'unreadable'].includes(report.witness);
 
   const loadMore = async () => {
     const last = entries.at(-1);
@@ -52,9 +55,15 @@ export function AuditPage() {
                 <ShieldAlert className="size-4" />{' '}
                 {chain.data.broken_at != null
                   ? t('Broken at entry {entry}', { entry: chain.data.broken_at })
-                  : t('{count} time stamp anchors do not match the chain', { count: chain.data.broken_anchors.length })}
+                  : badAnchors > 0
+                    ? t('{count} time stamp anchors do not match the chain', { count: badAnchors })
+                    : t('The audit trail does not match the time stamp copy in the bucket')}
               </span>
             ))}
+          {report?.anchor_stale && (
+            <span className="text-warning">{t('Recent entries have no time stamp. Check the time stamp authority.')}</span>
+          )}
+          {copyProblem && <span className="text-warning">{t('The time stamp copy in the bucket is missing or out of date.')}</span>}
           <Input
             value={action}
             onChange={(e) => {

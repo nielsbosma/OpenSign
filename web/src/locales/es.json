@@ -1055,5 +1055,8 @@
   "Runs queued again: {count}": "Ejecuciones en cola de nuevo: {count}",
   "Run {count} Failed Again": "Ejecutar de nuevo {count} fallidas",
   "No runs yet": "Aún no hay ejecuciones",
-  "Run": "Ejecución"
+  "Run": "Ejecución",
+  "The audit trail does not match the time stamp copy in the bucket": "El registro de auditoría no coincide con la copia del sello de tiempo en el bucket",
+  "Recent entries have no time stamp. Check the time stamp authority.": "Las entradas recientes no tienen sello de tiempo. Revisa la autoridad de sellado de tiempo.",
+  "The time stamp copy in the bucket is missing or out of date.": "La copia del sello de tiempo en el bucket falta o está desactualizada."
 }

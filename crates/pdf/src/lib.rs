@@ -38,6 +38,7 @@ pub use sanitize::{Limits, Sanitized, sanitize};
 pub use seal::{Prepared, SealOptions, Signed, finish, prepare, seal, sign};
 pub use stamp::{Stamp, StampContent, check_signature_image, stamp};
 pub use tags::{TagScan, TextTag, take_text_tags};
+pub use tsa::verify_timestamp_token;
 pub use tsa::{TimestampError, build_request as build_timestamp_request, parse_response as parse_timestamp_response, token_time};
 pub use verify::{SignatureCheck, verify_signatures};
 

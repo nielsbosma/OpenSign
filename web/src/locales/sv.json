@@ -1055,5 +1055,8 @@
   "Runs queued again: {count}": "Körningar köade igen: {count}",
   "Run {count} Failed Again": "Kör {count} misslyckade igen",
   "No runs yet": "Inga körningar än",
-  "Run": "Körning"
+  "Run": "Körning",
+  "The audit trail does not match the time stamp copy in the bucket": "Granskningsloggen stämmer inte med tidsstämpelkopian i bucketen",
+  "Recent entries have no time stamp. Check the time stamp authority.": "De senaste posterna saknar tidsstämpel. Kontrollera tidsstämpelutfärdaren.",
+  "The time stamp copy in the bucket is missing or out of date.": "Tidsstämpelkopian i bucketen saknas eller är inaktuell."
 }

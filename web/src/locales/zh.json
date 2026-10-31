@@ -1055,5 +1055,8 @@
   "Runs queued again: {count}": "已重新加入队列的运行：{count}",
   "Run {count} Failed Again": "再次运行 {count} 个失败项",
   "No runs yet": "尚无运行记录",
-  "Run": "运行"
+  "Run": "运行",
+  "The audit trail does not match the time stamp copy in the bucket": "审计记录与存储桶中的时间戳副本不一致",
+  "Recent entries have no time stamp. Check the time stamp authority.": "最近的条目没有时间戳。请检查时间戳机构。",
+  "The time stamp copy in the bucket is missing or out of date.": "存储桶中的时间戳副本缺失或已过期。"
 }

@@ -280,11 +280,7 @@ pub fn seal_identity(keys: &Keys, party_id: Uuid, identity: &str) -> String {
 
 pub fn open_identity(keys: &Keys, party: &PartyRow) -> Option<String> {
     let stored = party.evidence.as_ref()?["identity"].as_str()?;
-    match keys.decrypt_str(KeyPurpose::Settings, &identity_context(party.id), stored) {
-        Ok(plain) => Some(plain.to_string()),
-        Err(_) if !stored.starts_with("v1.") => Some(stored.to_string()),
-        Err(_) => None,
-    }
+    keys.decrypt_str(KeyPurpose::Settings, &identity_context(party.id), stored).ok().map(|plain| plain.to_string())
 }
 
 /// For identity checks: a personal number that is set but does not decrypt is an error, never

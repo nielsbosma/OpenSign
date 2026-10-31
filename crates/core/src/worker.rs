@@ -128,13 +128,18 @@ async fn anchor_audit(ctx: &Ctx, conn: &mut sqlx::PgConnection) -> Result<()> {
         return Ok(());
     }
     let token = seal::timestamp(ctx, url, &<sha2::Sha256 as sha2::Digest>::digest(&hash).into()).await?;
-    sqlx::query("insert into audit_anchors (audit_id, head_hash, tsa_token, tsa_url) values ($1, $2, $3, $4)")
-        .bind(head_id)
-        .bind(&hash)
-        .bind(token)
-        .bind(url)
-        .execute(&mut *conn)
-        .await?;
+    let anchor_id: i64 =
+        sqlx::query_scalar("insert into audit_anchors (audit_id, head_hash, tsa_token, tsa_url) values ($1, $2, $3, $4) returning id")
+            .bind(head_id)
+            .bind(&hash)
+            .bind(&token)
+            .bind(url)
+            .fetch_one(&mut *conn)
+            .await?;
+    // The anchor stands without its copy, and `audit.verify` reports the gap until the next one.
+    if let Err(e) = crate::audit::write_witness(&ctx.app.storage, ctx.keys(), anchor_id, head_id, &hash, &token).await {
+        tracing::warn!(error = %e, "could not copy the audit anchor to the bucket");
+    }
     Ok(())
 }
 
