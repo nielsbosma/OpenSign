@@ -4,7 +4,7 @@
 #     -e APP_SECRET=... -e APP_URL=https://sign.example.com ghcr.io/nielsbosma/opensign
 # ROLE=web or ROLE=worker runs only one half; the default runs both.
 
-FROM node:24-alpine AS web
+FROM node:24-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS web
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable
 WORKDIR /src
@@ -15,7 +15,7 @@ COPY web web
 COPY docs docs
 RUN pnpm --filter @opensign/web build
 
-FROM rust:1.99-slim AS server
+FROM rust:1.99-slim@sha256:b8e062b1c3a80183df83d9ba187cadd2b5ab84bc78d453dbfeb2fccd5f982247 AS server
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     cargo build --release --locked --bin opensign && cp target/release/opensign /opensign
 
-FROM gcr.io/distroless/cc-debian13:nonroot
+FROM gcr.io/distroless/cc-debian13:nonroot@sha256:3ee00291cf386ec52a552e6a858d555debd74776eb4bfa53fa3df2cd6677515e
 COPY --from=server /opensign /app/opensign
 COPY --from=web /src/web/dist /app/web
 ENV PORT=3000 WEB_DIST=/app/web APP_ENV=production
