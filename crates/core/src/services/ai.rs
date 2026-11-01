@@ -737,8 +737,13 @@ impl Service for TestProvider {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<TestOutput> {
         let s = settings(ctx, conn).await?;
+        if s.provider.is_empty() {
+            return Err(bad_request("Choose a provider and save it before testing the connection"));
+        }
         if !ai::is_configured(&s) {
-            return Err(bad_request("Choose a provider and a model, and save them, before testing the connection"));
+            // Without a model the address and key can still be checked, and a refused key is what the admin needs to hear.
+            ai::list_models(ctx, &s).await?;
+            return Err(bad_request("The provider accepts the key. Choose a model and save it to test the model too"));
         }
         let started = std::time::Instant::now();
         let reply = complete(

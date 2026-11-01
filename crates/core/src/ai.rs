@@ -98,7 +98,7 @@ fn describe(settings: &AiSettings, status: u16, body: &str) -> String {
 }
 
 fn authorize(request: reqwest::RequestBuilder, settings: &AiSettings) -> reqwest::RequestBuilder {
-    let key = settings.api_key.as_deref().unwrap_or_default();
+    let key = settings.api_key.as_deref().unwrap_or_default().trim();
     if settings.provider == "anthropic" {
         request.header("x-api-key", key).header("anthropic-version", "2023-06-01")
     } else if key.is_empty() {

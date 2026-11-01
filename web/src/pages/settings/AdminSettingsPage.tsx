@@ -854,7 +854,7 @@ export function SettingsGroup({ group }: { group: Group }) {
                         <Input
                           id={id}
                           type="password"
-                          autoComplete="off"
+                          autoComplete="new-password"
                           value={typeof draft[f.key] === 'string' ? (draft[f.key] as string) : ''}
                           onChange={(e) => set(f.key, e.target.value || null)}
                           placeholder={isSet ? '••••••••' : undefined}

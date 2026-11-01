@@ -111,7 +111,7 @@ function DisabledHint({ reason, children }: { reason: string | null; children: R
 
 function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="grid gap-2.5">
+    <section className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
       <div className="flex items-center justify-between">
         <h3 className="font-medium">{title}</h3>
         {action}
@@ -1151,7 +1151,7 @@ export function DocumentPage() {
           )}
         </div>
 
-        <aside className="min-w-0 lg:sticky lg:top-3 lg:max-h-[calc(100svh-1.5rem)] lg:self-start lg:overflow-y-auto lg:pb-4 [scrollbar-width:thin]">
+        <aside className="min-w-0 lg:sticky lg:top-3 lg:max-h-[calc(100svh-1.5rem)] lg:self-start lg:overflow-x-hidden lg:overflow-y-auto lg:pb-4 [scrollbar-width:thin]">
           {draft && selected.length > 1 && (
             <div className="mb-4">
               <ArrangeBar
@@ -1288,7 +1288,7 @@ export function DocumentPage() {
               )}
             </TabsContent>
             {placeable && (
-              <TabsContent value="fields" className="mt-4 grid gap-3">
+              <TabsContent value="fields" className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-3">
                 <Select value={placingFor ?? 'me'} onValueChange={(v) => setPlacingFor(v === 'me' ? null : v)}>
                   <SelectTrigger aria-label={t('Fields for')} className="w-full">
                     <SelectValue />
