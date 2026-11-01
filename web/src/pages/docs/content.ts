@@ -1,13 +1,17 @@
-const sources = import.meta.glob<string>('../../../../docs/*.md', { query: '?raw', import: 'default', eager: true });
+import { msg } from '@/lib/i18n';
 
-export type DocPage = { slug: string; title: string; markdown: string; group: string };
+const sources = import.meta.glob<string>('../../../../docs/*.md', { query: '?raw', import: 'default', eager: true });
+const translationSources = import.meta.glob<string>('../../../../docs/*/*.md', { query: '?raw', import: 'default' });
+
+/** `anchors` is set on a translated page: the ids of the English headings, in order, so links keep working in every language. */
+export type DocPage = { slug: string; title: string; markdown: string; group: string; anchors?: string[] };
 export type Heading = { depth: 2 | 3; text: string; id: string };
 export type SearchEntry = { slug: string; page: string; heading?: string; id?: string; text: string };
 
 const NAV: { group: string; slugs: string[] }[] = [
-  { group: 'Getting Started', slugs: ['index', 'quick-start', 'setup'] },
+  { group: msg('Getting Started'), slugs: ['index', 'quick-start', 'setup'] },
   {
-    group: 'Sending Documents',
+    group: msg('Sending Documents'),
     slugs: [
       'documents',
       'text-tags',
@@ -22,17 +26,21 @@ const NAV: { group: string; slugs: string[] }[] = [
       'data-export',
     ],
   },
-  { group: 'Signing', slugs: ['signing-page', 'sealed-pdfs', 'verification'] },
+  { group: msg('Signing'), slugs: ['signing-page', 'sealed-pdfs', 'verification'] },
   {
-    group: 'Administration',
+    group: msg('Administration'),
     slugs: ['users-and-roles', 'account-security', 'single-sign-on', 'settings', 'retention', 'audit-log', 'ai', 'automations'],
   },
-  { group: 'Developers', slugs: ['api', 'webhooks', 'embedding', 'scrive', 'docusign', 'mcp'] },
-  { group: 'Operations', slugs: ['deployment', 'updates', 'security'] },
+  { group: msg('Developers'), slugs: ['api', 'webhooks', 'embedding', 'scrive', 'docusign', 'mcp'] },
+  { group: msg('Operations'), slugs: ['deployment', 'updates', 'security'] },
 ];
 
 function slugOf(path: string) {
   return path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/, '');
+}
+
+function titleOf(markdown: string, slug: string) {
+  return /^# (.+)$/m.exec(markdown)?.[1]?.trim() ?? slug;
 }
 
 const markdownBySlug = new Map(Object.entries(sources).map(([path, md]) => [slugOf(path), md]));
@@ -41,15 +49,38 @@ export const PAGES: DocPage[] = NAV.flatMap(({ group, slugs }) =>
   slugs.flatMap((slug) => {
     const markdown = markdownBySlug.get(slug);
     if (markdown === undefined) return [];
-    const title = /^# (.+)$/m.exec(markdown)?.[1]?.trim() ?? slug;
-    return [{ slug, title, markdown, group }];
+    return [{ slug, title: titleOf(markdown, slug), markdown, group }];
   }),
 );
 
-export const GROUPS = NAV.map(({ group }) => ({ group, pages: PAGES.filter((p) => p.group === group) }));
+export function groupsOf(pages: DocPage[]) {
+  return NAV.map(({ group }) => ({ group, pages: pages.filter((p) => p.group === group) }));
+}
 
-export function findPage(slug: string | undefined) {
-  return PAGES.find((p) => p.slug === (slug || 'index'));
+export function findPage(slug: string | undefined, pages = PAGES) {
+  return pages.find((p) => p.slug === (slug || 'index'));
+}
+
+/** The pages in a language: its translations, and English for the pages it does not have. */
+export function localizedPages(translations: Map<string, string>): DocPage[] {
+  return PAGES.map((page) => {
+    const markdown = translations.get(page.slug);
+    if (markdown === undefined) return page;
+    return { ...page, markdown, title: titleOf(markdown, page.slug), anchors: anchorIds(page.markdown) };
+  });
+}
+
+/** Loads a language's pages only when someone reads them. A failed load leaves that language's pages in English. */
+export async function loadPages(language: string): Promise<DocPage[]> {
+  if (language === 'en') return PAGES;
+  const folder = `/docs/${language}/`;
+  const files = Object.entries(translationSources).filter(([path]) => path.includes(folder));
+  try {
+    const loaded = await Promise.all(files.map(async ([path, load]) => [slugOf(path), await load()] as const));
+    return localizedPages(new Map(loaded));
+  } catch {
+    return PAGES;
+  }
 }
 
 export function pagePath(slug: string) {
@@ -87,23 +118,33 @@ export function headingSlugger() {
   };
 }
 
-export function headings(markdown: string): Heading[] {
+function headingLines(markdown: string) {
+  return [...markdown.replace(/```[\s\S]*?```/g, '').matchAll(/^(#{1,6}) (.+)$/gm)].map((m) => ({
+    depth: m[1]?.length ?? 0,
+    text: plainText(m[2] ?? ''),
+  }));
+}
+
+/** The id of every heading on a page, in order, including the title. */
+export function anchorIds(markdown: string) {
   const slug = headingSlugger();
+  return headingLines(markdown).map((h) => slug(h.text));
+}
+
+export function headings(markdown: string, anchors = anchorIds(markdown)): Heading[] {
   const out: Heading[] = [];
-  for (const line of markdown.replace(/```[\s\S]*?```/g, '').split('\n')) {
-    const [, hashes = '', title = ''] = /^(#{1,6}) (.+)$/.exec(line) ?? [];
-    if (!title) continue;
-    const text = plainText(title);
-    const id = slug(text);
-    if (hashes.length === 2 || hashes.length === 3) out.push({ depth: hashes.length as 2 | 3, text, id });
-  }
+  headingLines(markdown).forEach(({ depth, text }, i) => {
+    const id = anchors[i] ?? '';
+    if (depth === 2 || depth === 3) out.push({ depth, text, id });
+  });
   return out;
 }
 
-function buildIndex(): SearchEntry[] {
+function buildIndex(pages: DocPage[]): SearchEntry[] {
   const entries: SearchEntry[] = [];
-  for (const page of PAGES) {
+  for (const page of pages) {
     const slug = headingSlugger();
+    let headingCount = 0;
     let current: SearchEntry = { slug: page.slug, page: page.title, text: '' };
     const lines: string[] = [];
     const flush = () => {
@@ -117,7 +158,9 @@ function buildIndex(): SearchEntry[] {
       const [, hashes = '', title = ''] = (!inCode && /^(#{1,6}) (.+)$/.exec(line)) || [];
       if (title) {
         const text = plainText(title);
-        const id = slug(text);
+        const generated = slug(text);
+        const id = page.anchors?.[headingCount] ?? generated;
+        headingCount++;
         if (hashes.length === 1) continue;
         flush();
         current = { slug: page.slug, page: page.title, heading: text, id, text: '' };
@@ -130,14 +173,15 @@ function buildIndex(): SearchEntry[] {
   return entries;
 }
 
-let index: SearchEntry[] | null = null;
+const indexes = new WeakMap<DocPage[], SearchEntry[]>();
 
 export type SearchResult = SearchEntry & { snippet: string };
 
-export function search(query: string, limit = 20): SearchResult[] {
+export function search(query: string, pages = PAGES, limit = 20): SearchResult[] {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (!terms.length) return [];
-  index ??= buildIndex();
+  const index = indexes.get(pages) ?? buildIndex(pages);
+  indexes.set(pages, index);
   const scored: { entry: SearchEntry; score: number }[] = [];
   for (const entry of index) {
     const title = `${entry.page} ${entry.heading ?? ''}`.toLowerCase();

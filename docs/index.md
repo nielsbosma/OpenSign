@@ -2,6 +2,8 @@
 
 OpenSign is an open source electronic signing service that you run yourself. You upload a Word or PDF document, place fields, and send it. Each signer gets a link, proves who they are in the way you chose, and signs. When everyone is done you get back a sealed PDF that any PDF reader can verify, with evidence pages that record who signed, when, and how they identified themselves.
 
+These docs follow your language, and the language menu at the top changes it. Translations are machine translated and the English version is authoritative.
+
 These pages cover every part of OpenSign, for people who send documents, for admins who run an install, and for developers who integrate with it.
 
 ## Where to start

@@ -4,13 +4,15 @@ import Markdown, { type Components } from 'react-markdown';
 import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router';
 import remarkGfm from 'remark-gfm';
 import { Logo } from '@/components/common';
+import { LanguagePicker } from '@/components/LanguagePicker';
 import { Button } from '@/components/ui/button';
 import { CommandDialog, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Kbd } from '@/components/ui/kbd';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { isRtl, t, tx, useLanguage } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
-import { type DocPage, docHref, findPage, GROUPS, headingSlugger, headings, PAGES, pagePath, search } from './content';
+import { type DocPage, docHref, findPage, groupsOf, headingSlugger, headings, loadPages, PAGES, pagePath, search } from './content';
 
 const REPO = 'https://github.com/nielsbosma/OpenSign';
 
@@ -20,12 +22,15 @@ function textOf(node: HastNode): string {
   return node.type === 'text' ? (node.value ?? '') : (node.children ?? []).map(textOf).join('');
 }
 
-function rehypeHeadingIds() {
+function rehypeHeadingIds({ anchors }: { anchors?: string[] }) {
   return (tree: HastNode) => {
     const slug = headingSlugger();
+    let count = 0;
     const walk = (node: HastNode) => {
       if (node.type === 'element' && /^h[1-6]$/.test(node.tagName ?? '')) {
-        node.properties = { ...node.properties, id: slug(textOf(node).replace(/\s+/g, ' ').trim()) };
+        const generated = slug(textOf(node).replace(/\s+/g, ' ').trim());
+        node.properties = { ...node.properties, id: anchors?.[count] ?? generated };
+        count++;
       }
       node.children?.forEach(walk);
     };
@@ -47,8 +52,8 @@ function Heading({ level, id, children }: { level: 1 | 2 | 3 | 4; id?: string; c
       {id && level > 1 && (
         <a
           href={`#${id}`}
-          className="ml-1.5 inline-flex align-middle text-muted-foreground opacity-0 group-hover:opacity-100"
-          aria-label="Link to this section"
+          className="ms-1.5 inline-flex align-middle text-muted-foreground opacity-0 group-hover:opacity-100"
+          aria-label={t('Link to this section')}
         >
           <Hash className="size-3.5" />
         </a>
@@ -105,20 +110,27 @@ const components: Components = {
       {children}
     </DocLink>
   ),
-  ul: ({ children }) => <ul className="my-4 list-disc space-y-1.5 pl-6 leading-7">{children}</ul>,
-  ol: ({ children }) => <ol className="my-4 list-decimal space-y-1.5 pl-6 leading-7">{children}</ol>,
+  ul: ({ children }) => <ul className="my-4 list-disc space-y-1.5 ps-6 leading-7">{children}</ul>,
+  ol: ({ children }) => <ol className="my-4 list-decimal space-y-1.5 ps-6 leading-7">{children}</ol>,
   blockquote: ({ children }) => (
     <blockquote className="my-5 rounded-md border border-primary/25 bg-primary/5 px-4 py-0.5 [&>p]:my-3">{children}</blockquote>
   ),
-  code: ({ children }) => <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em] break-words">{children}</code>,
+  code: ({ children }) => (
+    <code dir="ltr" className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em] break-words">
+      {children}
+    </code>
+  ),
   pre: ({ children }) => (
-    <pre className="my-5 overflow-x-auto rounded-lg border bg-muted/50 p-4 font-mono text-[13px] leading-relaxed [&_code]:rounded-none [&_code]:bg-transparent [&_code]:p-0 [&_code]:text-[13px] [&_code]:break-normal">
+    <pre
+      dir="ltr"
+      className="my-5 overflow-x-auto text-left rounded-lg border bg-muted/50 p-4 font-mono text-[13px] leading-relaxed [&_code]:rounded-none [&_code]:bg-transparent [&_code]:p-0 [&_code]:text-[13px] [&_code]:break-normal"
+    >
       {children}
     </pre>
   ),
   table: ({ children }) => (
     <div className="my-5 overflow-x-auto rounded-lg border">
-      <table className="w-full border-collapse text-left">{children}</table>
+      <table className="w-full border-collapse text-start">{children}</table>
     </div>
   ),
   thead: ({ children }) => <thead className="bg-muted/50 [&:not(:has(th:not(:empty)))]:hidden">{children}</thead>,
@@ -135,16 +147,20 @@ const components: Components = {
   hr: () => <hr className="my-8" />,
 };
 
-function editLink(slug: string) {
-  return `${REPO}/edit/main/docs/${slug}.md`;
+function editLink(page: DocPage, language: string) {
+  return `${REPO}/edit/main/docs/${page.anchors ? `${language}/` : ''}${page.slug}.md`;
 }
 
-function Nav({ current, onNavigate }: { current?: string; onNavigate?: () => void }) {
+function pageLabel(page: DocPage) {
+  return page.slug === 'index' ? t('Introduction') : page.title;
+}
+
+function Nav({ allPages, current, onNavigate }: { allPages: DocPage[]; current?: string; onNavigate?: () => void }) {
   return (
-    <nav aria-label="Documentation" className="grid gap-6 text-sm">
-      {GROUPS.map(({ group, pages }) => (
+    <nav aria-label={t('Documentation')} className="grid gap-6 text-sm">
+      {groupsOf(allPages).map(({ group, pages }) => (
         <div key={group}>
-          <div className="mb-1.5 px-2.5 text-xs font-medium text-muted-foreground">{group}</div>
+          <div className="mb-1.5 px-2.5 text-xs font-medium text-muted-foreground">{t(group)}</div>
           <div className="grid gap-0.5">
             {pages.map((p) => (
               <NavLink
@@ -157,7 +173,7 @@ function Nav({ current, onNavigate }: { current?: string; onNavigate?: () => voi
                   p.slug === current && 'bg-accent font-medium text-foreground',
                 )}
               >
-                {p.slug === 'index' ? 'Introduction' : p.title}
+                {pageLabel(p)}
               </NavLink>
             ))}
           </div>
@@ -167,17 +183,23 @@ function Nav({ current, onNavigate }: { current?: string; onNavigate?: () => voi
   );
 }
 
-function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+function SearchDialog({ pages, open, onOpenChange }: { pages: DocPage[]; open: boolean; onOpenChange: (open: boolean) => void }) {
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
-  const results = useMemo(() => search(query), [query]);
+  const results = useMemo(() => search(query, pages), [query, pages]);
   return (
-    <CommandDialog open={open} onOpenChange={onOpenChange} title="Search the Documentation" description="Find a page or a section">
-      <CommandInput placeholder="Search the documentation" value={query} onValueChange={setQuery} />
+    <CommandDialog
+      shouldFilter={false}
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('Search the Documentation')}
+      description={t('Find a page or a section')}
+    >
+      <CommandInput placeholder={t('Search the documentation')} value={query} onValueChange={setQuery} />
       <CommandList className="max-h-[60vh]">
-        {query.trim() && <CommandEmpty>Nothing matches.</CommandEmpty>}
+        {query.trim() && <CommandEmpty>{t('Nothing matches.')}</CommandEmpty>}
         {!query.trim() &&
-          PAGES.map((p) => (
+          pages.map((p) => (
             <CommandItem
               key={p.slug}
               value={p.slug}
@@ -186,7 +208,7 @@ function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
                 navigate(pagePath(p.slug));
               }}
             >
-              {p.slug === 'index' ? 'Introduction' : p.title}
+              {pageLabel(p)}
             </CommandItem>
           ))}
         {results.map((r) => (
@@ -212,28 +234,28 @@ function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
   );
 }
 
-function PrevNext({ page }: { page: DocPage }) {
-  const i = PAGES.findIndex((p) => p.slug === page.slug);
-  const prev = PAGES[i - 1];
-  const next = PAGES[i + 1];
+function PrevNext({ pages, page }: { pages: DocPage[]; page: DocPage }) {
+  const i = pages.findIndex((p) => p.slug === page.slug);
+  const prev = pages[i - 1];
+  const next = pages[i + 1];
   return (
     <div className="mt-14 grid gap-3 border-t pt-6 sm:grid-cols-2">
       {prev ? (
         <Link to={pagePath(prev.slug)} className="rounded-lg border p-3 transition-colors hover:bg-accent">
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <ArrowLeft className="size-3" /> Previous
+            <ArrowLeft className="size-3 rtl:rotate-180" /> {t('Previous')}
           </div>
-          <div className="font-medium">{prev.slug === 'index' ? 'Introduction' : prev.title}</div>
+          <div className="font-medium">{pageLabel(prev)}</div>
         </Link>
       ) : (
         <span />
       )}
       {next && (
-        <Link to={pagePath(next.slug)} className="rounded-lg border p-3 text-right transition-colors hover:bg-accent">
+        <Link to={pagePath(next.slug)} className="rounded-lg border p-3 text-end transition-colors hover:bg-accent">
           <div className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
-            Next <ArrowRight className="size-3" />
+            {t('Next')} <ArrowRight className="size-3 rtl:rotate-180" />
           </div>
-          <div className="font-medium">{next.title}</div>
+          <div className="font-medium">{pageLabel(next)}</div>
         </Link>
       )}
     </div>
@@ -251,18 +273,72 @@ function useScrollToHash(key: string) {
   }, [key, hash]);
 }
 
+function useDocPages(language: string) {
+  const [loaded, setLoaded] = useState<DocPage[] | null>(language === 'en' ? PAGES : null);
+  useEffect(() => {
+    let live = true;
+    void loadPages(language).then((pages) => {
+      if (live) setLoaded(pages);
+    });
+    return () => {
+      live = false;
+    };
+  }, [language]);
+  return loaded;
+}
+
+function TranslationNote({
+  page,
+  showingEnglish,
+  onShowEnglish,
+}: {
+  page: DocPage;
+  showingEnglish: boolean;
+  onShowEnglish: (english: boolean) => void;
+}) {
+  const className = 'mb-6 rounded-md border bg-muted/50 px-3 py-2 text-sm text-muted-foreground';
+  const action = 'font-medium text-primary underline-offset-4 hover:underline';
+  if (showingEnglish)
+    return (
+      <p className={className}>
+        <button type="button" className={action} onClick={() => onShowEnglish(false)}>
+          {t('Back to the Translation')}
+        </button>
+      </p>
+    );
+  if (!page.anchors) return <p className={className}>{t('This page is not translated yet, so it is shown in English.')}</p>;
+  return (
+    <p className={className}>
+      {tx('This page was machine translated and has not been reviewed. The {english} is authoritative.', {
+        english: (
+          <button type="button" className={action} onClick={() => onShowEnglish(true)}>
+            {t('English version')}
+          </button>
+        ),
+      })}
+    </p>
+  );
+}
+
 /** Public documentation, rendered from the markdown files in `docs/`. No sign-in needed. */
 export function DocsPage() {
   const { '*': rest } = useParams();
-  const page = findPage(rest?.replace(/\/$/, ''));
+  const slug = rest?.replace(/\/$/, '');
+  const { language } = useLanguage();
+  const loaded = useDocPages(language);
+  const pages = loaded ?? PAGES;
+  const [englishSlug, setEnglishSlug] = useState<string | null>(null);
+  const localized = findPage(slug, pages);
+  const showingEnglish = Boolean(localized?.anchors && englishSlug === localized.slug);
+  const page = showingEnglish ? findPage(slug) : localized;
   const { theme, toggle } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const toc = useMemo(() => (page ? headings(page.markdown) : []), [page]);
-  useScrollToHash(page?.slug ?? '');
+  const toc = useMemo(() => (page ? headings(page.markdown, page.anchors) : []), [page]);
+  useScrollToHash(loaded ? (page?.slug ?? '') : '');
 
   useEffect(() => {
-    document.title = page ? `${page.slug === 'index' ? 'Documentation' : page.title} · OpenSign` : 'Not Found · OpenSign';
+    document.title = page ? `${page.slug === 'index' ? t('Documentation') : page.title} · OpenSign` : `${t('Page Not Found')} · OpenSign`;
   }, [page]);
 
   useEffect(() => {
@@ -281,62 +357,77 @@ export function DocsPage() {
     <div className="min-h-svh bg-background">
       <header className="sticky top-0 z-20 border-b bg-background/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4">
-          <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMenuOpen(true)} aria-label="Open Navigation">
+          <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMenuOpen(true)} aria-label={t('Open Navigation')}>
             <Menu />
           </Button>
           <Link to="/docs" className="flex items-center gap-2.5">
             <Logo />
             <span className="text-sm font-semibold">
-              OpenSign <span className="font-normal text-muted-foreground">Docs</span>
+              OpenSign <span className="font-normal text-muted-foreground">{t('Docs')}</span>
             </span>
           </Link>
           <div className="flex-1" />
           <Button variant="outline" className="h-9 w-9 justify-start text-muted-foreground sm:w-60" onClick={() => setSearchOpen(true)}>
             <Search />
-            <span className="hidden sm:inline">Search</span>
-            <Kbd className="ml-auto hidden sm:inline-flex">/</Kbd>
+            <span className="hidden sm:inline">{t('Search')}</span>
+            <Kbd className="ms-auto hidden sm:inline-flex">/</Kbd>
           </Button>
-          <Button variant="ghost" size="icon" onClick={toggle} aria-label={theme === 'dark' ? 'Light Theme' : 'Dark Theme'}>
+          <LanguagePicker className="hidden sm:flex" />
+          <Button variant="ghost" size="icon" onClick={toggle} aria-label={theme === 'dark' ? t('Light Theme') : t('Dark Theme')}>
             {theme === 'dark' ? <Sun /> : <Moon />}
           </Button>
           <Button asChild size="sm" className="hidden sm:inline-flex">
-            <a href="/">Open OpenSign</a>
+            <a href="/">{t('Open OpenSign')}</a>
           </Button>
         </div>
       </header>
 
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-        <SheetContent side="left" className="w-72 overflow-y-auto p-4">
-          <SheetTitle className="sr-only">Documentation</SheetTitle>
-          <Nav current={page?.slug} onNavigate={() => setMenuOpen(false)} />
+        <SheetContent side={isRtl(language) ? 'right' : 'left'} className="w-72 overflow-y-auto p-4">
+          <SheetTitle className="sr-only">{t('Documentation')}</SheetTitle>
+          <LanguagePicker className="mb-4 w-fit" />
+          <Nav allPages={pages} current={page?.slug} onNavigate={() => setMenuOpen(false)} />
         </SheetContent>
       </Sheet>
-      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+      <SearchDialog pages={pages} open={searchOpen} onOpenChange={setSearchOpen} />
 
       <div className="mx-auto flex max-w-7xl gap-10 px-4">
         <aside className="sticky top-14 hidden h-[calc(100svh-3.5rem)] w-56 shrink-0 overflow-y-auto py-8 lg:block">
-          <Nav current={page?.slug} />
+          <Nav allPages={pages} current={page?.slug} />
         </aside>
 
         <main className="min-w-0 flex-1 py-8 lg:py-10">
-          {page ? (
+          {!loaded ? null : page ? (
             <article className="mx-auto max-w-3xl text-[15px]">
-              <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHeadingIds]} components={components}>
-                {page.markdown}
-              </Markdown>
+              {language !== 'en' && localized && (
+                <TranslationNote
+                  page={localized}
+                  showingEnglish={showingEnglish}
+                  onShowEnglish={(english) => setEnglishSlug(english ? localized.slug : null)}
+                />
+              )}
+              <div {...(page.anchors ? {} : { dir: 'ltr', lang: 'en' })}>
+                <Markdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[[rehypeHeadingIds, { anchors: page.anchors }]]}
+                  components={components}
+                >
+                  {page.markdown}
+                </Markdown>
+              </div>
               <div className="mt-10 text-sm">
-                <a href={editLink(page.slug)} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground">
-                  Edit this page on GitHub
+                <a href={editLink(page, language)} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground">
+                  {t('Edit this page on GitHub')}
                 </a>
               </div>
-              <PrevNext page={page} />
+              <PrevNext pages={pages} page={page} />
             </article>
           ) : (
             <div className="mx-auto max-w-3xl py-16 text-center">
-              <h1 className="text-2xl font-semibold">Page not found</h1>
-              <p className="mt-2 text-muted-foreground">This page does not exist, or it has moved.</p>
+              <h1 className="text-2xl font-semibold">{t('Page Not Found')}</h1>
+              <p className="mt-2 text-muted-foreground">{t('This page does not exist, or it has moved.')}</p>
               <Button asChild className="mt-6">
-                <Link to="/docs">Go to the Documentation</Link>
+                <Link to="/docs">{t('Go to the Documentation')}</Link>
               </Button>
             </div>
           )}
@@ -344,10 +435,10 @@ export function DocsPage() {
 
         {page && toc.length > 1 && (
           <aside className="sticky top-14 hidden h-[calc(100svh-3.5rem)] w-52 shrink-0 overflow-y-auto py-10 xl:block">
-            <div className="mb-2 text-xs font-medium text-muted-foreground">On This Page</div>
-            <nav aria-label="On this page" className="grid gap-1 text-[13px]">
+            <div className="mb-2 text-xs font-medium text-muted-foreground">{t('On This Page')}</div>
+            <nav aria-label={t('On This Page')} className="grid gap-1 text-[13px]">
               {toc.map((h) => (
-                <a key={h.id} href={`#${h.id}`} className={cn('text-muted-foreground hover:text-foreground', h.depth === 3 && 'pl-3')}>
+                <a key={h.id} href={`#${h.id}`} className={cn('text-muted-foreground hover:text-foreground', h.depth === 3 && 'ps-3')}>
                   {h.text}
                 </a>
               ))}

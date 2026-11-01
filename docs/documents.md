@@ -8,7 +8,7 @@ A document in OpenSign is one or more files to sign, the parties who take part, 
 | --- | --- |
 | **Draft** | You are still preparing it. Files, parties and fields can change. |
 | **Pending** | Sent and waiting for signatures. Its files are locked into one PDF that can no longer change. |
-| **Completed** | Everyone who had to act has signed or approved. The sealed PDF is ready. |
+| **Signed** | Everyone who had to act has signed or approved. The sealed PDF is ready. |
 | **Declined** | A party declined. Signing stopped for everyone. |
 | **Canceled** | The sender (or a manager) stopped it. |
 | **Expired** | The deadline passed before everyone had signed. |

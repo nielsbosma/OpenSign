@@ -54,7 +54,7 @@ In development mode you can leave the key empty: the test email and everything a
 4. Pick the party in the field toolbar and place a **Signature** field on the page.
 5. Choose **Send for Signing**.
 
-Open the invitation, follow the link, draw or type a signature and sign. A few seconds later the document is **Completed**, and you can download the sealed PDF from the document page.
+Open the invitation, follow the link, draw or type a signature and sign. A few seconds later the document is **Signed**, and you can download the sealed PDF from the document page.
 
 ## 5. Check the result
 
