@@ -14,11 +14,14 @@ export function WebcamPhoto({
   session,
   request,
   onChange,
+  preview,
 }: {
   token: string;
   session: string | null;
   request: AttachmentRequest;
   onChange: (request: AttachmentRequest) => void;
+  /** The permissions policy only lets the signing page use the camera, so a preview shows the step without starting it. */
+  preview?: boolean;
 }) {
   const t = useTexts();
   const video = useRef<HTMLVideoElement>(null);
@@ -121,7 +124,7 @@ export function WebcamPhoto({
           </Button>
         </div>
       ) : (
-        <Button type="button" variant="outline" onClick={start}>
+        <Button type="button" variant="outline" disabled={preview} onClick={start}>
           <Camera /> {t.photoStart}
         </Button>
       )}

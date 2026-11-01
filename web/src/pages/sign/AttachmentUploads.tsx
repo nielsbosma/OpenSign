@@ -13,12 +13,15 @@ export function AttachmentUploads({
   requests,
   onChange,
   disabled,
+  preview,
 }: {
   token: string;
   session: string | null;
   requests: AttachmentRequest[];
   onChange: (requests: AttachmentRequest[]) => void;
   disabled?: boolean;
+  /** Try it out: the file stays in the browser and nothing reaches the server. */
+  preview?: boolean;
 }) {
   const t = useTexts();
   const [busy, setBusy] = useState<string>();
@@ -45,13 +48,20 @@ export function AttachmentUploads({
   const upload = (file: File | undefined) => {
     const id = target.current;
     if (!file || !id) return;
+    if (preview) {
+      const r = requests.find((x) => x.id === id);
+      if (r) replace({ ...r, fileId: 'preview', fileName: file.name });
+      return;
+    }
     void run(id, async () => replace(await uploadAttachment(token, session, id, file)));
   };
   const remove = (r: AttachmentRequest) =>
-    run(r.id, async () => {
-      await call('signing.remove_attachment', { token, session, id: r.id });
-      replace({ ...r, fileId: null, fileName: null, uploadedAt: null });
-    });
+    preview
+      ? replace({ ...r, fileId: null, fileName: null, uploadedAt: null })
+      : run(r.id, async () => {
+          await call('signing.remove_attachment', { token, session, id: r.id });
+          replace({ ...r, fileId: null, fileName: null, uploadedAt: null });
+        });
 
   return (
     <div className="grid gap-2">
