@@ -5,8 +5,8 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
 use serde_json::{Value, json};
 
-use super::Identity;
 use super::jws::{self, Key};
+use super::{EidText, Identity};
 use crate::error::{AppError, ErrorKind, Result, bad_request, conflict};
 use crate::settings::EidSettings;
 
@@ -29,7 +29,7 @@ pub enum User<'a> {
 
 pub enum Outcome {
     Pending,
-    Failed(&'static str),
+    Failed(EidText),
     Complete { identity: Identity, evidence: Value },
 }
 
@@ -111,10 +111,10 @@ impl Freja {
         Ok(match body["status"].as_str() {
             Some("STARTED" | "DELIVERED_TO_MOBILE") => Outcome::Pending,
             Some("APPROVED") => self.approved(auth_ref, &body)?,
-            Some("REJECTED") => Outcome::Failed("The identification was declined in Freja eID."),
-            Some("EXPIRED") => Outcome::Failed("Freja eID did not respond in time. Try again."),
-            Some("CANCELED" | "RP_CANCELED") => Outcome::Failed("The identification was canceled."),
-            _ => Outcome::Failed("The identification did not go through. Try again."),
+            Some("REJECTED") => Outcome::Failed(EidText::FREJA_DECLINED),
+            Some("EXPIRED") => Outcome::Failed(EidText::FREJA_TIMEOUT),
+            Some("CANCELED" | "RP_CANCELED") => Outcome::Failed(EidText::CANCELED),
+            _ => Outcome::Failed(EidText::FAILED),
         })
     }
 

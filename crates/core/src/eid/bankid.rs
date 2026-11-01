@@ -8,9 +8,8 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::Sha256;
 
-use super::Identity;
+use super::{EidText, Identity};
 use crate::error::{AppError, ErrorKind, Result, bad_request, conflict};
-use crate::i18n::Lang;
 use crate::settings::EidSettings;
 
 const PRODUCTION: &str = "https://appapi2.bankid.com/rp/v6.0";
@@ -152,41 +151,22 @@ pub fn qr_code(start_token: &str, start_secret: &str, seconds: i64) -> String {
     format!("bankid.{start_token}.{seconds}.{}", hex::encode(mac.finalize().into_bytes()))
 }
 
-/// What to tell the person for a BankID hint code, in BankID's recommended wording.
 /// What to tell the user for a collect hint, following BankID's recommended texts (RFA codes).
-pub fn message(hint: Option<&str>, failed: bool, lang: Lang) -> &'static str {
-    let sv = lang == Lang::Sv;
+pub fn message(hint: Option<&str>, failed: bool) -> EidText {
     match (hint, failed) {
-        (Some("outstandingTransaction" | "noClient"), false) if sv => "Starta BankID-appen.",
-        (Some("outstandingTransaction" | "noClient"), false) => "Start your BankID app.",
-        (Some("started"), false) if sv => "Söker efter BankID, det kan ta en liten stund.",
-        (Some("started"), false) => "Searching for BankID. It may take a little while.",
-        (Some("userMrtd"), false) if sv => "Läs in din id-handling med BankID-appen.",
-        (Some("userMrtd"), false) => "Process your machine-readable travel document using the BankID app.",
-        (Some("userCallConfirm"), false) if sv => "Bekräfta samtalet i BankID-appen.",
-        (Some("userCallConfirm"), false) => "Confirm the call in your BankID app.",
-        (Some("userSign"), false) if sv => "Skriv in din säkerhetskod i BankID-appen och välj Identifiera eller Skriv under.",
-        (Some("userSign"), false) => "Enter your security code in the BankID app and select Identify or Sign.",
-        (_, false) if sv => "Väntar på BankID.",
-        (_, false) => "Waiting for BankID.",
-        (Some("expiredTransaction"), true) if sv => "BankID-appen svarar inte. Kontrollera att den är startad och försök igen.",
-        (Some("expiredTransaction"), true) => "The BankID app did not respond in time. Try again.",
-        (Some("certificateErr"), true) if sv => {
-            "Det BankID du försöker använda är för gammalt eller spärrat. Använd ett annat BankID eller skaffa ett nytt hos din bank."
-        }
-        (Some("certificateErr"), true) => "The BankID you are trying to use is blocked or too old. Get a new one from your bank.",
-        (Some("userCancel"), true) if sv => "Åtgärden avbruten.",
-        (Some("userCancel"), true) => "The identification was canceled.",
-        (Some("cancelled"), true) if sv => "Åtgärden avbruten. Försök igen.",
-        (Some("cancelled"), true) => "The identification was canceled. Try again.",
-        (Some("startFailed"), true) if sv => {
-            "BankID-appen verkar inte finnas i din dator eller telefon. Installera den och skaffa ett BankID hos din bank, försök sedan igen."
-        }
-        (Some("startFailed"), true) => "The BankID app could not be found. Install it and get a BankID from your bank, then try again.",
-        (Some("userDeclinedCall"), true) if sv => "Du avböjde samtalet. Försök igen.",
-        (Some("userDeclinedCall"), true) => "You declined the call. Try again.",
-        (_, true) if sv => "Identifieringen gick inte igenom. Försök igen.",
-        (_, true) => "The identification did not go through. Try again.",
+        (Some("outstandingTransaction" | "noClient"), false) => EidText::new("start_app", "Start your BankID app."),
+        (Some("started"), false) => EidText::new("searching", "Searching for BankID. It may take a little while."),
+        (Some("userMrtd"), false) => EidText::new("read_document", "Process your machine-readable travel document using the BankID app."),
+        (Some("userCallConfirm"), false) => EidText::new("confirm_call", "Confirm the call in your BankID app."),
+        (Some("userSign"), false) => EidText::new("enter_code", "Enter your security code in the BankID app and select Identify or Sign."),
+        (_, false) => EidText::new("waiting", "Waiting for BankID."),
+        (Some("expiredTransaction"), true) => EidText::NO_RESPONSE,
+        (Some("certificateErr"), true) => EidText::BLOCKED,
+        (Some("userCancel"), true) => EidText::CANCELED,
+        (Some("cancelled"), true) => EidText::CANCELED_RETRY,
+        (Some("startFailed"), true) => EidText::NOT_FOUND,
+        (Some("userDeclinedCall"), true) => EidText::DECLINED_CALL,
+        (_, true) => EidText::FAILED,
     }
 }
 
