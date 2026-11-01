@@ -1158,5 +1158,14 @@
   "English version": "النسخة الإنجليزية",
   "This page was machine translated and has not been reviewed. The {english} is authoritative.": "تُرجمت هذه الصفحة آليًا ولم تتم مراجعتها. {english} هي المعتمدة.",
   "This page is not translated yet, so it is shown in English.": "لم تُترجم هذه الصفحة بعد، لذا تُعرض باللغة الإنجليزية.",
-  "Fields": "الحقول"
+  "Fields": "الحقول",
+  "{count} fields selected": "تم تحديد {count} من الحقول",
+  "Align Left": "محاذاة لليسار",
+  "Align Horizontal Centers": "توسيط أفقي",
+  "Align Right": "محاذاة لليمين",
+  "Align Top": "محاذاة للأعلى",
+  "Align Vertical Centers": "توسيط عمودي",
+  "Align Bottom": "محاذاة للأسفل",
+  "Distribute Horizontally": "توزيع أفقي",
+  "Distribute Vertically": "توزيع عمودي"
 }

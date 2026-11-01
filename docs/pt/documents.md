@@ -47,7 +47,7 @@ Adicione todas as pessoas que assinam, aprovam ou recebem uma cópia. Para cada 
 
 ### Campos
 
-Escolha uma parte na aba **Campos** e depois posicione os campos nas páginas. Os campos também podem vir do próprio arquivo: [tags de texto](text-tags.md#text-tags) como `{{Sign;type=signature;role=Tenant}}` e os campos de um [formulário PDF preenchível](text-tags.md#pdf-forms) se tornam campos no upload, e [Detectar campos](text-tags.md#detect-fields) na aba **Campos** sugere campos onde a página tem linhas e caixas a preencher. Cada campo pertence a uma parte, que o preenche ao assinar. Selecione um campo para alterá-lo no painel **Campo**: quem o preenche, seu rótulo, se é obrigatório e as configurações abaixo.
+Escolha uma parte na aba **Campos** e depois posicione os campos nas páginas. Os campos também podem vir do próprio arquivo: [tags de texto](text-tags.md#text-tags) como `{{Sign;type=signature;role=Tenant}}` e os campos de um [formulário PDF preenchível](text-tags.md#pdf-forms) se tornam campos no upload, e [Detectar campos](text-tags.md#detect-fields) na aba **Campos** sugere campos onde a página tem linhas e caixas a preencher. Cada campo pertence a uma parte, que o preenche ao assinar. Selecione um campo para alterá-lo no painel **Campo**: quem o preenche, seu rótulo, se é obrigatório e as configurações abaixo. Clique nos campos com Shift ou arraste pela página para selecionar vários e depois alinhe-os ou distribua-os no painel lateral. Os campos se encaixam uns nos outros ao arrastar; mantenha Alt pressionado para desativar.
 
 | Campo | |
 | --- | --- |

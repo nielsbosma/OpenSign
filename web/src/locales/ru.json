@@ -1158,5 +1158,14 @@
   "English version": "английская версия",
   "This page was machine translated and has not been reviewed. The {english} is authoritative.": "Эта страница переведена машинным способом и не проверялась. Основным текстом считается {english}.",
   "This page is not translated yet, so it is shown in English.": "Эта страница ещё не переведена, поэтому показана на английском языке.",
-  "Fields": "Поля"
+  "Fields": "Поля",
+  "{count} fields selected": "Выбрано полей: {count}",
+  "Align Left": "По левому краю",
+  "Align Horizontal Centers": "По центру по горизонтали",
+  "Align Right": "По правому краю",
+  "Align Top": "По верхнему краю",
+  "Align Vertical Centers": "По центру по вертикали",
+  "Align Bottom": "По нижнему краю",
+  "Distribute Horizontally": "Распределить по горизонтали",
+  "Distribute Vertically": "Распределить по вертикали"
 }

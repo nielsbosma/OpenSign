@@ -74,6 +74,7 @@ import { t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
 import { ActivityPanel } from './ActivityPanel';
+import { ArrangeBar } from './ArrangeBar';
 import { BulkSendDialog } from './BulkSendDialog';
 import { StatusBadge } from './DocumentsPage';
 import { ExportDataSubmenu } from './ExportData';
@@ -638,7 +639,7 @@ export function DocumentPage() {
   const [suggestions, setSuggestions] = useState<SuggestedField[]>([]);
   const [aiNote, setAiNote] = useState<string | null>(null);
   const aiStatus = useApi('ai.status', undefined, { staleTime: 5 * 60_000 });
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
   const [armed, setArmed] = useState<FieldKind | null>(null);
   const [placingFor, setPlacingFor] = useState<string | null>(null);
   const [partyDialog, setPartyDialog] = useState<{ open: boolean; party: PartyView | null }>({ open: false, party: null });
@@ -723,15 +724,15 @@ export function DocumentPage() {
     if (doc && placingFor !== null && !doc.parties.some((p) => p.id === placingFor)) setPlacingFor(null);
   }, [doc, placingFor]);
   useEffect(() => {
-    if (!draft || !selected) return;
+    if (!draft || !selected.length) return;
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return;
-      if (e.key === 'Escape') setSelected(null);
+      if (e.key === 'Escape') setSelected([]);
       else if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
-        update(fields.filter((f) => f.key !== selected));
-        setSelected(null);
+        update(fields.filter((f) => !selected.includes(f.key)));
+        setSelected([]);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -769,7 +770,7 @@ export function DocumentPage() {
 
   const place = (page: number, x: number, y: number, kind: FieldKind | null = armed) => {
     if (!draft) return;
-    if (!kind) return setSelected(null);
+    if (!kind) return setSelected([]);
     const spec = FIELD_KINDS.find((k) => k.kind === kind);
     if (!spec) return;
     const field: EditableField = {
@@ -792,7 +793,7 @@ export function DocumentPage() {
       height: spec.height,
     };
     update([...fields, field]);
-    setSelected(field.key);
+    setSelected([field.key]);
     setArmed(null);
   };
 
@@ -844,7 +845,7 @@ export function DocumentPage() {
     }
   };
 
-  const selectedField = fields.find((f) => f.key === selected);
+  const selectedField = selected.length === 1 ? fields.find((f) => f.key === selected[0]) : undefined;
 
   const toField = (s: SuggestedField): EditableField | null => {
     const signer = doc.parties.find((p) => p.role === 'signer')?.id ?? null;
@@ -878,7 +879,7 @@ export function DocumentPage() {
     const ok = added.filter((f): f is EditableField => !!f);
     if (ok.length) update([...fields, ...ok]);
     setSuggestions((all) => all.filter((s) => !picked.includes(s) || !toField(s)));
-    if (ok.length === 1) setSelected(ok[0]!.key);
+    if (ok.length === 1) setSelected([ok[0]!.key]);
   };
 
   return (
@@ -1095,15 +1096,16 @@ export function DocumentPage() {
                         editable={draft}
                         selected={selected}
                         onSelect={setSelected}
-                        onChange={(key, patch, done) =>
+                        marquee={draft && !armed}
+                        onChange={(patches, done) =>
                           update(
-                            fields.map((f) => (f.key === key ? { ...f, ...patch } : f)),
+                            fields.map((f) => (patches[f.key] ? { ...f, ...patches[f.key] } : f)),
                             done,
                           )
                         }
                         onRemove={(key) => {
                           update(fields.filter((f) => f.key !== key));
-                          setSelected(null);
+                          setSelected([]);
                         }}
                       />
                       {draft && (
@@ -1125,6 +1127,14 @@ export function DocumentPage() {
         </div>
 
         <aside className="min-w-0 lg:sticky lg:top-3 lg:max-h-[calc(100svh-1.5rem)] lg:self-start lg:overflow-y-auto lg:pb-4 [scrollbar-width:thin]">
+          {draft && selected.length > 1 && (
+            <div className="mb-4">
+              <ArrangeBar
+                fields={fields.filter((f) => selected.includes(f.key))}
+                onArrange={(patches) => update(fields.map((f) => (patches[f.key] ? { ...f, ...patches[f.key] } : f)))}
+              />
+            </div>
+          )}
           {draft && selectedField && (
             <div className="mb-4">
               <FieldSettings
@@ -1135,7 +1145,7 @@ export function DocumentPage() {
                 onChange={update}
                 onRemove={() => {
                   update(fields.filter((f) => f.key !== selectedField.key));
-                  setSelected(null);
+                  setSelected([]);
                 }}
               />
             </div>

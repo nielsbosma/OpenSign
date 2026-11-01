@@ -1158,5 +1158,14 @@
   "English version": "英文版本",
   "This page was machine translated and has not been reviewed. The {english} is authoritative.": "此页面为机器翻译,未经审核。请以{english}为准。",
   "This page is not translated yet, so it is shown in English.": "此页面尚未翻译,因此以英文显示。",
-  "Fields": "字段"
+  "Fields": "字段",
+  "{count} fields selected": "已选择 {count} 个字段",
+  "Align Left": "左对齐",
+  "Align Horizontal Centers": "水平居中对齐",
+  "Align Right": "右对齐",
+  "Align Top": "顶部对齐",
+  "Align Vertical Centers": "垂直居中对齐",
+  "Align Bottom": "底部对齐",
+  "Distribute Horizontally": "水平均匀分布",
+  "Distribute Vertically": "垂直均匀分布"
 }
