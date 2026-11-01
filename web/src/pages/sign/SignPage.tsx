@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ApiError, type AttachmentRequest, type AuthMethod, call, errorMessage, fetchPdf, type SignerView, useApi } from '@/lib/api';
 import { display } from '@/lib/field-values';
 import { saveBytes } from '@/lib/format';
@@ -149,7 +150,17 @@ export function Shell({ view, doc = view?.document, children }: { view?: SignerV
               {doc && <div className="truncate text-xs text-muted-foreground">{t.from(doc.sender, doc.organisation)}</div>}
             </div>
             <LanguagePicker />
-            <ShieldCheck className="size-4 shrink-0 text-success" aria-label={t.secureConnection} />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" aria-label={t.auditNote} className="shrink-0 rounded-sm">
+                  <ShieldCheck className="size-4 text-success" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-64">
+                {window.location.protocol === 'https:' && <span className="block font-medium">{t.secureConnection}</span>}
+                {t.auditNote}
+              </TooltipContent>
+            </Tooltip>
           </div>
         </header>
         <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
@@ -627,18 +638,31 @@ function SignerScreen({
                             key={f.id}
                             className={cn(
                               'absolute flex items-center rounded-[3px] border px-1 text-[10px] text-zinc-700',
-                              canAct ? 'border-primary bg-primary/10' : 'border-transparent',
+                              !canAct && 'border-transparent',
+                              canAct && (f.kind === 'signature' ? 'border-primary bg-primary/10' : 'border-dashed border-zinc-400'),
                             )}
                             style={style}
                           >
                             {canAct &&
-                              (f.kind === 'signature'
-                                ? t.yourSignature
-                                : f.kind === 'name'
-                                  ? view.party.name
-                                  : f.kind === 'date'
-                                    ? t.dateOfSigning
-                                    : f.kind)}
+                              (f.kind === 'signature' ? (
+                                <button
+                                  type="button"
+                                  className="size-full cursor-pointer text-start"
+                                  onClick={() =>
+                                    document.getElementById('signature-pad')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                  }
+                                >
+                                  {t.yourSignature}
+                                </button>
+                              ) : f.kind === 'name' ? (
+                                view.party.name
+                              ) : f.kind === 'email' ? (
+                                view.party.email
+                              ) : f.kind === 'date' ? (
+                                t.dateOfSigning
+                              ) : (
+                                f.kind
+                              ))}
                           </div>
                         );
                       })}
@@ -662,10 +686,25 @@ function SignerScreen({
               <>
                 {view.signAuthentication && <IdentifyPreview method={view.signAuthentication} />}
                 {inputs.length > 0 && <p className="text-xs text-muted-foreground">{t.fillFields}</p>}
-                {attachments.length > 0 && (
-                  <AttachmentUploads token="" session={null} requests={attachments} onChange={() => {}} disabled />
+                {attachments
+                  .filter((a) => a.kind === 'photo')
+                  .map((a) => (
+                    <WebcamPhoto key={a.id} token="" session={null} request={a} onChange={() => {}} preview />
+                  ))}
+                {attachments.some((a) => a.kind !== 'photo') && (
+                  <AttachmentUploads
+                    token=""
+                    session={null}
+                    requests={attachments.filter((a) => a.kind !== 'photo')}
+                    onChange={(files) => setAttachments([...attachments.filter((a) => a.kind === 'photo'), ...files])}
+                    preview
+                  />
                 )}
-                {isSigner && <SignaturePad defaultName={view.party.name} onChange={setSignature} />}
+                {isSigner && (
+                  <div id="signature-pad">
+                    <SignaturePad defaultName={view.party.name} onChange={setSignature} />
+                  </div>
+                )}
                 <label className="flex items-start gap-2.5">
                   <Checkbox checked={consent} onCheckedChange={(c) => setConsent(c === true)} className="mt-0.5" />
                   <span>{t.consent(isSigner)}</span>
@@ -717,20 +756,22 @@ function SignerScreen({
                   />
                 )}
                 {isSigner && (
-                  <SignaturePad
-                    key={saved ? 'saved' : 'new'}
-                    defaultName={view.party.name}
-                    onChange={setSignature}
-                    saved={saved}
-                    onForget={
-                      fromAccount
-                        ? undefined
-                        : () => {
-                            forgetSignature();
-                            setDevice(null);
-                          }
-                    }
-                  />
+                  <div id="signature-pad">
+                    <SignaturePad
+                      key={saved ? 'saved' : 'new'}
+                      defaultName={view.party.name}
+                      onChange={setSignature}
+                      saved={saved}
+                      onForget={
+                        fromAccount
+                          ? undefined
+                          : () => {
+                              forgetSignature();
+                              setDevice(null);
+                            }
+                      }
+                    />
+                  </div>
                 )}
                 {isSigner && deviceAllowed && !fromAccount && !device && (
                   <label className="flex items-start gap-2.5 text-xs text-muted-foreground">
