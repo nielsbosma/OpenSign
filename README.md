@@ -42,6 +42,15 @@ Hosted e-signature services charge per user or per envelope, keep your contracts
 | AI | Bring your own model, off by default, MCP server for Claude | Vendor's choice |
 | Source code | Open, auditable, [threat model](SECURITY.md) included | Closed |
 
+### How it compares
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/opensign-comparison-dark.png">
+  <img src="docs/images/opensign-comparison-light.png" width="900" alt="Feature comparison of OpenSign with DocuSign, Adobe Sign, Scrive, Visma Sign and DocuSeal">
+</picture>
+
+<sub>Selected features. Paid = higher plan or add-on. Single sign-on is OpenID Connect in OpenSign and SAML in the others. Partial = narrower than the row says. ? = public sources do not settle it. DocuSeal is its free edition; × can still exist in its paid plans. OpenSign needs your own agreements for BankID (a bank or TIC Identity), other eIDs and SMS, and their fees apply. It is v0.1: BankID via TIC Identity, broker eIDs and automations through Composio are not yet tested against live services. Checked November 1, 2026, from public docs.</sub>
+
 ## Features
 
 <table>

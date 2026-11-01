@@ -113,6 +113,31 @@ function fromArgument(value: unknown) {
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
+/** The descriptions of `PLACEHOLDERS` in `crates/core/src/automations.rs`, by name. */
+const PLACEHOLDER_TEXTS: Record<string, string> = {
+  event: msg('The event, such as document.completed'),
+  eventTime: msg('When the event happened, as an ISO time'),
+  'document.id': msg("The document's id"),
+  'document.title': msg("The document's title"),
+  'document.reference': msg('Your own reference (external id), if one was given'),
+  'document.status': msg('draft, pending, completed, declined, canceled or expired'),
+  'document.url': msg('A link to the document in OpenSign, for people with access'),
+  'document.createdAt': msg('When the document was created'),
+  'document.sentAt': msg('When it was sent'),
+  'document.completedAt': msg('When the last party signed'),
+  'document.sealedSha256': msg('The SHA-256 of the sealed PDF'),
+  'document.valuesUrl': msg("The API address of the document's filled-in values"),
+  'party.name': msg('The party the event is about (signed, viewed, declined)'),
+  'party.email': msg('Their email address'),
+  'party.phone': msg('Their phone number'),
+  'party.company': msg('Their company'),
+  declineReason: msg('Why the party declined'),
+  parties: msg("Every party's name, or the whole list when it is the only thing in the value"),
+  'owner.name': msg('The person who sent the document'),
+  'owner.email': msg('Their email address'),
+  sealedPdf: msg("The sealed PDF as a file, for a tool's file input. Only on document.completed."),
+};
+
 function Placeholders({ placeholders }: { placeholders: { name: string; description: string }[] }) {
   return (
     <details className="rounded-md border px-3 py-2 text-sm">
@@ -137,7 +162,9 @@ function Placeholders({ placeholders }: { placeholders: { name: string; descript
             >
               {`{{${p.name}}}`}
             </button>
-            <span className="text-muted-foreground text-xs">{p.description}</span>
+            <span className="text-muted-foreground text-xs">
+              {Object.hasOwn(PLACEHOLDER_TEXTS, p.name) ? t(PLACEHOLDER_TEXTS[p.name]!) : p.description}
+            </span>
           </li>
         ))}
       </ul>

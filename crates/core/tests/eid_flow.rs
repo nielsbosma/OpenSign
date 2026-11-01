@@ -173,6 +173,7 @@ async fn bankid_identifies_the_right_person_only() {
     let pending = status(started.id).await.unwrap();
     assert_eq!(pending.status, "pending");
     assert_eq!(pending.message.as_deref(), Some("Start your BankID app."));
+    assert_eq!(pending.code.as_deref(), Some("start_app"));
     assert!(pending.session.is_none());
     let done = status(started.id).await.unwrap();
     assert_eq!(done.status, "complete");
@@ -412,6 +413,7 @@ async fn bankid_through_tic_identifies_the_right_person_only() {
     let done = call::<eid::Status>(&signer, guess(&release_code)).await.unwrap();
     assert_eq!(done.status, "complete", "{:?}", done.message);
     assert!(done.session.is_some());
+    assert_eq!(refused.code.as_deref(), Some("other_person"));
     assert!(refused.message.unwrap().contains("someone other than"));
     *TEST_ISSUER.lock().unwrap() = None;
 }

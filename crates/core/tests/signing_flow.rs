@@ -710,6 +710,8 @@ async fn bulk_send_creates_one_document_per_row() {
     assert_eq!(preview.row_count, 2);
     assert_eq!(preview.problems.len(), 1, "Helga's email is caught before anything is sent");
     assert_eq!(preview.problems[0].row, 3);
+    assert_eq!(preview.problems[0].code, "bad_email");
+    assert_eq!(preview.problems[0].params["value"], "not-an-email");
 
     let refused =
         call::<bulk::Start>(&sender, bulk::StartInput { file: file(csv), mapping: preview.mapping.clone(), title_pattern: None }).await;

@@ -173,6 +173,9 @@ async fn assistant_and_review() {
     assert!(messages.iter().any(|m| m.contains("no signature field")), "{messages:?}");
     assert!(messages.iter().any(|m| m.contains("by SMS but has no phone")), "{messages:?}");
     assert!(messages.iter().any(|m| m.contains("no personal number")), "{messages:?}");
+    let by_sms = checks.iter().find(|c| c.code.as_deref() == Some("no_phone")).unwrap();
+    assert_eq!(by_sms.message, "Bo Berg gets the document by SMS but has no phone number");
+    assert_eq!(by_sms.params["name"], "Bo Berg");
 
     let refused = call::<ai::Review>(&ada, ai::ReviewInput { id, focus: None }).await.err().unwrap();
     assert_eq!(refused.kind, ErrorKind::Forbidden, "document text stays home until an Admin allows it");
