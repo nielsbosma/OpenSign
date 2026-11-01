@@ -290,6 +290,7 @@ function McpCard() {
   return (
     <SettingsCard
       title={t('AI Apps (MCP)')}
+      help="mcp"
       description={t(
         'Connect Claude or another MCP client to work with OpenSign as you. Add this server URL in the app; you approve the connection here.',
       )}
