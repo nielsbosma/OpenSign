@@ -103,6 +103,7 @@ function PasskeysCard() {
   return (
     <SettingsCard
       title={t('Passkeys')}
+      help="account-security#passkeys"
       description={t(
         'Sign in with your fingerprint, face or device PIN instead of a password and code. Works with iCloud Keychain, Google Password Manager, Windows Hello and security keys.',
       )}
@@ -204,6 +205,7 @@ function TwoFactorCard() {
   return (
     <SettingsCard
       title={t('Two-Factor Authentication')}
+      help="account-security#two-factor-with-an-authenticator-app"
       description={
         user?.twoFactorEnabled
           ? t('On. Signing in needs a code from your authenticator app.')
@@ -218,7 +220,11 @@ function TwoFactorCard() {
         </Button>
       )}
       <Dialog open={!!setup || !!codes} onOpenChange={(open) => !open && !codes && close()}>
-        <DialogContent onInteractOutside={(e) => codes && e.preventDefault()} onEscapeKeyDown={(e) => codes && e.preventDefault()}>
+        <DialogContent
+          showCloseButton={!codes}
+          onInteractOutside={(e) => codes && e.preventDefault()}
+          onEscapeKeyDown={(e) => codes && e.preventDefault()}
+        >
           {codes ? (
             <>
               <DialogHeader>
@@ -229,7 +235,7 @@ function TwoFactorCard() {
               </DialogHeader>
               <pre className="grid grid-cols-2 gap-1 rounded-md bg-muted p-4 font-mono text-sm">{codes.join('\n')}</pre>
               <DialogFooter>
-                <CopyButton value={codes.join('\n')} label={t('Copy Codes')} />
+                <CopyButton value={codes.join('\n')} label={t('Copy Codes')} size="default" />
                 <Button onClick={close}>{t('I Saved Them')}</Button>
               </DialogFooter>
             </>
@@ -286,13 +292,14 @@ function McpCard() {
   return (
     <SettingsCard
       title={t('AI Apps (MCP)')}
+      help="mcp"
       description={t(
         'Connect Claude or another MCP client to work with OpenSign as you. Add this server URL in the app; you approve the connection here.',
       )}
     >
       <div className="mb-4 flex max-w-lg gap-2">
         <Input readOnly value={url} className="font-mono" onFocus={(e) => e.target.select()} />
-        <CopyButton value={url} />
+        <CopyButton value={url} size="default" />
       </div>
       {connections.isPending ? (
         <Loading />

@@ -147,13 +147,13 @@ export function EmptyState({ icon, title, children }: { icon?: ReactNode; title:
   );
 }
 
-export function CopyButton({ value, label }: { value: string; label?: string }) {
+export function CopyButton({ value, label, size = 'sm' }: { value: string; label?: string; size?: 'sm' | 'default' }) {
   const [copied, setCopied] = useState(false);
   return (
     <Button
       type="button"
       variant="outline"
-      size="sm"
+      size={size}
       onClick={async () => {
         await navigator.clipboard.writeText(value);
         setCopied(true);

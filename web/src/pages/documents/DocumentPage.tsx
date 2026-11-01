@@ -483,7 +483,7 @@ function LinksDialog({ links, onClose }: { links: SignerLink[]; onClose: () => v
               <Label>{l.name}</Label>
               <div className="flex gap-2">
                 <Input readOnly value={l.url} className="font-mono text-xs" onFocus={(e) => e.target.select()} />
-                <CopyButton value={l.url} />
+                <CopyButton value={l.url} size="default" />
               </div>
             </div>
           ))}

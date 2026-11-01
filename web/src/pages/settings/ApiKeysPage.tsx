@@ -185,7 +185,7 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
             </DialogHeader>
             <div className="flex gap-2">
               <Input readOnly value={key} className="font-mono text-xs" onFocus={(e) => e.target.select()} />
-              <CopyButton value={key} />
+              <CopyButton value={key} size="default" />
             </div>
             <p className="text-xs text-muted-foreground">
               {tx('Send it as {header}. The API is documented at {link}.', {

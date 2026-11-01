@@ -22,7 +22,8 @@ type Spec = {
   /** `lines` is a list of strings, edited one per line. */
   type?: 'text' | 'secret' | 'bool' | 'number' | 'select' | 'file' | 'pem' | 'color' | 'country' | 'timeZone' | 'aiModel' | 'lines';
   hint?: string;
-  options?: [string, string][] | (() => [string, string][]);
+  // The third value marks a name that is never translated, such as a brand that is also an English word.
+  options?: [string, string, 'brand'?][] | (() => [string, string, 'brand'?][]);
   placeholder?: string;
   /** Shown only when this other boolean or text field is set, or equals `is` when given. */
   when?: string;
@@ -68,7 +69,7 @@ const GROUPS: Record<Group, { title: string; description: string; help?: string;
         label: msg('Provider'),
         type: 'select',
         options: [
-          ['resend', 'Resend'],
+          ['resend', 'Resend', 'brand'],
           ['smtp', 'SMTP'],
         ],
       },
@@ -703,7 +704,7 @@ export function SettingsGroup({ group }: { group: Group }) {
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [certFiles, setCertFiles] = useState<Record<string, File>>({});
   const save = useApiMutation('settings.update', {
-    invalidates: ['settings.', 'ai.', 'setup.', 'automations.'],
+    invalidates: ['settings.', 'ai.', 'setup.', 'automations.', 'branding.'],
     onSuccess: () => {
       setDraft({});
       setCertFiles({});
@@ -781,9 +782,9 @@ export function SettingsGroup({ group }: { group: Group }) {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {(typeof f.options === 'function' ? f.options() : f.options!).map(([v, name]) => (
+                        {(typeof f.options === 'function' ? f.options() : f.options!).map(([v, name, brand]) => (
                           <SelectItem key={v || 'off'} value={v || 'off'}>
-                            {t(name)}
+                            {brand ? name : t(name)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -808,7 +809,7 @@ export function SettingsGroup({ group }: { group: Group }) {
               if (f.type === 'country' || f.type === 'timeZone') {
                 const country = f.type === 'country';
                 return (
-                  <Field key={f.key} label={f.label} htmlFor={id} hint={hint}>
+                  <Field key={f.key} label={label} htmlFor={id} hint={hint}>
                     <SearchSelect
                       id={id}
                       value={String(value(f.key) ?? '')}
