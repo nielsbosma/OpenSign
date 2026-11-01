@@ -17,7 +17,9 @@
     "test:e2e": "pnpm --filter @opensign/web exec playwright test",
     "api:types": "pnpm --filter @opensign/web api:types",
     "infra:up": "docker compose up -d --wait postgres s3 mailpit webhooks converter && docker compose run --rm s3-init",
-    "infra:down": "docker compose down"
+    "infra:down": "docker compose down",
+    "stack:up": "docker compose --profile prod up -d --build --wait",
+    "stack:fresh": "docker compose --profile prod down -v && docker compose --profile prod up -d --build --wait"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

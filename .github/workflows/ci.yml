@@ -1,15 +1,13 @@
 name: CI
 
-# Pull requests: lint, tests, supply-chain checks, independent validation of a sealed PDF, and an
-# image smoke test (not pushed).
-# main: the same, then amd64 and arm64 are built on native runners and pushed as
-# ghcr.io/<owner>/opensign:edge.
+# Runs only when an image is built, so pull requests have no checks; run them locally (see CLAUDE.md).
+# main: lint, tests, supply-chain checks, independent validation of a sealed PDF and an image smoke
+# test, then amd64 and arm64 are built on native runners and pushed as ghcr.io/<owner>/opensign:edge.
 # Releases: publishing a GitHub Release named vX.Y.Z pushes :X.Y.Z, :X.Y and :latest, then calls the
 # SLIPLANE_DEPLOY_HOOK secret if set (deploy/Connect-Github.ps1 sets it). The tag that comes with a
 # release starts no run of its own, so each release is built once.
 
 on:
-  pull_request:
   push:
     branches: [main]
   release:
@@ -17,7 +15,7 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -150,7 +148,6 @@ jobs:
   build:
     name: Build ${{ matrix.arch }}
     needs: image
-    if: github.event_name != 'pull_request'
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read

@@ -2,7 +2,8 @@
 # (and Gotenberg on a private network for Word documents).
 #
 #   pnpm infra:up                         Postgres, S3 (RustFS), Mailpit and Gotenberg for `pnpm dev`
-#   docker compose --profile prod up -d   also runs the production image at http://localhost:8090
+#   pnpm stack:up                         also builds and runs the production image at http://localhost:8090
+#   pnpm stack:fresh                      the same from empty, deleting the local data
 #
 # Mailpit's inbox: http://localhost:8026 (dev email goes there instead of Resend).
 # Webhook receiver: http://localhost:8027. Point a webhook at http://localhost:8027/<any uuid> from `pnpm dev`,
