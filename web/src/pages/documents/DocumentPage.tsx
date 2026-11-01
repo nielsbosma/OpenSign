@@ -677,6 +677,7 @@ export function DocumentPage() {
   const versions = useApi('templates.versions', { templateId: id }, { enabled: !!doc?.isTemplate });
 
   const setParties = useApiMutation('documents.set_parties', { invalidates: ['documents.', 'templates.versions'] });
+  const saveParty = useApiMutation('documents.set_parties', { invalidates: ['documents.', 'templates.versions'], silent: true });
   const setSequential = useApiMutation('documents.update', { invalidates: ['documents.', 'templates.versions'] });
   const removeFile = useApiMutation('documents.remove_file', { invalidates: ['documents.', 'templates.versions'] });
   const detect = useApiMutation('documents.detect_fields', {
@@ -1339,7 +1340,12 @@ export function DocumentPage() {
         sequential={doc.sequential}
         available={authMethods.data?.available ?? ['none', 'standard']}
         documentLanguage={doc.language}
-        onSave={(p) => saveParties(partyDialog.party ? allParties().map((x) => (x.id === p.id ? p : x)) : [...allParties(), p])}
+        onSave={(p) =>
+          saveParty.mutateAsync({
+            documentId: doc.id,
+            parties: partyDialog.party ? allParties().map((x) => (x.id === p.id ? p : x)) : [...allParties(), p],
+          })
+        }
       />
       <SendDialog doc={doc} open={sending} onOpenChange={setSending} onSent={setLinks} />
       {draft && !doc.isTemplate && (

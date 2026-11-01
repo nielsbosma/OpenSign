@@ -139,7 +139,7 @@ export function ReviewPanel({ documentId, draft }: { documentId: string; draft: 
           {checks.data ? <Checks checks={checks.data} /> : <Spinner />}
         </section>
       )}
-      <section className="grid gap-3">
+      <section className="grid gap-2">
         <h3 className="flex items-center gap-2 font-medium">
           <Sparkles className="size-4 text-primary" /> {t('AI Review')}
         </h3>
