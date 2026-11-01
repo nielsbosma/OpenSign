@@ -43,6 +43,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   type AttachmentRequest,
   type AuthMethod,
@@ -90,6 +91,21 @@ import { ShareLinkSection } from './ShareLinkSection';
 import { SigningPreviewDialog } from './SigningPreviewDialog';
 import { announceUpload, DetectButton, SuggestionBar, SuggestionLayer } from './SuggestedFields';
 import { TemplateHistoryDialog } from './TemplateHistory';
+
+/** A disabled button takes no pointer events, so the tooltip hangs on a wrapper that keyboard users can reach too. */
+function DisabledHint({ reason, children }: { reason: string | null; children: React.ReactNode }) {
+  if (!reason) return children;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span tabIndex={0} className="inline-flex cursor-not-allowed rounded-md">
+          {children}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{reason}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -951,27 +967,33 @@ export function DocumentPage() {
             </Button>
           )}
           {doc.files.length > 0 && doc.status !== 'completed' && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                flush();
-                setPreviewing(true);
-              }}
-              disabled={!doc.parties.length}
-              title={doc.parties.length ? t('See the signing page as a party will') : t('Add a party to preview the signing page')}
-            >
-              <Eye /> {t('Preview')}
-            </Button>
+            <DisabledHint reason={doc.parties.length ? null : t('Add a party to preview the signing page')}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  flush();
+                  setPreviewing(true);
+                }}
+                disabled={!doc.parties.length}
+                title={doc.parties.length ? t('See the signing page as a party will') : undefined}
+              >
+                <Eye /> {t('Preview')}
+              </Button>
+            </DisabledHint>
           )}
           {draft && !doc.isTemplate && (
-            <Button variant="outline" onClick={() => flush().then(() => setSigningMyself(true))} disabled={!doc.files.length}>
-              <PenLine /> {t('Sign Myself')}
-            </Button>
+            <DisabledHint reason={doc.files.length ? null : t('Add a file first')}>
+              <Button variant="outline" onClick={() => flush().then(() => setSigningMyself(true))} disabled={!doc.files.length}>
+                <PenLine /> {t('Sign Myself')}
+              </Button>
+            </DisabledHint>
           )}
           {draft && !doc.isTemplate && (
-            <Button onClick={() => setSending(true)} disabled={!doc.files.length}>
-              <Send /> {t('Send')}
-            </Button>
+            <DisabledHint reason={doc.files.length ? null : t('Add a file first')}>
+              <Button onClick={() => setSending(true)} disabled={!doc.files.length}>
+                <Send /> {t('Send')}
+              </Button>
+            </DisabledHint>
           )}
           {pending && doc.canEdit && (
             <Button variant="outline" onClick={() => remind.mutate({ id: doc.id })} disabled={remind.isPending}>
