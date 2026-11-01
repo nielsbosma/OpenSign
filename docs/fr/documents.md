@@ -154,7 +154,7 @@ Si un admin a configuré l’IA, le même panneau peut aussi demander à une IA 
 
 ## Analyse IA par les signataires
 
-Par défaut, les signataires peuvent confier à leur propre assistant IA une copie en lecture seule du document pour qu’il le leur explique avant de signer. Désactivez **Autoriser les signataires à partager avec leur IA** sous **Analyse IA par les signataires** pour l’empêcher. Voir [La page de signature](signing-page.md#review-with-your-ai).
+Par défaut, les signataires peuvent confier à leur propre assistant IA une copie en lecture seule du document pour qu’il le leur explique avant de signer. Désactivez **Autoriser les signataires à partager avec leur IA** sous **Avancé** > **Analyse IA par les signataires** pour l’empêcher. Voir [La page de signature](signing-page.md#review-with-your-ai).
 
 ## Envoi
 

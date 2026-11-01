@@ -154,7 +154,7 @@ If an admin has set up AI, the same panel can also ask an AI to read the documen
 
 ## AI review by signers
 
-By default, signers can give their own AI assistant a read-only copy of the document to explain it before they sign. Turn **Let Signers Share With Their AI** off under **AI Review by Signers** to prevent it. See [The signing page](signing-page.md#review-with-your-ai).
+By default, signers can give their own AI assistant a read-only copy of the document to explain it before they sign. Turn **Let Signers Share With Their AI** off under **Advanced** > **AI Review by Signers** to prevent it. See [The signing page](signing-page.md#review-with-your-ai).
 
 ## Sending
 

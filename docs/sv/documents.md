@@ -154,7 +154,7 @@ Om en administratör har ställt in AI kan samma panel också be en AI läsa dok
 
 ## AI-granskning av signerare
 
-Som standard kan undertecknare ge sin egen AI-assistent en skrivskyddad kopia av dokumentet för att förklara det innan de signerar. Stäng av **Låt signerare dela med sin AI** under **AI-granskning av signerare** för att förhindra det. Se [Signeringssidan](signing-page.md#review-with-your-ai).
+Som standard kan undertecknare ge sin egen AI-assistent en skrivskyddad kopia av dokumentet för att förklara det innan de signerar. Stäng av **Låt signerare dela med sin AI** under **Avancerat** > **AI-granskning av signerare** för att förhindra det. Se [Signeringssidan](signing-page.md#review-with-your-ai).
 
 ## Skicka
 

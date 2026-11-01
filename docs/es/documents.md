@@ -154,7 +154,7 @@ Si un administrador ha configurado la IA, el mismo panel también puede pedir a 
 
 ## Revisión con IA por los firmantes
 
-Por defecto, los firmantes pueden dar a su propio asistente de IA una copia de solo lectura del documento para que se lo explique antes de firmar. Desactive **Permitir que los firmantes compartan con su IA** en **Revisión con IA por los firmantes** para impedirlo. Consulte [La página de firma](signing-page.md#review-with-your-ai).
+Por defecto, los firmantes pueden dar a su propio asistente de IA una copia de solo lectura del documento para que se lo explique antes de firmar. Desactive **Permitir que los firmantes compartan con su IA** en **Avanzado** > **Revisión con IA por los firmantes** para impedirlo. Consulte [La página de firma](signing-page.md#review-with-your-ai).
 
 ## Enviar
 
