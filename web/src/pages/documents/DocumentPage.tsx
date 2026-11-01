@@ -3,6 +3,7 @@ import {
   ArchiveRestore,
   ArrowLeft,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Copy,
   Download,
@@ -1258,8 +1259,18 @@ export function DocumentPage() {
                   <FileDrop onFiles={upload} busy={uploading} />
                 </Section>
               )}
-              {draft && <DetailsSection key={doc.id} doc={doc} />}
-              {(draft || (pending && doc.canEdit)) && <AiReviewSection doc={doc} />}
+              {(draft || (pending && doc.canEdit)) && (
+                <details className="group">
+                  <summary className="flex cursor-pointer list-none items-center gap-1.5 font-medium [&::-webkit-details-marker]:hidden">
+                    <ChevronRight className="size-4 text-muted-foreground transition-transform group-open:rotate-90 rtl:rotate-180 rtl:group-open:rotate-90" />
+                    {t('Advanced')}
+                  </summary>
+                  <div className="mt-4 grid gap-6">
+                    {draft && <DetailsSection key={doc.id} doc={doc} />}
+                    <AiReviewSection doc={doc} />
+                  </div>
+                </details>
+              )}
               {doc.isTemplate && doc.canEdit && can('documents.create') && <ShareLinkSection doc={doc} />}
               {doc.status === 'completed' && doc.sealedSha256 && (
                 <Section title={t('Seal')}>

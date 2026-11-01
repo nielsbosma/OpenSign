@@ -154,7 +154,7 @@ Se um admin configurou a IA, o mesmo painel também pode pedir a uma IA que leia
 
 ## Revisão por IA pelos signatários
 
-Por padrão, os signatários podem dar ao seu próprio assistente de IA uma cópia somente leitura do documento para que o explique antes de assinarem. Desative **Permitir que signatários compartilhem com a IA deles**, em **Revisão por IA pelos signatários**, para impedir isso. Veja [A página de assinatura](signing-page.md#review-with-your-ai).
+Por padrão, os signatários podem dar ao seu próprio assistente de IA uma cópia somente leitura do documento para que o explique antes de assinarem. Desative **Permitir que signatários compartilhem com a IA deles**, em **Avançado** > **Revisão por IA pelos signatários**, para impedir isso. Veja [A página de assinatura](signing-page.md#review-with-your-ai).
 
 ## Envio
 
