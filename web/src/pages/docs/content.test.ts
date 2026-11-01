@@ -1,10 +1,29 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { docHref, headingSlugger, headings, PAGES, search } from './content';
+import { APP_LANGUAGES } from '@/lib/i18n';
+import { anchorIds, docHref, headingSlugger, headings, localizedPages, PAGES, search } from './content';
 
 const docsDir = fileURLToPath(new URL('../../../../docs', import.meta.url));
 const srcDir = fileURLToPath(new URL('../..', import.meta.url));
+const languages = APP_LANGUAGES.map(([code]) => code).filter((code) => code !== 'en');
+
+function translatedFiles(language: string) {
+  const dir = `${docsDir}/${language}`;
+  return existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.md')) : [];
+}
+
+const FENCE = /^[ \t]*```[\s\S]*?^[ \t]*```/gm;
+
+/** What a translation must keep from its English source: heading levels, code blocks in order, and links and images. */
+function structure(markdown: string) {
+  const prose = markdown.replace(FENCE, '');
+  return {
+    headings: [...prose.matchAll(/^(#{1,6}) /gm)].map((m) => m[1]),
+    fences: [...markdown.matchAll(FENCE)].map((m) => m[0].replace(/^[ \t]+/gm, '')),
+    links: [...prose.matchAll(/\]\(([^)\s]+)\)/g)].map((m) => m[1]).sort(),
+  };
+}
 
 function headingIds() {
   return new Map(
@@ -56,6 +75,36 @@ describe('docs', () => {
       }
     }
     expect(count).toBeGreaterThan(10);
+  });
+
+  it('keeps only languages the app has, in folders of their own', () => {
+    const folders = readdirSync(docsDir, { withFileTypes: true }).filter((e) => e.isDirectory() && e.name !== 'images');
+    for (const folder of folders) expect(languages, folder.name).toContain(folder.name);
+  });
+
+  for (const language of languages) {
+    it(`has translations in ${language} with the structure of their English source`, () => {
+      for (const file of translatedFiles(language)) {
+        const english = PAGES.find((p) => `${p.slug}.md` === file);
+        expect(english, `${language}/${file} has no English page`).toBeDefined();
+        const markdown = readFileSync(`${docsDir}/${language}/${file}`, 'utf8');
+        expect(markdown.startsWith('# '), `${language}/${file} starts with a title`).toBe(true);
+        expect(structure(markdown), `${language}/${file}`).toEqual(structure(english?.markdown ?? ''));
+      }
+    });
+  }
+
+  it('keeps English anchors and search on translated pages', () => {
+    const page = PAGES.find((p) => p.slug === 'templates');
+    const ids = anchorIds(page?.markdown ?? '');
+    const translated = '# Mallar\n\n## Versioner\n\nOrd som hittas.\n';
+    const pages = localizedPages(new Map([['templates', translated]]));
+    const localized = pages.find((p) => p.slug === 'templates');
+    expect(localized?.title).toBe('Mallar');
+    expect(localized?.anchors).toEqual(ids);
+    expect(headings(translated, localized?.anchors)[0]?.id).toBe(ids[1]);
+    expect(search('hittas', pages)[0]?.id).toBe(ids[1]);
+    expect(search('hittas')).toEqual([]);
   });
 
   it('makes GitHub-style heading ids', () => {

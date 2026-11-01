@@ -1,4 +1,5 @@
-//! Embeds `docs/*.md` so the docs tools can serve them without files next to the binary.
+//! Embeds `docs/*.md` so the docs tools can serve them without files next to the binary. English only: the translations
+//! in `docs/<language>/` are for the docs site, and this reads no subfolders.
 
 use std::path::Path;
 use std::{env, fs};
