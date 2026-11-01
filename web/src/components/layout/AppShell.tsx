@@ -24,14 +24,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { call, useApi } from '@/lib/api';
-import { ROLE_LABELS } from '@/lib/format';
 import { isRtl, t, useLanguage } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { useTheme } from '@/lib/theme';
@@ -68,15 +66,16 @@ function UserMenu() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-56">
-        <DropdownMenuLabel className="font-normal text-muted-foreground">
-          {user && t(ROLE_LABELS[user.role] ?? user.role)}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={toggle}>
           {theme === 'dark' ? <Sun /> : <Moon />} {theme === 'dark' ? t('Light Theme') : t('Dark Theme')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => navigate('/settings')}>
           <Settings /> {t('Settings')}
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a href="/docs" target="_blank" rel="noreferrer">
+            <BookOpen /> {t('Documentation')}
+          </a>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <a href="/api-explorer" target="_blank" rel="noreferrer">
@@ -133,9 +132,6 @@ function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onClose: ()
         )}
         <a href="/verify" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
           <ShieldCheck className="size-4 opacity-80" /> {t('Verify a Document')}
-        </a>
-        <a href="/docs" target="_blank" rel="noreferrer" className={linkClass({ isActive: false })}>
-          <BookOpen className="size-4 opacity-80" /> {t('Documentation')}
         </a>
       </nav>
       <div className="grid gap-0.5 border-t border-sidebar-border px-2 py-2">
