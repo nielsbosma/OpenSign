@@ -116,7 +116,7 @@ pub async fn version_files(ctx: &Ctx, conn: &mut PgConnection, template: &Docume
 fn note(value: Option<&str>) -> Result<Option<String>> {
     let Some(value) = value.map(str::trim).filter(|v| !v.is_empty()) else { return Ok(None) };
     if value.chars().count() > MAX_NOTE {
-        return Err(bad_request(format!("Keep the note under {MAX_NOTE} characters")));
+        return Err(bad_request("Keep the note under {max} characters").params([("max", &MAX_NOTE)]));
     }
     if value.chars().any(|c| c.is_control() && c != '\n') {
         return Err(bad_request("The note contains characters that are not allowed"));
@@ -325,7 +325,7 @@ impl Service for Save {
             && versions::open(ctx.keys(), last.id, last.snapshot)? == content
         {
             if note.is_none() {
-                return Err(conflict(format!("Nothing has changed since version {}", last.number)));
+                return Err(conflict("Nothing has changed since version {number}").params([("number", &last.number)]));
             }
             sqlx::query("update template_versions set note = $3 where template_id = $1 and number = $2")
                 .bind(t.id)
@@ -365,7 +365,7 @@ impl Service for Restore {
         let target = version(ctx, conn, t.id, input.number).await?;
         let (_, current) = current_version(ctx, conn, t.id).await?;
         if current == target {
-            return Err(conflict(format!("The template already matches version {}", input.number)));
+            return Err(conflict("The template already matches version {number}").params([("number", &input.number)]));
         }
         versions::clear(conn, t.id).await?;
         versions::apply(ctx, conn, &target, t.id).await?;

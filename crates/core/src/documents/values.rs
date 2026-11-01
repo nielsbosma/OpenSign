@@ -155,16 +155,16 @@ pub fn check_spec(kind: FieldKind, spec: &Spec, group_key: Option<&str>) -> Resu
     for option in &spec.options {
         let option = clean_line(option);
         if option.is_empty() || option.chars().count() > MAX_OPTION_CHARS || option.chars().any(char::is_control) {
-            return Err(bad_request(format!("Each option needs a name of at most {MAX_OPTION_CHARS} characters")));
+            return Err(bad_request("Each option needs a name of at most {max} characters").params([("max", &MAX_OPTION_CHARS)]));
         }
         if options.contains(&option) {
-            return Err(bad_request(format!("The option \u{201c}{option}\u{201d} is listed twice")));
+            return Err(bad_request("The option \u{201c}{option}\u{201d} is listed twice").params([("option", &option)]));
         }
         options.push(option);
     }
     match kind {
         FieldKind::Select | FieldKind::Multiselect if options.is_empty() || options.len() > MAX_OPTIONS => {
-            return Err(bad_request(format!("A list field needs from 1 to {MAX_OPTIONS} options")));
+            return Err(bad_request("A list field needs from 1 to {max} options").params([("max", &MAX_OPTIONS)]));
         }
         FieldKind::Radio if options.len() != 1 => return Err(bad_request("Each radio button holds exactly one option")),
         _ if !has_options(kind) && !options.is_empty() => return Err(bad_request("Only list and radio fields have options")),
@@ -181,7 +181,7 @@ pub fn check_spec(kind: FieldKind, spec: &Spec, group_key: Option<&str>) -> Resu
         (FieldKind::Date | FieldKind::DateInput, Some(f)) if DATE_FORMATS.iter().any(|(name, _)| *name == f) => {}
         (FieldKind::Date | FieldKind::DateInput, Some(_)) => {
             let names: Vec<&str> = DATE_FORMATS.iter().map(|(name, _)| *name).collect();
-            return Err(bad_request(format!("A date format is one of {}", names.join(", "))));
+            return Err(bad_request("A date format is one of {formats}").params([("formats", &names.join(", "))]));
         }
         (FieldKind::Number | FieldKind::Formula, Some(f)) if NumberFormat::parse(f).is_some() => {}
         (FieldKind::Number | FieldKind::Formula, Some(_)) => {
@@ -192,21 +192,21 @@ pub fn check_spec(kind: FieldKind, spec: &Spec, group_key: Option<&str>) -> Resu
 
     let v = &spec.validation;
     if v.message.as_deref().is_some_and(|m| m.chars().count() > MAX_MESSAGE_CHARS || m.chars().any(char::is_control)) {
-        return Err(bad_request(format!("Keep the error text under {MAX_MESSAGE_CHARS} characters")));
+        return Err(bad_request("Keep the error text under {max} characters").params([("max", &MAX_MESSAGE_CHARS)]));
     }
     if (v.pattern.is_some() || v.min_length.is_some() || v.max_length.is_some()) && !text_kind(kind) {
         return Err(bad_request("Only text, initials and company fields take a pattern or a length"));
     }
     if let Some(pattern) = &v.pattern {
         if pattern.is_empty() || pattern.chars().count() > MAX_PATTERN_CHARS {
-            return Err(bad_request(format!("A pattern is from 1 to {MAX_PATTERN_CHARS} characters")));
+            return Err(bad_request("A pattern is from 1 to {max} characters").params([("max", &MAX_PATTERN_CHARS)]));
         }
         if compile(pattern).is_none() {
             return Err(bad_request("The pattern is not a valid regular expression"));
         }
     }
     if v.max_length.is_some_and(|n| n == 0 || n > MAX_TEXT_CHARS) || v.min_length.is_some_and(|n| n > MAX_TEXT_CHARS) {
-        return Err(bad_request(format!("A length is from 1 to {MAX_TEXT_CHARS} characters")));
+        return Err(bad_request("A length is from 1 to {max} characters").params([("max", &MAX_TEXT_CHARS)]));
     }
     if let (Some(min), Some(max)) = (v.min_length, v.max_length)
         && min > max

@@ -134,7 +134,7 @@ async fn update<G: SettingsGroup>(ctx: &Ctx, conn: &mut PgConnection, patch: &Va
     if let Value::Object(changes) = patch
         && let Some(field) = changes.keys().find(|k| pinned.contains(k))
     {
-        return Err(bad_request(format!("{field} is fixed by an environment variable")));
+        return Err(bad_request("{field} is fixed by an environment variable").params([("field", &field)]));
     }
     let current: G = settings(ctx, conn).await?;
     if !ctx.in_app() {
@@ -272,7 +272,7 @@ pub(crate) fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
             let present = |s: &str| !s.trim().is_empty();
             for (name, ca) in [("BankID server CA", &eid.bankid_ca_certificate), ("Freja server CA", &eid.freja_ca_certificate)] {
                 if present(ca) && reqwest::Certificate::from_pem_bundle(ca.as_bytes()).map_or(true, |c| c.is_empty()) {
-                    return Err(bad_request(format!("The {name} must be a PEM certificate")));
+                    return Err(bad_request("The {name} must be a PEM certificate").params([("name", &name)]));
                 }
             }
             for (name, identity) in [("BankID", &eid.bankid_certificate), ("Freja eID", &eid.freja_certificate)] {
@@ -318,9 +318,10 @@ pub(crate) fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
                 return Err(bad_request("List at most 20 sites allowed to embed"));
             }
             if let Some(bad) = security.embed_origins.iter().find(|o| crate::settings::canonical_origin(o).as_deref() != Some(o.as_str())) {
-                return Err(bad_request(format!(
-                    "{bad} is not a site address. Enter each as https://app.example.com, without a path or wildcards."
-                )));
+                return Err(bad_request(
+                    "{bad} is not a site address. Enter each as https://app.example.com, without a path or wildcards.",
+                )
+                .params([("bad", &bad)]));
             }
             if security.embed_signing && security.embed_origins.is_empty() {
                 return Err(bad_request("List the sites allowed to embed the signing page before turning embedding on"));

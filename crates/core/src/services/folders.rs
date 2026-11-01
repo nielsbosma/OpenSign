@@ -140,7 +140,7 @@ async fn check_parent(conn: &mut PgConnection, parent_id: Option<Uuid>, scope: &
         return Err(bad_request("Template folders and document folders cannot be mixed"));
     }
     if depth(conn, parent_id).await? + levels > MAX_DEPTH {
-        return Err(bad_request(format!("Folders can be nested at most {MAX_DEPTH} levels deep")));
+        return Err(bad_request("Folders can be nested at most {max} levels deep").params([("max", &MAX_DEPTH)]));
     }
     Ok(())
 }
@@ -388,7 +388,7 @@ fn check_ids(ids: &[Uuid]) -> Result<Vec<Uuid>> {
     ids.sort();
     ids.dedup();
     if ids.is_empty() || ids.len() > MAX_ITEMS {
-        return Err(bad_request(format!("Choose between 1 and {MAX_ITEMS} items")));
+        return Err(bad_request("Choose between 1 and {max} items").params([("max", &MAX_ITEMS)]));
     }
     Ok(ids)
 }
@@ -487,7 +487,8 @@ impl Service for Archive {
         for id in &ids {
             let document = load_document(ctx, conn, *id, Need::Edit).await?;
             if input.archived && !document.is_template && !status::FINISHED.contains(&document.status.as_str()) {
-                return Err(conflict(format!("Only finished documents can be archived, and \"{}\" is not finished", document.title)));
+                return Err(conflict("Only finished documents can be archived, and \"{title}\" is not finished")
+                    .params([("title", &document.title)]));
             }
             if document.archived_at.is_some() == input.archived {
                 continue;
@@ -500,10 +501,8 @@ impl Service for Archive {
                 .fetch_one(&mut *conn)
                 .await?;
                 if busy {
-                    return Err(conflict(format!(
-                        "\"{}\" has a bulk send in progress. Archive it when the bulk send is done.",
-                        document.title
-                    )));
+                    return Err(conflict("\"{title}\" has a bulk send in progress. Archive it when the bulk send is done.")
+                        .params([("title", &document.title)]));
                 }
             }
             sqlx::query("update documents set archived_at = $2 where id = $1")

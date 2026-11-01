@@ -283,10 +283,13 @@ async fn decode(file: &FileInput) -> Result<Sheet> {
 fn check_mapping(mapping: &[ColumnMapping], sheet: &Sheet, targets: &[Target]) -> Result<HashMap<String, usize>> {
     let mut by_target = HashMap::new();
     for m in mapping.iter().filter(|m| !m.target.is_empty()) {
-        let column =
-            sheet.columns.iter().position(|c| *c == m.column).ok_or_else(|| bad_request(format!("There is no column “{}”", m.column)))?;
+        let column = sheet
+            .columns
+            .iter()
+            .position(|c| *c == m.column)
+            .ok_or_else(|| bad_request("There is no column “{column}”").params([("column", &m.column)]))?;
         if !targets.iter().any(|t| t.key == m.target) {
-            return Err(bad_request(format!("“{}” is not something the template can take", m.target)));
+            return Err(bad_request("“{target}” is not something the template can take").params([("target", &m.target)]));
         }
         if by_target.insert(m.target.clone(), column).is_some() {
             return Err(bad_request("Map each template field from one column only"));
@@ -459,7 +462,7 @@ impl Service for Start {
         let problems = all_problems(&t, &sheet, &by_target, 5);
         if !problems.is_empty() {
             let list: Vec<String> = problems.iter().map(|p| format!("row {}: {}", p.row, p.message)).collect();
-            return Err(bad_request(format!("Fix these rows first: {}", list.join("; "))));
+            return Err(bad_request("Fix these rows first: {rows}").params([("rows", &list.join("; "))]));
         }
         let pattern = input.title_pattern.as_deref().unwrap_or("").trim().chars().take(200).collect::<String>();
         let id = Uuid::now_v7();

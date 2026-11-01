@@ -32,7 +32,7 @@ pub fn logo_path(org: &OrgSettings) -> Option<String> {
 /// because it can carry script.
 pub async fn clean_logo(bytes: Vec<u8>) -> Result<Vec<u8>> {
     if bytes.len() > LOGO_MAX_BYTES {
-        return Err(bad_request(format!("The logo can be at most {} MB", LOGO_MAX_BYTES / 1024 / 1024)));
+        return Err(bad_request("The logo can be at most {max} MB").params([("max", &(LOGO_MAX_BYTES / 1024 / 1024))]));
     }
     let head = String::from_utf8_lossy(&bytes[..bytes.len().min(512)]).to_ascii_lowercase();
     if head.contains("<svg") || head.trim_start().starts_with("<?xml") {
@@ -44,7 +44,8 @@ pub async fn clean_logo(bytes: Vec<u8>) -> Result<Vec<u8>> {
     let (width, height, png) =
         tokio::task::spawn_blocking(move || reencode_image_with_alpha(&bytes)).await.map_err(AppError::internal)??;
     if width.min(height) < LOGO_MIN_SIDE || width.max(height) > LOGO_MAX_SIDE {
-        return Err(bad_request(format!("The logo must be between {LOGO_MIN_SIDE} and {LOGO_MAX_SIDE} pixels on each side")));
+        return Err(bad_request("The logo must be between {min} and {max} pixels on each side")
+            .params([("min", &LOGO_MIN_SIDE), ("max", &LOGO_MAX_SIDE)]));
     }
     Ok(png)
 }
@@ -144,7 +145,7 @@ impl Service for SetLogo {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: SetLogoInput) -> Result<Branding> {
         if input.content_base64.len() > LOGO_MAX_BYTES / 3 * 4 + 8 {
-            return Err(bad_request(format!("The logo can be at most {} MB", LOGO_MAX_BYTES / 1024 / 1024)));
+            return Err(bad_request("The logo can be at most {max} MB").params([("max", &(LOGO_MAX_BYTES / 1024 / 1024))]));
         }
         let bytes = B64.decode(input.content_base64.trim()).map_err(|_| bad_request("contentBase64 is not valid base64"))?;
         let png = clean_logo(bytes).await?;

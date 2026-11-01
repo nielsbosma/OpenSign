@@ -103,7 +103,7 @@ impl Service for Create {
         events.sort();
         events.dedup();
         if events.is_empty() || events.iter().any(|e| e != "*" && !EVENTS.contains(&e.as_str())) {
-            return Err(bad_request(format!("Choose events from: *, {}", EVENTS.join(", "))));
+            return Err(bad_request("Choose events from: *, {events}").params([("events", &EVENTS.join(", "))]));
         }
         let id = Uuid::now_v7();
         let secret = format!("whsec_{}", random_token());

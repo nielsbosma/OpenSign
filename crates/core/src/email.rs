@@ -223,7 +223,8 @@ mod smtp {
     }
 
     fn mailbox(name: &str, address: &str) -> Result<Mailbox> {
-        let address = address.parse().map_err(|_| bad_request(format!("{address} is not an address an email can go to")))?;
+        let address =
+            address.parse().map_err(|_| bad_request("{address} is not an address an email can go to").params([("address", &address)]))?;
         let name = name.replace(['<', '>', '"', ',', ';'], "");
         Ok(Mailbox::new((!name.is_empty()).then_some(name), address))
     }

@@ -547,10 +547,10 @@ async fn check(ctx: &Ctx, conn: &mut PgConnection, input: &AutomationInput) -> R
         return Err(bad_request("Give the automation a name of up to 200 characters"));
     }
     if !EVENTS.contains(&input.event.as_str()) {
-        return Err(bad_request(format!("Choose an event from: {}", EVENTS.join(", "))));
+        return Err(bad_request("Choose an event from: {events}").params([("events", &EVENTS.join(", "))]));
     }
     if input.template_ids.len() > MAX_FILTER_IDS || input.folder_ids.len() > MAX_FILTER_IDS {
-        return Err(bad_request(format!("Pick at most {MAX_FILTER_IDS} templates and {MAX_FILTER_IDS} folders")));
+        return Err(bad_request("Pick at most {max} templates and {max} folders").params([("max", &MAX_FILTER_IDS)]));
     }
     let templates: i64 = sqlx::query_scalar("select count(*) from documents where id = any($1) and is_template")
         .bind(&input.template_ids)
@@ -571,7 +571,8 @@ async fn check(ctx: &Ctx, conn: &mut PgConnection, input: &AutomationInput) -> R
     let mut placeholders = BTreeSet::new();
     used(&arguments, &mut placeholders);
     if let Some(bad) = placeholders.iter().find(|p| !known(p)) {
-        return Err(bad_request(format!("{{{{{bad}}}}} is not a placeholder OpenSign knows. See the list under Placeholders.")));
+        return Err(bad_request("{bad} is not a placeholder OpenSign knows. See the list under Placeholders.")
+            .params([("bad", &format!("{{{{{bad}}}}}"))]));
     }
     if placeholders.contains(crate::automations::SEALED_PDF) && input.event != "document.completed" {
         return Err(bad_request("{{sealedPdf}} is only there when the document is completed. Use the document.completed event."));
@@ -581,13 +582,17 @@ async fn check(ctx: &Ctx, conn: &mut PgConnection, input: &AutomationInput) -> R
     let app = account["toolkit"]["slug"].as_str().unwrap_or_default().to_string();
     let tool = tool_view(&composio.tool(input.tool.trim()).await?)?;
     if !tool.app.eq_ignore_ascii_case(&app) {
-        return Err(bad_request(format!("{} is a {} tool, but the connection is to {app}", tool.slug, tool.app)));
+        return Err(bad_request("{tool} is a {kind} tool, but the connection is to {app}").params([
+            ("tool", &tool.slug),
+            ("kind", &tool.app),
+            ("app", &app),
+        ]));
     }
     let properties = tool.input_schema["properties"].as_object();
     if let Some(unknown) =
         arguments.as_object().into_iter().flatten().map(|(k, _)| k).find(|k| properties.is_none_or(|p| !p.contains_key(*k)))
     {
-        return Err(bad_request(format!("{} has no input called {unknown}", tool.slug)));
+        return Err(bad_request("{tool} has no input called {unknown}").params([("tool", &tool.slug), ("unknown", &unknown)]));
     }
     let missing: Vec<&str> = tool.input_schema["required"]
         .as_array()
@@ -597,7 +602,7 @@ async fn check(ctx: &Ctx, conn: &mut PgConnection, input: &AutomationInput) -> R
         .filter(|k| arguments.get(*k).is_none_or(|v| v.is_null() || v.as_str().is_some_and(|s| s.trim().is_empty())))
         .collect();
     if !missing.is_empty() {
-        return Err(bad_request(format!("Fill in the tool's required inputs: {}", missing.join(", "))));
+        return Err(bad_request("Fill in the tool's required inputs: {inputs}").params([("inputs", &missing.join(", "))]));
     }
     Ok(Checked { name, app, tool: tool.slug, version: tool.version, arguments })
 }
