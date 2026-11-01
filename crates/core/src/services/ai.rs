@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
@@ -489,12 +491,21 @@ fn truncate(text: &str, max: usize) -> String {
 pub struct Check {
     /// `error` blocks sending; `warning` is worth a look.
     pub severity: String,
+    /// What is wrong, in English.
     pub message: String,
     pub party_id: Option<Uuid>,
+    /// Which check this is, for showing it in another language. Reviews saved before codes existed have none.
+    #[serde(default)]
+    pub code: Option<String>,
+    /// The values that fill the placeholders of the text for `code`.
+    #[serde(default)]
+    pub params: BTreeMap<String, String>,
 }
 
-fn check(severity: &str, message: impl Into<String>, party_id: Option<Uuid>) -> Check {
-    Check { severity: severity.into(), message: message.into(), party_id }
+fn check(severity: &str, code: &str, text: &str, param: Option<(&str, &str)>, party_id: Option<Uuid>) -> Check {
+    let message = param.map_or(text.to_string(), |(name, value)| text.replace(&format!("{{{name}}}"), value));
+    let params = param.map(|(name, value)| (name.to_string(), value.to_string())).into_iter().collect();
+    Check { severity: severity.into(), message, party_id, code: Some(code.into()), params }
 }
 
 /// Mistakes in a draft's setup that would stop it being signed, or make the result weaker.
@@ -504,49 +515,56 @@ pub async fn setup_checks(conn: &mut PgConnection, document_id: Uuid) -> Result<
     let parties = parties(conn, document_id).await?;
     let fields = fields(conn, document_id).await?;
     if files.is_empty() {
-        out.push(check("error", "Add the document to be signed", None));
+        out.push(check("error", "no_document", "Add the document to be signed", None, None));
     }
     if !parties.iter().any(|p| p.must_act()) {
-        out.push(check("error", "Add at least one signer or approver", None));
+        out.push(check("error", "no_signer", "Add at least one signer or approver", None, None));
     }
     for p in &parties {
         let mine: Vec<_> = fields.iter().filter(|f| f.party_id == Some(p.id)).collect();
         let delivery = Delivery::parse(&p.delivery).unwrap_or(Delivery::Email);
+        let party = |severity, code, text| check(severity, code, text, Some(("name", p.name.as_str())), Some(p.id));
         if p.role() == PartyRole::Signer && !mine.iter().any(|f| f.kind == "signature") {
-            out.push(check(
+            out.push(party(
                 "warning",
-                format!("{} has no signature field; their signature goes on the evidence page only", p.name),
-                Some(p.id),
+                "no_signature_field",
+                "{name} has no signature field; their signature goes on the evidence page only",
             ));
         }
         if p.role() == PartyRole::Viewer && !mine.is_empty() {
-            out.push(check("error", format!("{} only views the document but has fields to fill in", p.name), Some(p.id)));
+            out.push(party("error", "viewer_has_fields", "{name} only views the document but has fields to fill in"));
         }
         if delivery == Delivery::Email && p.email.is_none() {
-            out.push(check("error", format!("{} gets the document by email but has no email address", p.name), Some(p.id)));
+            out.push(party("error", "no_email", "{name} gets the document by email but has no email address"));
         }
         if delivery == Delivery::Sms && p.phone.is_none() {
-            out.push(check("error", format!("{} gets the document by SMS but has no phone number", p.name), Some(p.id)));
+            out.push(party("error", "no_phone", "{name} gets the document by SMS but has no phone number"));
         }
         for method in [p.auth_to_view(), p.auth_to_sign()] {
             if method == AuthMethod::SmsPin && p.phone.is_none() {
-                out.push(check("error", format!("{} must confirm with an SMS code but has no phone number", p.name), Some(p.id)));
+                out.push(party("error", "sms_code_no_phone", "{name} must confirm with an SMS code but has no phone number"));
             }
             if matches!(method, AuthMethod::SeBankid | AuthMethod::Freja) && p.personal_number.is_none() {
-                out.push(check(
+                out.push(party(
                     "warning",
-                    format!("{} signs with an eID but no personal number is set, so anyone with the link and an eID could sign", p.name),
-                    Some(p.id),
+                    "eid_no_personal_number",
+                    "{name} signs with an eID but no personal number is set, so anyone with the link and an eID could sign",
                 ));
             }
         }
         if p.email.is_none() && p.phone.is_none() && p.must_act() {
-            out.push(check("warning", format!("{} has no email or phone, so they will not get the signed copy", p.name), Some(p.id)));
+            out.push(party("warning", "no_contact", "{name} has no email or phone, so they will not get the signed copy"));
         }
     }
     for f in &fields {
         if f.party_id.is_none() && f.required && f.value.as_deref().is_none_or(str::is_empty) {
-            out.push(check("error", format!("Fill in the field \"{}\" before sending", f.label), None));
+            out.push(check(
+                "error",
+                "field_empty",
+                "Fill in the field \"{label}\" before sending",
+                Some(("label", f.label.as_str())),
+                None,
+            ));
         }
     }
     out.dedup_by(|a, b| a.message == b.message);
