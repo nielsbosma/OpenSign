@@ -680,7 +680,6 @@
   "eID broker": "电子身份代理",
   "eID broker (OpenID Connect)": "电子身份代理（OpenID Connect）",
   "expires {date}": "{date} 过期",
-  "failed": "失败",
   "from any IP address": "来自任意 IP 地址",
   "from {ips}": "来自 {ips}",
   "kept in this tab only": "仅保存在此标签页中",
@@ -1170,5 +1169,17 @@
   "Distribute Vertically": "垂直均匀分布",
   "Save your changes to test them.": "请保存更改后再进行测试。",
   "Add a file first": "请先添加文件",
-  "Advanced": "高级"
+  "Advanced": "高级",
+  "Expires {date}": "{date} 到期",
+  "Kept until {date}": "保留至 {date}",
+  "Step {step} in the signing order": "签署顺序第 {step} 步",
+  "Move {name} earlier": "将 {name} 上移",
+  "Move {name} later": "将 {name} 下移",
+  "{handled} of {total} handled · {sent} sent · {failed} failed": "已处理 {handled}/{total} · 已发送 {sent} · 失败 {failed}",
+  "Choose File": "选择文件",
+  "Choose Files": "选择文件",
+  "Inactive": "未激活",
+  "The server sent a response that could not be read": "服务器返回的响应无法读取",
+  "Something went wrong": "出了点问题",
+  "The preview could not be shown": "无法显示预览"
 }

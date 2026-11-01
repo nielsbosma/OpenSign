@@ -84,7 +84,7 @@ function SchemaRows({
               {typeLabel(spec, prop)}
               {nullable(spec, prop) && ' | null'}
             </span>
-            {object?.required?.includes(name) && <span className="text-[11px] text-destructive">required</span>}
+            {object?.required?.includes(name) && <span className="text-[11px] text-destructive">{t('required')}</span>}
             {description && <p className="w-full text-muted-foreground text-xs leading-relaxed">{description}</p>}
           </div>
         );
@@ -318,7 +318,7 @@ function EndpointView({ spec, endpoint }: { spec: OpenApi; endpoint: Endpoint })
               <span className="flex items-baseline gap-2 text-sm">
                 <code className="font-mono">{p.name}</code>
                 <span className="text-muted-foreground text-xs">{p.in}</span>
-                {p.required && <span className="text-[11px] text-destructive">required</span>}
+                {p.required && <span className="text-[11px] text-destructive">{t('required')}</span>}
               </span>
               <ParameterInput spec={spec} parameter={p} value={values.params[p.name] ?? ''} onChange={(v) => setParam(p.name, v)} />
             </label>
@@ -425,7 +425,7 @@ function ParameterRows({ spec, parameters }: { spec: OpenApi; parameters: Parame
           <code className="font-medium font-mono text-[13px]">{p.name}</code>
           <span className="font-mono text-muted-foreground text-xs">{typeLabel(spec, p.schema)}</span>
           <span className="text-muted-foreground text-xs">in {p.in}</span>
-          {p.required && <span className="text-[11px] text-destructive">required</span>}
+          {p.required && <span className="text-[11px] text-destructive">{t('required')}</span>}
           {(p.description || resolve(spec, p.schema).description) && (
             <p className="w-full text-muted-foreground text-xs leading-relaxed">{p.description || resolve(spec, p.schema).description}</p>
           )}

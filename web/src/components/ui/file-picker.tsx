@@ -1,5 +1,6 @@
 import { File as FileIcon, Upload, X } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 export interface FilePickerProps {
@@ -48,7 +49,7 @@ export function FilePicker({ files, onChange, accept, multiple, disabled, hint, 
         )}
       >
         <Upload className="size-5 text-muted-foreground" />
-        <span className="font-medium">{multiple ? 'Choose Files' : 'Choose File'}</span>
+        <span className="font-medium">{multiple ? t('Choose Files') : t('Choose File')}</span>
         <span className="text-xs text-muted-foreground">{hint ?? 'or drag and drop here'}</span>
       </button>
       <input
@@ -71,7 +72,7 @@ export function FilePicker({ files, onChange, accept, multiple, disabled, hint, 
               <button
                 type="button"
                 className="rounded-sm p-0.5 text-muted-foreground hover:bg-accent"
-                aria-label={`Remove ${f.name}`}
+                aria-label={t('Remove {name}', { name: f.name })}
                 onClick={() => onChange(files.filter((_, j) => j !== i))}
               >
                 <X className="size-3.5" />

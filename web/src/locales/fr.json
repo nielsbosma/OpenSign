@@ -680,7 +680,6 @@
   "eID broker": "Courtier eID",
   "eID broker (OpenID Connect)": "Courtier eID (OpenID Connect)",
   "expires {date}": "expire le {date}",
-  "failed": "échec",
   "from any IP address": "depuis n’importe quelle adresse IP",
   "from {ips}": "depuis {ips}",
   "kept in this tab only": "conservée dans cet onglet uniquement",
@@ -1170,5 +1169,17 @@
   "Distribute Vertically": "Répartir verticalement",
   "Save your changes to test them.": "Enregistrez vos modifications pour les tester.",
   "Add a file first": "Ajoutez d'abord un fichier",
-  "Advanced": "Avancé"
+  "Advanced": "Avancé",
+  "Expires {date}": "Expire le {date}",
+  "Kept until {date}": "Conservé jusqu’au {date}",
+  "Step {step} in the signing order": "Étape {step} de l’ordre de signature",
+  "Move {name} earlier": "Déplacer {name} plus tôt",
+  "Move {name} later": "Déplacer {name} plus tard",
+  "{handled} of {total} handled · {sent} sent · {failed} failed": "{handled} sur {total} traités · {sent} envoyés · {failed} en échec",
+  "Choose File": "Choisir un Fichier",
+  "Choose Files": "Choisir des Fichiers",
+  "Inactive": "Inactif",
+  "The server sent a response that could not be read": "Le serveur a envoyé une réponse illisible",
+  "Something went wrong": "Une erreur est survenue",
+  "The preview could not be shown": "Impossible d’afficher l’aperçu"
 }

@@ -66,7 +66,7 @@ export function BulkSendPage() {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
           <span className="font-medium">{STATUS_LABELS[b.status] ?? b.status}</span>
           <span className="tabular text-muted-foreground">
-            {handled} of {b.total} handled · {b.sent} sent · {b.failed} {t('failed')}
+            {t('{handled} of {total} handled · {sent} sent · {failed} failed', { handled, total: b.total, sent: b.sent, failed: b.failed })}
           </span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-muted">

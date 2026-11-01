@@ -20,6 +20,14 @@ import { SettingsGroup } from './AdminSettingsPage';
 import { SettingsCard } from './SettingsLayout';
 import { DeliveryLog } from './WebhookDeliveriesPage';
 
+const CONNECTION_STATUS: Record<string, string> = {
+  ACTIVE: msg('Active'),
+  INITIATED: msg('Pending'),
+  INACTIVE: msg('Inactive'),
+  EXPIRED: msg('Expired'),
+  FAILED: msg('Failed'),
+};
+
 type Recipe = { label: string; app: string; search: string; tool: string; event: string; text: Record<string, string> };
 
 const SIGNED = 'Signed: {{document.title}} by {{parties}}. {{document.url}}';
@@ -579,7 +587,7 @@ function Automations() {
                     {c.id}
                   </div>
                 </div>
-                <Badge variant="outline">{c.status}</Badge>
+                <Badge variant="outline">{t(CONNECTION_STATUS[c.status] ?? c.status)}</Badge>
                 {c.status !== 'ACTIVE' && (
                   <Button size="sm" variant="outline" onClick={() => connect(c.app)}>
                     {t('Reconnect')}
