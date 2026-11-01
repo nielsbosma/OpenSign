@@ -43,6 +43,8 @@ Instructions for coding agents and people. Read the README and SECURITY.md first
 
 ## Checks before you finish
 
+CI runs only when an image is built (`main` and releases), so pull requests have no checks and these are the gate. `pnpm stack:up` builds and runs the image locally at http://localhost:8090 without GitHub; `pnpm stack:fresh` does it from empty and deletes the local data.
+
 ```sh
 pnpm lint && pnpm typecheck && pnpm test   # with pnpm infra:up and TEST_DATABASE_URL set
 ```
