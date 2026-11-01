@@ -103,6 +103,7 @@ function PasskeysCard() {
   return (
     <SettingsCard
       title={t('Passkeys')}
+      help="account-security#passkeys"
       description={t(
         'Sign in with your fingerprint, face or device PIN instead of a password and code. Works with iCloud Keychain, Google Password Manager, Windows Hello and security keys.',
       )}
@@ -204,6 +205,7 @@ function TwoFactorCard() {
   return (
     <SettingsCard
       title={t('Two-Factor Authentication')}
+      help="account-security#two-factor-with-an-authenticator-app"
       description={
         user?.twoFactorEnabled
           ? t('On. Signing in needs a code from your authenticator app.')
