@@ -40,7 +40,7 @@ export function SearchSelect({
           className="w-full justify-between px-3 font-normal"
         >
           {selected ? (
-            <span className="flex min-w-0 items-center gap-2">
+            <span className="flex min-w-0 items-baseline gap-2">
               <span className="truncate">{selected.label}</span>
               {selected.detail && <span className="text-xs text-muted-foreground">{selected.detail}</span>}
             </span>
@@ -66,7 +66,7 @@ export function SearchSelect({
               >
                 <Check className={cn(o.value === value ? 'opacity-100' : 'opacity-0')} />
                 <span className="truncate">{o.label}</span>
-                {o.detail && <span className="ml-auto text-xs text-muted-foreground">{o.detail}</span>}
+                {o.detail && <span className="ms-auto text-xs text-muted-foreground">{o.detail}</span>}
               </CommandItem>
             ))}
           </CommandList>

@@ -808,7 +808,7 @@ export function SettingsGroup({ group }: { group: Group }) {
               if (f.type === 'country' || f.type === 'timeZone') {
                 const country = f.type === 'country';
                 return (
-                  <Field key={f.key} label={f.label} htmlFor={id} hint={hint}>
+                  <Field key={f.key} label={label} htmlFor={id} hint={hint}>
                     <SearchSelect
                       id={id}
                       value={String(value(f.key) ?? '')}
