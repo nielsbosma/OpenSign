@@ -56,6 +56,8 @@ pub struct DetectOutput {
     pub ai_used: bool,
     /// Why the AI model was not asked, or what went wrong when it was.
     pub ai_note: Option<String>,
+    /// Which text `ai_note` is, for showing it in another language. An error from the provider has none.
+    pub ai_note_code: Option<String>,
 }
 
 fn overlap(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> f64 {
@@ -155,15 +157,18 @@ impl Service for DetectFields {
             offset += count;
         }
 
-        let (mut ai_used, mut ai_note) = (false, None);
+        let (mut ai_used, mut ai_note, mut ai_note_code) = (false, None, None);
         if input.ai {
             let s: AiSettings = settings(ctx, conn).await?;
             if !ctx.can(Permission::AiUse) {
                 ai_note = Some("You do not have permission to use the AI features".to_string());
+                ai_note_code = Some("no_permission".to_string());
             } else if !ai::is_configured(&s) {
                 ai_note = Some("The AI features are off. An Admin can set up a provider in Settings, AI.".to_string());
+                ai_note_code = Some("off".to_string());
             } else if !s.allow_document_text {
                 ai_note = Some("Document text may not be sent to the AI provider. An Admin can allow it in Settings, AI.".to_string());
+                ai_note_code = Some("no_document_text".to_string());
             } else {
                 let mut budget = MAX_AI_CHARS;
                 let pages: Vec<Value> = pages_text
@@ -222,7 +227,7 @@ impl Service for DetectFields {
 
         suggestions.retain(|s| !existing.iter().any(|f| f.page == s.page && overlap((f.x, f.y, f.width, f.height), rect(s)) > 0.4));
         suggestions.truncate(MAX_SUGGESTIONS);
-        Ok(DetectOutput { suggestions, ai_used, ai_note })
+        Ok(DetectOutput { suggestions, ai_used, ai_note, ai_note_code })
     }
 }
 

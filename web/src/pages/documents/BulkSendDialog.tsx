@@ -33,6 +33,20 @@ export const TARGET_LABELS = [
   msg('Language'),
 ];
 
+/** The texts of `problems` in `crates/core/src/services/bulk.rs`, by code. */
+const ROW_PROBLEMS: Record<string, string> = {
+  no_name: msg('{name} has no name'),
+  no_email: msg('{name} has no email address'),
+  no_mobile: msg('{name} has no mobile number'),
+  bad_email: msg("{name}'s email address “{value}” is not valid"),
+  bad_mobile: msg("{name}'s mobile number “{value}” is not valid"),
+  bad_language: msg("{name}'s language “{value}” is not one OpenSign speaks"),
+};
+
+function problemText(p: { code: string; params: Record<string, string>; message: string }) {
+  return Object.hasOwn(ROW_PROBLEMS, p.code) ? t(ROW_PROBLEMS[p.code]!, p.params) : p.message;
+}
+
 export function BulkSendDialog({
   templateId,
   templateTitle,
@@ -225,7 +239,7 @@ export function BulkSendDialog({
                 <ul className="grid gap-0.5 text-xs">
                   {preview.problems.map((p, i) => (
                     <li key={i}>
-                      {t('Row {row}:', { row: p.row })} {p.message}
+                      {t('Row {row}:', { row: p.row })} {problemText(p)}
                     </li>
                   ))}
                 </ul>

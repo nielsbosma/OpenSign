@@ -52,6 +52,7 @@ import {
   errorMessage,
   type FieldKind,
   fetchPdf,
+  type Output,
   type PartyInput,
   type PartyView,
   replaceFile,
@@ -72,7 +73,7 @@ import {
   PARTY_STATUS_LABELS,
   saveBytes,
 } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { msg, t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
 import { ActivityPanel } from './ActivityPanel';
@@ -94,6 +95,16 @@ import { announceUpload, DetectButton, SuggestionBar, SuggestionLayer } from './
 import { TemplateHistoryDialog } from './TemplateHistory';
 
 /** A disabled button takes no pointer events, so the tooltip hangs on a wrapper that keyboard users can reach too. */
+const AI_NOTES: Record<string, string> = {
+  no_permission: msg('You do not have permission to use the AI features'),
+  off: msg('The AI features are off. An Admin can set up a provider in Settings, AI.'),
+  no_document_text: msg('Document text may not be sent to the AI provider. An Admin can allow it in Settings, AI.'),
+};
+
+function aiNoteText(out: Output<'documents.detect_fields'>) {
+  return out.aiNoteCode && Object.hasOwn(AI_NOTES, out.aiNoteCode) ? t(AI_NOTES[out.aiNoteCode]!) : (out.aiNote ?? null);
+}
+
 function DisabledHint({ reason, children }: { reason: string | null; children: React.ReactNode }) {
   if (!reason) return children;
   return (
@@ -684,8 +695,9 @@ export function DocumentPage() {
   const detect = useApiMutation('documents.detect_fields', {
     onSuccess: (out) => {
       setSuggestions(out.suggestions);
-      setAiNote(out.aiNote ?? null);
-      if (!out.suggestions.length) toast.info(out.aiNote ?? t('No places for new fields were found'));
+      const note = aiNoteText(out);
+      setAiNote(note);
+      if (!out.suggestions.length) toast.info(note ?? t('No places for new fields were found'));
     },
   });
   const remind = useApiMutation('documents.remind', { onSuccess: () => toast.success(t('Reminders sent')) });

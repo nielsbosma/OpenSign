@@ -864,7 +864,14 @@ export type ColumnMapping = {
 };
 
 export type RowProblem = {
+  /** Which problem this is, for showing it in another language. */
+  code: string;
+  /** What is wrong, in English. */
   message: string;
+  /** The values that fill the placeholders of the text for `code`. */
+  params: {
+    [key: string]: string;
+  };
   /** 1-based, counting the header row as row 1, as a spreadsheet shows it. */
   row: number;
 };
@@ -1226,6 +1233,8 @@ export type DocumentsDetectFieldsOutput = DetectOutput;
 export type DetectOutput = {
   /** Why the AI model was not asked, or what went wrong when it was. */
   aiNote?: string | null;
+  /** Which text `ai_note` is, for showing it in another language. An error from the provider has none. */
+  aiNoteCode?: string | null;
   /** The AI model was asked too. */
   aiUsed: boolean;
   /** Places that look like they want a field and have none yet. Nothing is saved. */
