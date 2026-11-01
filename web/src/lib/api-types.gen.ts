@@ -2189,6 +2189,8 @@ export type SigningEidStatusInput = {
 export type SigningEidStatusOutput = EidStatus;
 
 export type EidStatus = {
+  /** Which text `message` is, for showing it in the person's language. */
+  code?: string | null;
   expiresAt?: string | null;
   /** What to tell the person. */
   message?: string | null;
