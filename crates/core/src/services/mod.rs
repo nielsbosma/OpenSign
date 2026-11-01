@@ -245,6 +245,7 @@ mod tests {
         "ai.chat",
         "api_keys.create",
         "auth.logout",
+        "automations.app_logo",
         "documents.party_identity",
         "documents.sign_in_person",
         "documents.sign_myself",

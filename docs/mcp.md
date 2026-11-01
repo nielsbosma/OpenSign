@@ -97,6 +97,7 @@ Some things stay in the app on purpose, because they are credentials, need the p
 | In-person signing, Sign Myself and anything a signer does | Needs the signer at the device, with their own link or session. |
 | Your saved signature | Only you draw or change it, in the app. |
 | The in-app AI assistant | Agents call the tools directly. |
+| App logos for the automations settings | An image for the settings page, of no use to an agent. |
 
 Every service in OpenSign states in its definition whether it is a tool, and if not, why. A test fails when a new one makes no choice, so new features reach agents from day one.
 
