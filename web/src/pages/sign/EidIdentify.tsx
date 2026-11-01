@@ -4,10 +4,10 @@ import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { type AuthMethod, call, errorMessage } from '@/lib/api';
+import { type AuthMethod, call, errorMessage, type Output } from '@/lib/api';
 import { FormError } from '../auth/AuthLayout';
 import { framed } from './embed';
-import { useTexts } from './texts';
+import { type Texts, useTexts } from './texts';
 
 type Started = { id: string; qr?: string | null; autoStartToken?: string | null; popupUrl?: string };
 
@@ -26,6 +26,12 @@ function Qr({ value }: { value: string }) {
  * Identification with BankID, Freja eID or an eID broker. BankID and Freja are polled from here; the broker sends the
  * browser away and back with `resume` set to the identification to pick up.
  */
+/** Texts this build does not know, and a provider's own words, show what the server sent. */
+function statusText(t: Texts, status: Output<'signing.eid_status'>) {
+  const texts: Record<string, string> = t.eidStatus;
+  return (status.code && Object.hasOwn(texts, status.code) ? texts[status.code] : status.message) ?? undefined;
+}
+
 export function EidIdentify({
   token,
   session,
@@ -68,14 +74,14 @@ export function EidIdentify({
         }
         if (status.status === 'failed') {
           setStarted(null);
-          setError(status.message ?? t.eidFailed);
+          setError(statusText(t, status) ?? t.eidFailed);
           return;
         }
         if (status.needsCode) {
           setNeedsCode(true);
           return;
         }
-        setMessage(status.message ?? undefined);
+        setMessage(statusText(t, status));
         if (status.qr) setStarted((s) => (s && s.id === id ? { ...s, qr: status.qr } : s));
       } catch (e) {
         if (stopped) return;
@@ -141,7 +147,7 @@ export function EidIdentify({
       } else if (status.status === 'failed') {
         setNeedsCode(false);
         setStarted(null);
-        setError(status.message ?? t.eidFailed);
+        setError(statusText(t, status) ?? t.eidFailed);
       } else {
         setCode('');
         setError(t.eidCodeWrong);
