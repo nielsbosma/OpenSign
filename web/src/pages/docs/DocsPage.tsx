@@ -300,7 +300,7 @@ export function DocsPage() {
             {theme === 'dark' ? <Sun /> : <Moon />}
           </Button>
           <Button asChild size="sm" className="hidden sm:inline-flex">
-            <a href="/">Open OpenSign</a>
+            <a href="/">OpenSign</a>
           </Button>
         </div>
       </header>
