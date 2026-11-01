@@ -703,7 +703,7 @@ export function SettingsGroup({ group }: { group: Group }) {
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [certFiles, setCertFiles] = useState<Record<string, File>>({});
   const save = useApiMutation('settings.update', {
-    invalidates: ['settings.', 'ai.', 'setup.', 'automations.'],
+    invalidates: ['settings.', 'ai.', 'setup.', 'automations.', 'branding.'],
     onSuccess: () => {
       setDraft({});
       setCertFiles({});
