@@ -556,7 +556,8 @@ impl Service for Sign {
             return Err(conflict("It is not your turn yet. You will get an email when it is."));
         }
         if !satisfied(party.auth_to_view(), session.as_ref()) || !satisfied_to_sign(party.auth_to_sign(), session.as_ref()) {
-            return Err(AppError::new(ErrorKind::Unauthorized, format!("Identify yourself with {} first", party.auth_to_sign().label())));
+            return Err(AppError::new(ErrorKind::Unauthorized, "Identify yourself with {method} first")
+                .params([("method", &party.auth_to_sign().label())]));
         }
         if !input.consent {
             return Err(bad_request("Confirm that you want to sign electronically"));
@@ -565,7 +566,7 @@ impl Service for Sign {
             if missing.kind == attachments::KIND_PHOTO {
                 return Err(bad_request("Take a photo of yourself with your camera first"));
             }
-            return Err(bad_request(format!("Upload \u{201c}{}\u{201d} first", missing.name)));
+            return Err(bad_request("Upload \u{201c}{label}\u{201d} first").params([("label", &missing.name)]));
         }
 
         let every = fields(conn, document.id).await?;
@@ -659,9 +660,10 @@ impl Service for Sign {
             };
             if missing {
                 return Err(bad_request(match kind {
-                    FieldKind::Image | FieldKind::File => format!("Upload \u{201c}{label}\u{201d} first"),
-                    _ => format!("Fill in \u{201c}{label}\u{201d}"),
-                }));
+                    FieldKind::Image | FieldKind::File => "Upload \u{201c}{label}\u{201d} first",
+                    _ => "Fill in \u{201c}{label}\u{201d}",
+                })
+                .params([("label", &label)]));
             }
             filled.push((field, value));
         }
@@ -674,10 +676,10 @@ impl Service for Sign {
             let label = boxes.iter().map(|(f, _)| f.label.as_str()).find(|l| !l.is_empty()).unwrap_or("radio");
             let shown = boxes.iter().any(|(f, _)| own.iter().any(|i| every[*i].id == f.id && outcomes[*i].visible));
             if chosen > 1 {
-                return Err(bad_request(format!("Choose only one option for \u{201c}{label}\u{201d}")));
+                return Err(bad_request("Choose only one option for \u{201c}{label}\u{201d}").params([("label", &label)]));
             }
             if shown && chosen == 0 && boxes.iter().any(|(f, _)| f.required) {
-                return Err(bad_request(format!("Choose an option for \u{201c}{label}\u{201d}")));
+                return Err(bad_request("Choose an option for \u{201c}{label}\u{201d}").params([("label", &label)]));
             }
         }
         for (field, value) in &filled {
@@ -763,7 +765,8 @@ impl Service for Decline {
             return Err(conflict("You cannot decline this document now"));
         }
         if !satisfied(party.auth_to_view(), session.as_ref()) {
-            return Err(AppError::new(ErrorKind::Unauthorized, format!("Identify yourself with {} first", party.auth_to_view().label())));
+            return Err(AppError::new(ErrorKind::Unauthorized, "Identify yourself with {method} first")
+                .params([("method", &party.auth_to_view().label())]));
         }
         let reason = input.reason.as_deref().map(clean_value).transpose()?.filter(|r| !r.is_empty());
         sqlx::query("update parties set status = 'declined', declined_at = $2, decline_reason = $3, updated_at = now() where id = $1")
@@ -809,7 +812,8 @@ async fn attachment_party(ctx: &Ctx, conn: &mut PgConnection, token: &str, sessi
         return Err(conflict("It is not your turn yet. You will get an email when it is."));
     }
     if !satisfied(party.auth_to_view(), session.as_ref()) {
-        return Err(AppError::new(ErrorKind::Unauthorized, format!("Identify yourself with {} first", party.auth_to_view().label())));
+        return Err(AppError::new(ErrorKind::Unauthorized, "Identify yourself with {method} first")
+            .params([("method", &party.auth_to_view().label())]));
     }
     Ok(resolved)
 }
@@ -1036,7 +1040,8 @@ impl Service for RemoveFieldFile {
 pub async fn signer_file(ctx: &Ctx, conn: &mut PgConnection, token: &str, session_token: Option<&str>) -> Result<FileRecord> {
     let Resolved { party, document, session } = resolve(ctx, conn, token, session_token).await?;
     if !satisfied(party.auth_to_view(), session.as_ref()) {
-        return Err(AppError::new(ErrorKind::Unauthorized, format!("Identify yourself with {} first", party.auth_to_view().label())));
+        return Err(AppError::new(ErrorKind::Unauthorized, "Identify yourself with {method} first")
+            .params([("method", &party.auth_to_view().label())]));
     }
     let id = match document.status.as_str() {
         status::COMPLETED => document.sealed_file_id,

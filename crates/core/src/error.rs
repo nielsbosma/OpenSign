@@ -1,3 +1,6 @@
+use std::collections::BTreeMap;
+use std::fmt::Display;
+
 use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -39,13 +42,22 @@ pub struct AppError {
     pub cause: Option<anyhow::Error>,
     /// A protocol error code for callers that speak one, e.g. OAuth's `invalid_grant`.
     pub code: Option<&'static str>,
+    /// The message before its placeholders were filled. See `params`.
+    pub template: Option<Box<Template>>,
+}
+
+/// What the web app translates a filled-in message from.
+#[derive(Debug)]
+pub struct Template {
+    pub text: String,
+    pub params: BTreeMap<&'static str, String>,
 }
 
 pub type Result<T, E = AppError> = std::result::Result<T, E>;
 
 impl AppError {
     pub fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
-        Self { kind, message: message.into(), cause: None, code: None }
+        Self { kind, message: message.into(), cause: None, code: None, template: None }
     }
 
     pub fn with_cause(mut self, cause: impl Into<anyhow::Error>) -> Self {
@@ -58,8 +70,29 @@ impl AppError {
         self
     }
 
+    /// Fills the `{name}` placeholders of the message. The app translates the unfilled text, keyed by
+    /// its English wording; API callers read the filled English.
+    pub fn params<const N: usize>(mut self, params: [(&'static str, &dyn Display); N]) -> Self {
+        let mut message = self.message.clone();
+        let mut filled = BTreeMap::new();
+        for (name, value) in params {
+            let value = value.to_string();
+            message = message.replace(&format!("{{{name}}}"), &value);
+            filled.insert(name, value);
+        }
+        let text = std::mem::replace(&mut self.message, message);
+        self.template = Some(Box::new(Template { text, params: filled }));
+        self
+    }
+
     pub fn internal(cause: impl Into<anyhow::Error>) -> Self {
-        Self { kind: ErrorKind::Internal, message: "Something went wrong on our side".into(), cause: Some(cause.into()), code: None }
+        Self {
+            kind: ErrorKind::Internal,
+            message: "Something went wrong on our side".into(),
+            cause: Some(cause.into()),
+            code: None,
+            template: None,
+        }
     }
 }
 
@@ -107,5 +140,19 @@ impl From<opensign_db::DbError> for AppError {
 impl From<opensign_crypto::CryptoError> for AppError {
     fn from(error: opensign_crypto::CryptoError) -> Self {
         AppError::internal(error)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn params_fill_the_message_and_keep_the_text() {
+        let e = bad_request("{name} can use at most {max} MB").params([("name", &"Ada"), ("max", &5)]);
+        assert_eq!(e.message, "Ada can use at most 5 MB");
+        let template = e.template.expect("params keep the text");
+        assert_eq!(template.text, "{name} can use at most {max} MB");
+        assert_eq!(template.params["max"], "5");
     }
 }

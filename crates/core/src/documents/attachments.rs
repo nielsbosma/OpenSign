@@ -76,7 +76,7 @@ pub async fn for_party(conn: &mut PgConnection, party_id: Uuid) -> Result<Vec<At
 /// Replaces a draft party's file requests. The photo request is left alone.
 pub async fn set(conn: &mut PgConnection, document_id: Uuid, party_id: Uuid, inputs: &[AttachmentRequestInput]) -> Result<()> {
     if inputs.len() > MAX_PER_PARTY {
-        return Err(bad_request(format!("Ask each party for at most {MAX_PER_PARTY} attachments")));
+        return Err(bad_request("Ask each party for at most {max} attachments").params([("max", &MAX_PER_PARTY)]));
     }
     sqlx::query("delete from attachment_requests where party_id = $1 and kind = 'file'").bind(party_id).execute(&mut *conn).await?;
     for (position, input) in inputs.iter().enumerate() {
@@ -135,7 +135,7 @@ pub async fn photo_parties(conn: &mut PgConnection, document_id: Uuid) -> Result
 /// encoded again as PNG, which also drops metadata such as GPS positions. Anything else is refused.
 pub async fn clean(bytes: Vec<u8>, name: &str) -> Result<(String, &'static str, Vec<u8>)> {
     if bytes.len() > MAX_BYTES {
-        return Err(bad_request(format!("Attachments can be at most {} MB", MAX_BYTES / 1024 / 1024)));
+        return Err(bad_request("Attachments can be at most {max} MB").params([("max", &(MAX_BYTES / 1024 / 1024))]));
     }
     let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
     let stem = base.rsplit_once('.').map_or(base, |(s, _)| s);
@@ -157,7 +157,7 @@ pub async fn clean(bytes: Vec<u8>, name: &str) -> Result<(String, &'static str, 
 /// without metadata. PDFs and anything else are refused.
 pub async fn clean_photo(bytes: Vec<u8>) -> Result<(String, &'static str, Vec<u8>)> {
     if bytes.len() > PHOTO_MAX_BYTES {
-        return Err(bad_request(format!("The photo can be at most {} MB", PHOTO_MAX_BYTES / 1024 / 1024)));
+        return Err(bad_request("The photo can be at most {max} MB").params([("max", &(PHOTO_MAX_BYTES / 1024 / 1024))]));
     }
     if !bytes.starts_with(&[0xFF, 0xD8, 0xFF]) && !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         return Err(bad_request("The photo must be a JPEG or PNG image"));
@@ -174,7 +174,7 @@ pub async fn clean_photo(bytes: Vec<u8>) -> Result<(String, &'static str, Vec<u8
 /// again as PNG without metadata.
 pub async fn clean_field_image(bytes: Vec<u8>, name: &str) -> Result<(String, &'static str, Vec<u8>)> {
     if bytes.len() > MAX_BYTES {
-        return Err(bad_request(format!("Images can be at most {} MB", MAX_BYTES / 1024 / 1024)));
+        return Err(bad_request("Images can be at most {max} MB").params([("max", &(MAX_BYTES / 1024 / 1024))]));
     }
     if !bytes.starts_with(&[0xFF, 0xD8, 0xFF]) && !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         return Err(bad_request("Upload a JPEG or PNG image"));

@@ -112,7 +112,7 @@ impl Service for BeginRegistration {
         }
         let count: i64 = sqlx::query_scalar("select count(*) from passkeys where user_id = $1").bind(user.id).fetch_one(&mut *conn).await?;
         if count >= MAX_PER_USER {
-            return Err(bad_request(format!("You can have at most {MAX_PER_USER} passkeys")));
+            return Err(bad_request("You can have at most {max} passkeys").params([("max", &MAX_PER_USER)]));
         }
         let existing: Vec<Vec<u8>> =
             sqlx::query_scalar("select credential_id from passkeys where user_id = $1").bind(user.id).fetch_all(&mut *conn).await?;

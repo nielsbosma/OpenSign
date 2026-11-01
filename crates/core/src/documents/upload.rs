@@ -90,7 +90,7 @@ fn pdf_error(error: PdfError) -> AppError {
 pub async fn prepare(app: &App, bytes: Vec<u8>, max_mb: u32) -> Result<Sanitized> {
     let limits = Limits { max_bytes: max_mb.max(1) as usize * 1024 * 1024, ..Limits::default() };
     if bytes.len() > limits.max_bytes {
-        return Err(bad_request(format!("The file is larger than {max_mb} MB")));
+        return Err(bad_request("The file is larger than {max} MB").params([("max", &max_mb)]));
     }
     let source = detect(&bytes)?;
     let pdf = if source == SourceType::Pdf { bytes } else { convert(app, &bytes, source).await? };

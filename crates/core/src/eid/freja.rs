@@ -84,7 +84,7 @@ impl Freja {
             Some(2000) => Err(conflict("A Freja eID request for this person is already in progress. Wait a moment and try again.")),
             _ if status.is_client_error() => {
                 let reason: String = body["message"].as_str().unwrap_or("no reason given").chars().take(200).collect();
-                Err(bad_request(format!("Freja eID refused the request: {reason}")))
+                Err(bad_request("Freja eID refused the request: {reason}").params([("reason", &reason)]))
             }
             _ => Err(unavailable(&format!("Freja eID answered with {status}. Try again in a moment."))),
         }
