@@ -1,14 +1,24 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
-import { Field } from '@/components/common';
+import { Field, Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { AttachmentRequest, AttachmentRequestInput, AuthMethod, Delivery, PartyInput, PartyRole, PartyView } from '@/lib/api';
+import {
+  type AttachmentRequest,
+  type AttachmentRequestInput,
+  type AuthMethod,
+  type Delivery,
+  errorMessage,
+  type PartyInput,
+  type PartyRole,
+  type PartyView,
+} from '@/lib/api';
 import { AUTH_LABELS, DELIVERY_LABELS, languageName, languages } from '@/lib/format';
 import { labels, msg, t } from '@/lib/i18n';
+import { FormError } from '@/pages/auth/AuthLayout';
 
 const ROLES = labels({ signer: msg('Signs'), approver: msg('Approves'), viewer: msg('Receives a copy') }) as Record<PartyRole, string>;
 const VIEW_AUTH: AuthMethod[] = ['none', 'sms_pin', 'se_bankid', 'freja', 'broker'];
@@ -137,13 +147,17 @@ export function PartyDialog({
   sequential: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (party: PartyInput) => void;
+  /** Rejects when the server refuses the party; the dialog stays open and shows why. */
+  onSave: (party: PartyInput) => Promise<unknown>;
   /** Methods set up on this server; a party keeps a method it already has. */
   available: AuthMethod[];
   documentLanguage: string;
 }) {
   const [p, setP] = useState<PartyInput>({ name: '' });
+  const [error, setError] = useState<string>();
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
+    setError(undefined);
     if (open)
       setP(
         party ?? {
@@ -164,10 +178,18 @@ export function PartyDialog({
   const unavailableAuth = [...VIEW_AUTH, ...SIGN_AUTH].filter((m) => !available.includes(m) && m !== p.authToSign && m !== p.authToView);
   const unavailableDelivery: Delivery[] = available.includes('sms_pin') || p.delivery === 'sms' ? [] : ['sms'];
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
-    onSave(p);
-    onOpenChange(false);
+    setError(undefined);
+    setSaving(true);
+    try {
+      await onSave(p);
+      onOpenChange(false);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -287,11 +309,14 @@ export function PartyDialog({
               <AttachmentRequests value={p.attachments ?? []} onChange={(attachments) => set({ attachments })} />
             )}
           </div>
+          <FormError message={error} />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t('Cancel')}
             </Button>
-            <Button type="submit">{party ? t('Save') : t('Add')}</Button>
+            <Button type="submit" disabled={saving}>
+              {saving && <Spinner className="text-primary-foreground" />} {party ? t('Save') : t('Add')}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
