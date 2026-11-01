@@ -737,6 +737,9 @@ impl Service for TestProvider {
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, _: Empty) -> Result<TestOutput> {
         let s = settings(ctx, conn).await?;
+        if !ai::is_configured(&s) {
+            return Err(bad_request("Choose a provider and a model, and save them, before testing the connection"));
+        }
         let started = std::time::Instant::now();
         let reply = complete(
             ctx,
