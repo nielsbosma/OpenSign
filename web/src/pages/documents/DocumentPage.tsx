@@ -1254,21 +1254,21 @@ export function DocumentPage() {
             </TabsContent>
             {placeable && (
               <TabsContent value="fields" className="mt-4 grid gap-3">
-                <select
-                  aria-label={t('Fields for')}
-                  value={placingFor ?? ''}
-                  onChange={(e) => setPlacingFor(e.target.value || null)}
-                  className="h-9 w-full rounded-md border bg-background px-2"
-                >
-                  {doc.parties
-                    .filter((p) => p.role !== 'viewer')
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  <option value="">{t('Me, now (prefilled)')}</option>
-                </select>
+                <Select value={placingFor ?? 'me'} onValueChange={(v) => setPlacingFor(v === 'me' ? null : v)}>
+                  <SelectTrigger aria-label={t('Fields for')} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {doc.parties
+                      .filter((p) => p.role !== 'viewer')
+                      .map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    <SelectItem value="me">{t('Me, now (prefilled)')}</SelectItem>
+                  </SelectContent>
+                </Select>
                 <div className="grid grid-cols-2 gap-1.5">
                   {FIELD_KINDS.filter((k) => placingFor || SENDER_KINDS.includes(k.kind)).map((k) => (
                     <Button
