@@ -1157,5 +1157,6 @@
   "Back to the Translation": "返回译文",
   "English version": "英文版本",
   "This page was machine translated and has not been reviewed. The {english} is authoritative.": "此页面为机器翻译,未经审核。请以{english}为准。",
-  "This page is not translated yet, so it is shown in English.": "此页面尚未翻译,因此以英文显示。"
+  "This page is not translated yet, so it is shown in English.": "此页面尚未翻译,因此以英文显示。",
+  "Save your changes to test them.": "请保存更改后再进行测试。"
 }
