@@ -680,7 +680,6 @@
   "eID broker": "Брокер eID",
   "eID broker (OpenID Connect)": "Брокер eID (OpenID Connect)",
   "expires {date}": "истекает {date}",
-  "failed": "ошибка",
   "from any IP address": "с любого IP-адреса",
   "from {ips}": "с {ips}",
   "kept in this tab only": "хранится только в этой вкладке",
@@ -1170,5 +1169,17 @@
   "Distribute Vertically": "Распределить по вертикали",
   "Save your changes to test them.": "Сохраните изменения, чтобы проверить их.",
   "Add a file first": "Сначала добавьте файл",
-  "Advanced": "Дополнительно"
+  "Advanced": "Дополнительно",
+  "Expires {date}": "Истекает {date}",
+  "Kept until {date}": "Хранится до {date}",
+  "Step {step} in the signing order": "Шаг {step} в порядке подписания",
+  "Move {name} earlier": "Переместить {name} раньше",
+  "Move {name} later": "Переместить {name} позже",
+  "{handled} of {total} handled · {sent} sent · {failed} failed": "Обработано {handled} из {total} · отправлено {sent} · с ошибкой {failed}",
+  "Choose File": "Выбрать файл",
+  "Choose Files": "Выбрать файлы",
+  "Inactive": "Неактивно",
+  "The server sent a response that could not be read": "Сервер прислал ответ, который не удалось прочитать",
+  "Something went wrong": "Что-то пошло не так",
+  "The preview could not be shown": "Не удалось показать предпросмотр"
 }

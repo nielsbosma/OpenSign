@@ -680,7 +680,6 @@
   "eID broker": "eID ब्रोकर",
   "eID broker (OpenID Connect)": "eID ब्रोकर (OpenID Connect)",
   "expires {date}": "{date} को समाप्त",
-  "failed": "विफल",
   "from any IP address": "किसी भी IP पते से",
   "from {ips}": "{ips} से",
   "kept in this tab only": "केवल इसी टैब में रखी जाती है",
@@ -1170,5 +1169,17 @@
   "Distribute Vertically": "लंबवत रूप से वितरित करें",
   "Save your changes to test them.": "परीक्षण के लिए अपने बदलाव सहेजें।",
   "Add a file first": "पहले एक फ़ाइल जोड़ें",
-  "Advanced": "उन्नत"
+  "Advanced": "उन्नत",
+  "Expires {date}": "{date} को समाप्त",
+  "Kept until {date}": "{date} तक रखा जाएगा",
+  "Step {step} in the signing order": "हस्ताक्षर क्रम में चरण {step}",
+  "Move {name} earlier": "{name} को पहले करें",
+  "Move {name} later": "{name} को बाद में करें",
+  "{handled} of {total} handled · {sent} sent · {failed} failed": "{total} में से {handled} संभाले गए · {sent} भेजे गए · {failed} विफल",
+  "Choose File": "फ़ाइल चुनें",
+  "Choose Files": "फ़ाइलें चुनें",
+  "Inactive": "निष्क्रिय",
+  "The server sent a response that could not be read": "सर्वर ने ऐसा उत्तर भेजा जिसे पढ़ा नहीं जा सका",
+  "Something went wrong": "कुछ गलत हो गया",
+  "The preview could not be shown": "पूर्वावलोकन नहीं दिखाया जा सका"
 }

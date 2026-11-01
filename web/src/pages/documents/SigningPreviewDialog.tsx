@@ -61,7 +61,7 @@ export function SigningPreviewDialog({
           </Button>
         </div>
         {party && ready ? (
-          <SigningPreview documentId={doc.id} partyId={party.id} />
+          <SigningPreview documentId={doc.id} partyId={party.id} errorTitle={t('The preview could not be shown')} />
         ) : (
           <div className="flex justify-center pt-20">
             <Spinner className="size-6" />

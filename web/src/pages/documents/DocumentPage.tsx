@@ -195,7 +195,7 @@ function PartyCard({
           <span
             className="flex size-5 shrink-0 items-center justify-center rounded-full font-semibold text-[11px] text-white"
             style={{ backgroundColor: partyColor(parties, party.id) }}
-            title={`Step ${step} in the signing order`}
+            title={t('Step {step} in the signing order', { step })}
           >
             {step}
           </span>
@@ -271,7 +271,7 @@ function PartyCard({
               className="h-5"
               disabled={!onMove.up}
               onClick={onMove.up}
-              aria-label={`Move ${party.name} earlier`}
+              aria-label={t('Move {name} earlier', { name: party.name })}
             >
               <ChevronUp />
             </Button>
@@ -281,7 +281,7 @@ function PartyCard({
               className="h-5"
               disabled={!onMove.down}
               onClick={onMove.down}
-              aria-label={`Move ${party.name} later`}
+              aria-label={t('Move {name} later', { name: party.name })}
             >
               <ChevronDown />
             </Button>
@@ -918,7 +918,7 @@ export function DocumentPage() {
                 ? t('Sent {date}', { date: formatDateTime(doc.sentAt) })
                 : t('Created {date}', { date: formatDateTime(doc.createdAt) })}
             </span>
-            {doc.expiresAt && pending && <span>· Expires {formatDateTime(doc.expiresAt)}</span>}
+            {doc.expiresAt && pending && <span>· {t('Expires {date}', { date: formatDateTime(doc.expiresAt) })}</span>}
             {doc.isTemplate && versions.data && (
               <button type="button" className="hover:text-foreground hover:underline" onClick={() => setShowHistory(true)}>
                 ·{' '}
@@ -954,7 +954,7 @@ export function DocumentPage() {
                 · <Archive className="size-3.5" /> {t('Archived')}
               </span>
             )}
-            {doc.deletesAt && <span>· Kept until {formatDate(doc.deletesAt)}</span>}
+            {doc.deletesAt && <span>· {t('Kept until {date}', { date: formatDate(doc.deletesAt) })}</span>}
             {saving && <span>{t('· Saving…')}</span>}
           </div>
         </div>

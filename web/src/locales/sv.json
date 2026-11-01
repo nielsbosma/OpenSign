@@ -680,7 +680,6 @@
   "eID broker": "E-legitimationsförmedlare",
   "eID broker (OpenID Connect)": "E-legitimationsförmedlare (OpenID Connect)",
   "expires {date}": "går ut {date}",
-  "failed": "misslyckades",
   "from any IP address": "från vilken IP-adress som helst",
   "from {ips}": "från {ips}",
   "kept in this tab only": "sparas bara i den här fliken",
@@ -1170,5 +1169,17 @@
   "Distribute Vertically": "Fördela vertikalt",
   "Save your changes to test them.": "Spara ändringarna för att testa dem.",
   "Add a file first": "Lägg till en fil först",
-  "Advanced": "Avancerat"
+  "Advanced": "Avancerat",
+  "Expires {date}": "Upphör {date}",
+  "Kept until {date}": "Sparas till {date}",
+  "Step {step} in the signing order": "Steg {step} i signeringsordningen",
+  "Move {name} earlier": "Flytta {name} tidigare",
+  "Move {name} later": "Flytta {name} senare",
+  "{handled} of {total} handled · {sent} sent · {failed} failed": "{handled} av {total} hanterade · {sent} skickade · {failed} misslyckades",
+  "Choose File": "Välj Fil",
+  "Choose Files": "Välj Filer",
+  "Inactive": "Inaktiv",
+  "The server sent a response that could not be read": "Servern skickade ett svar som inte gick att läsa",
+  "Something went wrong": "Något gick fel",
+  "The preview could not be shown": "Förhandsgranskningen kunde inte visas"
 }

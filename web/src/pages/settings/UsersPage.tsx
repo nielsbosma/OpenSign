@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { errorMessage, type Role, useApi, useApiMutation } from '@/lib/api';
-import { formatDate, formatDateTime } from '@/lib/format';
+import { formatDate, formatDateTime, ROLE_LABELS } from '@/lib/format';
 import { msg, t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { FormError } from '../auth/AuthLayout';
@@ -212,7 +212,7 @@ export function UsersPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5">
-                        <span className="capitalize">{u.role}</span>
+                        <span>{ROLE_LABELS[u.role] ?? u.role}</span>
                         {!u.active && <Badge variant="outline">{t('Deactivated')}</Badge>}
                         {u.twoFactorEnabled && <Badge variant="secondary">{t('2FA')}</Badge>}
                         {u.sso && <Badge variant="secondary">{t('SSO')}</Badge>}
@@ -277,8 +277,8 @@ export function UsersPage() {
               <li key={i.id} className="flex items-center gap-3 rounded-md border px-3 py-2">
                 <div className="min-w-0 flex-1">
                   <div className="truncate">{i.email}</div>
-                  <div className="text-xs text-muted-foreground capitalize">
-                    {i.role} · expires {formatDate(i.expiresAt)}
+                  <div className="text-xs text-muted-foreground">
+                    {ROLE_LABELS[i.role] ?? i.role} · {t('Expires {date}', { date: formatDate(i.expiresAt) })}
                   </div>
                 </div>
                 <Button variant="danger" onClick={() => revoke.mutate({ id: i.id })}>

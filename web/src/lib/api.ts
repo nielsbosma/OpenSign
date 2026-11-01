@@ -1,6 +1,7 @@
 import { MutationCache, QueryCache, QueryClient, type UseQueryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type { Services } from './api-types.gen';
+import { t } from './i18n';
 
 export type * from './api-types.gen';
 
@@ -25,10 +26,15 @@ async function parse(response: Response) {
   try {
     body = text ? JSON.parse(text) : null;
   } catch {
-    if (response.ok) throw new ApiError('The server sent a response that could not be read', response.status, 'internal');
+    if (response.ok) throw new ApiError(t('The server sent a response that could not be read'), response.status, 'internal');
   }
   if (!response.ok) {
-    throw new ApiError(body?.error ?? response.statusText ?? 'Something went wrong', response.status, body?.kind ?? 'internal', body?.code);
+    throw new ApiError(
+      body?.error ?? response.statusText ?? t('Something went wrong'),
+      response.status,
+      body?.kind ?? 'internal',
+      body?.code,
+    );
   }
   return body;
 }
@@ -113,7 +119,7 @@ export async function verifyFile(file: File): Promise<Output<'documents.verify'>
 }
 
 export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Something went wrong';
+  return error instanceof Error ? error.message : t('Something went wrong');
 }
 
 export function createQueryClient() {

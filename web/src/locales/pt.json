@@ -680,7 +680,6 @@
   "eID broker": "Broker de eID",
   "eID broker (OpenID Connect)": "Broker de eID (OpenID Connect)",
   "expires {date}": "expira em {date}",
-  "failed": "falhou",
   "from any IP address": "de qualquer endereço IP",
   "from {ips}": "de {ips}",
   "kept in this tab only": "mantida apenas nesta aba",
@@ -1170,5 +1169,17 @@
   "Distribute Vertically": "Distribuir na vertical",
   "Save your changes to test them.": "Salve as alterações para testá-las.",
   "Add a file first": "Adicione um arquivo primeiro",
-  "Advanced": "Avançado"
+  "Advanced": "Avançado",
+  "Expires {date}": "Expira em {date}",
+  "Kept until {date}": "Guardado até {date}",
+  "Step {step} in the signing order": "Etapa {step} da ordem de assinatura",
+  "Move {name} earlier": "Mover {name} para antes",
+  "Move {name} later": "Mover {name} para depois",
+  "{handled} of {total} handled · {sent} sent · {failed} failed": "{handled} de {total} processados · {sent} enviados · {failed} com falha",
+  "Choose File": "Escolher Arquivo",
+  "Choose Files": "Escolher Arquivos",
+  "Inactive": "Inativo",
+  "The server sent a response that could not be read": "O servidor enviou uma resposta que não pôde ser lida",
+  "Something went wrong": "Algo deu errado",
+  "The preview could not be shown": "Não foi possível mostrar a pré-visualização"
 }

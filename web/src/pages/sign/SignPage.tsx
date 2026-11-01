@@ -844,7 +844,7 @@ function IdentifyPreview({ method }: { method: AuthMethod }) {
 }
 
 /** The signing page as a party will see it, for the sender. Read-only: it never calls a signing service. */
-export function SigningPreview({ documentId, partyId }: { documentId: string; partyId: string }) {
+export function SigningPreview({ documentId, partyId, errorTitle }: { documentId: string; partyId: string; errorTitle: string }) {
   const [view, setView] = useState<SignerView>();
   const [error, setError] = useState<string>();
   useEffect(() => {
@@ -861,7 +861,7 @@ export function SigningPreview({ documentId, partyId }: { documentId: string; pa
     <TextsContext.Provider value={textsFor(view?.document.language)}>
       <Shell view={view}>
         {error ? (
-          <Message icon={<XCircle className="size-10 text-destructive" />} title="The preview could not be shown">
+          <Message icon={<XCircle className="size-10 text-destructive" />} title={errorTitle}>
             {error}
           </Message>
         ) : view ? (

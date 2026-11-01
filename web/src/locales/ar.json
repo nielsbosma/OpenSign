@@ -680,7 +680,6 @@
   "eID broker": "وسيط الهوية الإلكترونية",
   "eID broker (OpenID Connect)": "وسيط الهوية الإلكترونية (OpenID Connect)",
   "expires {date}": "ينتهي في {date}",
-  "failed": "فشل",
   "from any IP address": "من أي عنوان IP",
   "from {ips}": "من {ips}",
   "kept in this tab only": "يُحفظ في علامة التبويب هذه فقط",
@@ -1170,5 +1169,17 @@
   "Distribute Vertically": "توزيع عمودي",
   "Save your changes to test them.": "احفظ تغييراتك لاختبارها.",
   "Add a file first": "أضف ملفًا أولًا",
-  "Advanced": "متقدم"
+  "Advanced": "متقدم",
+  "Expires {date}": "ينتهي في {date}",
+  "Kept until {date}": "يُحفظ حتى {date}",
+  "Step {step} in the signing order": "الخطوة {step} في ترتيب التوقيع",
+  "Move {name} earlier": "نقل {name} إلى وقت أبكر",
+  "Move {name} later": "نقل {name} إلى وقت لاحق",
+  "{handled} of {total} handled · {sent} sent · {failed} failed": "تمت معالجة {handled} من {total} · أُرسل {sent} · فشل {failed}",
+  "Choose File": "اختيار ملف",
+  "Choose Files": "اختيار ملفات",
+  "Inactive": "غير نشط",
+  "The server sent a response that could not be read": "أرسل الخادم استجابة تعذرت قراءتها",
+  "Something went wrong": "حدث خطأ ما",
+  "The preview could not be shown": "تعذر عرض المعاينة"
 }
