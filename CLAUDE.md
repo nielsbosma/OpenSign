@@ -12,6 +12,7 @@ Instructions for coding agents and people. Read the README and SECURITY.md first
 - Signer-facing services are named `signing.*`, take the link token, and resolve the party with `signing::resolve`. They never use the signed-in user.
 - After changing a service's input or output, run `pnpm api:types` and commit `web/src/lib/api-types.gen.ts`.
 - A change people can see updates its page in `docs/` (served at `/docs`). A new page also goes in the `NAV` list in `web/src/pages/docs/content.ts`.
+- English in `docs/*.md` is the source. Translations are in `docs/<language>/<slug>.md`, and a page without one shows English. When you change an English page that has translations, update the same text in all of them in the same PR. Keep headings in the same order and levels (anchors come from the English headings by position), code blocks identical and link targets unchanged; `content.test.ts` fails otherwise, but it cannot see changed wording. UI labels use the wording in that language's `web/src/locales` file.
 
 ## Security habits
 
