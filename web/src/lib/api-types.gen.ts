@@ -479,6 +479,18 @@ export type AuthVerifyTwoFactorOutput = {
   status: "passkey_required";
 };
 
+export type AutomationsAppLogoInput = {
+  /** The app's toolkit slug from automations.apps, such as googledrive. */
+  slug: string;
+};
+
+export type AutomationsAppLogoOutput = AppLogoOutput;
+
+export type AppLogoOutput = {
+  /** The logo as a data URL, or nothing when the app has none. */
+  dataUrl?: string | null;
+};
+
 export type AutomationsAppsInput = {
   /** At most 100; 30 when left out. */
   limit?: number | null;
@@ -2682,6 +2694,7 @@ export interface Services {
   "auth.sso_start": { kind: "mutation"; input: AuthSsoStartInput; output: AuthSsoStartOutput };
   "auth.sso_status": { kind: "query"; input: AuthSsoStatusInput; output: AuthSsoStatusOutput };
   "auth.verify_two_factor": { kind: "mutation"; input: AuthVerifyTwoFactorInput; output: AuthVerifyTwoFactorOutput };
+  "automations.app_logo": { kind: "query"; input: AutomationsAppLogoInput; output: AutomationsAppLogoOutput };
   "automations.apps": { kind: "query"; input: AutomationsAppsInput; output: AutomationsAppsOutput };
   "automations.connect": { kind: "mutation"; input: AutomationsConnectInput; output: AutomationsConnectOutput };
   "automations.connections": { kind: "query"; input: AutomationsConnectionsInput; output: AutomationsConnectionsOutput };
