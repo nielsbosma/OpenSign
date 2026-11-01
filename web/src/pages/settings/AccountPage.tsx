@@ -218,7 +218,11 @@ function TwoFactorCard() {
         </Button>
       )}
       <Dialog open={!!setup || !!codes} onOpenChange={(open) => !open && !codes && close()}>
-        <DialogContent onInteractOutside={(e) => codes && e.preventDefault()} onEscapeKeyDown={(e) => codes && e.preventDefault()}>
+        <DialogContent
+          showCloseButton={!codes}
+          onInteractOutside={(e) => codes && e.preventDefault()}
+          onEscapeKeyDown={(e) => codes && e.preventDefault()}
+        >
           {codes ? (
             <>
               <DialogHeader>
