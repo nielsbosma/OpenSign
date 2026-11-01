@@ -1,7 +1,8 @@
--- The whole schema, squashed before the first release. Add changes as new numbered files after this one.
+-- The whole schema, squashed before the first production install. Add changes as new numbered files after this one.
 
 -- Identity, settings, audit chain, files, jobs and OAuth for MCP.
 
+-- failed_login_count and locked_until are no longer read (see login_failures) and can go in a later release.
 create table users (
   id uuid primary key,
   email text not null,
@@ -56,7 +57,9 @@ create table sessions (
   elevated_until timestamptz,
   ip text,
   user_agent text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Null for a session from a local sign-in; otherwise whether the provider's token proved a second factor.
+  sso_mfa boolean
 );
 create index sessions_user_idx on sessions (user_id);
 
@@ -68,6 +71,17 @@ create table login_challenges (
   created_at timestamptz not null default now()
 );
 
+-- Failed sign-ins per email and address. The row with address '*' is the total across addresses.
+create table login_failures (
+  subject text not null,
+  address text not null,
+  failures integer not null,
+  last_failed_at timestamptz not null,
+  locked_until timestamptz,
+  primary key (subject, address)
+);
+create index login_failures_last_failed_at on login_failures (last_failed_at);
+
 create table password_reset_tokens (
   id text primary key,
   user_id uuid not null references users (id) on delete cascade,
@@ -75,6 +89,24 @@ create table password_reset_tokens (
   used_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+create table email_change_tokens (
+  id text primary key,
+  user_id uuid not null references users (id) on delete cascade,
+  new_email text not null,
+  requested_by uuid references users (id) on delete set null,
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index email_change_tokens_user on email_change_tokens (user_id);
+
+-- One-time links (file upload links) that have been spent. Rows go once the link has expired anyway.
+create table used_tokens (
+  id uuid primary key,
+  expires_at timestamptz not null
+);
+create index used_tokens_expires_idx on used_tokens (expires_at);
 
 create table invites (
   id uuid primary key,
@@ -90,6 +122,7 @@ create table invites (
   created_at timestamptz not null default now()
 );
 create index invites_email_idx on invites (lower(email));
+create index invites_invited_by on invites (invited_by) where accepted_at is null and revoked_at is null;
 
 create table api_keys (
   id uuid primary key,
@@ -132,7 +165,8 @@ create table audit_log (
   prev_hash bytea not null,
   hash bytea not null unique,
   -- Chained with an HMAC keyed from APP_SECRET, so someone who can write to the database cannot rebuild the chain.
-  hash_alg text not null default 'hmac-sha256' check (hash_alg in ('sha256', 'hmac-sha256'))
+  hash_alg text not null default 'hmac-sha256' check (hash_alg in ('sha256', 'hmac-sha256')),
+  constraint audit_log_keyed_only check (hash_alg = 'hmac-sha256')
 );
 create index audit_log_entity_idx on audit_log (entity_type, entity_id);
 create index audit_log_actor_idx on audit_log (actor_id);
@@ -156,6 +190,7 @@ create table audit_anchors (
   created_at timestamptz not null default now()
 );
 create trigger audit_anchors_append_only before update or delete on audit_anchors for each row execute function refuse_change();
+create trigger audit_anchors_no_truncate before truncate on audit_anchors for each statement execute function refuse_change();
 
 -- Bodies live in the bucket, encrypted with a per-file key; wrapped_key is that key wrapped by the KEK.
 create table files (
@@ -172,6 +207,35 @@ create table files (
   deleted_at timestamptz
 );
 create index files_kind_idx on files (kind, created_at);
+
+-- A user's saved signature, offered (never applied silently) when they sign themselves.
+alter table users add column signature_file_id uuid references files (id) on delete set null;
+alter table users add column signature_typed text;
+alter table users add column signature_initials text;
+alter table users add column signature_updated_at timestamptz;
+-- Single sign-on through OpenID Connect. An account is the issuer and subject, never the email.
+alter table users add column sso boolean not null default false;
+
+create table user_identities (
+  id uuid primary key,
+  user_id uuid not null unique references users (id) on delete cascade,
+  issuer text not null,
+  subject text not null,
+  created_at timestamptz not null default now(),
+  last_login_at timestamptz,
+  unique (issuer, subject)
+);
+
+-- One row per sign-in on its way through the provider, taken on the way back.
+create table sso_logins (
+  id uuid primary key,
+  state_mac text not null unique,
+  browser_mac text not null,
+  secrets text not null,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+create index sso_logins_expires_at on sso_logins (expires_at);
 
 create table notifications (
   id uuid primary key,
@@ -247,10 +311,23 @@ create table webauthn_challenges (
   user_id uuid references users (id) on delete cascade,
   purpose text not null,
   expires_at timestamptz not null,
-  constraint webauthn_challenges_purpose_check check (purpose in ('register', 'sign_in'))
+  constraint webauthn_challenges_purpose_check check (purpose in ('register', 'sign_in', 'second_factor', 'step_up'))
 );
 
 -- Documents to sign, their parties and fields, templates and webhooks.
+
+create table folders (
+  id uuid primary key,
+  name text not null,
+  parent_id uuid references folders (id) on delete cascade,
+  scope text not null,
+  created_by uuid references users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint folders_scope_check check (scope in ('documents', 'templates'))
+);
+create unique index folders_name_idx on folders (scope, coalesce(parent_id, '00000000-0000-0000-0000-000000000000'), lower(name));
+create index folders_parent_idx on folders (parent_id);
 
 create table documents (
   id uuid primary key,
@@ -282,12 +359,18 @@ create table documents (
   legal_hold_at timestamptz,
   legal_hold_by uuid references users (id) on delete set null,
   review_links boolean not null default true,
+  folder_id uuid references folders (id) on delete set null,
+  archived_at timestamptz,
+  -- The template version a document was made from.
+  template_version integer,
   constraint documents_status_check check (status in ('draft', 'pending', 'completed', 'declined', 'canceled', 'expired'))
 );
 create index documents_owner_idx on documents (owner_id, created_at desc);
 create index documents_status_idx on documents (status, created_at desc);
 create index documents_external_idx on documents (external_id) where external_id is not null;
 create index documents_retention_idx on documents (status, updated_at) where not legal_hold and not is_template;
+create index documents_folder_idx on documents (folder_id) where folder_id is not null;
+create index documents_template_idx on documents (template_id, template_version) where template_id is not null;
 
 -- A document's source files, merged into one PDF in this order when it is sent.
 create table document_files (
@@ -354,9 +437,86 @@ create table fields (
   value text,
   options jsonb not null default '[]',
   created_at timestamptz not null default now(),
+  -- Checks a signer's value must pass: pattern, message, minLength, maxLength, min, max.
+  validation jsonb not null default '{}',
+  -- How a date or number is written on the page, e.g. "DD/MM/YYYY" or "1 234,00 kr".
+  format text,
+  -- Radio boxes with the same key form one group; each box holds its option in `options`.
+  group_key text,
+  -- The signer sees the sender's value but cannot change it.
+  read_only boolean not null default false,
+  -- The image or file a signer put in an image or file field; `value` holds its name.
+  file_id uuid references files (id) on delete set null,
+  -- When a field is shown: a list of { field, op, value } rules on other fields' labels, all of which must hold.
+  conditions jsonb not null default '[]',
+  -- The expression of a `formula` field, such as "{Hours} * {Rate}".
+  formula text,
+  uploads integer not null default 0,
   constraint fields_box_check check (x >= 0 and y >= 0 and width > 0 and height > 0 and x + width <= 1.0001 and y + height <= 1.0001)
 );
 create index fields_document_idx on fields (document_id);
+create index fields_file_idx on fields (file_id) where file_id is not null;
+
+-- Saved states of a template: its settings, files, parties, attachment requests and fields as JSON.
+create table template_versions (
+  id uuid primary key,
+  template_id uuid not null references documents (id) on delete cascade,
+  number integer not null,
+  snapshot jsonb not null,
+  note text,
+  -- Set when the version was made by restoring an earlier one.
+  restored_from integer,
+  created_by uuid references users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint template_versions_number_key unique (template_id, number)
+);
+
+-- Keeps the files a version names from being purged while the version exists.
+create table template_version_files (
+  version_id uuid not null references template_versions (id) on delete cascade,
+  file_id uuid not null references files (id),
+  primary key (version_id, file_id)
+);
+create index template_version_files_file_idx on template_version_files (file_id);
+
+-- A public link to a template. Whoever opens it confirms their email, then becomes `party_id`'s
+-- party on a new document owned by `owner_id`.
+create table share_links (
+  id uuid primary key,
+  template_id uuid not null unique references documents (id) on delete cascade,
+  slug text not null unique,
+  enabled boolean not null default false,
+  party_id uuid references parties (id) on delete set null,
+  owner_id uuid references users (id) on delete set null,
+  per_hour integer not null default 10,
+  max_total integer,
+  expires_at timestamptz,
+  documents_created integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint share_links_per_hour_check check (per_hour between 1 and 1000),
+  constraint share_links_max_total_check check (max_total is null or max_total >= 1)
+);
+
+-- Email confirmations started from a share link. Deleted once used, and after a day if not.
+create table share_link_requests (
+  id uuid primary key,
+  share_link_id uuid not null references share_links (id) on delete cascade,
+  email text not null,
+  name text not null,
+  phone text,
+  code_hash text not null,
+  attempts integer not null default 0,
+  ip text,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+create index share_link_requests_link_idx on share_link_requests (share_link_id, created_at);
+create index share_link_requests_email_idx on share_link_requests (lower(email), created_at);
+
+-- Documents made from a share link, for the per-hour and total limits.
+alter table documents add column share_link_id uuid references share_links (id) on delete set null;
+create index documents_share_link_idx on documents (share_link_id, created_at) where share_link_id is not null;
 
 -- The organisation's document seal. The private key is encrypted with a key derived from APP_SECRET.
 create table seal_identities (
@@ -383,6 +543,15 @@ create table sms_challenges (
   created_at timestamptz not null default now()
 );
 
+-- What was spent on SMS, for the budgets in Admin settings.
+create table sms_log (
+  id uuid primary key,
+  share_link_id uuid,
+  sent_at timestamptz not null default now()
+);
+create index sms_log_sent_idx on sms_log (sent_at);
+create index sms_log_share_link_idx on sms_log (share_link_id, sent_at) where share_link_id is not null;
+
 create table webhooks (
   id uuid primary key,
   url text not null,
@@ -394,18 +563,61 @@ create table webhooks (
   created_at timestamptz not null default now()
 );
 
+-- Rules that run a Composio tool when a document event happens.
+create table automations (
+  id uuid primary key,
+  name text not null,
+  event text not null,
+  -- Empty: every document.
+  template_ids uuid[] not null default '{}',
+  folder_ids uuid[] not null default '{}',
+  toolkit text not null,
+  tool text not null,
+  -- The tool version when the rule was saved, so a change at Composio cannot break it silently.
+  tool_version text,
+  connected_account_id text not null,
+  -- The tool's arguments; strings may hold {{placeholders}} filled from the document.
+  arguments jsonb not null default '{}',
+  active boolean not null default true,
+  created_by uuid references users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Webhook deliveries and automation runs share this log: same retries, attempts and 30-day sweep.
 create table webhook_deliveries (
   id uuid primary key,
-  webhook_id uuid not null references webhooks (id) on delete cascade,
+  webhook_id uuid references webhooks (id) on delete cascade,
   event text not null,
   payload jsonb not null,
   status_code integer,
   error text,
   attempts integer not null default 0,
   delivered_at timestamptz,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  resent_from uuid references webhook_deliveries (id) on delete set null,
+  last_attempt_at timestamptz,
+  -- Null once delivered or given up.
+  next_attempt_at timestamptz,
+  automation_id uuid references automations (id) on delete cascade,
+  constraint webhook_deliveries_target_check check ((webhook_id is null) <> (automation_id is null))
 );
 create index webhook_deliveries_webhook_idx on webhook_deliveries (webhook_id, created_at desc);
+create index webhook_deliveries_created_idx on webhook_deliveries (created_at);
+create index webhook_deliveries_resent_from_idx on webhook_deliveries (resent_from);
+create index webhook_deliveries_automation_idx on webhook_deliveries (automation_id, created_at desc) where automation_id is not null;
+
+-- One row per try, with the start of the answer so failures can be diagnosed.
+create table webhook_attempts (
+  id uuid primary key,
+  delivery_id uuid not null references webhook_deliveries (id) on delete cascade,
+  status_code integer,
+  error text,
+  response_excerpt text,
+  duration_ms integer not null,
+  created_at timestamptz not null default now()
+);
+create index webhook_attempts_delivery_idx on webhook_attempts (delivery_id, created_at);
 
 create table idempotency_keys (
   actor text not null,
@@ -440,6 +652,7 @@ create table ai_usage (
   created_at timestamptz not null default now()
 );
 create index ai_usage_created_idx on ai_usage (created_at);
+create index ai_usage_user_created_idx on ai_usage (user_id, created_at);
 
 -- A sealed document cannot change: only its row's bookkeeping may.
 create function protect_sealed_document() returns trigger language plpgsql as $$
@@ -473,7 +686,14 @@ create table eid_sessions (
   expires_at timestamptz not null,
   completed_at timestamptz,
   consumed_at timestamptz,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- The browser an eID broker flow started in; the callback must come back to it.
+  browser_mac text,
+  -- An identification started from a framed signing page: the session goes to the frame only with the
+  -- code shown in the window where the person identified.
+  framed boolean not null default false,
+  release_mac text,
+  release_attempts integer not null default 0
 );
 
 create index eid_sessions_party on eid_sessions (party_id, created_at);
@@ -493,6 +713,7 @@ create table attachment_requests (
   created_at timestamptz not null default now(),
   -- 'photo' is a live photo taken with the camera while signing.
   kind text not null default 'file',
+  uploads integer not null default 0,
   constraint attachment_requests_upload_check check ((file_id is null) = (uploaded_at is null)),
   constraint attachment_requests_kind_check check (kind in ('file', 'photo'))
 );
