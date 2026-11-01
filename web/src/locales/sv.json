@@ -1159,5 +1159,14 @@
   "This page was machine translated and has not been reviewed. The {english} is authoritative.": "Den här sidan är maskinöversatt och har inte granskats. Den {english} är den som gäller.",
   "This page is not translated yet, so it is shown in English.": "Den här sidan är inte översatt ännu, så den visas på engelska.",
   "Fields": "Fält",
+  "{count} fields selected": "{count} fält valda",
+  "Align Left": "Vänsterjustera",
+  "Align Horizontal Centers": "Centrera horisontellt",
+  "Align Right": "Högerjustera",
+  "Align Top": "Justera överkant",
+  "Align Vertical Centers": "Centrera vertikalt",
+  "Align Bottom": "Justera underkant",
+  "Distribute Horizontally": "Fördela horisontellt",
+  "Distribute Vertically": "Fördela vertikalt",
   "Save your changes to test them.": "Spara ändringarna för att testa dem."
 }

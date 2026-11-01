@@ -1159,5 +1159,14 @@
   "This page was machine translated and has not been reviewed. The {english} is authoritative.": "Cette page a été traduite automatiquement et n'a pas été relue. La {english} fait foi.",
   "This page is not translated yet, so it is shown in English.": "Cette page n'est pas encore traduite ; elle est donc affichée en anglais.",
   "Fields": "Champs",
+  "{count} fields selected": "{count} champs sélectionnés",
+  "Align Left": "Aligner à gauche",
+  "Align Horizontal Centers": "Centrer horizontalement",
+  "Align Right": "Aligner à droite",
+  "Align Top": "Aligner en haut",
+  "Align Vertical Centers": "Centrer verticalement",
+  "Align Bottom": "Aligner en bas",
+  "Distribute Horizontally": "Répartir horizontalement",
+  "Distribute Vertically": "Répartir verticalement",
   "Save your changes to test them.": "Enregistrez vos modifications pour les tester."
 }

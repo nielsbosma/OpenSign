@@ -47,7 +47,7 @@ Añada a todos los que firman, aprueban o reciben una copia. Para cada parte eli
 
 ### Campos
 
-Elija una parte en la pestaña **Campos** y coloque los campos en las páginas. Los campos también pueden venir del propio archivo: las [etiquetas de texto](text-tags.md#text-tags) como `{{Sign;type=signature;role=Tenant}}` y los campos de un [formulario PDF rellenable](text-tags.md#pdf-forms) se convierten en campos al subir, y [Detectar campos](text-tags.md#detect-fields) en la pestaña **Campos** sugiere campos donde la página tiene líneas y recuadros por rellenar. Cada campo pertenece a una parte, que lo rellena al firmar. Seleccione un campo para cambiarlo en el panel **Campo**: quién lo rellena, su etiqueta, si es obligatorio y los ajustes de abajo.
+Elija una parte en la pestaña **Campos** y coloque los campos en las páginas. Los campos también pueden venir del propio archivo: las [etiquetas de texto](text-tags.md#text-tags) como `{{Sign;type=signature;role=Tenant}}` y los campos de un [formulario PDF rellenable](text-tags.md#pdf-forms) se convierten en campos al subir, y [Detectar campos](text-tags.md#detect-fields) en la pestaña **Campos** sugiere campos donde la página tiene líneas y recuadros por rellenar. Cada campo pertenece a una parte, que lo rellena al firmar. Seleccione un campo para cambiarlo en el panel **Campo**: quién lo rellena, su etiqueta, si es obligatorio y los ajustes de abajo. Haz clic con Mayús en los campos o arrastra por la página para seleccionar varios, y alinéalos o distribúyelos en el panel lateral. Los campos se ajustan entre sí al arrastrarlos; mantén pulsado Alt para desactivarlo.
 
 | Campo | |
 | --- | --- |

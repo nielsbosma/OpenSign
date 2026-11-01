@@ -47,7 +47,7 @@ Add everyone who signs, approves or receives a copy. For each party you choose t
 
 ### Fields
 
-Pick a party on the **Fields** tab, then place fields on the pages. Fields can also come from the file itself: [text tags](text-tags.md#text-tags) such as `{{Sign;type=signature;role=Tenant}}` and the fields of a [fillable PDF form](text-tags.md#pdf-forms) become fields when you upload, and [Detect Fields](text-tags.md#detect-fields) on the **Fields** tab suggests fields where the page has lines and boxes to fill in. Each field belongs to one party, who fills it in when signing. Select a field to change it in the **Field** panel: who fills it in, its label, whether it is required, and the settings below.
+Pick a party on the **Fields** tab, then place fields on the pages. Fields can also come from the file itself: [text tags](text-tags.md#text-tags) such as `{{Sign;type=signature;role=Tenant}}` and the fields of a [fillable PDF form](text-tags.md#pdf-forms) become fields when you upload, and [Detect Fields](text-tags.md#detect-fields) on the **Fields** tab suggests fields where the page has lines and boxes to fill in. Each field belongs to one party, who fills it in when signing. Select a field to change it in the **Field** panel: who fills it in, its label, whether it is required, and the settings below. Shift-click fields or drag across the page to select several, then align or distribute them in the side panel. Fields snap to each other as you drag; hold Alt to turn that off.
 
 | Field | |
 | --- | --- |

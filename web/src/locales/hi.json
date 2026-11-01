@@ -1159,5 +1159,14 @@
   "This page was machine translated and has not been reviewed. The {english} is authoritative.": "इस पृष्ठ का मशीन अनुवाद किया गया है और इसकी समीक्षा नहीं हुई है। {english} ही प्रामाणिक है।",
   "This page is not translated yet, so it is shown in English.": "इस पृष्ठ का अभी अनुवाद नहीं हुआ है, इसलिए यह अंग्रेज़ी में दिखाया गया है।",
   "Fields": "फ़ील्ड",
+  "{count} fields selected": "{count} फ़ील्ड चुने गए",
+  "Align Left": "बाएँ संरेखित करें",
+  "Align Horizontal Centers": "क्षैतिज केंद्र में संरेखित करें",
+  "Align Right": "दाएँ संरेखित करें",
+  "Align Top": "ऊपर संरेखित करें",
+  "Align Vertical Centers": "लंबवत केंद्र में संरेखित करें",
+  "Align Bottom": "नीचे संरेखित करें",
+  "Distribute Horizontally": "क्षैतिज रूप से वितरित करें",
+  "Distribute Vertically": "लंबवत रूप से वितरित करें",
   "Save your changes to test them.": "परीक्षण के लिए अपने बदलाव सहेजें।"
 }

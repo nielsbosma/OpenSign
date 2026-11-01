@@ -47,7 +47,7 @@ Lägg till alla som signerar, godkänner eller får en kopia. För varje part v�
 
 ### Fält
 
-Välj en part på fliken **Fält** och placera sedan fält på sidorna. Fält kan också komma från själva filen: [texttaggar](text-tags.md#text-tags) som `{{Sign;type=signature;role=Tenant}}` och fälten i ett [ifyllbart PDF-formulär](text-tags.md#pdf-forms) blir fält när du laddar upp, och [Hitta fält](text-tags.md#detect-fields) på fliken **Fält** föreslår fält där sidan har linjer och rutor att fylla i. Varje fält tillhör en part, som fyller i det vid signeringen. Markera ett fält för att ändra det i panelen **Fält**: vem som fyller i det, dess etikett, om det är obligatoriskt och inställningarna nedan.
+Välj en part på fliken **Fält** och placera sedan fält på sidorna. Fält kan också komma från själva filen: [texttaggar](text-tags.md#text-tags) som `{{Sign;type=signature;role=Tenant}}` och fälten i ett [ifyllbart PDF-formulär](text-tags.md#pdf-forms) blir fält när du laddar upp, och [Hitta fält](text-tags.md#detect-fields) på fliken **Fält** föreslår fält där sidan har linjer och rutor att fylla i. Varje fält tillhör en part, som fyller i det vid signeringen. Markera ett fält för att ändra det i panelen **Fält**: vem som fyller i det, dess etikett, om det är obligatoriskt och inställningarna nedan. Skift-klicka på fält eller dra över sidan för att välja flera, och justera eller fördela dem sedan i sidopanelen. Fält fäster mot varandra när du drar; håll ned Alt för att stänga av det.
 
 | Fält | |
 | --- | --- |

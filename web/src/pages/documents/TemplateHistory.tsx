@@ -422,7 +422,7 @@ function VersionPreview({ doc, number, onClose }: { doc: DocumentView; number: n
                   fields={fields}
                   parties={parties}
                   editable={false}
-                  selected={null}
+                  selected={[]}
                   onSelect={() => {}}
                   onChange={() => {}}
                   onRemove={() => {}}

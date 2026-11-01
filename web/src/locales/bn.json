@@ -1159,5 +1159,14 @@
   "This page was machine translated and has not been reviewed. The {english} is authoritative.": "এই পৃষ্ঠাটি মেশিনে অনুবাদ করা এবং পর্যালোচনা করা হয়নি। {english}টিই প্রামাণ্য।",
   "This page is not translated yet, so it is shown in English.": "এই পৃষ্ঠাটি এখনও অনূদিত হয়নি, তাই এটি ইংরেজিতে দেখানো হচ্ছে।",
   "Fields": "ফিল্ড",
+  "{count} fields selected": "{count}টি ফিল্ড নির্বাচিত",
+  "Align Left": "বামে সারিবদ্ধ করুন",
+  "Align Horizontal Centers": "অনুভূমিকভাবে কেন্দ্রে আনুন",
+  "Align Right": "ডানে সারিবদ্ধ করুন",
+  "Align Top": "উপরে সারিবদ্ধ করুন",
+  "Align Vertical Centers": "উল্লম্বভাবে কেন্দ্রে আনুন",
+  "Align Bottom": "নিচে সারিবদ্ধ করুন",
+  "Distribute Horizontally": "অনুভূমিকভাবে বিতরণ করুন",
+  "Distribute Vertically": "উল্লম্বভাবে বিতরণ করুন",
   "Save your changes to test them.": "পরীক্ষা করতে আপনার পরিবর্তনগুলি সংরক্ষণ করুন।"
 }
