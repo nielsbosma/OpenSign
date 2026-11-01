@@ -183,6 +183,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<webhooks::ResendFailed>(),
         erase::<automations::Status>(),
         erase::<automations::Apps>(),
+        erase::<automations::AppLogo>(),
         erase::<automations::Connections>(),
         erase::<automations::Connect>(),
         erase::<automations::Disconnect>(),

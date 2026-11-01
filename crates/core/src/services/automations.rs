@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use async_trait::async_trait;
+use base64::Engine;
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -126,6 +127,65 @@ fn app_view(t: &Value) -> Option<AppView> {
         no_auth: t["no_auth"].as_bool().unwrap_or(false),
         tools_count: t["meta"]["tools_count"].as_u64(),
     })
+}
+
+/// Logos come through the server because the CSP lets the browser load nothing from another origin.
+const LOGO_BASE: &str = "https://logos.composio.dev/api";
+const MAX_LOGO_BYTES: usize = 200_000;
+const LOGO_TYPES: &[&str] = &["image/svg+xml", "image/png", "image/jpeg", "image/webp"];
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AppLogoInput {
+    /// The app's toolkit slug from automations.apps, such as googledrive.
+    pub slug: String,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AppLogoOutput {
+    /// The logo as a data URL, or nothing when the app has none.
+    pub data_url: Option<String>,
+}
+
+async fn fetch_logo(ctx: &Ctx, slug: &str) -> Option<String> {
+    let mut response =
+        ctx.app.http.public.get(format!("{LOGO_BASE}/{slug}")).timeout(std::time::Duration::from_secs(10)).send().await.ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+    let content_type = response.headers().get(reqwest::header::CONTENT_TYPE)?.to_str().ok()?.split(';').next()?.trim().to_string();
+    if !LOGO_TYPES.contains(&content_type.as_str()) {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.ok()? {
+        bytes.extend_from_slice(&chunk);
+        if bytes.len() > MAX_LOGO_BYTES {
+            return None;
+        }
+    }
+    Some(format!("data:{content_type};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
+}
+
+pub struct AppLogo;
+
+#[async_trait]
+impl Service for AppLogo {
+    type Input = AppLogoInput;
+    type Output = AppLogoOutput;
+    const META: Meta =
+        Meta::query("automations.app_logo", "The logo of an app Composio can connect to, for showing in the app list.", ACCESS)
+            .not_a_tool("An image for the settings page, of no use to an agent.");
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: AppLogoInput) -> Result<AppLogoOutput> {
+        client(ctx, conn).await?;
+        let slug = input.slug.trim();
+        if slug.is_empty() || slug.len() > 100 || !slug.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+            return Err(bad_request("That is not an app slug"));
+        }
+        Ok(AppLogoOutput { data_url: fetch_logo(ctx, slug).await })
+    }
 }
 
 pub struct Apps;
