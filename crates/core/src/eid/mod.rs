@@ -9,6 +9,74 @@ pub mod tic;
 
 use serde::{Deserialize, Serialize};
 
+/// What to tell the person during an identification. The signing page shows `code` in their language;
+/// `message` is the English for everyone else. Failures are stored by code, so each is listed in `FAILURES`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EidText {
+    pub code: &'static str,
+    pub message: &'static str,
+}
+
+impl EidText {
+    pub const fn new(code: &'static str, message: &'static str) -> Self {
+        Self { code, message }
+    }
+
+    pub const FAILED: Self = Self::new("failed", "The identification did not go through. Try again.");
+    pub const CANCELED: Self = Self::new("canceled", "The identification was canceled.");
+    pub const CANCELED_RETRY: Self = Self::new("canceled_retry", "The identification was canceled. Try again.");
+    pub const NO_RESPONSE: Self = Self::new("no_response", "The BankID app did not respond in time. Try again.");
+    pub const BLOCKED: Self = Self::new("blocked", "The BankID you are trying to use is blocked or too old. Get a new one from your bank.");
+    pub const NOT_FOUND: Self =
+        Self::new("not_found", "The BankID app could not be found. Install it and get a BankID from your bank, then try again.");
+    pub const DECLINED_CALL: Self = Self::new("declined_call", "You declined the call. Try again.");
+    pub const FREJA_DECLINED: Self = Self::new("freja_declined", "The identification was declined in Freja eID.");
+    pub const FREJA_TIMEOUT: Self = Self::new("freja_timeout", "Freja eID did not respond in time. Try again.");
+    pub const OTHER_PERSON: Self = Self::new("other_person", "This eID belongs to someone other than the person the document was sent to.");
+    pub const ALREADY_USED: Self = Self::new("already_used", "This identification was already used. Start again.");
+    pub const METHOD_CHANGED: Self = Self::new("method_changed", "The sender changed how you identify. Start again.");
+    pub const TOO_LONG: Self = Self::new("too_long", "The identification took too long. Try again.");
+    pub const TOO_MANY_CODES: Self = Self::new("too_many_codes", "That was the wrong code too many times. Start again.");
+    pub const OTHER_BROWSER: Self = Self::new(
+        "other_browser",
+        "Finish the identification in the same browser where you started it. Go back to the signing link and start again.",
+    );
+    pub const BROKER_CANCELED: Self = Self::new("broker_canceled", "The identification was canceled or did not go through.");
+    pub const BROKER_NO_RESULT: Self = Self::new("broker_no_result", "The eID broker sent no result");
+    pub const NO_PERSONAL_NUMBER: Self = Self::new("no_personal_number", "TIC Identity did not return a Swedish personal number");
+    pub const BROKER_NO_PERSON: Self = Self::new("broker_no_person", "The eID broker did not say who you are");
+
+    const FAILURES: &[Self] = &[
+        Self::FAILED,
+        Self::CANCELED,
+        Self::CANCELED_RETRY,
+        Self::NO_RESPONSE,
+        Self::BLOCKED,
+        Self::NOT_FOUND,
+        Self::DECLINED_CALL,
+        Self::FREJA_DECLINED,
+        Self::FREJA_TIMEOUT,
+        Self::OTHER_PERSON,
+        Self::ALREADY_USED,
+        Self::METHOD_CHANGED,
+        Self::TOO_LONG,
+        Self::TOO_MANY_CODES,
+        Self::OTHER_BROWSER,
+        Self::BROKER_CANCELED,
+        Self::BROKER_NO_RESULT,
+        Self::NO_PERSONAL_NUMBER,
+        Self::BROKER_NO_PERSON,
+    ];
+
+    pub fn by_code(code: &str) -> Option<Self> {
+        Self::FAILURES.iter().copied().find(|t| t.code == code)
+    }
+
+    pub fn by_message(message: &str) -> Option<Self> {
+        Self::FAILURES.iter().copied().find(|t| t.message == message)
+    }
+}
+
 /// The person an eID vouched for.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -131,6 +199,15 @@ pub fn same_person(expected: &str, proven: &str, this_year: i32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stored_failures_read_back() {
+        for text in EidText::FAILURES {
+            assert_eq!(EidText::by_code(text.code), Some(*text));
+            assert_eq!(EidText::by_message(text.message), Some(*text));
+        }
+        assert_eq!(EidText::by_code("A provider's own words"), None);
+    }
 
     #[test]
     fn swedish_personal_numbers() {

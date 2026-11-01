@@ -864,7 +864,14 @@ export type ColumnMapping = {
 };
 
 export type RowProblem = {
+  /** Which problem this is, for showing it in another language. */
+  code: string;
+  /** What is wrong, in English. */
   message: string;
+  /** The values that fill the placeholders of the text for `code`. */
+  params: {
+    [key: string]: string;
+  };
   /** 1-based, counting the header row as row 1, as a spreadsheet shows it. */
   row: number;
 };
@@ -1136,7 +1143,14 @@ export type DocumentsCheckInput = {
 };
 
 export type Check = {
+  /** Which check this is, for showing it in another language. Reviews saved before codes existed have none. */
+  code?: string | null;
+  /** What is wrong, in English. */
   message: string;
+  /** The values that fill the placeholders of the text for `code`. */
+  params?: {
+    [key: string]: string;
+  };
   partyId?: string | null;
   /** `error` blocks sending; `warning` is worth a look. */
   severity: string;
@@ -1219,6 +1233,8 @@ export type DocumentsDetectFieldsOutput = DetectOutput;
 export type DetectOutput = {
   /** Why the AI model was not asked, or what went wrong when it was. */
   aiNote?: string | null;
+  /** Which text `ai_note` is, for showing it in another language. An error from the provider has none. */
+  aiNoteCode?: string | null;
   /** The AI model was asked too. */
   aiUsed: boolean;
   /** Places that look like they want a field and have none yet. Nothing is saved. */
@@ -2182,6 +2198,8 @@ export type SigningEidStatusInput = {
 export type SigningEidStatusOutput = EidStatus;
 
 export type EidStatus = {
+  /** Which text `message` is, for showing it in the person's language. */
+  code?: string | null;
   expiresAt?: string | null;
   /** What to tell the person. */
   message?: string | null;

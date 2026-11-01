@@ -78,7 +78,12 @@ pub struct PreviewInput {
 pub struct RowProblem {
     /// 1-based, counting the header row as row 1, as a spreadsheet shows it.
     pub row: usize,
+    /// What is wrong, in English.
     pub message: String,
+    /// Which problem this is, for showing it in another language.
+    pub code: String,
+    /// The values that fill the placeholders of the text for `code`.
+    pub params: BTreeMap<String, String>,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -320,29 +325,38 @@ fn phone(raw: &str, language: &str) -> String {
     }
 }
 
-fn problems(t: &Template, values: &Values) -> Vec<String> {
+fn problem(code: &str, text: &str, name: &str, value: Option<&str>) -> RowProblem {
+    let mut params = BTreeMap::from([("name".to_string(), name.to_string())]);
+    if let Some(value) = value {
+        params.insert("value".into(), value.into());
+    }
+    let message = params.iter().fold(text.to_string(), |text, (key, value)| text.replace(&format!("{{{key}}}"), value));
+    RowProblem { row: 0, message, code: code.into(), params }
+}
+
+fn problems(t: &Template, values: &Values) -> Vec<RowProblem> {
     let mut out = Vec::new();
     for (i, p) in t.parties.iter().enumerate() {
         if party_value(values, i, "name").is_some_and(str::is_empty) {
-            out.push(format!("{} has no name", p.name));
+            out.push(problem("no_name", "{name} has no name", &p.name, None));
         }
         let email = party_value(values, i, "email").map(str::to_string).or_else(|| p.email.clone()).unwrap_or_default();
         let phone = party_value(values, i, "phone").map(|v| phone(v, &t.language)).or_else(|| p.phone.clone()).unwrap_or_default();
         match Delivery::parse(&p.delivery) {
-            Some(Delivery::Email) if email.is_empty() => out.push(format!("{} has no email address", p.name)),
-            Some(Delivery::Sms) if phone.is_empty() => out.push(format!("{} has no mobile number", p.name)),
+            Some(Delivery::Email) if email.is_empty() => out.push(problem("no_email", "{name} has no email address", &p.name, None)),
+            Some(Delivery::Sms) if phone.is_empty() => out.push(problem("no_mobile", "{name} has no mobile number", &p.name, None)),
             _ => {}
         }
         if !email.is_empty() && normalize_email(&email).is_err() {
-            out.push(format!("{}'s email address “{email}” is not valid", p.name));
+            out.push(problem("bad_email", "{name}'s email address “{value}” is not valid", &p.name, Some(&email)));
         }
         if !phone.is_empty() && crate::sms::normalize_phone(&phone).is_err() {
-            out.push(format!("{}'s mobile number “{phone}” is not valid", p.name));
+            out.push(problem("bad_mobile", "{name}'s mobile number “{value}” is not valid", &p.name, Some(&phone)));
         }
         if let Some(lang) = party_value(values, i, "language").map(str::trim).filter(|l| !l.is_empty())
             && crate::i18n::Lang::parse(lang).is_none()
         {
-            out.push(format!("{}'s language “{lang}” is not one OpenSign speaks", p.name));
+            out.push(problem("bad_language", "{name}'s language “{value}” is not one OpenSign speaks", &p.name, Some(lang)));
         }
     }
     out
@@ -351,8 +365,8 @@ fn problems(t: &Template, values: &Values) -> Vec<String> {
 fn all_problems(t: &Template, sheet: &Sheet, by_target: &HashMap<String, usize>, limit: usize) -> Vec<RowProblem> {
     let mut out = Vec::new();
     for (i, row) in sheet.rows.iter().enumerate() {
-        for message in problems(t, &row_values(row, by_target)) {
-            out.push(RowProblem { row: i + 2, message });
+        for problem in problems(t, &row_values(row, by_target)) {
+            out.push(RowProblem { row: i + 2, ..problem });
             if out.len() >= limit {
                 return out;
             }

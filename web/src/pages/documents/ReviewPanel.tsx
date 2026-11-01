@@ -28,6 +28,25 @@ const SEVERITY: Record<string, string> = {
   low: 'border-border',
 };
 
+/** The texts of `setup_checks` in `crates/core/src/services/ai.rs`, by code. */
+const CHECK_TEXTS: Record<string, string> = {
+  no_document: msg('Add the document to be signed'),
+  no_signer: msg('Add at least one signer or approver'),
+  no_signature_field: msg('{name} has no signature field; their signature goes on the evidence page only'),
+  viewer_has_fields: msg('{name} only views the document but has fields to fill in'),
+  no_email: msg('{name} gets the document by email but has no email address'),
+  no_phone: msg('{name} gets the document by SMS but has no phone number'),
+  sms_code_no_phone: msg('{name} must confirm with an SMS code but has no phone number'),
+  eid_no_personal_number: msg('{name} signs with an eID but no personal number is set, so anyone with the link and an eID could sign'),
+  no_contact: msg('{name} has no email or phone, so they will not get the signed copy'),
+  field_empty: msg('Fill in the field "{label}" before sending'),
+};
+
+/** Reviews saved before checks had codes, and codes this build does not know, show the server's English. */
+export function checkText(check: Check) {
+  return check.code && Object.hasOwn(CHECK_TEXTS, check.code) ? t(CHECK_TEXTS[check.code]!, check.params) : check.message;
+}
+
 export function Checks({ checks }: { checks: Check[] }) {
   if (!checks.length) return <p className="text-muted-foreground">{t('Everything needed to send is in place.')}</p>;
   return (
@@ -35,7 +54,7 @@ export function Checks({ checks }: { checks: Check[] }) {
       {checks.map((c, i) => (
         <li key={i} className="flex gap-2">
           <AlertTriangle className={cn('mt-0.5 size-3.5 shrink-0', c.severity === 'error' ? 'text-destructive' : 'text-warning')} />
-          <span>{c.message}</span>
+          <span>{checkText(c)}</span>
         </li>
       ))}
     </ul>

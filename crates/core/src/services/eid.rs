@@ -16,6 +16,7 @@ use super::signing::{Resolved, SESSION_MINUTES, issue_session, resolve, satisfie
 use crate::audit::{Entry, audit};
 use crate::context::Ctx;
 use crate::documents::{AuthMethod, DOCUMENT_COLUMNS, Delivery, DocumentRow, PARTY_COLUMNS, PartyRow, required_personal_number, status};
+use crate::eid::EidText;
 use crate::eid::bankid::{self, BankId, Collected};
 use crate::eid::freja::{self, Freja, Outcome, User};
 use crate::eid::{Identity, bankid_via_tic, oidc, same_person, se_personal_number, tic};
@@ -25,8 +26,6 @@ use crate::settings::{EidSettings, OrgSettings, SecuritySettings};
 
 const STARTS_PER_HOUR: i64 = 10;
 const CONTINUE_TICKET: &str = "eid-continue";
-const OTHER_BROWSER: &str =
-    "Finish the identification in the same browser where you started it. Go back to the signing link and start again.";
 
 fn secrets_context(id: Uuid) -> String {
     format!("eid:{id}:secrets")
@@ -374,6 +373,8 @@ pub struct EidStatus {
     pub status: String,
     /// What to tell the person.
     pub message: Option<String>,
+    /// Which text `message` is, for showing it in the person's language.
+    pub code: Option<String>,
     /// The QR code to show now, while pending.
     pub qr: Option<String>,
     /// Set once, when complete: pass it as `session` with the next calls.
@@ -409,17 +410,43 @@ fn secrets(ctx: &Ctx, row: &Row) -> Result<Secrets> {
     serde_json::from_str(&plain).map_err(AppError::internal)
 }
 
-fn failed(message: impl Into<String>) -> EidStatus {
-    EidStatus { status: "failed".into(), message: Some(message.into()), qr: None, session: None, expires_at: None, needs_code: false }
+fn status(status: &str, text: EidText) -> EidStatus {
+    EidStatus {
+        status: status.into(),
+        message: Some(text.message.into()),
+        code: Some(text.code.into()),
+        qr: None,
+        session: None,
+        expires_at: None,
+        needs_code: false,
+    }
 }
 
-async fn fail(conn: &mut PgConnection, id: Uuid, message: &str) -> Result<EidStatus> {
+fn failed(text: EidText) -> EidStatus {
+    status("failed", text)
+}
+
+/// The stored reason holds a text's code, or the words of an error from the provider.
+fn failed_with(stored: Option<String>) -> EidStatus {
+    let Some(stored) = stored else { return failed(EidText::FAILED) };
+    match EidText::by_code(&stored) {
+        Some(text) => failed(text),
+        None => EidStatus { message: Some(stored), code: None, ..failed(EidText::FAILED) },
+    }
+}
+
+async fn store_failure(conn: &mut PgConnection, id: Uuid, stored: &str) -> Result<()> {
     sqlx::query("update eid_sessions set status = 'failed', message = $2, secrets = null where id = $1 and status = 'pending'")
         .bind(id)
-        .bind(message)
+        .bind(stored)
         .execute(&mut *conn)
         .await?;
-    Ok(failed(message))
+    Ok(())
+}
+
+async fn fail(conn: &mut PgConnection, id: Uuid, text: EidText) -> Result<EidStatus> {
+    store_failure(conn, id, text.code).await?;
+    Ok(failed(text))
 }
 
 /// Records what the provider proved, unless it is someone other than the person the document was
@@ -432,12 +459,11 @@ async fn complete(
     provider: &str,
     identity: &Identity,
     evidence: &Value,
-) -> Result<std::result::Result<(), String>> {
+) -> Result<std::result::Result<(), EidText>> {
     if let Some(expected) = required_personal_number(ctx.keys(), party)? {
         let matches = identity.personal_number.as_deref().is_some_and(|proven| same_person(&expected, proven, ctx.now.year()));
         if !matches {
-            let message = "This eID belongs to someone other than the person the document was sent to.";
-            fail(conn, row_id, message).await?;
+            fail(conn, row_id, EidText::OTHER_PERSON).await?;
             audit(
                 ctx,
                 conn,
@@ -445,7 +471,7 @@ async fn complete(
                     .metadata(json!({ "party": party.id, "name": party.name, "method": provider, "eidName": identity.name })),
             )
             .await?;
-            return Ok(Err(message.into()));
+            return Ok(Err(EidText::OTHER_PERSON));
         }
     }
     let evidence = ctx.keys().encrypt_str(KeyPurpose::Settings, &evidence_context(row_id), &evidence.to_string());
@@ -481,28 +507,21 @@ impl Service for Status {
             .await?
             .ok_or_else(|| not_found("Identification"))?;
         if row.consumed_at.is_some() {
-            return Ok(failed("This identification was already used. Start again."));
+            return Ok(failed(EidText::ALREADY_USED));
         }
         let method = method_of(&row.provider);
         let purpose = if row.purpose == "sign" { Purpose::Sign } else { Purpose::View };
         if method_for(&party, purpose) != method {
-            return fail(conn, row.id, "The sender changed how you identify. Start again.").await;
+            return fail(conn, row.id, EidText::METHOD_CHANGED).await;
         }
         if row.status == "failed" {
-            return Ok(failed(row.message.unwrap_or_else(|| "The identification did not go through. Try again.".into())));
+            return Ok(failed_with(row.message));
         }
         if row.status == "pending" {
             if row.expires_at < ctx.now {
-                return fail(conn, row.id, "The identification took too long. Try again.").await;
+                return fail(conn, row.id, EidText::TOO_LONG).await;
             }
-            let pending = |message: &str, qr: Option<String>| EidStatus {
-                status: "pending".into(),
-                message: Some(message.to_string()),
-                qr,
-                session: None,
-                expires_at: Some(row.expires_at),
-                needs_code: false,
-            };
+            let pending = |text: EidText, qr: Option<String>| EidStatus { qr, expires_at: Some(row.expires_at), ..status("pending", text) };
             let lang = party.lang(&document);
             let eid: EidSettings = settings(ctx, conn).await?;
             let reference = row.reference.clone().unwrap_or_default();
@@ -514,22 +533,22 @@ impl Service for Status {
                             (Some(t), Some(k)) => Some(bankid::qr_code(&t, &k, (ctx.now - row.created_at).num_seconds().max(0))),
                             _ => None,
                         };
-                        return Ok(pending(bankid::message(hint.as_deref(), false, lang), qr));
+                        return Ok(pending(bankid::message(hint.as_deref(), false), qr));
                     }
-                    Collected::Failed { hint } => return fail(conn, row.id, bankid::message(hint.as_deref(), true, lang)).await,
+                    Collected::Failed { hint } => return fail(conn, row.id, bankid::message(hint.as_deref(), true)).await,
                     Collected::Complete { identity, evidence } => (identity, evidence),
                 },
                 "freja" => match Freja::from_settings(&eid)?.result(&reference).await? {
                     Outcome::Pending => {
-                        return Ok(pending(lang.freja_confirm(), None));
+                        return Ok(pending(EidText::new("freja_confirm", lang.freja_confirm()), None));
                     }
-                    Outcome::Failed(message) => return fail(conn, row.id, message).await,
+                    Outcome::Failed(text) => return fail(conn, row.id, text).await,
                     Outcome::Complete { identity, evidence } => (identity, evidence),
                 },
-                _ => return Ok(pending("Waiting for the eID provider.", None)),
+                _ => return Ok(pending(EidText::new("waiting_provider", "Waiting for the eID provider."), None)),
             };
-            if let Err(message) = complete(ctx, conn, &party, row.id, &row.provider, &identity, &evidence).await? {
-                return Ok(failed(message));
+            if let Err(text) = complete(ctx, conn, &party, row.id, &row.provider, &identity, &evidence).await? {
+                return Ok(failed(text));
             }
         }
         // The window may have reached someone else than whoever holds this frame, by a forwarded link.
@@ -538,6 +557,7 @@ impl Service for Status {
                 return Ok(EidStatus {
                     status: "pending".into(),
                     message: None,
+                    code: None,
                     qr: None,
                     session: None,
                     expires_at: Some(row.expires_at),
@@ -552,12 +572,13 @@ impl Service for Status {
                 Some(_) => EidStatus {
                     status: "pending".into(),
                     message: None,
+                    code: None,
                     qr: None,
                     session: None,
                     expires_at: Some(row.expires_at),
                     needs_code: true,
                 },
-                None => failed(TOO_MANY_CODES),
+                None => failed(EidText::TOO_MANY_CODES),
             });
         }
         let consumed: Option<Value> = sqlx::query_scalar(
@@ -568,7 +589,7 @@ impl Service for Status {
         .fetch_optional(&mut *conn)
         .await?;
         let Some(identity) = consumed.and_then(|v| open_identity(ctx, row.id, &v)) else {
-            return Ok(failed("This identification was already used. Start again."));
+            return Ok(failed(EidText::ALREADY_USED));
         };
         audit(
             ctx,
@@ -589,6 +610,7 @@ impl Service for Status {
         Ok(EidStatus {
             status: "complete".into(),
             message: None,
+            code: None,
             qr: None,
             session: Some(issue_session(ctx, &party, method, Some(proof), purpose == Purpose::Sign)),
             expires_at: Some(ctx.now + Duration::minutes(SESSION_MINUTES)),
@@ -598,7 +620,6 @@ impl Service for Status {
 }
 
 const MAX_RELEASE_ATTEMPTS: i32 = 5;
-const TOO_MANY_CODES: &str = "That was the wrong code too many times. Start again.";
 
 /// Whether `code` is the one the window showed. Wrong guesses are counted, and too many throw the
 /// identification away.
@@ -623,7 +644,7 @@ async fn release(ctx: &Ctx, conn: &mut PgConnection, row: &Row, party: &PartyRow
     if attempts.is_some_and(|n| n >= MAX_RELEASE_ATTEMPTS) {
         sqlx::query("update eid_sessions set status = 'failed', message = $2, identity = null, evidence = null, release_mac = null, secrets = null where id = $1")
             .bind(row.id)
-            .bind(TOO_MANY_CODES)
+            .bind(EidText::TOO_MANY_CODES.code)
             .execute(&mut *conn)
             .await?;
     }
@@ -642,7 +663,7 @@ impl Service for Cancel {
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: StatusInput) -> Result<super::Ok_> {
         let Resolved { party, .. } = resolve(ctx, conn, &input.token, None).await?;
         let row: Option<(String, Option<String>)> = sqlx::query_as(
-            "update eid_sessions set status = 'failed', message = 'Canceled', secrets = null where id = $1 and party_id = $2 and status = 'pending'
+            "update eid_sessions set status = 'failed', message = 'canceled', secrets = null where id = $1 and party_id = $2 and status = 'pending'
              returning provider, reference",
         )
         .bind(input.id)
@@ -803,7 +824,7 @@ pub async fn broker_callback(
         _ => false,
     };
     if !same_browser {
-        fail(conn, id, OTHER_BROWSER).await?;
+        fail(conn, id, EidText::OTHER_BROWSER).await?;
         audit(
             ctx,
             conn,
@@ -811,16 +832,16 @@ pub async fn broker_callback(
                 .metadata(json!({ "party": party.id, "name": party.name, "method": provider })),
         )
         .await?;
-        return Err(bad_request(OTHER_BROWSER));
+        return Err(bad_request(EidText::OTHER_BROWSER.message));
     }
     let finish = async {
         if expires_at < ctx.now {
-            return Err(bad_request("The identification took too long. Try again."));
+            return Err(bad_request(EidText::TOO_LONG.message));
         }
         if error.is_some() {
-            return Err(bad_request("The identification was canceled or did not go through."));
+            return Err(bad_request(EidText::BROKER_CANCELED.message));
         }
-        let code = code.ok_or_else(|| bad_request("The eID broker sent no result"))?;
+        let code = code.ok_or_else(|| bad_request(EidText::BROKER_NO_RESULT.message))?;
         let plain = ctx
             .keys()
             .decrypt_str(KeyPurpose::Settings, &secrets_context(id), sealed.as_deref().unwrap_or_default())
@@ -848,23 +869,26 @@ pub async fn broker_callback(
         let claims =
             oidc::verify_id_token(&id_token, &keys, &discovery.issuer, &oidc.client_id, &nonce, &oidc.acr_values, ctx.now.timestamp())?;
         let identity = if provider == "tic" {
-            tic::identity(&claims, ctx.now.year()).ok_or_else(|| bad_request("TIC Identity did not return a Swedish personal number"))?
+            tic::identity(&claims, ctx.now.year()).ok_or_else(|| bad_request(EidText::NO_PERSONAL_NUMBER.message))?
         } else {
-            oidc::identity(&claims).ok_or_else(|| bad_request("The eID broker did not say who you are"))?
+            oidc::identity(&claims).ok_or_else(|| bad_request(EidText::BROKER_NO_PERSON.message))?
         };
         let evidence = json!({ "provider": provider, "issuer": discovery.issuer, "idToken": id_token });
-        if let Err(message) = complete(ctx, conn, &party, id, &provider, &identity, &evidence).await? {
-            return Err(bad_request(message));
+        if let Err(text) = complete(ctx, conn, &party, id, &provider, &identity, &evidence).await? {
+            return Err(bad_request(text.message));
         }
         Ok(())
     };
     if let Err(e) = finish.await {
-        let message =
-            if e.kind == ErrorKind::BadRequest { e.message.clone() } else { "The identification did not go through. Try again.".into() };
+        let stored = match EidText::by_message(&e.message) {
+            Some(text) => text.code,
+            None if e.kind == ErrorKind::BadRequest => e.message.as_str(),
+            None => EidText::FAILED.code,
+        };
         if e.kind != ErrorKind::BadRequest {
             tracing::warn!(error = %e, "eID broker callback failed");
         }
-        fail(conn, id, &message).await?;
+        store_failure(conn, id, stored).await?;
         return Ok(Returned { id, code: None });
     }
     if !framed {
