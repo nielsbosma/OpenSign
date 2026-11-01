@@ -80,14 +80,14 @@ Ett formulärfält vars namn börjar med en parts namn går till den parten: `Te
 
 ## Hitta fält
 
-**Hitta fält** i fältverktygsfältet tittar igenom sidorna efter ställen som vill ha ett fält:
+**Hitta fält** på fliken **Fält** tittar igenom sidorna efter ställen som vill ha ett fält:
 
 - linjer och rader av understrykningar att skriva på, med etiketten bredvid eller under dem,
 - tomma rutor att kryssa i, med texten bredvid som etikett.
 
 Etiketten avgör typen: Signature, Underskrift eller Firma blir ett underskriftsfält, Name eller Namnförtydligande ett namn, Date eller Datum signeringsdatumet, Date of birth en datumväljare, Email, Phone och Company sina respektive fält, och allt annat text.
 
-Förslagen ritas med streckade kanter och ingenting sparas förrän du godkänner dem. Klicka på ett för att lägga till det, eller på **Godkänn alla**. De går till parten som valts i verktygsfältet; underskrifter och initialer går till en undertecknare. Håll muspekaren över ett förslag och klicka på krysset för att avfärda det. Ställen som redan har ett fält föreslås inte igen.
+Förslagen ritas med streckade kanter och ingenting sparas förrän du godkänner dem. Klicka på ett för att lägga till det, eller på **Godkänn alla**. De går till parten som valts på fliken **Fält**; underskrifter och initialer går till en undertecknare. Håll muspekaren över ett förslag och klicka på krysset för att avfärda det. Ställen som redan har ett fält föreslås inte igen.
 
 ### Med AI
 

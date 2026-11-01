@@ -47,7 +47,7 @@ Ajoutez toutes les personnes qui signent, approuvent ou reçoivent une copie. Po
 
 ### Champs
 
-Choisissez une partie dans la barre d’outils des champs, puis placez des champs sur les pages. Les champs peuvent aussi venir du fichier lui-même : les [balises de texte](text-tags.md#text-tags) comme `{{Sign;type=signature;role=Tenant}}` et les champs d’un [formulaire PDF remplissable](text-tags.md#pdf-forms) deviennent des champs à l’import, et [Détecter les champs](text-tags.md#detect-fields), dans la barre d’outils, suggère des champs là où la page comporte des lignes et des cases à remplir. Chaque champ appartient à une partie, qui le remplit en signant. Sélectionnez un champ pour le modifier dans le panneau **Champ** : qui le remplit, son libellé, s’il est obligatoire, et les réglages ci-dessous.
+Choisissez une partie dans l’onglet **Champs**, puis placez des champs sur les pages. Les champs peuvent aussi venir du fichier lui-même : les [balises de texte](text-tags.md#text-tags) comme `{{Sign;type=signature;role=Tenant}}` et les champs d’un [formulaire PDF remplissable](text-tags.md#pdf-forms) deviennent des champs à l’import, et [Détecter les champs](text-tags.md#detect-fields), dans l’onglet **Champs**, suggère des champs là où la page comporte des lignes et des cases à remplir. Chaque champ appartient à une partie, qui le remplit en signant. Sélectionnez un champ pour le modifier dans le panneau **Champ** : qui le remplit, son libellé, s’il est obligatoire, et les réglages ci-dessous.
 
 | Champ | |
 | --- | --- |
@@ -67,7 +67,7 @@ Choisissez une partie dans la barre d’outils des champs, puis placez des champ
 | Date | Remplie avec la date de signature, dans le format que vous choisissez. |
 | Nom, E-mail, Entreprise | Remplis à partir des informations de la partie. |
 
-Choisissez **Moi, maintenant (prérempli)** dans la barre d’outils pour placer une valeur que vous renseignez vous-même avant l’envoi, comme un numéro de contrat, un montant ou une date. Les champs obligatoires de ce type doivent être remplis avant que le document puisse être envoyé.
+Choisissez **Moi, maintenant (prérempli)** dans l’onglet **Champs** pour placer une valeur que vous renseignez vous-même avant l’envoi, comme un numéro de contrat, un montant ou une date. Les champs obligatoires de ce type doivent être remplis avant que le document puisse être envoyé.
 
 Les champs texte, nombre, liste, radio, case à cocher, téléphone et date d’une partie peuvent avoir une **Valeur par défaut** dont ils partent. Activez **Lecture seule** et la partie la voit sans pouvoir la modifier.
 

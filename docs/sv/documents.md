@@ -47,7 +47,7 @@ Lägg till alla som signerar, godkänner eller får en kopia. För varje part v�
 
 ### Fält
 
-Välj en part i fältverktygsfältet och placera sedan fält på sidorna. Fält kan också komma från själva filen: [texttaggar](text-tags.md#text-tags) som `{{Sign;type=signature;role=Tenant}}` och fälten i ett [ifyllbart PDF-formulär](text-tags.md#pdf-forms) blir fält när du laddar upp, och [Hitta fält](text-tags.md#detect-fields) i verktygsfältet föreslår fält där sidan har linjer och rutor att fylla i. Varje fält tillhör en part, som fyller i det vid signeringen. Markera ett fält för att ändra det i panelen **Fält**: vem som fyller i det, dess etikett, om det är obligatoriskt och inställningarna nedan.
+Välj en part på fliken **Fält** och placera sedan fält på sidorna. Fält kan också komma från själva filen: [texttaggar](text-tags.md#text-tags) som `{{Sign;type=signature;role=Tenant}}` och fälten i ett [ifyllbart PDF-formulär](text-tags.md#pdf-forms) blir fält när du laddar upp, och [Hitta fält](text-tags.md#detect-fields) på fliken **Fält** föreslår fält där sidan har linjer och rutor att fylla i. Varje fält tillhör en part, som fyller i det vid signeringen. Markera ett fält för att ändra det i panelen **Fält**: vem som fyller i det, dess etikett, om det är obligatoriskt och inställningarna nedan.
 
 | Fält | |
 | --- | --- |
@@ -67,7 +67,7 @@ Välj en part i fältverktygsfältet och placera sedan fält på sidorna. Fält 
 | Datum | Fylls i med signeringsdatumet, i det format du väljer. |
 | Namn, E-post, Företag | Fylls i från partens uppgifter. |
 
-Välj **Jag, nu (förifyllt)** i verktygsfältet för att placera ett värde som du fyller i själv före utskick, till exempel ett avtalsnummer, ett belopp eller ett datum. Obligatoriska fält av det här slaget måste fyllas i innan dokumentet kan skickas.
+Välj **Jag, nu (förifyllt)** på fliken **Fält** för att placera ett värde som du fyller i själv före utskick, till exempel ett avtalsnummer, ett belopp eller ett datum. Obligatoriska fält av det här slaget måste fyllas i innan dokumentet kan skickas.
 
 En parts text-, nummer-, list-, radio-, kryssrute-, telefon- och datumfält kan ha ett **Förvalt värde** som de utgår från. Slå på **Skrivskyddat** så ser parten värdet men kan inte ändra det.
 

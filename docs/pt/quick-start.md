@@ -51,7 +51,7 @@ No modo de desenvolvimento, você pode deixar a chave vazia: o e-mail de teste e
 1. Vá para **Documentos** e escolha **Novo documento**.
 2. Solte um arquivo PDF ou Word, dê um título a ele e crie-o.
 3. Em **Partes**, adicione você mesmo como signatário, com o seu endereço de e-mail.
-4. Escolha a parte na barra de ferramentas de campos e posicione um campo **Assinatura** na página.
+4. Escolha a parte na aba **Campos** e posicione um campo **Assinatura** na página.
 5. Escolha **Enviar para assinatura**.
 
 Abra o convite, siga o link, desenhe ou digite uma assinatura e assine. Alguns segundos depois, o documento está **Assinado**, e você pode baixar o PDF selado na página do documento.

@@ -51,7 +51,7 @@ In development mode you can leave the key empty: the test email and everything a
 1. Go to **Documents** and choose **New Document**.
 2. Drop a PDF or Word file, give it a title and create it.
 3. Under **Parties**, add yourself as a signer with your email address.
-4. Pick the party in the field toolbar and place a **Signature** field on the page.
+4. Pick the party on the **Fields** tab and place a **Signature** field on the page.
 5. Choose **Send for Signing**.
 
 Open the invitation, follow the link, draw or type a signature and sign. A few seconds later the document is **Signed**, and you can download the sealed PDF from the document page.

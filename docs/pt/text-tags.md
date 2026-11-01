@@ -80,14 +80,14 @@ Um campo de formulário cujo nome começa com o nome de uma parte vai para essa 
 
 ## Detectar campos
 
-**Detectar campos**, na barra de ferramentas de campos, examina as páginas em busca de lugares que pedem um campo:
+**Detectar campos**, na aba **Campos**, examina as páginas em busca de lugares que pedem um campo:
 
 - linhas e sequências de sublinhados para escrever, com o rótulo ao lado ou abaixo,
 - caixas vazias para marcar, com o texto ao lado como rótulo.
 
 O rótulo define o tipo: Signature, Underskrift ou Firma vira um campo de assinatura, Name ou Namnförtydligande um nome, Date ou Datum a data da assinatura, Date of birth um seletor de data, Email, Phone e Company os campos correspondentes, e qualquer outra coisa vira texto.
 
-As sugestões são desenhadas com bordas tracejadas e nada é salvo até que você as aceite. Clique em uma para adicioná-la, ou em **Aceitar todos**. Elas vão para a parte escolhida na barra de ferramentas; assinaturas e iniciais vão para um signatário. Passe o mouse sobre uma sugestão e clique na cruz para dispensá-la. Lugares que já têm um campo não são sugeridos de novo.
+As sugestões são desenhadas com bordas tracejadas e nada é salvo até que você as aceite. Clique em uma para adicioná-la, ou em **Aceitar todos**. Elas vão para a parte escolhida na aba **Campos**; assinaturas e iniciais vão para um signatário. Passe o mouse sobre uma sugestão e clique na cruz para dispensá-la. Lugares que já têm um campo não são sugeridos de novo.
 
 ### Com IA
 

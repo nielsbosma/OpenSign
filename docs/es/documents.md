@@ -47,7 +47,7 @@ Añada a todos los que firman, aprueban o reciben una copia. Para cada parte eli
 
 ### Campos
 
-Elija una parte en la barra de herramientas de campos y coloque los campos en las páginas. Los campos también pueden venir del propio archivo: las [etiquetas de texto](text-tags.md#text-tags) como `{{Sign;type=signature;role=Tenant}}` y los campos de un [formulario PDF rellenable](text-tags.md#pdf-forms) se convierten en campos al subir, y [Detectar campos](text-tags.md#detect-fields) en la barra de herramientas sugiere campos donde la página tiene líneas y recuadros por rellenar. Cada campo pertenece a una parte, que lo rellena al firmar. Seleccione un campo para cambiarlo en el panel **Campo**: quién lo rellena, su etiqueta, si es obligatorio y los ajustes de abajo.
+Elija una parte en la pestaña **Campos** y coloque los campos en las páginas. Los campos también pueden venir del propio archivo: las [etiquetas de texto](text-tags.md#text-tags) como `{{Sign;type=signature;role=Tenant}}` y los campos de un [formulario PDF rellenable](text-tags.md#pdf-forms) se convierten en campos al subir, y [Detectar campos](text-tags.md#detect-fields) en la pestaña **Campos** sugiere campos donde la página tiene líneas y recuadros por rellenar. Cada campo pertenece a una parte, que lo rellena al firmar. Seleccione un campo para cambiarlo en el panel **Campo**: quién lo rellena, su etiqueta, si es obligatorio y los ajustes de abajo.
 
 | Campo | |
 | --- | --- |
@@ -67,7 +67,7 @@ Elija una parte en la barra de herramientas de campos y coloque los campos en la
 | Fecha | Se rellena con la fecha de la firma, en el formato que elija. |
 | Nombre, Correo electrónico, Empresa | Se rellenan a partir de los datos de la parte. |
 
-Elija **Yo, ahora (prerrellenado)** en la barra de herramientas para colocar un valor que rellena usted mismo antes de enviar, como un número de contrato, un importe o una fecha. Los campos obligatorios de este tipo deben rellenarse antes de poder enviar el documento.
+Elija **Yo, ahora (prerrellenado)** en la pestaña **Campos** para colocar un valor que rellena usted mismo antes de enviar, como un número de contrato, un importe o una fecha. Los campos obligatorios de este tipo deben rellenarse antes de poder enviar el documento.
 
 Los campos de texto, número, lista, botón de opción, casilla, teléfono y fecha de una parte pueden tener un **Valor por defecto** del que partir. Active **Solo lectura** y la parte lo ve pero no puede cambiarlo.
 

@@ -51,7 +51,7 @@ I utvecklingsläge kan du lämna nyckeln tom: testmejlet och allt som följer ef
 1. Gå till **Dokument** och välj **Nytt dokument**.
 2. Släpp en PDF- eller Word-fil, ge den en titel och skapa den.
 3. Lägg till dig själv som undertecknare med din e-postadress under **Parter**.
-4. Välj parten i fältverktygsfältet och placera ett **Underskrift**-fält på sidan.
+4. Välj parten på fliken **Fält** och placera ett **Underskrift**-fält på sidan.
 5. Välj **Skicka för signering**.
 
 Öppna inbjudan, följ länken, rita eller skriv en underskrift och signera. Några sekunder senare är dokumentet **Signerat**, och du kan ladda ner den förseglade PDF:en från dokumentsidan.
