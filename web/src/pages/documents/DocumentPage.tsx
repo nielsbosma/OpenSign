@@ -98,6 +98,7 @@ function DisabledHint({ reason, children }: { reason: string | null; children: R
   return (
     <Tooltip>
       <TooltipTrigger asChild>
+        {/* biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard users need to reach the reason a button is disabled */}
         <span tabIndex={0} className="inline-flex cursor-not-allowed rounded-md">
           {children}
         </span>
