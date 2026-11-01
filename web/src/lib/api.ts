@@ -1,7 +1,7 @@
 import { MutationCache, QueryCache, QueryClient, type UseQueryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type { Services } from './api-types.gen';
-import { t } from './i18n';
+import { serverText, t } from './i18n';
 
 export type * from './api-types.gen';
 
@@ -30,7 +30,7 @@ async function parse(response: Response) {
   }
   if (!response.ok) {
     throw new ApiError(
-      body?.error ?? response.statusText ?? t('Something went wrong'),
+      body?.error ? serverText(body.text ?? body.error, body.params) : response.statusText || t('Something went wrong'),
       response.status,
       body?.kind ?? 'internal',
       body?.code,

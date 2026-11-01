@@ -25,14 +25,40 @@ const STORAGE_KEY = 'opensign-language';
 
 let current = 'en';
 let catalog: Catalog = {};
+let serverCatalog: Catalog | null = null;
 
 /**
  * The text in the current language. Texts are keyed by their English wording, so a missing translation shows English.
  * `{name}` placeholders are filled from `values`.
  */
 export function t(text: string, values?: Record<string, string | number>): string {
-  const translated = catalog[text] || text;
-  return values ? translated.replace(/\{(\w+)\}/g, (match, key: string) => (key in values ? String(values[key]) : match)) : translated;
+  return fill(catalog[text] || text, values);
+}
+
+function fill(text: string, values?: Record<string, string | number>) {
+  return values ? text.replace(/\{(\w+)\}/g, (match, key: string) => (Object.hasOwn(values, key) ? String(values[key]) : match)) : text;
+}
+
+/** An error from the server, by its English wording. Wording the catalog does not have shows as it came. */
+export function serverText(text: string, values?: Record<string, string | number>): string {
+  return fill((serverCatalog ?? catalog)[text] || text, values);
+}
+
+/** The signing pages speak the signer's language, which can differ from the app's; so do errors there. */
+export function useServerTextLanguage(code: string) {
+  useEffect(() => {
+    let live = true;
+    const load = catalogs[`../locales/${code}.json`];
+    (load ? load() : Promise.resolve({}))
+      .catch(() => ({}))
+      .then((loaded) => {
+        if (live) serverCatalog = loaded;
+      });
+    return () => {
+      live = false;
+      serverCatalog = null;
+    };
+  }, [code]);
 }
 
 /** Like `t`, with elements such as links or code in the placeholders. */

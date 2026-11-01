@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { call, errorMessage, type PublicShareLink } from '@/lib/api';
+import { useServerTextLanguage } from '@/lib/i18n';
 import { FormError } from '../auth/AuthLayout';
 import { Message, Shell } from './SignPage';
 import { LanguageContext, languageFor, TextsContext, textsFor, useTexts } from './texts';
@@ -16,6 +17,7 @@ export function SharePage() {
   const [language, setLanguage] = useState<string>();
   const [chosen, setChosen] = useState<string | null>(null);
   const code = languageFor(chosen ?? language);
+  useServerTextLanguage(code);
   const choose = useCallback((c: string) => setChosen(c), []);
   const choice = useMemo(() => ({ code, choose }), [code, choose]);
   return (

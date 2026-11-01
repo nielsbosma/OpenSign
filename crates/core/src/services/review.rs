@@ -109,7 +109,8 @@ impl Service for CreateLink {
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: TokenInput) -> Result<CreatedReviewLink> {
         let Resolved { party, document, session } = resolve(ctx, conn, &input.token, input.session.as_deref()).await?;
         if !satisfied(party.auth_to_view(), session.as_ref()) {
-            return Err(AppError::new(ErrorKind::Unauthorized, format!("Identify yourself with {} first", party.auth_to_view().label())));
+            return Err(AppError::new(ErrorKind::Unauthorized, "Identify yourself with {method} first")
+                .params([("method", &party.auth_to_view().label())]));
         }
         sqlx::query("select 1 from parties where id = $1 for update").bind(party.id).execute(&mut *conn).await?;
         let days = days_allowed(ctx, conn).await?;
@@ -160,7 +161,8 @@ impl Service for RevokeLink {
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: TokenInput) -> Result<super::Ok_> {
         let Resolved { party, document, session } = resolve(ctx, conn, &input.token, input.session.as_deref()).await?;
         if !satisfied(party.auth_to_view(), session.as_ref()) {
-            return Err(AppError::new(ErrorKind::Unauthorized, format!("Identify yourself with {} first", party.auth_to_view().label())));
+            return Err(AppError::new(ErrorKind::Unauthorized, "Identify yourself with {method} first")
+                .params([("method", &party.auth_to_view().label())]));
         }
         if revoke_for_party(conn, party.id).await? > 0 {
             audit(

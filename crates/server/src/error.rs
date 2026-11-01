@@ -25,15 +25,23 @@ impl IntoResponse for ApiError {
         let kind = serde_json::to_value(error.kind).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default();
         if error.kind == ErrorKind::Internal {
             tracing::error!(request_id = request_id.as_deref().unwrap_or("-"), error = %error, cause = ?error.cause, "internal error");
-            let message = match &request_id {
-                Some(id) => format!("{} (reference {id})", error.message),
-                None => error.message.clone(),
+            return match &request_id {
+                Some(id) => {
+                    let text = format!("{} (reference {{id}})", error.message);
+                    let message = format!("{} (reference {id})", error.message);
+                    (status, Json(json!({ "error": message, "kind": kind, "text": text, "params": { "id": id } }))).into_response()
+                }
+                None => json_error(status, &kind, &error.message),
             };
-            return json_error(status, &kind, &message);
         }
+        let mut body = json!({ "error": error.message, "kind": kind });
         if let Some(code) = error.code {
-            return (status, Json(json!({ "error": error.message, "kind": kind, "code": code }))).into_response();
+            body["code"] = json!(code);
         }
-        json_error(status, &kind, &error.message)
+        if let Some(template) = &error.template {
+            body["text"] = json!(template.text);
+            body["params"] = json!(template.params);
+        }
+        (status, Json(body)).into_response()
     }
 }

@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ApiError, type AttachmentRequest, type AuthMethod, call, errorMessage, fetchPdf, type SignerView, useApi } from '@/lib/api';
 import { display } from '@/lib/field-values';
 import { saveBytes } from '@/lib/format';
+import { useServerTextLanguage } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { FormError } from '../auth/AuthLayout';
 import { AiReview } from './AiReview';
@@ -268,6 +269,7 @@ export function SignPage() {
   const [language, setLanguage] = useState<string>();
   const [chosen, choose] = useChosenLanguage(token);
   const code = languageFor(chosen ?? language);
+  useServerTextLanguage(code);
   const choice = useMemo(() => ({ code, choose }), [code, choose]);
   return (
     <LanguageContext.Provider value={choice}>

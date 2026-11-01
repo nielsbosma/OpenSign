@@ -328,14 +328,15 @@ pub(crate) fn parse_net(entry: &str) -> Option<IpNet> {
 pub fn normalize_allowed_ips(entries: &[String]) -> Result<Vec<String>> {
     let mut out: Vec<String> = Vec::new();
     for raw in entries.iter().map(|e| e.trim()).filter(|e| !e.is_empty()) {
-        let net = parse_net(raw).ok_or_else(|| bad_request(format!("{raw} is not an IP address or CIDR range")))?.trunc();
+        let net =
+            parse_net(raw).ok_or_else(|| bad_request("{value} is not an IP address or CIDR range").params([("value", &raw)]))?.trunc();
         let canonical = if net.prefix_len() == net.max_prefix_len() { net.addr().to_string() } else { net.to_string() };
         if !out.contains(&canonical) {
             out.push(canonical);
         }
     }
     if out.len() > MAX_ALLOWED_IPS {
-        return Err(bad_request(format!("Allow at most {MAX_ALLOWED_IPS} addresses or ranges")));
+        return Err(bad_request("Allow at most {max} addresses or ranges").params([("max", &MAX_ALLOWED_IPS)]));
     }
     Ok(out)
 }

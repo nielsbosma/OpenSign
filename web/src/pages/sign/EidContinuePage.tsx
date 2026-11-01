@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Spinner } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { call, errorMessage } from '@/lib/api';
+import { useServerTextLanguage } from '@/lib/i18n';
 import { FormError } from '../auth/AuthLayout';
 import { Message, Shell } from './SignPage';
 import { LanguageContext, languageFor, TextsContext, textsFor, useTexts } from './texts';
@@ -17,6 +18,7 @@ export function EidContinuePage() {
   const [language, setLanguage] = useState<string>();
   const [chosen, setChosen] = useState<string | null>(null);
   const code = languageFor(chosen ?? language);
+  useServerTextLanguage(code);
   const choose = useCallback((c: string) => setChosen(c), []);
   const choice = useMemo(() => ({ code, choose }), [code, choose]);
   return (
