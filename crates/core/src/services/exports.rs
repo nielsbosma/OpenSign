@@ -154,7 +154,7 @@ impl Service for Export {
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: ExportInput) -> Result<ExportOutput> {
         let (read_all, user_id, can_create) = visibility(ctx)?;
         if input.ids.as_ref().is_some_and(|ids| ids.is_empty() || ids.len() > MAX_DOCUMENTS) {
-            return Err(bad_request(format!("Choose from 1 to {MAX_DOCUMENTS} documents")));
+            return Err(bad_request("Choose from 1 to {max} documents").params([("max", &MAX_DOCUMENTS)]));
         }
         let bulk = match input.bulk_id {
             Some(id) => Some(super::bulk::load(ctx, conn, id).await?),
@@ -192,7 +192,9 @@ impl Service for Export {
         .fetch_all(&mut *conn)
         .await?;
         if documents.len() > MAX_DOCUMENTS {
-            return Err(bad_request(format!("More than {MAX_DOCUMENTS} documents match. Narrow the filters and export in parts.")));
+            return Err(
+                bad_request("More than {max} documents match. Narrow the filters and export in parts.").params([("max", &MAX_DOCUMENTS)])
+            );
         }
         let data = data_for(conn, &documents).await?;
         let base = match (&bulk, &template, &documents[..]) {

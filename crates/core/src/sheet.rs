@@ -171,10 +171,10 @@ fn tidy(mut rows: Vec<Vec<String>>) -> Result<Sheet> {
         return Err(bad_request("The first row must name the columns"));
     }
     if width > MAX_COLUMNS {
-        return Err(bad_request(format!("Use at most {MAX_COLUMNS} columns")));
+        return Err(bad_request("Use at most {max} columns").params([("max", &MAX_COLUMNS)]));
     }
     if rows.len() > MAX_ROWS {
-        return Err(bad_request(format!("Send to at most {MAX_ROWS} rows at a time")));
+        return Err(bad_request("Send to at most {max} rows at a time").params([("max", &MAX_ROWS)]));
     }
     let mut columns: Vec<String> = Vec::with_capacity(width);
     for (i, h) in header.into_iter().take(width).enumerate() {

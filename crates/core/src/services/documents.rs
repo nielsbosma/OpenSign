@@ -68,7 +68,7 @@ pub(crate) async fn lock_draft(conn: &mut PgConnection, id: Uuid) -> Result<()> 
 fn clean_text(value: &str, what: &str, max: usize) -> Result<String> {
     let value = value.trim();
     if value.chars().count() > max {
-        return Err(bad_request(format!("{what} is too long (at most {max} characters)")));
+        return Err(bad_request(format!("{what} is too long (at most {{max}} characters)")).params([("max", &max)]));
     }
     if value.chars().any(|c| c.is_control() && c != '\n' && c != '\t') {
         return Err(bad_request(format!("{what} contains characters that are not allowed")));
@@ -273,10 +273,8 @@ pub struct CreateInput {
 pub fn language(value: Option<&str>) -> Result<String> {
     match Lang::parse(value.unwrap_or("en")) {
         Some(lang) => Ok(lang.code().to_string()),
-        None => Err(bad_request(format!(
-            "Use one of these language codes: {}",
-            LANGUAGES.iter().map(|(code, _)| *code).collect::<Vec<_>>().join(", ")
-        ))),
+        None => Err(bad_request("Use one of these language codes: {codes}")
+            .params([("codes", &LANGUAGES.iter().map(|(code, _)| *code).collect::<Vec<_>>().join(", "))])),
     }
 }
 
@@ -1105,7 +1103,7 @@ impl Service for SetParties {
         let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
         lock_draft(conn, document.id).await?;
         if input.parties.len() > MAX_PARTIES {
-            return Err(bad_request(format!("A document can have at most {MAX_PARTIES} parties")));
+            return Err(bad_request("A document can have at most {max} parties").params([("max", &MAX_PARTIES)]));
         }
         let existing = parties(conn, document.id).await?;
         let cleaned: Vec<CleanParty> = input.parties.into_iter().map(|p| clean_party(p, &existing)).collect::<Result<_>>()?;
@@ -1362,7 +1360,9 @@ pub(crate) fn clean_field(f: &FieldInput, all: &[PartyRow], sequential: bool, gr
                 return Err(bad_request("All radio buttons of a group belong to the same party"));
             }
             if group.1.contains(&spec.options[0]) {
-                return Err(bad_request(format!("The option \u{201c}{}\u{201d} is in its radio group twice", spec.options[0])));
+                return Err(
+                    bad_request("The option \u{201c}{option}\u{201d} is in its radio group twice").params([("option", &spec.options[0])])
+                );
             }
             if value.is_some() && group.2 {
                 return Err(bad_request("Only one radio button of a group can be chosen"));
@@ -1448,7 +1448,7 @@ impl Service for SetFields {
         let document = load_document(ctx, conn, input.document_id, Need::Edit).await?;
         lock_draft(conn, document.id).await?;
         if input.fields.len() > MAX_FIELDS {
-            return Err(bad_request(format!("A document can have at most {MAX_FIELDS} fields")));
+            return Err(bad_request("A document can have at most {max} fields").params([("max", &MAX_FIELDS)]));
         }
         let all = parties(conn, document.id).await?;
         let mut groups = Groups::new();
@@ -1509,7 +1509,7 @@ async fn check_auth_available(ctx: &Ctx, conn: &mut PgConnection, method: AuthMe
         AuthMethod::SmsPin => {
             let sms: SmsSettings = settings(ctx, conn).await?;
             let Some(phone) = &party.phone else {
-                return Err(bad_request(format!("{} needs a phone number for SMS codes", party.name)));
+                return Err(bad_request("{name} needs a phone number for SMS codes").params([("name", &party.name)]));
             };
             crate::sms::check_country(&sms, phone)?;
             if !crate::sms::is_configured(&sms) && !ctx.app.env.development {
@@ -1519,7 +1519,9 @@ async fn check_auth_available(ctx: &Ctx, conn: &mut PgConnection, method: AuthMe
         }
         AuthMethod::SeBankid | AuthMethod::Freja | AuthMethod::Broker => {
             let eid: EidSettings = settings(ctx, conn).await?;
-            crate::eid::ready(&eid, method).map_err(|e| bad_request(format!("{} cannot be used yet: {}", method.label(), e.message)))
+            crate::eid::ready(&eid, method).map_err(|e| {
+                bad_request("{method} cannot be used yet: {reason}").params([("method", &method.label()), ("reason", &e.message)])
+            })
         }
     }
 }
@@ -1597,11 +1599,15 @@ impl Service for Send {
         let sms_ready = crate::sms::is_configured(&settings::<SmsSettings>(ctx, conn).await?) || ctx.app.env.development;
         for p in &all {
             match Delivery::parse(&p.delivery) {
-                Some(Delivery::Email) if p.email.is_none() => return Err(bad_request(format!("{} needs an email address", p.name))),
+                Some(Delivery::Email) if p.email.is_none() => {
+                    return Err(bad_request("{name} needs an email address").params([("name", &p.name)]));
+                }
                 Some(Delivery::Email) if !email_ready(ctx, &email_settings) => {
                     return Err(bad_request("Email is not set up. An admin connects Resend or an SMTP server in Admin settings."));
                 }
-                Some(Delivery::Sms) if p.phone.is_none() => return Err(bad_request(format!("{} needs a phone number", p.name))),
+                Some(Delivery::Sms) if p.phone.is_none() => {
+                    return Err(bad_request("{name} needs a phone number").params([("name", &p.name)]));
+                }
                 Some(Delivery::Sms) if !sms_ready => {
                     return Err(bad_request("SMS is not set up. An admin chooses an SMS provider in Admin settings."));
                 }
@@ -1628,7 +1634,8 @@ impl Service for Send {
         let page_count = combined.pages.len() as i32;
         for f in crate::documents::fields(conn, document.id).await? {
             if f.page >= page_count {
-                return Err(bad_request(format!("A field is on page {} but the document has {page_count} pages", f.page + 1)));
+                return Err(bad_request("A field is on page {page} but the document has {count} pages")
+                    .params([("page", &(f.page + 1)), ("count", &page_count)]));
             }
             if f.party_id.is_none() && f.required && f.value.is_none() {
                 return Err(bad_request("Fill in the sender's fields before sending"));
@@ -2094,13 +2101,13 @@ impl Service for SignInPerson {
         let all = parties(conn, document.id).await?;
         let party = all.iter().find(|p| p.id == input.party_id).ok_or_else(|| not_found("Party"))?;
         if party.delivery != Delivery::InPerson.as_str() || !party.must_act() {
-            return Err(bad_request(format!("{} does not sign in person", party.name)));
+            return Err(bad_request("{name} does not sign in person").params([("name", &party.name)]));
         }
         if party.signed_at.is_some() || party.declined_at.is_some() {
-            return Err(conflict(format!("{} has already answered", party.name)));
+            return Err(conflict("{name} has already answered").params([("name", &party.name)]));
         }
         if !current_turn(&document, &all).contains(&party.id) {
-            return Err(conflict(format!("It is not {}'s turn yet", party.name)));
+            return Err(conflict("It is not {name}'s turn yet").params([("name", &party.name)]));
         }
         sqlx::query("update parties set link_version = link_version + 1 where id = $1").bind(party.id).execute(&mut *conn).await?;
         let party = parties(conn, document.id).await?.into_iter().find(|p| p.id == input.party_id).ok_or_else(|| not_found("Party"))?;

@@ -30,6 +30,8 @@ describe('server texts', () => {
     const gone = SERVER_TEXTS.filter((text) => {
       const thing = text.match(/^(.+) not found$/)?.[1];
       if (thing && source.includes(`not_found("${thing}")`)) return false;
+      const what = text.match(/^(.+) (?:is too long \(at most \{max\} characters\)|contains characters that are not allowed)$/)?.[1];
+      if (what && source.includes(`, "${what}", `)) return false;
       return !source.includes(`"${text.replace(' (reference {id})', '')}`);
     });
     expect(gone).toEqual([]);

@@ -776,43 +776,45 @@ pub fn check(items: &[Item], owners: &[Owner]) -> Result<()> {
     for (i, item) in items.iter().enumerate() {
         let name = if item.label.trim().is_empty() { item.kind.as_str() } else { item.label.trim() };
         if item.conditions.len() > MAX_CONDITIONS {
-            return Err(bad_request(format!("A field can have at most {MAX_CONDITIONS} conditions")));
+            return Err(bad_request("A field can have at most {max} conditions").params([("max", &MAX_CONDITIONS)]));
         }
         for c in item.conditions {
             let value = c.value.as_deref().map(str::trim).unwrap_or_default();
             if c.op.takes_value() && value.is_empty() {
-                return Err(bad_request(format!("A condition of \u{201c}{name}\u{201d} needs a value to compare with")));
+                return Err(bad_request("A condition of \u{201c}{name}\u{201d} needs a value to compare with").params([("name", &name)]));
             }
             if value.chars().count() > MAX_CONDITION_VALUE_CHARS || value.chars().any(char::is_control) {
-                return Err(bad_request(format!("Keep the values of conditions under {MAX_CONDITION_VALUE_CHARS} characters")));
+                return Err(
+                    bad_request("Keep the values of conditions under {max} characters").params([("max", &MAX_CONDITION_VALUE_CHARS)])
+                );
             }
         }
         match (item.kind, item.formula) {
             (FieldKind::Formula, Some(f)) => {
-                let expr = parse(f).map_err(|e| bad_request(format!("The formula of \u{201c}{name}\u{201d} cannot be read: {e}")))?;
+                let expr = parse(f).map_err(|e| {
+                    bad_request("The formula of \u{201c}{name}\u{201d} cannot be read: {reason}").params([("name", &name), ("reason", &e)])
+                })?;
                 if operators(&expr) > MAX_OPERATORS {
-                    return Err(bad_request(format!(
-                        "The formula of \u{201c}{name}\u{201d} is too long: use at most {MAX_OPERATORS} operators"
-                    )));
+                    return Err(bad_request("The formula of \u{201c}{name}\u{201d} is too long: use at most {max} operators")
+                        .params([("name", &name), ("max", &MAX_OPERATORS)]));
                 }
             }
-            (FieldKind::Formula, None) => return Err(bad_request(format!("Write the formula of \u{201c}{name}\u{201d}"))),
+            (FieldKind::Formula, None) => return Err(bad_request("Write the formula of \u{201c}{name}\u{201d}").params([("name", &name)])),
             (_, Some(_)) => return Err(bad_request("Only formula fields have a formula")),
             _ => {}
         }
         let mut mine = Vec::new();
         for label in dependencies(item) {
             let targets = by_label.get(label.as_str()).ok_or_else(|| {
-                bad_request(format!("\u{201c}{name}\u{201d} refers to \u{201c}{label}\u{201d}, but no field has that label"))
+                bad_request("\u{201c}{name}\u{201d} refers to \u{201c}{label}\u{201d}, but no field has that label")
+                    .params([("name", &name), ("label", &label)])
             })?;
             let one = targets.len() == 1 || targets.iter().all(|t| items[*t].kind == FieldKind::Radio && owners[*t] == owners[targets[0]]);
             if !one {
-                return Err(bad_request(format!(
-                    "Several fields are labelled \u{201c}{label}\u{201d}; give them different labels so \u{201c}{name}\u{201d} knows which to use"
-                )));
+                return Err(bad_request("Several fields are labelled \u{201c}{label}\u{201d}; give them different labels so \u{201c}{name}\u{201d} knows which to use").params([("label", &label), ("name", &name)]));
             }
             if targets.contains(&i) {
-                return Err(bad_request(format!("\u{201c}{name}\u{201d} cannot depend on itself")));
+                return Err(bad_request("\u{201c}{name}\u{201d} cannot depend on itself").params([("name", &name)]));
             }
             let allowed = match (owners[i], owners[targets[0]]) {
                 (_, Owner::Sender) => true,
@@ -822,13 +824,7 @@ pub fn check(items: &[Item], owners: &[Owner]) -> Result<()> {
                 _ => false,
             };
             if !allowed {
-                return Err(bad_request(if owners[i] == Owner::Sender {
-                    format!("A formula you fill in can only use your own fields, not \u{201c}{label}\u{201d}")
-                } else {
-                    format!(
-                        "\u{201c}{name}\u{201d} can only use fields of the same party, your own, or of parties who sign earlier in order, not \u{201c}{label}\u{201d}"
-                    )
-                }));
+                return Err(bad_request(if owners[i] == Owner::Sender { "A formula you fill in can only use your own fields, not \u{201c}{label}\u{201d}" } else { "\u{201c}{name}\u{201d} can only use fields of the same party, your own, or of parties who sign earlier in order, not \u{201c}{label}\u{201d}" }).params([("name", &name), ("label", &label)]));
             }
             mine.extend(targets.iter().copied());
         }
@@ -853,20 +849,16 @@ pub fn check(items: &[Item], owners: &[Owner]) -> Result<()> {
                         stack.push((d, 0));
                     }
                     1 => {
-                        return Err(bad_request(format!(
-                            "\u{201c}{}\u{201d} depends on itself through other fields' conditions or formulas",
-                            items[i].label.trim()
-                        )));
+                        return Err(bad_request("\u{201c}{name}\u{201d} depends on itself through other fields' conditions or formulas")
+                            .params([("name", &items[i].label.trim())]));
                     }
                     _ => {}
                 }
             } else {
                 chain[i] = deps[i].iter().map(|d| chain[*d] + 1).max().unwrap_or(0);
                 if chain[i] > MAX_CHAIN {
-                    return Err(bad_request(format!(
-                        "\u{201c}{}\u{201d} builds on too many other fields in a row; keep it to at most {MAX_CHAIN}",
-                        items[i].label.trim()
-                    )));
+                    return Err(bad_request("\u{201c}{name}\u{201d} builds on too many other fields in a row; keep it to at most {max}")
+                        .params([("name", &items[i].label.trim()), ("max", &MAX_CHAIN)]));
                 }
                 state[i] = 2;
                 stack.pop();
