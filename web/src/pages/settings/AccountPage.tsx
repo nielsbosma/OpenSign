@@ -229,7 +229,7 @@ function TwoFactorCard() {
               </DialogHeader>
               <pre className="grid grid-cols-2 gap-1 rounded-md bg-muted p-4 font-mono text-sm">{codes.join('\n')}</pre>
               <DialogFooter>
-                <CopyButton value={codes.join('\n')} label={t('Copy Codes')} />
+                <CopyButton value={codes.join('\n')} label={t('Copy Codes')} size="default" />
                 <Button onClick={close}>{t('I Saved Them')}</Button>
               </DialogFooter>
             </>
@@ -292,7 +292,7 @@ function McpCard() {
     >
       <div className="mb-4 flex max-w-lg gap-2">
         <Input readOnly value={url} className="font-mono" onFocus={(e) => e.target.select()} />
-        <CopyButton value={url} />
+        <CopyButton value={url} size="default" />
       </div>
       {connections.isPending ? (
         <Loading />

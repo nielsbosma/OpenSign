@@ -58,7 +58,7 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
             </DialogHeader>
             <div className="flex gap-2">
               <Input readOnly value={secret} className="font-mono text-xs" onFocus={(e) => e.target.select()} />
-              <CopyButton value={secret} />
+              <CopyButton value={secret} size="default" />
             </div>
             <DialogFooter>
               <Button onClick={() => close(false)}>{t('Done')}</Button>
