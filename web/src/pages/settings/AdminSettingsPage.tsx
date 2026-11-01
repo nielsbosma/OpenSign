@@ -588,16 +588,17 @@ function RetentionExtras() {
   );
 }
 
-function AiExtras() {
+function AiExtras({ unsaved }: { unsaved: boolean }) {
   const usage = useApi('ai.usage');
   const test = useApiMutation('ai.test', {
     onSuccess: (out) => toast.success(t('The model answered in {ms} ms', { ms: out.milliseconds })),
   });
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <Button variant="outline" onClick={() => test.mutate({})} disabled={test.isPending}>
+      <Button variant="outline" onClick={() => test.mutate({})} disabled={test.isPending || unsaved}>
         {test.isPending && <Spinner />} {t('Test Connection')}
       </Button>
+      {unsaved && <span className="text-muted-foreground">{t('Save your changes to test them.')}</span>}
       {usage.data && (
         <span className="text-muted-foreground">
           {usage.data.monthlyBudget
@@ -825,8 +826,8 @@ export function SettingsGroup({ group }: { group: Group }) {
                 const isSet = saved[f.key] === true;
                 return (
                   <Field key={f.key} label={label} htmlFor={id} hint={hint ?? (isSet ? t('Saved. Leave empty to keep it.') : undefined)}>
-                    <div className="flex gap-2">
-                      {f.type === 'file' ? (
+                    {f.type === 'file' ? (
+                      <div className="flex gap-2">
                         <FilePicker
                           id={id}
                           className="flex-1"
@@ -842,7 +843,14 @@ export function SettingsGroup({ group }: { group: Group }) {
                             set(f.key, file ? await readCertificate(file) : undefined);
                           }}
                         />
-                      ) : (
+                        {isSet && !locked && (
+                          <Button type="button" variant="danger" onClick={() => set(f.key, '')}>
+                            {t('Clear')}
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="relative">
                         <Input
                           id={id}
                           type="password"
@@ -851,14 +859,21 @@ export function SettingsGroup({ group }: { group: Group }) {
                           onChange={(e) => set(f.key, e.target.value || null)}
                           placeholder={isSet ? '••••••••' : undefined}
                           disabled={locked}
+                          className={isSet && !locked ? 'pe-16' : undefined}
                         />
-                      )}
-                      {isSet && !locked && (
-                        <Button type="button" variant="danger" onClick={() => set(f.key, '')}>
-                          {t('Clear')}
-                        </Button>
-                      )}
-                    </div>
+                        {isSet && !locked && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => set(f.key, '')}
+                            className="absolute end-1.5 top-1.5 text-destructive hover:text-destructive"
+                          >
+                            {t('Clear')}
+                          </Button>
+                        )}
+                      </div>
+                    )}
                     {f.passwordKey && isPkcs12(draft[f.key]) && (
                       <Input
                         className="mt-2"
@@ -950,7 +965,9 @@ export function SettingsGroup({ group }: { group: Group }) {
           </div>
         </form>
         {(group === 'email' || group === 'ai') && (
-          <div className="mt-6 border-t pt-5">{group === 'email' ? <EmailExtras /> : <AiExtras />}</div>
+          <div className="mt-6 border-t pt-5">
+            {group === 'email' ? <EmailExtras /> : <AiExtras unsaved={Object.keys(draft).length > 0} />}
+          </div>
         )}
       </SettingsCard>
       {group === 'org' && <LogoExtras />}
