@@ -51,7 +51,7 @@ En modo de desarrollo puede dejar la clave vacía: el correo de prueba y todo lo
 1. Vaya a **Documentos** y elija **Nuevo documento**.
 2. Suelte un archivo PDF o Word, póngale un título y créelo.
 3. En **Partes**, añádase como firmante con su dirección de correo electrónico.
-4. Elija la parte en la barra de herramientas de campos y coloque un campo de **Firma** en la página.
+4. Elija la parte en la pestaña **Campos** y coloque un campo de **Firma** en la página.
 5. Elija **Enviar para firmar**.
 
 Abra la invitación, siga el enlace, dibuje o escriba una firma y firme. Unos segundos después el documento está **Firmado**, y puede descargar el PDF sellado desde la página del documento.

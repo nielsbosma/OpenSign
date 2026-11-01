@@ -1,26 +1,46 @@
+import {
+  Building2,
+  Calendar,
+  CalendarDays,
+  ChevronsUpDown,
+  CircleDot,
+  Hash,
+  Image as ImageIcon,
+  ListChecks,
+  type LucideIcon,
+  Mail,
+  Paperclip,
+  PenLine,
+  Phone,
+  Sigma,
+  Signature,
+  SquareCheck,
+  Type,
+  User,
+} from 'lucide-react';
 import type { FieldInput, FieldKind, FieldRow, PartyView } from '@/lib/api';
 import { msg, t } from '@/lib/i18n';
 
 export type EditableField = FieldInput & { key: string };
 
-export const FIELD_KINDS: { kind: FieldKind; label: string; width: number; height: number }[] = [
-  { kind: 'signature', label: msg('Signature'), width: 0.26, height: 0.06 },
-  { kind: 'initials', label: msg('Initials'), width: 0.09, height: 0.045 },
-  { kind: 'name', label: msg('Name'), width: 0.24, height: 0.032 },
-  { kind: 'date', label: msg('Date'), width: 0.16, height: 0.032 },
-  { kind: 'text', label: msg('Text'), width: 0.24, height: 0.032 },
-  { kind: 'email', label: msg('Email'), width: 0.24, height: 0.032 },
-  { kind: 'company', label: msg('Company'), width: 0.24, height: 0.032 },
-  { kind: 'checkbox', label: msg('Checkbox'), width: 0.028, height: 0.02 },
-  { kind: 'number', label: msg('Number'), width: 0.16, height: 0.032 },
-  { kind: 'select', label: msg('Dropdown'), width: 0.2, height: 0.032 },
-  { kind: 'multiselect', label: msg('Multi-Select'), width: 0.24, height: 0.032 },
-  { kind: 'radio', label: msg('Radio'), width: 0.022, height: 0.016 },
-  { kind: 'phone', label: msg('Phone'), width: 0.2, height: 0.032 },
-  { kind: 'date_input', label: msg('Date Picker'), width: 0.16, height: 0.032 },
-  { kind: 'image', label: msg('Image'), width: 0.2, height: 0.09 },
-  { kind: 'file', label: msg('File'), width: 0.24, height: 0.032 },
-  { kind: 'formula', label: msg('Formula'), width: 0.16, height: 0.032 },
+export const FIELD_KINDS: { kind: FieldKind; label: string; icon: LucideIcon; width: number; height: number }[] = [
+  { kind: 'signature', label: msg('Signature'), icon: PenLine, width: 0.26, height: 0.06 },
+  { kind: 'initials', label: msg('Initials'), icon: Signature, width: 0.09, height: 0.045 },
+  { kind: 'name', label: msg('Name'), icon: User, width: 0.24, height: 0.032 },
+  { kind: 'date', label: msg('Date'), icon: Calendar, width: 0.16, height: 0.032 },
+  { kind: 'text', label: msg('Text'), icon: Type, width: 0.24, height: 0.032 },
+  { kind: 'email', label: msg('Email'), icon: Mail, width: 0.24, height: 0.032 },
+  { kind: 'company', label: msg('Company'), icon: Building2, width: 0.24, height: 0.032 },
+  { kind: 'checkbox', label: msg('Checkbox'), icon: SquareCheck, width: 0.028, height: 0.02 },
+  { kind: 'number', label: msg('Number'), icon: Hash, width: 0.16, height: 0.032 },
+  { kind: 'select', label: msg('Dropdown'), icon: ChevronsUpDown, width: 0.2, height: 0.032 },
+  { kind: 'multiselect', label: msg('Multi-Select'), icon: ListChecks, width: 0.24, height: 0.032 },
+  { kind: 'radio', label: msg('Radio'), icon: CircleDot, width: 0.022, height: 0.016 },
+  { kind: 'phone', label: msg('Phone'), icon: Phone, width: 0.2, height: 0.032 },
+  { kind: 'date_input', label: msg('Date Picker'), icon: CalendarDays, width: 0.16, height: 0.032 },
+  { kind: 'image', label: msg('Image'), icon: ImageIcon, width: 0.2, height: 0.09 },
+  { kind: 'file', label: msg('File'), icon: Paperclip, width: 0.24, height: 0.032 },
+  { kind: 'formula', label: msg('Formula'), icon: Sigma, width: 0.16, height: 0.032 },
 ];
 
 /** What the sender can fill in themselves before sending. */

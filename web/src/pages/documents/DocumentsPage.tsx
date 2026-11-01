@@ -131,8 +131,9 @@ export function DocumentsPage({ templates }: { templates: boolean }) {
           />
         </aside>
         <div className="min-w-0">
-          <div className="mb-4 flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <Tabs
+              className="min-w-0 max-w-full"
               value={filter}
               onValueChange={(v) => {
                 setFilter(v as typeof filter);

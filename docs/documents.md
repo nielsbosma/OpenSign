@@ -47,7 +47,7 @@ Add everyone who signs, approves or receives a copy. For each party you choose t
 
 ### Fields
 
-Pick a party in the field toolbar, then place fields on the pages. Fields can also come from the file itself: [text tags](text-tags.md#text-tags) such as `{{Sign;type=signature;role=Tenant}}` and the fields of a [fillable PDF form](text-tags.md#pdf-forms) become fields when you upload, and [Detect Fields](text-tags.md#detect-fields) in the toolbar suggests fields where the page has lines and boxes to fill in. Each field belongs to one party, who fills it in when signing. Select a field to change it in the **Field** panel: who fills it in, its label, whether it is required, and the settings below.
+Pick a party on the **Fields** tab, then place fields on the pages. Fields can also come from the file itself: [text tags](text-tags.md#text-tags) such as `{{Sign;type=signature;role=Tenant}}` and the fields of a [fillable PDF form](text-tags.md#pdf-forms) become fields when you upload, and [Detect Fields](text-tags.md#detect-fields) on the **Fields** tab suggests fields where the page has lines and boxes to fill in. Each field belongs to one party, who fills it in when signing. Select a field to change it in the **Field** panel: who fills it in, its label, whether it is required, and the settings below.
 
 | Field | |
 | --- | --- |
@@ -67,7 +67,7 @@ Pick a party in the field toolbar, then place fields on the pages. Fields can al
 | Date | Filled in with the date of signing, in the format you choose. |
 | Name, Email, Company | Filled in from the party's details. |
 
-Choose **Me, now (prefilled)** in the toolbar to place a value you fill in yourself before sending, such as a contract number, an amount or a date. Required fields of this kind must be filled in before the document can be sent.
+Choose **Me, now (prefilled)** on the **Fields** tab to place a value you fill in yourself before sending, such as a contract number, an amount or a date. Required fields of this kind must be filled in before the document can be sent.
 
 A party's text, number, list, radio, checkbox, phone and date fields can have a **Default Value** they start from. Turn on **Read-Only** and they see it but cannot change it.
 

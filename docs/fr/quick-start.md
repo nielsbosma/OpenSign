@@ -51,7 +51,7 @@ En mode développement, vous pouvez laisser la clé vide : l’e-mail de test et
 1. Allez dans **Documents** et choisissez **Nouveau document**.
 2. Déposez un fichier PDF ou Word, donnez-lui un titre et créez-le.
 3. Sous **Parties**, ajoutez-vous comme signataire avec votre adresse e-mail.
-4. Choisissez la partie dans la barre d’outils des champs et placez un champ **Signature** sur la page.
+4. Choisissez la partie dans l’onglet **Champs** et placez un champ **Signature** sur la page.
 5. Choisissez **Envoyer pour signature**.
 
 Ouvrez l’invitation, suivez le lien, dessinez ou saisissez une signature et signez. Quelques secondes plus tard, le document est **Signé** et vous pouvez télécharger le PDF scellé depuis la page du document.

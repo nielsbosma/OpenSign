@@ -85,7 +85,7 @@ export function NewDocumentDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
-        <form onSubmit={submit} className="grid gap-4">
+        <form onSubmit={submit} className="grid grid-cols-[minmax(0,1fr)] gap-4">
           <DialogHeader>
             <DialogTitle>{t('New Document')}</DialogTitle>
             <DialogDescription>{t('Start from files or a template. You add signers and fields next.')}</DialogDescription>
@@ -118,7 +118,7 @@ export function NewDocumentDialog({
           )}
           <FileDrop onFiles={(f) => setFiles([...files, ...f])} />
           {files.length > 0 && (
-            <ul className="grid gap-1 text-muted-foreground">
+            <ul className="grid grid-cols-[minmax(0,1fr)] gap-1 text-muted-foreground">
               {files.map((f, i) => (
                 <li key={i} className="flex items-center justify-between gap-2">
                   <span className="truncate">{f.name}</span>

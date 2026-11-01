@@ -80,14 +80,14 @@ Un campo de formulario cuyo nombre empieza con el nombre de una parte va a esa p
 
 ## Detectar campos
 
-**Detectar campos** en la barra de herramientas de campos examina las páginas en busca de lugares que piden un campo:
+**Detectar campos** en la pestaña **Campos** examina las páginas en busca de lugares que piden un campo:
 
 - líneas y tiras de guiones bajos para escribir encima, con la etiqueta al lado o debajo,
 - recuadros vacíos para marcar, con el texto que tienen al lado como etiqueta.
 
 La etiqueta decide el tipo: Signature, Underskrift o Firma se convierte en un campo de firma, Name o Namnförtydligande en un nombre, Date o Datum en la fecha de la firma, Date of birth en un selector de fecha, Email, Phone y Company en sus campos, y cualquier otra cosa en texto.
 
-Las sugerencias se dibujan con bordes discontinuos y no se guarda nada hasta que las acepta. Haga clic en una para añadirla, o en **Aceptar todos**. Van a la parte elegida en la barra de herramientas; las firmas y las iniciales van a un firmante. Pase el cursor sobre una sugerencia y haga clic en la cruz para descartarla. Los lugares que ya tienen un campo no se vuelven a sugerir.
+Las sugerencias se dibujan con bordes discontinuos y no se guarda nada hasta que las acepta. Haga clic en una para añadirla, o en **Aceptar todos**. Van a la parte elegida en la pestaña **Campos**; las firmas y las iniciales van a un firmante. Pase el cursor sobre una sugerencia y haga clic en la cruz para descartarla. Los lugares que ya tienen un campo no se vuelven a sugerir.
 
 ### Con IA
 

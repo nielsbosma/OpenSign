@@ -80,14 +80,14 @@ Un champ de formulaire dont le nom commence par le nom d’une partie va à cett
 
 ## Détecter les champs
 
-**Détecter les champs**, dans la barre d’outils des champs, examine les pages à la recherche d’endroits qui demandent un champ :
+**Détecter les champs**, dans l’onglet **Champs**, examine les pages à la recherche d’endroits qui demandent un champ :
 
 - des lignes et des suites de tirets bas sur lesquelles écrire, avec le libellé à côté ou en dessous,
 - des cases vides à cocher, avec le texte voisin comme libellé.
 
 Le libellé détermine le type : Signature, Underskrift ou Firma donne un champ de signature, Name ou Namnförtydligande un nom, Date ou Datum la date de signature, Date of birth un sélecteur de date, Email, Phone et Company leurs champs respectifs, et tout le reste du texte.
 
-Les suggestions sont dessinées avec des bordures en pointillés et rien n’est enregistré tant que vous ne les acceptez pas. Cliquez sur l’une d’elles pour l’ajouter, ou sur **Tout accepter**. Elles vont à la partie choisie dans la barre d’outils ; les signatures et les initiales vont à un signataire. Survolez une suggestion et cliquez sur la croix pour l’écarter. Les endroits qui ont déjà un champ ne sont plus suggérés.
+Les suggestions sont dessinées avec des bordures en pointillés et rien n’est enregistré tant que vous ne les acceptez pas. Cliquez sur l’une d’elles pour l’ajouter, ou sur **Tout accepter**. Elles vont à la partie choisie dans l’onglet **Champs** ; les signatures et les initiales vont à un signataire. Survolez une suggestion et cliquez sur la croix pour l’écarter. Les endroits qui ont déjà un champ ne sont plus suggérés.
 
 ### Avec l’IA
 

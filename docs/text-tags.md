@@ -80,14 +80,14 @@ A form field whose name starts with a party's name goes to that party: `Tenant.N
 
 ## Detect Fields
 
-**Detect Fields** in the field toolbar looks at the pages for places that want a field:
+**Detect Fields** on the **Fields** tab looks at the pages for places that want a field:
 
 - lines and runs of underscores to write on, with the label beside or below them,
 - empty boxes to tick, with the text next to them as the label.
 
 The label decides the kind: Signature, Underskrift or Firma becomes a signature field, Name or Namnförtydligande a name, Date or Datum the date of signing, Date of birth a date picker, Email, Phone and Company their fields, and anything else text.
 
-Suggestions are drawn with dashed borders and nothing is saved until you accept them. Click one to add it, or **Accept All**. They go to the party chosen in the toolbar; signatures and initials go to a signer. Hover over a suggestion and click the cross to dismiss it. Places that already have a field are not suggested again.
+Suggestions are drawn with dashed borders and nothing is saved until you accept them. Click one to add it, or **Accept All**. They go to the party chosen on the **Fields** tab; signatures and initials go to a signer. Hover over a suggestion and click the cross to dismiss it. Places that already have a field are not suggested again.
 
 ### With AI
 

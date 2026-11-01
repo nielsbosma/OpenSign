@@ -47,7 +47,7 @@ Adicione todas as pessoas que assinam, aprovam ou recebem uma cópia. Para cada 
 
 ### Campos
 
-Escolha uma parte na barra de ferramentas de campos e depois posicione os campos nas páginas. Os campos também podem vir do próprio arquivo: [tags de texto](text-tags.md#text-tags) como `{{Sign;type=signature;role=Tenant}}` e os campos de um [formulário PDF preenchível](text-tags.md#pdf-forms) se tornam campos no upload, e [Detectar campos](text-tags.md#detect-fields) na barra de ferramentas sugere campos onde a página tem linhas e caixas a preencher. Cada campo pertence a uma parte, que o preenche ao assinar. Selecione um campo para alterá-lo no painel **Campo**: quem o preenche, seu rótulo, se é obrigatório e as configurações abaixo.
+Escolha uma parte na aba **Campos** e depois posicione os campos nas páginas. Os campos também podem vir do próprio arquivo: [tags de texto](text-tags.md#text-tags) como `{{Sign;type=signature;role=Tenant}}` e os campos de um [formulário PDF preenchível](text-tags.md#pdf-forms) se tornam campos no upload, e [Detectar campos](text-tags.md#detect-fields) na aba **Campos** sugere campos onde a página tem linhas e caixas a preencher. Cada campo pertence a uma parte, que o preenche ao assinar. Selecione um campo para alterá-lo no painel **Campo**: quem o preenche, seu rótulo, se é obrigatório e as configurações abaixo.
 
 | Campo | |
 | --- | --- |
@@ -67,7 +67,7 @@ Escolha uma parte na barra de ferramentas de campos e depois posicione os campos
 | Data | Preenchida com a data da assinatura, no formato que você escolher. |
 | Nome, E-mail, Empresa | Preenchidos com os dados da parte. |
 
-Escolha **Eu, agora (pré-preenchido)** na barra de ferramentas para colocar um valor que você mesmo preenche antes de enviar, como um número de contrato, um valor ou uma data. Os campos obrigatórios desse tipo precisam ser preenchidos antes que o documento possa ser enviado.
+Escolha **Eu, agora (pré-preenchido)** na aba **Campos** para colocar um valor que você mesmo preenche antes de enviar, como um número de contrato, um valor ou uma data. Os campos obrigatórios desse tipo precisam ser preenchidos antes que o documento possa ser enviado.
 
 Os campos de texto, número, lista, botão de opção, caixa de seleção, telefone e data de uma parte podem ter um **Valor padrão** com o qual começam. Ative **Somente leitura** e a parte o vê, mas não pode alterá-lo.
 

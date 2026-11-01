@@ -632,6 +632,7 @@ export function DocumentPage() {
   const doc = query.data;
   const folders = useApi('folders.list', { scope: doc?.isTemplate ? 'templates' : 'documents' }, { enabled: !!doc });
   const draft = !!doc && doc.status === 'draft' && doc.canEdit;
+  const placeable = draft && !!doc?.files.length;
   const pending = !!doc && doc.status === 'pending';
   const { fields, update, reload, flush, saving } = useFields(doc, draft);
   const [suggestions, setSuggestions] = useState<SuggestedField[]>([]);
@@ -1060,55 +1061,8 @@ export function DocumentPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">
-          {draft && doc.files.length > 0 && (
-            <div className="sticky top-3 z-10 mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border bg-background/95 p-2 backdrop-blur">
-              <select
-                aria-label={t('Fields for')}
-                value={placingFor ?? ''}
-                onChange={(e) => setPlacingFor(e.target.value || null)}
-                className="h-8 rounded-md border bg-background px-2 text-[13px]"
-              >
-                {doc.parties
-                  .filter((p) => p.role !== 'viewer')
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                <option value="">{t('Me, now (prefilled)')}</option>
-              </select>
-              {FIELD_KINDS.filter((k) => placingFor || SENDER_KINDS.includes(k.kind)).map((k) => (
-                <Button
-                  key={k.kind}
-                  size="sm"
-                  variant={armed === k.kind ? 'default' : 'ghost'}
-                  onClick={() => setArmed(armed === k.kind ? null : k.kind)}
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData(FIELD_DRAG_TYPE, k.kind);
-                    e.dataTransfer.effectAllowed = 'copy';
-                  }}
-                  className="cursor-grab active:cursor-grabbing"
-                  style={armed === k.kind ? undefined : { color: partyColor(doc.parties, placingFor) }}
-                >
-                  {k.label}
-                </Button>
-              ))}
-              <span className="ms-auto text-xs text-muted-foreground">
-                {armed ? t('Click on the page to place it') : t('Drag a field onto the page, or pick one and click')}
-              </span>
-              <DetectButton
-                busy={detect.isPending}
-                aiReady={!!aiStatus.data?.configured && aiStatus.data.allowDocumentText && aiStatus.data.canUse}
-                onDetect={async (ai) => {
-                  await flush();
-                  detect.mutate({ documentId: doc.id, ai });
-                }}
-              />
-            </div>
-          )}
           {!doc.files.length ? (
             draft || doc.isTemplate ? (
               <FileDrop onFiles={upload} busy={uploading} />
@@ -1189,9 +1143,10 @@ export function DocumentPage() {
           <Tabs defaultValue="setup">
             <TabsList className="w-full">
               <TabsTrigger value="setup">{draft ? t('Setup') : t('Parties')}</TabsTrigger>
+              {placeable && <TabsTrigger value="fields">{t('Fields')}</TabsTrigger>}
               <TabsTrigger value="review">{t('Review')}</TabsTrigger>
             </TabsList>
-            <TabsContent value="setup" className="mt-4 grid gap-6">
+            <TabsContent value="setup" className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-6">
               <Section
                 title={t('Parties')}
                 action={
@@ -1249,7 +1204,7 @@ export function DocumentPage() {
               </Section>
               {(draft || doc.isTemplate) && doc.files.length > 0 && (
                 <Section title={t('Files')}>
-                  <ul className="grid gap-1">
+                  <ul className="grid grid-cols-[minmax(0,1fr)] gap-1">
                     {doc.files.map((f) => (
                       <li key={f.id} className="flex items-center gap-2">
                         <span className="min-w-0 flex-1 truncate">{f.name}</span>
@@ -1287,6 +1242,55 @@ export function DocumentPage() {
                 </Section>
               )}
             </TabsContent>
+            {placeable && (
+              <TabsContent value="fields" className="mt-4 grid gap-3">
+                <select
+                  aria-label={t('Fields for')}
+                  value={placingFor ?? ''}
+                  onChange={(e) => setPlacingFor(e.target.value || null)}
+                  className="h-9 w-full rounded-md border bg-background px-2"
+                >
+                  {doc.parties
+                    .filter((p) => p.role !== 'viewer')
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  <option value="">{t('Me, now (prefilled)')}</option>
+                </select>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {FIELD_KINDS.filter((k) => placingFor || SENDER_KINDS.includes(k.kind)).map((k) => (
+                    <Button
+                      key={k.kind}
+                      size="sm"
+                      variant={armed === k.kind ? 'default' : 'outline'}
+                      onClick={() => setArmed(armed === k.kind ? null : k.kind)}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(FIELD_DRAG_TYPE, k.kind);
+                        e.dataTransfer.effectAllowed = 'copy';
+                      }}
+                      className="min-w-0 cursor-grab justify-start active:cursor-grabbing"
+                    >
+                      <k.icon style={armed === k.kind ? undefined : { color: partyColor(doc.parties, placingFor) }} />
+                      <span className="truncate">{t(k.label)}</span>
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {armed ? t('Click on the page to place it') : t('Drag a field onto the page, or pick one and click')}
+                </p>
+                <DetectButton
+                  busy={detect.isPending}
+                  aiReady={!!aiStatus.data?.configured && aiStatus.data.allowDocumentText && aiStatus.data.canUse}
+                  onDetect={async (ai) => {
+                    await flush();
+                    detect.mutate({ documentId: doc.id, ai });
+                  }}
+                />
+              </TabsContent>
+            )}
             <TabsContent value="review" className="mt-4">
               <ReviewPanel documentId={doc.id} draft={draft} />
             </TabsContent>
