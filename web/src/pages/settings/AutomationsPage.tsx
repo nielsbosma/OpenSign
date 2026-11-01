@@ -400,6 +400,15 @@ function RuleDialog({
   );
 }
 
+function AppLogo({ slug, name }: { slug: string; name: string }) {
+  const logo = useApi('automations.app_logo', { slug }, { staleTime: Number.POSITIVE_INFINITY });
+  return (
+    <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted font-medium text-sm">
+      {logo.data?.dataUrl ? <img src={logo.data.dataUrl} alt="" className="size-5 object-contain" /> : name.slice(0, 1).toUpperCase()}
+    </span>
+  );
+}
+
 function ConnectDialog({
   open,
   onOpenChange,
@@ -432,10 +441,8 @@ function ConnectDialog({
           <ul className="grid gap-1.5">
             {apps.data.map((a) => (
               <li key={a.slug} className="flex items-center gap-3 rounded-md border px-3 py-2">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted font-medium text-sm">
-                  {(a.name || a.slug).slice(0, 1).toUpperCase()}
-                </span>
-                <div className="min-w-40 flex-1">
+                <AppLogo slug={a.slug} name={a.name || a.slug} />
+                <div className="min-w-0 flex-1">
                   <div className="truncate font-medium text-sm">{a.name || a.slug}</div>
                   <div className="truncate text-muted-foreground text-xs">{a.description ?? a.categories.join(', ')}</div>
                 </div>
