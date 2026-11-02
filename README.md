@@ -202,15 +202,10 @@ Security is the product. Documents and secrets are encrypted at rest with keys d
 
 ## How it fits together
 
-```
-           ┌──────────────── one container ───────────────────────────┐
- browser ─▶│ React app ─ RPC ──┐                                      │
- REST/API ▶│ REST, Scrive,     ├─▶ services (permissions, audit, ──▶ Postgres
- Claude  ─▶│ DocuSign, MCP ────┤   settings, encryption)          ──▶ S3 (encrypted files)
- signer  ─▶│ signing page ─────┘   worker: email, SMS, sealing,   ──▶ Resend/SMTP, SMS, eID, TSA, LLM
-           │                       webhooks, reminders            ──▶ Gotenberg (private)
-           └──────────────────────────────────────────────────────────┘
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.svg">
+  <img src="docs/images/architecture-light.svg" width="900" alt="OpenSign runs as one container. Browsers, REST clients, Claude and signers reach the React app, REST API, MCP server and signing page, which all use the services layer. Together with the worker, it talks to Postgres, S3, outside providers (Resend or SMTP, SMS, eID, TSA, LLM) and a private Gotenberg.">
+</picture>
 
 Rust (axum, sqlx) in `crates/`: `crypto` (keys, encryption, tokens; no I/O), `db` (migrations), `pdf` (sanitizing, stamping, evidence, PAdES), `core` (services, eID, email, worker) and `server` (HTTP, REST, compatibility APIs, MCP). The web app is React, Vite and Tailwind in `web/`. Every feature is a service, so the web app, REST, the compatibility APIs, MCP and the AI assistant all go through the same permission checks and audit trail.
 
