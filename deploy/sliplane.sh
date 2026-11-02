@@ -12,7 +12,8 @@
 #   SLIPLANE_SERVER_ID   the server to run on (default: the only server, or the first one)
 #   SLIPLANE_PROJECT     project name (default: OpenSign)
 #   SLIPLANE_REGION      ger, fin, us-east, ... for the database and bucket (default: ger)
-#   POSTGRES_INSTANCE    starter, base, ... (default: starter)
+#   POSTGRES_INSTANCE    starter, base, ... (default: starter). Without a payment method, Sliplane
+#                        offers starter and base free for 48 hours.
 #   DATABASE_URL / S3_ENDPOINT S3_BUCKET S3_ACCESS_KEY S3_SECRET_KEY S3_REGION
 #                        bring your own database or bucket instead of creating them
 #   RESEND_API_KEY, RESEND_FROM   pin email to Resend (otherwise the setup wizard asks for it)
