@@ -4,17 +4,11 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
-### Added
-
-- Single sign-on with OpenID Connect, for Microsoft Entra ID, Google, Okta and other providers. Accounts are created at first sign-in, never as admins, and admins can keep the only password sign-in. See the [single sign-on](docs/single-sign-on.md) page.
-
-### Fixed
-
-- The Deploy to Sliplane button asks for the image tag the release actually publishes (`0.1.0`, not `v0.1.0`).
-
-## [0.1.1] - 2026-10-31
+## [0.1.1] - 2026-11-02
 
 ### Before You Update
+
+A database from 0.1.0 cannot be updated. The migrations were folded into one, and 0.1.1 refuses to start on a database that has migrations it does not know. Start 0.1.1 with an empty database and keep your 0.1.0 install until you have what you need from it. A service that follows `:latest` or `:0.1` gets 0.1.1 at its next deploy, so pin it to `:0.1.0` first.
 
 Production now refuses example and predictable `APP_SECRET` values, so an install using one will not start. Check yours first. If it is one of them, plan a migration before updating: changing it makes existing data unreadable. Installs from the Sliplane Deployer have a generated secret and are not affected.
 
@@ -30,8 +24,13 @@ A security review of 0.1.0 led to this round of hardening. Update as soon as you
 - Broker and TIC Identity results are bound to the browser that started them. From a framed signing page, the person also enters a code shown in the identification window. Sealed evidence masks personal numbers and phone numbers.
 - Files replaced on a draft or by a signer are destroyed. Legal hold also refuses edits and canceling.
 
+### Added
+
+- Single sign-on with OpenID Connect, for Microsoft Entra ID, Google, Okta and other providers. Accounts are created at first sign-in, never as admins, and admins can keep the only password sign-in. See the [single sign-on](docs/single-sign-on.md) page.
+
 ### Fixed
 
+- The Deploy to Sliplane button asks for the image tag the release actually publishes (`0.1.1`, not `v0.1.1`).
 - The assistant no longer turns the whole page blank when a message arrives, in browsers where `scrollIntoView` returns a promise.
 
 ### Changed
