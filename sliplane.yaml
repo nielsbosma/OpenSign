@@ -48,7 +48,7 @@ services:
     cmd: gotenberg --api-timeout=60s --chromium-disable-routes=true --webhook-disable=true --prometheus-disable-collect=true
 
   opensign:
-    image: ghcr.io/nielsbosma/opensign:${{ release.tag }}
+    image: ghcr.io/nielsbosma/opensign:${{ release.version }}
     public: true
     port: 3000
     healthcheck: /api/health
