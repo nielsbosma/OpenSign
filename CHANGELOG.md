@@ -8,6 +8,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 - Single sign-on with OpenID Connect, for Microsoft Entra ID, Google, Okta and other providers. Accounts are created at first sign-in, never as admins, and admins can keep the only password sign-in. See the [single sign-on](docs/single-sign-on.md) page.
 
+### Fixed
+
+- The Deploy to Sliplane button asks for the image tag the release actually publishes (`0.1.0`, not `v0.1.0`).
+
 ## [0.1.1] - 2026-10-31
 
 ### Before You Update
