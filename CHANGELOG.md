@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-02
+
 ### Fixed
 
 - The Deploy to Sliplane button no longer fails at the converter. Sliplane refuses an image pinned by digest, so `sliplane.yaml` now names the exact Gotenberg version, 8.39.0, the same image as the digest.
