@@ -47,6 +47,8 @@ Sliplane keeps Gotenberg off the public internet for incoming traffic, but it ha
 
 **[Deploy to Sliplane](https://sliplane.opendeploy.cloud/?repo=https://github.com/nielsbosma/OpenSign)**
 
+Without a payment method in Sliplane, the button sets up a Starter server with 20 GB and a Starter managed Postgres with 10 GB, both free for 48 hours. To keep them, add a payment method before the time is up and turn each into a paid one in Sliplane. Otherwise Sliplane deletes the server and the database trial expires, so do not keep documents you need there without doing this. Larger sizes, more storage and monthly or yearly billing need a payment method.
+
 ### From a terminal
 
 The same setup through the Sliplane API:

@@ -148,7 +148,7 @@ OpenSign is one container image plus Postgres, an S3-compatible bucket and, for 
 
 The button reads [sliplane.yaml](sliplane.yaml): it asks for your Resend key (and optionally an AI provider), shows what it will create and what it costs, and sets up a managed Postgres, a bucket, Gotenberg on the private network and OpenSign with a fresh `APP_SECRET`. Its finish page opens setup with the setup code already filled in. From a terminal, `SLIPLANE_TOKEN=api_rw_org_... ./deploy/sliplane.sh` does the same over the Sliplane API.
 
-A Starter server with 20 GB is free for 48 hours. Add a payment method in Sliplane before the time is up to keep it, or it is deleted.
+Without a payment method in Sliplane, the button sets up a Starter server with 20 GB and a Starter managed Postgres with 10 GB, both free for 48 hours. To keep them, add a payment method before the time is up and turn each into a paid one in Sliplane. Otherwise Sliplane deletes the server and the database trial expires, so do not keep documents you need there without doing this.
 
 ### With Docker
 
