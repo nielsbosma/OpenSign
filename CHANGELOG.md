@@ -4,6 +4,12 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-03
+
+### Added
+
+- SMS through Twilio with an API key instead of the Auth Token, and with a Messaging Service as the sender.
+
 ## [0.1.2] - 2026-11-02
 
 ### Fixed

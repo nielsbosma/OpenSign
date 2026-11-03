@@ -1622,5 +1622,7 @@
   "Inactive": "निष्क्रिय",
   "The server sent a response that could not be read": "सर्वर ने ऐसा उत्तर भेजा जिसे पढ़ा नहीं जा सका",
   "Something went wrong": "कुछ गलत हो गया",
-  "The preview could not be shown": "पूर्वावलोकन नहीं दिखाया जा सका"
+  "The preview could not be shown": "पूर्वावलोकन नहीं दिखाया जा सका",
+  "API Key SID": "API कुंजी SID",
+  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "केवल Twilio के लिए। API कुंजी के साथ उसका सीक्रेट ऊपर वाले फ़ील्ड में डालें। Auth Token के लिए खाली छोड़ें।"
 }
