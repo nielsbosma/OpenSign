@@ -1622,5 +1622,7 @@
   "Inactive": "غير نشط",
   "The server sent a response that could not be read": "أرسل الخادم استجابة تعذرت قراءتها",
   "Something went wrong": "حدث خطأ ما",
-  "The preview could not be shown": "تعذر عرض المعاينة"
+  "The preview could not be shown": "تعذر عرض المعاينة",
+  "API Key SID": "SID مفتاح API",
+  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "Twilio فقط. عند استخدام مفتاح API، يوضع سره في الحقل أعلاه. اتركه فارغًا لاستخدام Auth Token."
 }

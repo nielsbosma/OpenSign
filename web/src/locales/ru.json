@@ -1622,5 +1622,7 @@
   "Inactive": "Неактивно",
   "The server sent a response that could not be read": "Сервер прислал ответ, который не удалось прочитать",
   "Something went wrong": "Что-то пошло не так",
-  "The preview could not be shown": "Не удалось показать предпросмотр"
+  "The preview could not be shown": "Не удалось показать предпросмотр",
+  "API Key SID": "SID ключа API",
+  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "Только для Twilio. При использовании ключа API его секрет указывается в поле выше. Оставьте пустым, чтобы использовать Auth Token."
 }

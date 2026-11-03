@@ -1622,5 +1622,7 @@
   "Inactive": "নিষ্ক্রিয়",
   "The server sent a response that could not be read": "সার্ভার এমন উত্তর পাঠিয়েছে যা পড়া যায়নি",
   "Something went wrong": "কিছু ভুল হয়েছে",
-  "The preview could not be shown": "প্রিভিউ দেখানো যায়নি"
+  "The preview could not be shown": "প্রিভিউ দেখানো যায়নি",
+  "API Key SID": "API কী SID",
+  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "শুধু Twilio-র জন্য। API কী ব্যবহার করলে তার সিক্রেট উপরের ঘরে দিন। Auth Token ব্যবহার করতে ফাঁকা রাখুন।"
 }

@@ -1622,5 +1622,7 @@
   "Inactive": "Inativo",
   "The server sent a response that could not be read": "O servidor enviou uma resposta que não pôde ser lida",
   "Something went wrong": "Algo deu errado",
-  "The preview could not be shown": "Não foi possível mostrar a pré-visualização"
+  "The preview could not be shown": "Não foi possível mostrar a pré-visualização",
+  "API Key SID": "SID da chave de API",
+  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "Somente Twilio. Com uma chave de API, o segredo vai no campo acima. Deixe em branco para usar o Auth Token."
 }
