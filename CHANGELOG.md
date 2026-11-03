@@ -4,6 +4,12 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-11-03
+
+### Security
+
+- The spreadsheet reader behind bulk send (calamine) is updated to 0.38, which fixes a crash and a huge memory allocation from a crafted .xls or .xlsb file (RUSTSEC-2026-0436). 0.1.3 was never built as an image because of this advisory; 0.1.4 carries its SMS changes.
+
 ## [0.1.3] - 2026-11-03
 
 ### Added
