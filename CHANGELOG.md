@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Fixed
+
+- OpenSign starts with a Sliplane managed Postgres. Its connection strings end in `sslrootcert=system`, which the database driver read as a file named `system` ("No such file or directory"). OpenSign now drops that one setting and still verifies the server certificate against the public certificate authorities.
+
 ## [0.1.4] - 2026-11-03
 
 ### Security
