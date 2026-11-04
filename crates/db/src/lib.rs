@@ -22,7 +22,8 @@ pub enum DbError {
 }
 
 pub async fn connect(url: &str, max_connections: u32) -> Result<Db, DbError> {
-    let options: PgConnectOptions = url.parse::<PgConnectOptions>().map_err(DbError::Connect)?.disable_statement_logging();
+    let options: PgConnectOptions =
+        without_system_root_cert(url).parse::<PgConnectOptions>().map_err(DbError::Connect)?.disable_statement_logging();
     PgPoolOptions::new()
         .max_connections(max_connections)
         .acquire_timeout(Duration::from_secs(10))
@@ -35,6 +36,15 @@ pub async fn connect(url: &str, max_connections: u32) -> Result<Db, DbError> {
         .connect_with(options)
         .await
         .map_err(DbError::Connect)
+}
+
+/// libpq reads `sslrootcert=system` as "trust the system's CAs", and Sliplane puts it in its connection strings.
+/// sqlx opens it as a file named `system` and fails with "No such file or directory". Without it, sqlx verifies
+/// against the Mozilla roots it ships, so `sslmode=verify-full` still checks the certificate.
+fn without_system_root_cert(url: &str) -> String {
+    let Some((base, query)) = url.split_once('?') else { return url.to_string() };
+    let kept: Vec<&str> = query.split('&').filter(|p| !p.eq_ignore_ascii_case("sslrootcert=system")).collect();
+    if kept.is_empty() { base.to_string() } else { format!("{base}?{}", kept.join("&")) }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,3 +113,19 @@ pub async fn test_db() -> Option<Db> {
 
 #[cfg(feature = "testing")]
 static NEXT_SCHEMA: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+#[cfg(test)]
+mod tests {
+    use super::without_system_root_cert;
+
+    #[test]
+    fn drops_only_the_system_root_cert() {
+        assert_eq!(
+            without_system_root_cert("postgres://u:p@h:5432/db?sslmode=verify-full&sslrootcert=system&options=-c%20search_path%3Dx"),
+            "postgres://u:p@h:5432/db?sslmode=verify-full&options=-c%20search_path%3Dx"
+        );
+        assert_eq!(without_system_root_cert("postgres://u:p@h/db?sslrootcert=system"), "postgres://u:p@h/db");
+        assert_eq!(without_system_root_cert("postgres://u:p@h/db?sslrootcert=/ca.pem"), "postgres://u:p@h/db?sslrootcert=/ca.pem");
+        assert_eq!(without_system_root_cert("postgres://u:p@h/db"), "postgres://u:p@h/db");
+    }
+}
