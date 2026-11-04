@@ -22,7 +22,7 @@ hex = { workspace = true }
 lopdf = { version = "0.46", default-features = false }
 p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
 p256-ct = { package = "p256", version = "0.14", features = ["ecdsa", "pkcs8"] }
-p384 = { version = "0.13", features = ["ecdsa"] }
+p384 = { version = "0.14", features = ["ecdsa"] }
 png = "0.17"
 qrcode = { version = "0.14", default-features = false }
 rand = { workspace = true }
