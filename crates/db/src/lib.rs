@@ -22,7 +22,8 @@ pub enum DbError {
 }
 
 pub async fn connect(url: &str, max_connections: u32) -> Result<Db, DbError> {
-    let options: PgConnectOptions = without_system_root_cert(url).parse::<PgConnectOptions>().map_err(DbError::Connect)?.disable_statement_logging();
+    let options: PgConnectOptions =
+        without_system_root_cert(url).parse::<PgConnectOptions>().map_err(DbError::Connect)?.disable_statement_logging();
     PgPoolOptions::new()
         .max_connections(max_connections)
         .acquire_timeout(Duration::from_secs(10))
