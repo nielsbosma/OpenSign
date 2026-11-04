@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Fixed
+
+- Setup gets past the email step when the Resend key or sender is set by an environment variable, as the Sliplane Deployer does. Those fields are shown locked and are no longer sent, so the server no longer refuses the save with "apiKey is fixed by an environment variable".
+
 ## [0.1.5] - 2026-11-04
 
 ### Fixed

@@ -188,6 +188,9 @@ function EmailStep() {
   const queryClient = useQueryClient();
   const current = useApi('settings.get', { group: 'email' });
   const values = (current.data?.values ?? {}) as EmailValues;
+  const pinned = current.data?.pinned ?? [];
+  const locked = (field: keyof EmailValues) => pinned.includes(field);
+  const lockedHint = t('Set by an environment variable.');
   const [provider, setProvider] = useState<string>();
   const [apiKey, setApiKey] = useState('');
   const [smtpHost, setSmtpHost] = useState<string>();
@@ -210,23 +213,23 @@ function EmailStep() {
     setError(undefined);
     setBusy(true);
     try {
-      await call('settings.update', {
-        group: 'email',
-        values: {
-          provider: chosen,
-          ...(smtp
-            ? {
-                smtpHost: (smtpHost ?? values.smtpHost ?? '').trim(),
-                smtpPort: Number(smtpPort ?? values.smtpPort ?? 587),
-                smtpSecurity: security,
-                smtpUsername: (smtpUsername ?? values.smtpUsername ?? '').trim(),
-                smtpPassword: smtpPassword || null,
-              }
-            : { apiKey: apiKey.trim() || null }),
-          fromAddress: (fromAddress ?? values.fromAddress ?? '').trim(),
-          fromName: fromName ?? values.fromName ?? '',
-        },
-      });
+      const changes: Record<string, unknown> = {
+        provider: chosen,
+        ...(smtp
+          ? {
+              smtpHost: (smtpHost ?? values.smtpHost ?? '').trim(),
+              smtpPort: Number(smtpPort ?? values.smtpPort ?? 587),
+              smtpSecurity: security,
+              smtpUsername: (smtpUsername ?? values.smtpUsername ?? '').trim(),
+              smtpPassword: smtpPassword || null,
+            }
+          : { apiKey: apiKey.trim() || null }),
+        fromAddress: (fromAddress ?? values.fromAddress ?? '').trim(),
+        fromName: fromName ?? values.fromName ?? '',
+      };
+      // The server refuses the whole update when it names a field an environment variable fixes.
+      for (const field of pinned) delete changes[field];
+      await call('settings.update', { group: 'email', values: changes });
       await call('settings.send_test_email', {});
       await queryClient.invalidateQueries({ queryKey: ['setup.status'] });
       setDone(true);
@@ -343,11 +346,13 @@ function EmailStep() {
             label={t('Resend API Key')}
             htmlFor="apiKey"
             hint={
-              values.apiKey
-                ? t('A key is saved. Leave empty to keep it.')
-                : tx('Create one in {link} with permission to send email.', {
-                    link: <ExternalLink href="https://resend.com/api-keys">Resend API Keys</ExternalLink>,
-                  })
+              locked('apiKey')
+                ? lockedHint
+                : values.apiKey
+                  ? t('A key is saved. Leave empty to keep it.')
+                  : tx('Create one in {link} with permission to send email.', {
+                      link: <ExternalLink href="https://resend.com/api-keys">Resend API Keys</ExternalLink>,
+                    })
             }
           >
             <Input
@@ -358,6 +363,7 @@ function EmailStep() {
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="re_..."
               className="font-mono"
+              disabled={locked('apiKey')}
             />
           </Field>
         )}
@@ -366,11 +372,13 @@ function EmailStep() {
             label={t('From Address')}
             htmlFor="fromAddress"
             hint={
-              smtp
-                ? t('An address the server may send from.')
-                : tx('On a domain you {link}.', {
-                    link: <ExternalLink href="https://resend.com/domains">{t('verified in Resend')}</ExternalLink>,
-                  })
+              locked('fromAddress')
+                ? lockedHint
+                : smtp
+                  ? t('An address the server may send from.')
+                  : tx('On a domain you {link}.', {
+                      link: <ExternalLink href="https://resend.com/domains">{t('verified in Resend')}</ExternalLink>,
+                    })
             }
           >
             <Input
@@ -380,14 +388,16 @@ function EmailStep() {
               onChange={(e) => setFromAddress(e.target.value)}
               placeholder="sign@example.com"
               required
+              disabled={locked('fromAddress')}
             />
           </Field>
-          <Field label={t('From Name')} htmlFor="fromName">
+          <Field label={t('From Name')} htmlFor="fromName" hint={locked('fromName') ? lockedHint : undefined}>
             <Input
               id="fromName"
               value={fromName ?? values.fromName ?? ''}
               onChange={(e) => setFromName(e.target.value)}
               placeholder={t('Acme Signing')}
+              disabled={locked('fromName')}
             />
           </Field>
         </div>
