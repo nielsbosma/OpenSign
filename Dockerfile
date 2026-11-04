@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     cargo build --release --locked --bin opensign && cp target/release/opensign /opensign
 
-FROM gcr.io/distroless/cc-debian13:nonroot@sha256:3ee00291cf386ec52a552e6a858d555debd74776eb4bfa53fa3df2cd6677515e
+FROM gcr.io/distroless/cc-debian13:nonroot@sha256:08476c244888bfb425bae1ae4dd7c17f093e972aab8426883d97f3c6f280f7c1
 COPY --from=server /opensign /app/opensign
 COPY --from=web /src/web/dist /app/web
 ENV PORT=3000 WEB_DIST=/app/web APP_ENV=production
