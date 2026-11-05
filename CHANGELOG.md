@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-11-05
+
 ### Fixed
 
 - When an AI provider refuses a request, the message now says why, for example that a LiteLLM key may not use the chosen model, and the provider's answer is written to the server log. Before, every refusal read "refused the key", and a proxy's reason was not shown or logged anywhere. Key details that LiteLLM includes in its errors are left out.
