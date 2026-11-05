@@ -1624,5 +1624,7 @@
   "Something went wrong": "Что-то пошло не так",
   "The preview could not be shown": "Не удалось показать предпросмотр",
   "API Key SID": "SID ключа API",
-  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "Только для Twilio. При использовании ключа API его секрет указывается в поле выше. Оставьте пустым, чтобы использовать Auth Token."
+  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "Только для Twilio. При использовании ключа API его секрет указывается в поле выше. Оставьте пустым, чтобы использовать Auth Token.",
+  "Send Test Message": "Отправить тестовое SMS",
+  "Test message sent to {to}": "Тестовое SMS отправлено на {to}"
 }

@@ -55,6 +55,8 @@ En **Ajustes → SMS**, elija un proveedor:
 
 El **Remitente** es un nombre de hasta 11 letras, o un número que usted posea. El mismo proveedor se usa para la entrega de los enlaces de firma por SMS.
 
+Después de guardar, escriba su propio número bajo el formulario y pulse **Enviar Mensaje de Prueba**. Si el proveedor lo rechaza, el mensaje dice por qué, por ejemplo una clave incorrecta o un remitente que la cuenta no puede usar. Una prueba cuenta para los límites de abajo.
+
 ### Limitar lo que puede costar el SMS
 
 Los mensajes de texto cuestan dinero, y los enlaces compartidos permiten que personas que usted no conoce los soliciten. Estos ajustes mantienen la factura acotada:

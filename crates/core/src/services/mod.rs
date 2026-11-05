@@ -88,6 +88,7 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<admin::GetSettings>(),
         erase::<admin::UpdateSettings>(),
         erase::<admin::SendTestEmail>(),
+        erase::<admin::SendTestSms>(),
         erase::<branding::Get>(),
         erase::<branding::SetLogo>(),
         erase::<branding::RemoveLogo>(),

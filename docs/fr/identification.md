@@ -55,6 +55,8 @@ Dans **Paramètres → SMS**, choisissez un fournisseur :
 
 L’**Expéditeur** est un nom de 11 lettres au maximum, ou un numéro qui vous appartient. Le même fournisseur sert à la livraison des liens de signature par SMS.
 
+Après l'enregistrement, saisissez votre propre numéro sous le formulaire et appuyez sur **Envoyer un SMS de Test**. Si le fournisseur refuse, le message indique pourquoi, par exemple une clé erronée ou un expéditeur que le compte ne peut pas utiliser. Un test compte dans les limites ci-dessous.
+
 ### Limiter le coût des SMS
 
 Les SMS coûtent de l’argent, et les liens de partage permettent à des personnes que vous ne connaissez pas d’en demander. Ces paramètres bornent la facture :

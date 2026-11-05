@@ -130,9 +130,25 @@ pub async fn send(app: &App, settings: &SmsSettings, to: &str, text: &str) -> Re
         .map_err(|e| AppError::new(ErrorKind::Unavailable, "The SMS provider is not reachable").with_cause(e))?;
     if !response.status().is_success() {
         let status = response.status();
-        return Err(AppError::new(ErrorKind::Unavailable, format!("The SMS provider refused the message ({status})")));
+        let reason = refusal_reason(&response.text().await.unwrap_or_default());
+        tracing::warn!(provider = %settings.provider, %status, reason = %reason, "the SMS provider refused a message");
+        let because = if reason.is_empty() { String::new() } else { format!(": {reason}") };
+        return Err(AppError::new(ErrorKind::Unavailable, format!("The SMS provider refused the message ({status}){because}")));
     }
     Ok(())
+}
+
+/// Twilio answers JSON with a `message`, 46elks a line of text. Both hosts are fixed, so the text is theirs.
+fn refusal_reason(body: &str) -> String {
+    let text = serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| v.get("message").and_then(|m| m.as_str()).map(str::to_string))
+        .unwrap_or_else(|| body.to_string());
+    let line = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if line.starts_with('<') {
+        return String::new();
+    }
+    line.chars().take(200).collect()
 }
 
 fn urlencode(value: &str) -> String {
@@ -142,6 +158,22 @@ fn urlencode(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn says_why_the_provider_refused() {
+        let twilio =
+            r#"{"code": 20003, "message": "Authenticate", "more_info": "https://www.twilio.com/docs/errors/20003", "status": 401}"#;
+        assert_eq!(refusal_reason(twilio), "Authenticate");
+        assert_eq!(
+            refusal_reason(
+                "Invalid to number
+"
+            ),
+            "Invalid to number"
+        );
+        assert_eq!(refusal_reason("<html><body>Bad gateway</body></html>"), "");
+        assert_eq!(refusal_reason(&"x".repeat(500)).len(), 200);
+    }
 
     #[test]
     fn normalizes_phone_numbers() {

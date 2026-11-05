@@ -55,6 +55,8 @@ Välj en leverantör i **Inställningar → Sms**:
 
 **Avsändare** är ett namn på upp till 11 bokstäver, eller ett nummer som du äger. Samma leverantör används för leverans av signeringslänkar med SMS.
 
+När du har sparat skriver du ditt eget nummer under formuläret och trycker på **Skicka testmeddelande**. Om leverantören vägrar står det varför, till exempel en fel nyckel eller en avsändare som kontot inte får använda. Ett test räknas mot gränserna nedan.
+
 ### Begränsa vad SMS kan kosta
 
 Textmeddelanden kostar pengar, och delningslänkar låter personer du inte känner begära dem. De här inställningarna håller räkningen begränsad:

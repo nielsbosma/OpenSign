@@ -1978,6 +1978,13 @@ export type SettingsSendTestEmailInput = {
 
 export type SettingsSendTestEmailOutput = Ok_;
 
+export type SettingsSendTestSmsInput = {
+  /** The phone number to text, with its country code. */
+  to: string;
+};
+
+export type SettingsSendTestSmsOutput = Ok_;
+
 export type SettingsUpdateInput = {
   group: Group;
   /** The fields to change. Leave a secret out (or send null) to keep it; send "" to clear it. */
@@ -2787,6 +2794,7 @@ export interface Services {
   "seal.regenerate": { kind: "mutation"; input: SealRegenerateInput; output: SealRegenerateOutput };
   "settings.get": { kind: "query"; input: SettingsGetInput; output: SettingsGetOutput };
   "settings.send_test_email": { kind: "mutation"; input: SettingsSendTestEmailInput; output: SettingsSendTestEmailOutput };
+  "settings.send_test_sms": { kind: "mutation"; input: SettingsSendTestSmsInput; output: SettingsSendTestSmsOutput };
   "settings.update": { kind: "mutation"; input: SettingsUpdateInput; output: SettingsUpdateOutput };
   "setup.create_first_admin": { kind: "mutation"; input: SetupCreateFirstAdminInput; output: SetupCreateFirstAdminOutput };
   "setup.status": { kind: "query"; input: SetupStatusInput; output: SetupStatusOutput };

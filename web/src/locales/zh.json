@@ -1624,5 +1624,7 @@
   "Something went wrong": "出了点问题",
   "The preview could not be shown": "无法显示预览",
   "API Key SID": "API 密钥 SID",
-  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "仅限 Twilio。使用 API 密钥时，请将其密钥填入上方字段。留空则使用 Auth Token。"
+  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "仅限 Twilio。使用 API 密钥时，请将其密钥填入上方字段。留空则使用 Auth Token。",
+  "Send Test Message": "发送测试短信",
+  "Test message sent to {to}": "测试短信已发送至 {to}"
 }

@@ -1624,5 +1624,7 @@
   "Something went wrong": "Algo deu errado",
   "The preview could not be shown": "Não foi possível mostrar a pré-visualização",
   "API Key SID": "SID da chave de API",
-  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "Somente Twilio. Com uma chave de API, o segredo vai no campo acima. Deixe em branco para usar o Auth Token."
+  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "Somente Twilio. Com uma chave de API, o segredo vai no campo acima. Deixe em branco para usar o Auth Token.",
+  "Send Test Message": "Enviar Mensagem de Teste",
+  "Test message sent to {to}": "Mensagem de teste enviada para {to}"
 }
