@@ -1624,5 +1624,7 @@
   "Something went wrong": "কিছু ভুল হয়েছে",
   "The preview could not be shown": "প্রিভিউ দেখানো যায়নি",
   "API Key SID": "API কী SID",
-  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "শুধু Twilio-র জন্য। API কী ব্যবহার করলে তার সিক্রেট উপরের ঘরে দিন। Auth Token ব্যবহার করতে ফাঁকা রাখুন।"
+  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "শুধু Twilio-র জন্য। API কী ব্যবহার করলে তার সিক্রেট উপরের ঘরে দিন। Auth Token ব্যবহার করতে ফাঁকা রাখুন।",
+  "Send Test Message": "পরীক্ষামূলক বার্তা পাঠান",
+  "Test message sent to {to}": "পরীক্ষামূলক বার্তা {to}-এ পাঠানো হয়েছে"
 }

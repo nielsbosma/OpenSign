@@ -57,6 +57,8 @@ A Twilio API key works too, and can be revoked on its own: the Account SID stays
 
 **Sender** is a name of up to 11 letters, or a number you own. With Twilio it can also be a Messaging Service SID (`MG…`). The same provider is used for SMS delivery of signing links.
 
+After saving, enter your own number under the form and press **Send Test Message**. If the provider refuses, the message says why, such as a wrong key or a sender the account may not use. A test counts toward the limits below.
+
 ### Limiting what SMS can cost
 
 Text messages cost money, and share links let people you do not know ask for them. These settings keep the bill bounded:

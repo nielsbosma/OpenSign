@@ -531,6 +531,35 @@ function EmailExtras() {
   );
 }
 
+function SmsExtras({ unsaved }: { unsaved: boolean }) {
+  const [to, setTo] = useState('');
+  const test = useApiMutation('settings.send_test_sms', {
+    onSuccess: () => toast.success(t('Test message sent to {to}', { to })),
+  });
+  return (
+    <form
+      className="flex flex-wrap items-center gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        test.mutate({ to });
+      }}
+    >
+      <Input
+        type="tel"
+        className="w-56"
+        placeholder="+46 70 123 45 67"
+        aria-label={t('Phone')}
+        value={to}
+        onChange={(e) => setTo(e.target.value)}
+      />
+      <Button type="submit" variant="outline" disabled={test.isPending || unsaved || to.trim() === ''}>
+        {test.isPending && <Spinner />} {t('Send Test Message')}
+      </Button>
+      {unsaved && <span className="text-muted-foreground">{t('Save your changes to test them.')}</span>}
+    </form>
+  );
+}
+
 function SealExtras() {
   const seal = useApi('seal.get');
   const regenerate = useApiMutation('seal.regenerate', { invalidates: ['seal.'] });
@@ -970,9 +999,11 @@ export function SettingsGroup({ group }: { group: Group }) {
             )}
           </div>
         </form>
-        {(group === 'email' || group === 'ai') && (
+        {(group === 'email' || group === 'ai' || (group === 'sms' && Boolean(saved.provider))) && (
           <div className="mt-6 border-t pt-5">
-            {group === 'email' ? <EmailExtras /> : <AiExtras unsaved={Object.keys(draft).length > 0} />}
+            {group === 'email' && <EmailExtras />}
+            {group === 'ai' && <AiExtras unsaved={Object.keys(draft).length > 0} />}
+            {group === 'sms' && <SmsExtras unsaved={Object.keys(draft).length > 0} />}
           </div>
         )}
       </SettingsCard>

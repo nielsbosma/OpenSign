@@ -55,6 +55,8 @@ Em **Configurações → SMS**, escolha um provedor:
 
 O **Remetente** é um nome de até 11 letras, ou um número que você possui. O mesmo provedor é usado para a entrega dos links de assinatura por SMS.
 
+Depois de salvar, digite o seu próprio número abaixo do formulário e clique em **Enviar Mensagem de Teste**. Se o provedor recusar, a mensagem diz por quê, por exemplo uma chave errada ou um remetente que a conta não pode usar. Um teste conta para os limites abaixo.
+
 ### Limitar o custo do SMS
 
 As mensagens de texto custam dinheiro, e os links de compartilhamento permitem que pessoas que você não conhece peçam esse envio. Estas configurações mantêm a conta sob controle:

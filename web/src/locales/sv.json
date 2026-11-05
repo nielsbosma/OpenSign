@@ -1624,5 +1624,7 @@
   "Something went wrong": "Något gick fel",
   "The preview could not be shown": "Förhandsgranskningen kunde inte visas",
   "API Key SID": "SID för API-nyckel",
-  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "Bara Twilio. Med en API-nyckel skriver du dess hemlighet i fältet ovanför. Lämna tomt för att använda Auth Token."
+  "Twilio only. With an API key, its secret goes in the field above. Leave empty to use the Auth Token.": "Bara Twilio. Med en API-nyckel skriver du dess hemlighet i fältet ovanför. Lämna tomt för att använda Auth Token.",
+  "Send Test Message": "Skicka testmeddelande",
+  "Test message sent to {to}": "Testmeddelandet skickades till {to}"
 }

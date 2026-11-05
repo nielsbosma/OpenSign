@@ -468,6 +468,42 @@ impl Service for SendTestEmail {
 }
 
 #[derive(Deserialize, JsonSchema)]
+pub struct TestSmsInput {
+    /// The phone number to text, with its country code.
+    pub to: String,
+}
+
+pub struct SendTestSms;
+
+#[async_trait]
+impl Service for SendTestSms {
+    type Input = TestSmsInput;
+    type Output = Ok_;
+    const META: Meta = Meta::mutation(
+        "settings.send_test_sms",
+        "Send a test text message through the saved SMS provider, 46elks or Twilio, to check the account, key and sender.",
+        Access::Permission(Permission::SettingsManage),
+    )
+    .without_transaction()
+    .not_a_tool("texts any number and costs money");
+
+    async fn run(ctx: &Ctx, conn: &mut PgConnection, input: TestSmsInput) -> Result<Ok_> {
+        let to = crate::sms::normalize_phone(&input.to)?;
+        let sms: SmsSettings = settings(ctx, conn).await?;
+        if !crate::sms::is_configured(&sms) {
+            return Err(bad_request("Choose an SMS provider, fill in its account and save before sending a test"));
+        }
+        let entry = crate::sms::reserve(conn, &sms, &to, None, ctx.now).await?;
+        if let Err(error) = crate::sms::send(&ctx.app, &sms, &to, "OpenSign test message. SMS from OpenSign works.").await {
+            crate::sms::release(conn, entry).await?;
+            return Err(error);
+        }
+        audit(ctx, conn, Entry::new("settings.sms_tested", "settings", "sms").metadata(serde_json::json!({ "to": to }))).await?;
+        Ok(Ok_::default())
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ListAuditInput {
     /// Return entries older than this id (for paging).
