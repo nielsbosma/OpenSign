@@ -254,6 +254,7 @@ mod tests {
         "oauth.describe",
         "oauth.deny",
         "seal.regenerate",
+        "settings.send_test_sms",
         "users.reset_two_factor",
     ];
 

@@ -485,7 +485,7 @@ impl Service for SendTestSms {
         Access::Permission(Permission::SettingsManage),
     )
     .without_transaction()
-    .not_a_tool("texts any number and costs money");
+    .not_a_tool("It texts any number an agent names, and every message costs money.");
 
     async fn run(ctx: &Ctx, conn: &mut PgConnection, input: TestSmsInput) -> Result<Ok_> {
         let to = crate::sms::normalize_phone(&input.to)?;

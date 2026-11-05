@@ -94,6 +94,7 @@ Some things stay in the app on purpose, because they are credentials, need the p
 | Resetting someone's two-factor | It weakens their sign-in, so an admin does it in the app. |
 | OAuth consent and connected AI apps | Consent is given by the person in the browser, and an agent cannot see or change which clients hold access. |
 | Replacing the seal key | Done in the app. |
+| Sending a test SMS | It texts any number it is given, and every message costs money. Test SMS in the app. |
 | In-person signing, Sign Myself and anything a signer does | Needs the signer at the device, with their own link or session. |
 | Your saved signature | Only you draw or change it, in the app. |
 | The in-app AI assistant | Agents call the tools directly. |
