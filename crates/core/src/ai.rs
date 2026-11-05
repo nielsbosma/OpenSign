@@ -87,14 +87,51 @@ fn client<'a>(ctx: &'a Ctx, settings: &AiSettings) -> &'a reqwest::Client {
 }
 
 fn describe(settings: &AiSettings, status: u16, body: &str) -> String {
-    // A proxy's address can point anywhere on the private network, so what answers there stays out of messages.
-    let body = if matches!(settings.provider.as_str(), "litellm" | "openai-compatible") { "" } else { body };
+    let proxy = matches!(settings.provider.as_str(), "litellm" | "openai-compatible");
+    // A proxy's address can point anywhere on the private network, so only an OpenAI-style error message from it
+    // is shown, never the raw body.
+    let reason = provider_reason(body).or_else(|| (!proxy && !body.trim().is_empty()).then(|| clip(body, 200)));
+    let because = reason.map(|r| format!(": {r}")).unwrap_or_default();
     match status {
-        401 | 403 => format!("The AI provider refused the key (HTTP {status}). An Admin should check it in Settings, AI."),
-        404 => "The AI provider does not know that model or address (HTTP 404).".into(),
-        429 => "The AI provider is rate limiting or out of credit (HTTP 429). Try again shortly.".into(),
-        _ => format!("The AI provider failed (HTTP {status}): {}", body.chars().take(200).collect::<String>()),
+        401 | 403 if proxy => format!(
+            "The AI provider refused the request (HTTP {status}){because}. A proxy such as LiteLLM also refuses a key that may not use the chosen model. An Admin should check the key and model in Settings, AI."
+        ),
+        401 | 403 => format!("The AI provider refused the key (HTTP {status}){because}. An Admin should check it in Settings, AI."),
+        404 => format!("The AI provider does not know that model or address (HTTP 404){because}."),
+        429 => format!("The AI provider is rate limiting or out of credit (HTTP 429){because}. Try again shortly."),
+        _ => format!("The AI provider failed (HTTP {status}){because}"),
     }
+}
+
+/// The message from an OpenAI- or Anthropic-style error body, without the key details LiteLLM appends.
+fn provider_reason(body: &str) -> Option<String> {
+    let message = error_message(body)?;
+    let message = message.as_str();
+    let message = ["Received API Key", "Key Hash", "Received Model Group"]
+        .iter()
+        .filter_map(|marker| message.find(marker))
+        .min()
+        .map_or(message, |at| &message[..at]);
+    let message = message.trim().trim_end_matches([',', ';', ':', '.']).trim();
+    (!message.is_empty()).then(|| clip(message, 200))
+}
+
+fn error_message(body: &str) -> Option<String> {
+    let value: Value = serde_json::from_str(body).ok()?;
+    let error = value.get("error").unwrap_or(&value);
+    error.get("message").or_else(|| error.get("detail")).or_else(|| error.is_string().then_some(error))?.as_str().map(str::to_string)
+}
+
+fn clip(text: &str, max: usize) -> String {
+    let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if flat.chars().count() <= max { flat } else { format!("{}…", flat.chars().take(max).collect::<String>()) }
+}
+
+fn refused(settings: &AiSettings, status: u16, body: &str) -> AppError {
+    // LiteLLM masks the key itself but names its hash, which an operator matches against the key's id in LiteLLM.
+    let answer = clip(&error_message(body).unwrap_or_else(|| body.to_string()), 400);
+    tracing::warn!(provider = %settings.provider, status, answer = %answer, "the AI provider refused a request");
+    AppError::new(ErrorKind::Unavailable, describe(settings, status, body))
 }
 
 fn authorize(request: reqwest::RequestBuilder, settings: &AiSettings) -> reqwest::RequestBuilder {
@@ -128,7 +165,7 @@ pub async fn list_models(ctx: &Ctx, settings: &AiSettings) -> Result<Vec<Model>>
     let status = response.status().as_u16();
     let text = response.text().await.unwrap_or_default();
     if !(200..300).contains(&status) {
-        return Err(AppError::new(ErrorKind::Unavailable, describe(settings, status, &text)));
+        return Err(refused(settings, status, &text));
     }
     let value: Value = serde_json::from_str(&text)
         .map_err(|e| AppError::new(ErrorKind::Unavailable, "The AI provider sent an unreadable model list").with_cause(e))?;
@@ -261,7 +298,7 @@ pub async fn complete(ctx: &Ctx, conn: &mut PgConnection, settings: &AiSettings,
     let status = response.status().as_u16();
     let text = response.text().await.unwrap_or_default();
     if !(200..300).contains(&status) {
-        return Err(AppError::new(ErrorKind::Unavailable, describe(settings, status, &text)));
+        return Err(refused(settings, status, &text));
     }
     let value: Value = serde_json::from_str(&text)
         .map_err(|e| AppError::new(ErrorKind::Unavailable, "The AI provider sent an unreadable reply").with_cause(e))?;
@@ -359,6 +396,25 @@ pub fn json_in(text: &str) -> Option<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shows_why_a_proxy_refused() {
+        let proxy = AiSettings { provider: "litellm".into(), ..Default::default() };
+        let denied = r#"{"error":{"message":"Authentication Error, key not allowed to access model. This key can only access models=['chat-fast']. Tried to access chat-smart","type":"auth_error","code":"401"}}"#;
+        let message = describe(&proxy, 401, denied);
+        assert!(message.contains("key not allowed to access model"), "{message}");
+        assert!(message.contains("may not use the chosen model"), "{message}");
+
+        let unknown = r#"{"error":{"message":"Authentication Error, Invalid proxy server token passed. Received API Key = sk-...abcd, Key Hash (Token) =2ab06c. Unable to find token","type":"auth_error"}}"#;
+        let message = describe(&proxy, 401, unknown);
+        assert!(message.contains("Invalid proxy server token passed"), "{message}");
+        assert!(!message.contains("sk-") && !message.contains("2ab06c"), "{message}");
+
+        let html = "<html>internal admin page</html>";
+        assert!(!describe(&proxy, 500, html).contains("internal"));
+        let openai = AiSettings { provider: "openai".into(), ..Default::default() };
+        assert!(describe(&openai, 500, html).contains("internal"));
+    }
 
     #[test]
     fn finds_json_in_prose() {
