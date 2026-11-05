@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-11-05
+
 ### Added
 
 - **Send Test Message** in Settings, SMS texts a number you enter through the saved provider, so a wrong key or sender shows up before a signer needs a code. When 46elks or Twilio refuses any message, the error now gives the provider's reason, and the server logs it.
