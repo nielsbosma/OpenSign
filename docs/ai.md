@@ -15,7 +15,7 @@ In **Settings → AI**:
 | Monthly Token Budget | Tokens per calendar month across everyone. 0 means no limit. |
 | Model | Once the provider accepts your key, a searchable list of the chat models it offers, newest first. If the list cannot be fetched, type the model name, such as `claude-sonnet-5-5`, and the field shows the provider's error. |
 
-The same page has a test button that sends a tiny request to check the provider, model and key, and shows how many tokens were used this month.
+The same page has a test button that sends a tiny request to check the provider, model and key, and shows how many tokens were used this month. When the provider refuses, the message includes its reason. A LiteLLM proxy answers HTTP 401 both for an unknown key and for a key that may not use the chosen model, so a key that lists models can still fail the test.
 
 Using the AI features needs the **ai.use** permission (admins, managers and senders).
 
