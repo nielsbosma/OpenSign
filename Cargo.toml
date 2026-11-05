@@ -27,7 +27,7 @@ opensign-db = { path = "crates/db" }
 opensign-core = { path = "crates/core" }
 opensign-pdf = { path = "crates/pdf" }
 
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 anyhow = "1"
 argon2 = { version = "0.5", features = ["std"] }
 async-trait = "0.1"
