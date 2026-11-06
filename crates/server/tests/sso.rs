@@ -18,7 +18,6 @@ use rsa::pkcs1v15::SigningKey;
 use rsa::signature::{SignatureEncoding, Signer};
 use rsa::traits::PublicKeyParts;
 use serde_json::{Value, json};
-use sha2::Sha256;
 use tower::ServiceExt;
 
 type Nonce = Arc<Mutex<String>>;
@@ -46,7 +45,8 @@ async fn provider(nonce: Nonce) -> String {
             });
             let signed =
                 format!("{}.{}", B64URL.encode(json!({ "alg": "RS256", "kid": "k1" }).to_string()), B64URL.encode(claims.to_string()));
-            let id_token = format!("{signed}.{}", B64URL.encode(SigningKey::<Sha256>::new(private).sign(signed.as_bytes()).to_bytes()));
+            let id_token =
+                format!("{signed}.{}", B64URL.encode(SigningKey::<rsa::sha2::Sha256>::new(private).sign(signed.as_bytes()).to_bytes()));
             Json(json!({ "id_token": id_token }))
         }
     };

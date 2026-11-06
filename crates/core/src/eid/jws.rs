@@ -5,11 +5,11 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64URL;
 use rsa::pkcs1v15::{Signature, VerifyingKey};
 use rsa::pkcs8::DecodePublicKey;
+use rsa::sha2::Sha256;
 use rsa::signature::Verifier;
 use rsa::{BigUint, RsaPublicKey};
 use serde::Deserialize;
 use serde_json::Value;
-use sha2::Sha256;
 use x509_cert::Certificate;
 use x509_cert::der::{DecodePem, Encode};
 

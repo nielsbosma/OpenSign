@@ -12,6 +12,7 @@ use rsa::pkcs1::DecodeRsaPublicKey;
 use rsa::traits::PublicKeyParts;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use signature::hazmat::PrehashVerifier;
+use signature_ct::hazmat::PrehashVerifier as _;
 use spki::SubjectPublicKeyInfoOwned;
 use x509_cert::Certificate;
 use x509_cert::ext::pkix::name::{DistributionPointName, GeneralName};
@@ -168,5 +169,35 @@ pub(crate) fn crl_urls(cert: &Certificate) -> Vec<String> {
             .flatten()
             .collect(),
         _ => Vec::new(),
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use der::asn1::{Any, BitString};
+    use signature_ct::Signer;
+    use signature_ct::hazmat::PrehashSigner;
+    use spki::AlgorithmIdentifierOwned;
+
+    use super::*;
+
+    /// Many CAs and time stamp authorities sign with P-384, and no fixture here covers it.
+    #[test]
+    fn verifies_p384_ecdsa() {
+        let key = p384::ecdsa::SigningKey::from_slice(&[7u8; 48]).unwrap();
+        let point = key.verifying_key().to_sec1_point(false);
+        let spki = SubjectPublicKeyInfoOwned {
+            algorithm: AlgorithmIdentifierOwned { oid: ID_EC_PUBLIC_KEY, parameters: Some(Any::encode_from(&SECP_384_R_1).unwrap()) },
+            subject_public_key: BitString::from_bytes(point.as_bytes()).unwrap(),
+        };
+        let message = b"to be signed";
+        let signature: p384::ecdsa::Signature = key.sign(message);
+        assert!(verify_signature(&spki, &ECDSA_WITH_SHA_384, None, message, signature.to_der().as_bytes()));
+        assert!(!verify_signature(&spki, &ECDSA_WITH_SHA_384, None, b"something else", signature.to_der().as_bytes()));
+        assert!(!verify_signature(&spki, &ECDSA_WITH_SHA_256, None, message, signature.to_der().as_bytes()));
+
+        let short: p384::ecdsa::Signature = key.sign_prehash(&Sha256::digest(message)).unwrap();
+        assert!(verify_signature(&spki, &ECDSA_WITH_SHA_256, None, message, short.to_der().as_bytes()));
     }
 }

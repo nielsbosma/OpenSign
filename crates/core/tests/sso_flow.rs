@@ -88,7 +88,7 @@ async fn idp() -> Arc<Idp> {
         }
         let signed = format!("{}.{}", B64URL.encode(json!({ "alg": "RS256", "kid": "k1" }).to_string()), B64URL.encode(claims.to_string()));
         let key = idp.signing_key.lock().unwrap().clone();
-        let id_token = format!("{signed}.{}", B64URL.encode(SigningKey::<Sha256>::new(key).sign(signed.as_bytes()).to_bytes()));
+        let id_token = format!("{signed}.{}", B64URL.encode(SigningKey::<rsa::sha2::Sha256>::new(key).sign(signed.as_bytes()).to_bytes()));
         (axum::http::StatusCode::OK, Json(json!({ "token_type": "Bearer", "id_token": id_token })))
     }
     let router = axum::Router::new()

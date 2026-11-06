@@ -1,5 +1,5 @@
 use chrono::{DateTime, Duration, Utc};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use opensign_crypto::KeyPurpose;
 use serde_json::{Value, json};
 use sha2::Sha256;
@@ -374,7 +374,7 @@ pub fn webhook_secret_context(id: Uuid) -> String {
 /// `t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>">`, the scheme Stripe popularised, so
 /// receivers can reject replays by checking `t`.
 pub fn webhook_signature(secret: &[u8], timestamp: i64, body: &[u8]) -> String {
-    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(secret).expect("HMAC takes any key length");
+    let mut mac = <Hmac<Sha256> as KeyInit>::new_from_slice(secret).expect("HMAC takes any key length");
     mac.update(timestamp.to_string().as_bytes());
     mac.update(b".");
     mac.update(body);

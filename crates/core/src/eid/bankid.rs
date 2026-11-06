@@ -3,7 +3,7 @@
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::Sha256;
@@ -146,7 +146,7 @@ impl BankId {
 
 /// The animated QR code's content `seconds` after the order started.
 pub fn qr_code(start_token: &str, start_secret: &str, seconds: i64) -> String {
-    let mut mac = Hmac::<Sha256>::new_from_slice(start_secret.as_bytes()).expect("HMAC takes any key length");
+    let mut mac = <Hmac<Sha256> as KeyInit>::new_from_slice(start_secret.as_bytes()).expect("HMAC takes any key length");
     mac.update(seconds.to_string().as_bytes());
     format!("bankid.{start_token}.{seconds}.{}", hex::encode(mac.finalize().into_bytes()))
 }

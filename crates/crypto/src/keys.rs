@@ -108,7 +108,7 @@ impl Keys {
         let nonce = random_bytes::<12>();
         let ct = self
             .cipher(purpose)
-            .encrypt(Nonce::from_slice(&nonce), Payload { msg: plaintext, aad: context.as_bytes() })
+            .encrypt(&Nonce::from(nonce), Payload { msg: plaintext, aad: context.as_bytes() })
             .expect("AES-GCM encryption of an in-memory buffer cannot fail");
         format!("v1.{}.{}", B64.encode(nonce), B64.encode(ct))
     }
@@ -120,11 +120,9 @@ impl Keys {
         };
         let nonce = B64.decode(nonce).map_err(|_| CryptoError::Format)?;
         let ct = B64.decode(ct).map_err(|_| CryptoError::Format)?;
-        if nonce.len() != 12 {
-            return Err(CryptoError::Format);
-        }
+        let nonce = Nonce::try_from(nonce.as_slice()).map_err(|_| CryptoError::Format)?;
         self.cipher(purpose)
-            .decrypt(Nonce::from_slice(&nonce), Payload { msg: &ct, aad: context.as_bytes() })
+            .decrypt(&nonce, Payload { msg: &ct, aad: context.as_bytes() })
             .map(Zeroizing::new)
             .map_err(|_| CryptoError::Decrypt)
     }
@@ -149,7 +147,7 @@ impl Keys {
     }
 
     pub fn mac(&self, purpose: KeyPurpose, data: &[u8]) -> [u8; 32] {
-        let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(self.key(purpose)).expect("HMAC takes any key length");
+        let mut mac = <Hmac<Sha256> as KeyInit>::new_from_slice(self.key(purpose)).expect("HMAC takes any key length");
         mac.update(data);
         mac.finalize().into_bytes().into()
     }
@@ -201,6 +199,22 @@ mod tests {
     #[test]
     fn rejects_short_secrets() {
         assert!(matches!(Keys::derive("short"), Err(CryptoError::WeakSecret)));
+    }
+
+    /// Values computed with another implementation (Python `cryptography`). Stored secrets, files
+    /// and MACs must still open after a crypto crate upgrade.
+    #[test]
+    fn matches_known_answers() {
+        let keys = Keys::derive(SECRET).unwrap();
+        assert_eq!(
+            hex::encode(keys.mac(KeyPurpose::TokenMac, b"known-answer")),
+            "6bc7ac558a598c39b9f48f9fb7384a9f76d60225c1bced786a940892e341a552"
+        );
+        let sealed = "v1.AAECAwQFBgcICQoL.UdE4gY2nSLpxCrB9wJQGF_YOuukTJk0WoWYmFA";
+        assert_eq!(keys.decrypt_str(KeyPurpose::Settings, "settings:smtp", sealed).unwrap().as_str(), "known answer");
+        let blob = hex::decode("4f534231000102030405060708090a0b3dd1ad363038f77e3913374eb5f51dd0ca87e68377bf8c83").unwrap();
+        let data_key = DataKey::from_slice(&[7u8; 32]).unwrap();
+        assert_eq!(crate::aead::open_blob(&data_key, b"file-1", &blob).unwrap(), b"%PDF-1.7");
     }
 
     #[test]
