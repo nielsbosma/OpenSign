@@ -4,9 +4,10 @@
 #     -e APP_SECRET=... -e APP_URL=https://sign.example.com ghcr.io/nielsbosma/opensign
 # ROLE=web or ROLE=worker runs only one half; the default runs both.
 
-FROM node:24-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS web
+FROM node:26-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS web
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-RUN corepack enable
+# Node 25 and later no longer ship corepack.
+RUN npm install -g corepack@0.36.0 && corepack enable
 WORKDIR /src
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY web/package.json web/
