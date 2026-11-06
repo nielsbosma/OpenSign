@@ -263,7 +263,8 @@ async fn tic_stand_in(private: rsa::RsaPrivateKey, state: Arc<Mutex<TicStandIn>>
             });
             let signed =
                 format!("{}.{}", B64URL.encode(json!({ "alg": "RS256", "kid": "k1" }).to_string()), B64URL.encode(claims.to_string()));
-            let id_token = format!("{signed}.{}", B64URL.encode(SigningKey::<Sha256>::new(private).sign(signed.as_bytes()).to_bytes()));
+            let id_token =
+                format!("{signed}.{}", B64URL.encode(SigningKey::<rsa::sha2::Sha256>::new(private).sign(signed.as_bytes()).to_bytes()));
             (axum::http::StatusCode::OK, Json(json!({ "token_type": "Bearer", "id_token": id_token, "access_token": "a" })))
         }
     };
@@ -427,7 +428,7 @@ async fn freja_results_count_only_when_freja_signed_them() {
     );
     let sign = |payload: &Value| {
         let signed = format!("{}.{}", B64URL.encode(json!({ "alg": "RS256" }).to_string()), B64URL.encode(payload.to_string()));
-        format!("{signed}.{}", B64URL.encode(SigningKey::<Sha256>::new(private.clone()).sign(signed.as_bytes()).to_bytes()))
+        format!("{signed}.{}", B64URL.encode(SigningKey::<rsa::sha2::Sha256>::new(private.clone()).sign(signed.as_bytes()).to_bytes()))
     };
     let attributes =
         json!({ "basicUserInfo": { "name": "Anna", "surname": "Andersson" }, "ssn": { "ssn": "199001010017", "country": "SE" } });

@@ -161,7 +161,7 @@ fn cose_get(value: &Value, label: i64) -> Option<&Value> {
 enum PublicKey {
     Es256(p256::ecdsa::VerifyingKey),
     EdDsa(ed25519_dalek::VerifyingKey),
-    Rs256(rsa::pkcs1v15::VerifyingKey<sha2::Sha256>),
+    Rs256(rsa::pkcs1v15::VerifyingKey<rsa::sha2::Sha256>),
 }
 
 impl PublicKey {

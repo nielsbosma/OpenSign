@@ -32,7 +32,7 @@ pub fn seal_blob(key: &DataKey, aad: &[u8], plaintext: &[u8]) -> Vec<u8> {
     let nonce = random_bytes::<12>();
     let cipher = Aes256Gcm::new_from_slice(key.as_bytes()).expect("32-byte key");
     let ct = cipher
-        .encrypt(Nonce::from_slice(&nonce), Payload { msg: plaintext, aad })
+        .encrypt(&Nonce::from(nonce), Payload { msg: plaintext, aad })
         .expect("AES-GCM encryption of an in-memory buffer cannot fail");
     let mut out = Vec::with_capacity(HEADER_LEN + ct.len());
     out.extend_from_slice(MAGIC);
@@ -46,7 +46,8 @@ pub fn open_blob(key: &DataKey, aad: &[u8], sealed: &[u8]) -> Result<Vec<u8>, Cr
         return Err(CryptoError::Format);
     }
     let cipher = Aes256Gcm::new_from_slice(key.as_bytes()).expect("32-byte key");
-    cipher.decrypt(Nonce::from_slice(&sealed[4..HEADER_LEN]), Payload { msg: &sealed[HEADER_LEN..], aad }).map_err(|_| CryptoError::Decrypt)
+    let nonce = Nonce::try_from(&sealed[4..HEADER_LEN]).map_err(|_| CryptoError::Format)?;
+    cipher.decrypt(&nonce, Payload { msg: &sealed[HEADER_LEN..], aad }).map_err(|_| CryptoError::Decrypt)
 }
 
 #[cfg(test)]

@@ -22,15 +22,17 @@ hex = { workspace = true }
 lopdf = { version = "0.46", default-features = false }
 p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
 p256-ct = { package = "p256", version = "0.14", features = ["ecdsa", "pkcs8"] }
-p384 = { version = "0.13", features = ["ecdsa"] }
+p384 = { version = "0.14", features = ["ecdsa"] }
 png = "0.17"
 qrcode = { version = "0.14", default-features = false }
 rand = { workspace = true }
 rsa = { version = "0.9", default-features = false, features = ["std", "sha2"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha1 = { workspace = true }
-sha2 = { workspace = true, features = ["oid"] }
+# Not the workspace versions: rsa 0.9, cms 0.2, x509-cert 0.2 and ecdsa 0.16 need digest 0.10. They move
+# together once rsa 0.10 and cms 0.3 are stable.
+sha1 = "0.10"
+sha2 = { version = "0.10", features = ["oid"] }
 signature = { version = "2", features = ["std"] }
 signature-ct = { package = "signature", version = "3" }
 spki = { version = "0.7", features = ["std"] }

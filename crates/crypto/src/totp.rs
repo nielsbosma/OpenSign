@@ -1,4 +1,4 @@
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha1::Sha1;
 use zeroize::Zeroizing;
 
@@ -80,7 +80,7 @@ impl Totp {
     }
 
     fn code_at_step(&self, step: i64) -> String {
-        let mut mac = <Hmac<Sha1> as Mac>::new_from_slice(&self.secret).expect("HMAC takes any key length");
+        let mut mac = <Hmac<Sha1> as KeyInit>::new_from_slice(&self.secret).expect("HMAC takes any key length");
         mac.update(&step.to_be_bytes());
         let digest = mac.finalize().into_bytes();
         let offset = (digest[19] & 0x0f) as usize;
