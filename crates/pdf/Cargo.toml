@@ -32,7 +32,7 @@ serde_json = { workspace = true }
 # Not the workspace versions: rsa 0.9, cms 0.2, x509-cert 0.2 and ecdsa 0.16 need digest 0.10. They move
 # together once rsa 0.10 and cms 0.3 are stable.
 sha1 = "0.10"
-sha2 = { version = "0.10", features = ["oid"] }
+sha2 = { version = "0.11", features = ["oid"] }
 signature = { version = "2", features = ["std"] }
 signature-ct = { package = "signature", version = "3" }
 spki = { version = "0.7", features = ["std"] }
