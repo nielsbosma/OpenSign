@@ -11,6 +11,10 @@ updates:
       cargo:
         patterns: ["*"]
         update-types: [minor, patch]
+    ignore:
+      # x509-cert 0.2 is built on spki 0.7; spki moves together with x509-cert 0.3.
+      - dependency-name: spki
+        versions: [">=0.8"]
 
   - package-ecosystem: npm
     directory: /
