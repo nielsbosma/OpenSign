@@ -3,6 +3,7 @@ import {
   ArrowUpCircle,
   BookOpen,
   Braces,
+  Bug,
   FileStack,
   FileText,
   LogOut,
@@ -15,7 +16,7 @@ import {
   Sparkles,
   Sun,
 } from 'lucide-react';
-import { useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { AssistantPanel } from '@/components/AssistantPanel';
 import { BrandLogo, useBranding } from '@/components/common';
@@ -30,6 +31,7 @@ import {
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { call, useApi } from '@/lib/api';
+import { installDiagnostics } from '@/lib/diagnostics';
 import { isRtl, t, useLanguage } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { useTheme } from '@/lib/theme';
@@ -42,8 +44,12 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
     isActive && 'bg-sidebar-accent text-sidebar-foreground',
   );
 
-function UserMenu() {
+// Loaded only when someone starts a report, so the capture code never reaches public pages.
+const BugReport = lazy(() => import('@/components/bugreport/BugReport'));
+
+function UserMenu({ onReport }: { onReport: () => void }) {
   const { user } = useSession();
+  const bugReports = useApi('bugreports.status', undefined, { staleTime: 5 * 60_000 });
   const { theme, toggle } = useTheme();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -59,7 +65,7 @@ function UserMenu() {
           <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
             {user?.name.slice(0, 1).toUpperCase()}
           </span>
-          <span className="min-w-0 flex-1">
+          <span className="min-w-0 flex-1" data-private>
             <span className="block truncate text-[13px] font-medium">{user?.name}</span>
             <span className="block truncate text-[11px] text-muted-foreground">{user?.email}</span>
           </span>
@@ -82,6 +88,11 @@ function UserMenu() {
             <Braces /> {t('API Explorer')}
           </a>
         </DropdownMenuItem>
+        {bugReports.data?.enabled && (
+          <DropdownMenuItem onSelect={onReport}>
+            <Bug /> {t('Report a Bug')}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={signOut}>
           <LogOut /> {t('Sign Out')}
@@ -101,7 +112,7 @@ function storedCollapsed() {
   }
 }
 
-function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onClose: () => void }) {
+function Sidebar({ onNavigate, onClose, onReport }: { onNavigate?: () => void; onClose: () => void; onReport: () => void }) {
   const { user, can } = useSession();
   const version = useApi('system.version', { refresh: false }, { enabled: can('settings.manage'), staleTime: 60 * 60_000 });
   const branding = useBranding();
@@ -140,7 +151,7 @@ function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onClose: ()
             <ArrowUpCircle className="size-4 text-primary" /> {t('Update to {version}', { version: version.data.latest?.version ?? '' })}
           </NavLink>
         )}
-        <UserMenu />
+        <UserMenu onReport={onReport} />
       </div>
     </div>
   );
@@ -162,20 +173,26 @@ export function AppShell() {
   const ai = useApi('ai.status', undefined, { staleTime: 5 * 60_000 });
   const assistant = !!ai.data?.configured && ai.data.canUse;
   const rtl = isRtl(useLanguage().language);
+  const [reporting, setReporting] = useState(false);
+  useEffect(installDiagnostics, []);
+  const report = () => {
+    setDrawerOpen(false);
+    setReporting(true);
+  };
 
   return (
     <div className="flex h-svh overflow-hidden">
       {docked ? (
         showSidebar && (
           <aside className="w-60 shrink-0 border-e border-sidebar-border">
-            <Sidebar onClose={() => setSidebar(true)} />
+            <Sidebar onClose={() => setSidebar(true)} onReport={report} />
           </aside>
         )
       ) : (
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
           <SheetContent side={rtl ? 'right' : 'left'} className="w-72 p-0 [&>button]:hidden">
             <SheetTitle className="sr-only">{t('Navigation')}</SheetTitle>
-            <Sidebar onNavigate={() => setDrawerOpen(false)} onClose={() => setDrawerOpen(false)} />
+            <Sidebar onNavigate={() => setDrawerOpen(false)} onClose={() => setDrawerOpen(false)} onReport={report} />
           </SheetContent>
         </Sheet>
       )}
@@ -234,6 +251,11 @@ export function AppShell() {
             <AssistantPanel onClose={() => setChatOpen(false)} />
           </SheetContent>
         </Sheet>
+      )}
+      {reporting && (
+        <Suspense fallback={null}>
+          <BugReport onClose={() => setReporting(false)} />
+        </Suspense>
       )}
     </div>
   );

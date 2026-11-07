@@ -64,7 +64,7 @@ function PageCanvas({ page, width }: { page: Page; width: number }) {
     task.promise.catch(() => {});
     return task.cancel;
   }, [page, width]);
-  return <canvas ref={ref} className="block h-full w-full" />;
+  return <canvas ref={ref} data-private className="block h-full w-full" />;
 }
 
 /** Every page at the container's width, with an overlay per page for fields. */

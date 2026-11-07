@@ -215,7 +215,9 @@ function PartyCard({
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="truncate font-medium">{party.name}</span>
+            <span className="truncate font-medium" data-private>
+              {party.name}
+            </span>
             {!editable && (
               <span
                 className={cn(
@@ -227,7 +229,7 @@ function PartyCard({
               </span>
             )}
           </div>
-          <div className="truncate text-xs text-muted-foreground">
+          <div className="truncate text-xs text-muted-foreground" data-private>
             {[party.email, party.phone, party.company].filter(Boolean).join(' · ') || t('No contact details')}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
@@ -591,7 +593,12 @@ function EditableTitle({ doc, editable }: { doc: DocumentView; editable: boolean
   const [title, setTitle] = useState(doc.title);
   const update = useApiMutation('documents.update', { invalidates: ['documents.', 'templates.versions'] });
   useEffect(() => setTitle(doc.title), [doc.title]);
-  if (!editable) return <h1 className="truncate text-xl font-semibold tracking-tight">{doc.title}</h1>;
+  if (!editable)
+    return (
+      <h1 className="truncate text-xl font-semibold tracking-tight" data-private>
+        {doc.title}
+      </h1>
+    );
   return (
     <input
       aria-label={t('Title')}

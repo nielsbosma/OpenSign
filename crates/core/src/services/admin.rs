@@ -16,8 +16,8 @@ use crate::error::{AppError, ErrorKind, Result, bad_request};
 use crate::permissions::Permission;
 use crate::service::{Access, Meta, Service};
 use crate::settings::{
-    AiSettings, AutomationSettings, EidSettings, EmailSettings, OrgSettings, RetentionSettings, SecuritySettings, SettingsGroup,
-    SigningSettings, SmsSettings, SsoSettings, public_view,
+    AiSettings, AutomationSettings, BugReportSettings, EidSettings, EmailSettings, OrgSettings, RetentionSettings, SecuritySettings,
+    SettingsGroup, SigningSettings, SmsSettings, SsoSettings, public_view,
 };
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema)]
@@ -34,6 +34,7 @@ pub enum Group {
     Eid,
     Sso,
     Automations,
+    BugReports,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -80,6 +81,7 @@ impl Service for GetSettings {
             Group::Eid => view::<EidSettings>(ctx, conn).await,
             Group::Sso => view::<SsoSettings>(ctx, conn).await,
             Group::Automations => view::<AutomationSettings>(ctx, conn).await,
+            Group::BugReports => view::<BugReportSettings>(ctx, conn).await,
         }
     }
 }
@@ -328,6 +330,13 @@ pub(crate) fn validate<G: SettingsGroup>(group: &G) -> Result<()> {
             }
             Ok(())
         }
+        "bugReports" => {
+            let reports: BugReportSettings = serde_json::from_value(value.clone()).map_err(AppError::internal)?;
+            if !crate::services::bugreports::valid_repository(&reports.repository) {
+                return Err(bad_request("Enter the repository as owner/name, such as nielsbosma/OpenSign"));
+            }
+            crate::services::bugreports::relay_base(&reports.relay_url).map(|_| ()).map_err(bad_request)
+        }
         "retention" => {
             let rules: RetentionSettings = serde_json::from_value(value.clone()).map_err(AppError::internal)?;
             if [rules.completed_days, rules.ended_days, rules.draft_days].iter().any(|d| *d > 36_500) {
@@ -411,6 +420,13 @@ impl Service for UpdateSettings {
                 update::<SsoSettings>(ctx, conn, &input.values).await
             }
             Group::Automations => update::<AutomationSettings>(ctx, conn, &input.values).await,
+            Group::BugReports => {
+                // Screenshots of people's screens go where these point, so only a person in the app moves them.
+                if !ctx.in_app() && ["repository", "relayUrl"].iter().any(|f| input.values.get(*f).is_some_and(|v| !v.is_null())) {
+                    return Err(AppError::new(ErrorKind::Forbidden, "Change where bug reports go in the app, signed in"));
+                }
+                update::<BugReportSettings>(ctx, conn, &input.values).await
+            }
         }
     }
 }

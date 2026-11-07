@@ -21,6 +21,7 @@ pub fn body_limit(name: &str) -> usize {
         "documents.upload" | "documents.replace_file" | "documents.verify" => 40 * 1024 * 1024,
         "bulk.preview" | "bulk.start" => 8 * 1024 * 1024,
         "branding.set_logo" => 4 * 1024 * 1024,
+        "bugreports.prepare" => 12 * 1024 * 1024,
         _ => DEFAULT_BODY_LIMIT,
     }
 }

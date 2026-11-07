@@ -3,6 +3,7 @@ pub mod ai;
 pub mod auth;
 pub mod automations;
 pub mod branding;
+pub mod bugreports;
 pub mod bulk;
 pub mod detect;
 pub mod docs;
@@ -214,6 +215,8 @@ pub fn registry() -> Vec<Box<dyn DynService>> {
         erase::<ai::GetUsage>(),
         erase::<docs::Search>(),
         erase::<docs::Read>(),
+        erase::<bugreports::Status>(),
+        erase::<bugreports::Prepare>(),
     ]
 }
 
@@ -247,6 +250,7 @@ mod tests {
         "api_keys.create",
         "auth.logout",
         "automations.app_logo",
+        "bugreports.prepare",
         "documents.party_identity",
         "documents.sign_in_person",
         "documents.sign_myself",

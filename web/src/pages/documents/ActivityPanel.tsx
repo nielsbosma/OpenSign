@@ -38,7 +38,7 @@ export function ActivityPanel({ document }: { document: DocumentView }) {
     <div className="grid gap-6">
       <ol className="grid gap-3 border-s ps-4">
         {timeline(document).map((e, i) => (
-          <li key={i} className="relative">
+          <li key={i} className="relative" data-private>
             <span className="absolute -start-[21px] top-1.5 size-2 rounded-full bg-primary" />
             <div>{e.text}</div>
             <div className="text-xs text-muted-foreground">{formatDateTime(e.at)}</div>
@@ -53,7 +53,7 @@ export function ActivityPanel({ document }: { document: DocumentView }) {
           ) : (
             <ul className="grid gap-2">
               {audit.data?.map((entry) => (
-                <li key={entry.id} className="rounded-md border px-3 py-2">
+                <li key={entry.id} className="rounded-md border px-3 py-2" data-private>
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-mono text-xs">{entry.action}</span>
                     <span className="text-xs text-muted-foreground">{formatDateTime(entry.occurredAt)}</span>

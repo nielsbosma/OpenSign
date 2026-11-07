@@ -267,7 +267,9 @@ export function DocumentsPage({ templates }: { templates: boolean }) {
                         </TableCell>
                       )}
                       <TableCell className="max-w-80">
-                        <div className="truncate font-medium">{doc.title}</div>
+                        <div className="truncate font-medium" data-private>
+                          {doc.title}
+                        </div>
                         {(doc.externalId || (!folderId && doc.folderId)) && (
                           <div className="truncate text-xs text-muted-foreground">
                             {doc.externalId && <span className="font-mono">{doc.externalId}</span>}

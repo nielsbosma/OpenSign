@@ -34,6 +34,7 @@ const RUNS_ON_ITS_OWN: &[&str] = &[
     "automations.status",
     "automations.tool",
     "automations.tools",
+    "bugreports.status",
     "bulk.get",
     "bulk.list",
     "docs.read",
