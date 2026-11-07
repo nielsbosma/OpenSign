@@ -15,7 +15,7 @@ Send a PDF or Word document, collect signatures with email, SMS or BankID, and g
 
 [Documentation](docs/index.md) · [Quick start](docs/quick-start.md) · [Deploy](#deploy-in-five-minutes) · [API](docs/api.md) · [Security](SECURITY.md)
 
-<a href="https://sliplane.opendeploy.cloud/?repo=https://github.com/nielsbosma/OpenSign"><img src="docs/images/deploy-to-sliplane.svg" width="900" alt="Deploy to Sliplane. Set up OpenSign on your own server, free for 48 hours."></a>
+<a href="https://sliplane.opendeploy.cloud/?repo=https://github.com/nielsbosma/OpenSign"><img src="docs/images/deploy-to-sliplane.svg" width="900" alt="Deploy OpenSign to your own server on Sliplane. Free for 48 hours, no credit card, then 28 euros a month."></a>
 
 <br>
 
