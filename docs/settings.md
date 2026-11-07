@@ -181,6 +181,16 @@ Off by default. See [Automations](automations.md#turning-it-on).
 | Turn On Automations | `OPENSIGN_AUTOMATIONS_ENABLED` | Needs the key. |
 | Composio API Key | `OPENSIGN_AUTOMATIONS_COMPOSIO_API_KEY` | Secret. Your own Composio project's key. |
 
+## Bug Reports
+
+On by default. See [Reporting a bug](bug-reports.md). Only an admin signed in to the app can change where reports go.
+
+| Field | Variable | Default |
+| --- | --- | --- |
+| Allow Bug Reports | `OPENSIGN_BUGREPORTS_ENABLED` | On. Off hides **Report a Bug** and refuses reports. |
+| Repository | `OPENSIGN_BUGREPORTS_REPOSITORY` | `nielsbosma/OpenSign`. The GitHub repository, as `owner/name`, that receives the issues. The OpenDeploy Bug Reports app must be installed there. |
+| Relay Address | `OPENSIGN_BUGREPORTS_RELAY_URL` | `https://sliplane.opendeploy.cloud`. https only. |
+
 ## Pinning settings
 
 Any field above can be pinned with its environment variable. The variable is named `OPENSIGN_<GROUP>_<FIELD>`, with the field name in upper snake case, as listed in the tables. A pinned field:

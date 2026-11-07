@@ -9,7 +9,7 @@ export type Heading = { depth: 2 | 3; text: string; id: string };
 export type SearchEntry = { slug: string; page: string; heading?: string; id?: string; text: string };
 
 const NAV: { group: string; slugs: string[] }[] = [
-  { group: msg('Getting Started'), slugs: ['index', 'quick-start', 'setup'] },
+  { group: msg('Getting Started'), slugs: ['index', 'quick-start', 'setup', 'bug-reports'] },
   {
     group: msg('Sending Documents'),
     slugs: [

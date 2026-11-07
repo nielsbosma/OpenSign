@@ -81,6 +81,7 @@ export function AuditPage() {
             {entries.map((e) => (
               <li
                 key={e.id}
+                data-private
                 className="grid gap-0.5 rounded-md border px-3 py-2 sm:grid-cols-[180px_minmax(0,1fr)_auto] sm:items-center sm:gap-3"
               >
                 <span className="text-xs text-muted-foreground">{formatDateTime(e.occurredAt)}</span>

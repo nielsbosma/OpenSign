@@ -137,7 +137,9 @@ export function WebhooksPage() {
             <li key={h.id} className="flex items-center gap-3 rounded-md border px-3 py-2">
               <StatusDot tone={!h.active ? 'off' : h.lastError ? 'error' : h.lastStatus ? 'ok' : 'off'} />
               <div className="min-w-0 flex-1">
-                <div className="truncate font-mono text-xs">{h.url}</div>
+                <div className="truncate font-mono text-xs" data-private>
+                  {h.url}
+                </div>
                 <div className="truncate text-xs text-muted-foreground">
                   {h.events.join(', ')}
                   {h.lastError ? ` · ${h.lastError}` : h.lastStatus ? ` · ${t('last {status}', { status: h.lastStatus })}` : ''}

@@ -303,7 +303,13 @@ function ApiKeys() {
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {k.allowedIps.length
-                    ? tx('from {ips}', { ips: <span className="font-mono">{k.allowedIps.join(', ')}</span> })
+                    ? tx('from {ips}', {
+                        ips: (
+                          <span className="font-mono" data-private>
+                            {k.allowedIps.join(', ')}
+                          </span>
+                        ),
+                      })
                     : t('from any IP address')}
                 </div>
               </div>

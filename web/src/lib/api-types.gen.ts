@@ -810,6 +810,68 @@ export type BrandingSetLogoInput = {
 
 export type BrandingSetLogoOutput = Branding;
 
+export type Comment = {
+  /** The element's visible text or accessible name, shortened. */
+  label?: string;
+  /** The element's tag, such as `button`. */
+  tag?: string;
+  /** What the user wrote about the element. */
+  text: string;
+};
+
+export type Screenshot = {
+  /** The image in base64, with the user's masks already burned in. */
+  data: string;
+  /** `image/png` or `image/jpeg`. */
+  type: string;
+};
+
+export type Viewport = {
+  dpr: number;
+  height: number;
+  width: number;
+};
+
+export type BugreportsPrepareInput = {
+  /** Browser name, major version and system, such as `Firefox 146 (Windows)`. */
+  browser?: string;
+  comments?: Array<Comment>;
+  /** The user ticked that the report and screenshot may be published. */
+  consent: boolean;
+  /** Recent console errors and warnings. */
+  console?: Array<string>;
+  description: string;
+  /** Titles of the dialogs that were open. */
+  dialogs?: Array<string>;
+  /** The app's language, such as `sv`. */
+  language: string;
+  /** Recent failed calls, as `service → status`. */
+  requests?: Array<string>;
+  /** The page's route pattern, such as `/documents/:id`. Never the real path. */
+  route: string;
+  screenshot?: Screenshot | null;
+  title?: string;
+  viewport?: Viewport | null;
+};
+
+export type BugreportsPrepareOutput = Prepared;
+
+export type Prepared = {
+  /** Where the user checks the report, signs in with GitHub and publishes it. Open it in a new window. */
+  continueUrl: string;
+};
+
+export type BugreportsStatusInput = Record<string, unknown>;
+
+export type BugreportsStatusOutput = StatusView2;
+
+export type StatusView2 = {
+  /** Report a Bug is offered. */
+  enabled: boolean;
+  /** The GitHub repository, as `owner/name`, that receives reports. */
+  repository: string;
+};
+
 export type BulkCancelInput = {
   id: string;
 };
@@ -1956,7 +2018,7 @@ export type SealRegenerateInput = Record<string, unknown>;
 
 export type SealRegenerateOutput = SealInfo;
 
-export type Group = "org" | "email" | "security" | "retention" | "updates" | "signing" | "ai" | "sms" | "eid" | "sso" | "automations";
+export type Group = "org" | "email" | "security" | "retention" | "updates" | "signing" | "ai" | "sms" | "eid" | "sso" | "automations" | "bug_reports";
 
 export type SettingsGetInput = {
   group: Group;
@@ -2739,6 +2801,8 @@ export interface Services {
   "branding.get": { kind: "query"; input: BrandingGetInput; output: BrandingGetOutput };
   "branding.remove_logo": { kind: "mutation"; input: BrandingRemoveLogoInput; output: BrandingRemoveLogoOutput };
   "branding.set_logo": { kind: "mutation"; input: BrandingSetLogoInput; output: BrandingSetLogoOutput };
+  "bugreports.prepare": { kind: "mutation"; input: BugreportsPrepareInput; output: BugreportsPrepareOutput };
+  "bugreports.status": { kind: "query"; input: BugreportsStatusInput; output: BugreportsStatusOutput };
   "bulk.cancel": { kind: "mutation"; input: BulkCancelInput; output: BulkCancelOutput };
   "bulk.get": { kind: "query"; input: BulkGetInput; output: BulkGetOutput };
   "bulk.list": { kind: "query"; input: BulkListInput; output: BulkListOutput };

@@ -223,6 +223,34 @@ impl SettingsGroup for UpdateSettings {
     const SECRETS: &'static [&'static str] = &["deployHookUrl"];
 }
 
+/// Report a Bug: signed-in users send a report through the relay, which opens a GitHub issue in
+/// their own name after they confirm it there.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(default, rename_all = "camelCase")]
+pub struct BugReportSettings {
+    /// Shows Report a Bug in the user menu. Off hides it and refuses reports.
+    pub enabled: bool,
+    /// The GitHub repository, as `owner/name`, that receives the issues. The relay's GitHub App
+    /// must be installed there.
+    pub repository: String,
+    /// The relay that turns a report into an issue. https only.
+    pub relay_url: String,
+}
+
+impl Default for BugReportSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            repository: crate::services::system::REPOSITORY.into(),
+            relay_url: "https://sliplane.opendeploy.cloud".into(),
+        }
+    }
+}
+
+impl SettingsGroup for BugReportSettings {
+    const NAME: &'static str = "bugReports";
+}
+
 /// How long documents are kept. 0 keeps them; documents on legal hold and templates are always kept.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default, rename_all = "camelCase")]

@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- Signed-in users can report a bug from the user menu. The report and its screenshot become a public GitHub issue in their own name, after they confirm that nothing private is on screen. Admins can switch this off or send reports to another repository under Settings › Bug Reports.
+
 ## [0.1.8] - 2026-11-05
 
 ### Added

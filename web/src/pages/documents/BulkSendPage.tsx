@@ -87,7 +87,9 @@ export function BulkSendPage() {
             {b.rows.map((r) => (
               <TableRow key={r.rowNumber}>
                 <TableCell className="tabular text-muted-foreground">{r.rowNumber}</TableCell>
-                <TableCell className="font-medium">{r.label}</TableCell>
+                <TableCell className="font-medium" data-private>
+                  {r.label}
+                </TableCell>
                 <TableCell>
                   <Badge variant={ROW_TONES[r.status] ?? 'outline'}>{ROW_LABELS[r.status] ?? r.status}</Badge>
                   {r.error && <div className="mt-1 text-xs text-destructive">{r.error}</div>}

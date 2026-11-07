@@ -57,7 +57,7 @@ Tools carry the standard hints, so clients can ask before running them:
 | Users | `users_list`, `users_invite` ↗, `users_list_invites`, `users_revoke_invite` ◆, `users_update` ◆, `users_change_email` ◆ ↗ |
 | Audit | `audit_list`, `audit_verify` |
 | Account and keys | `account_me`, `account_set_language`, `api_keys_list`, `api_keys_update`, `api_keys_revoke` ◆ |
-| Settings and system | `settings_get`, `settings_update` ◆, `settings_send_test_email` ↗, `branding_set_logo`, `branding_remove_logo` ◆, `seal_get`, `retention_preview`, `system_version`, `system_status`, `system_update` ◆ ↗ |
+| Settings and system | `settings_get`, `settings_update` ◆, `settings_send_test_email` ↗, `branding_set_logo`, `branding_remove_logo` ◆, `seal_get`, `retention_preview`, `system_version`, `system_status`, `system_update` ◆ ↗, `bugreports_status` |
 | Documentation | `docs_search`, `docs_read` |
 
 ### Settings and secrets
@@ -99,6 +99,7 @@ Some things stay in the app on purpose, because they are credentials, need the p
 | Your saved signature | Only you draw or change it, in the app. |
 | The in-app AI assistant | Agents call the tools directly. |
 | App logos for the automations settings | An image for the settings page, of no use to an agent. |
+| Reporting a bug | A screenshot of the user's screen goes public on GitHub, so only the person at the screen may send it. |
 
 Every service in OpenSign states in its definition whether it is a tool, and if not, why. A test fails when a new one makes no choice, so new features reach agents from day one.
 

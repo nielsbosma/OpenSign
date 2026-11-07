@@ -170,6 +170,35 @@ const GROUPS: Record<Group, { title: string; description: string; help?: string;
       },
     ],
   },
+  bug_reports: {
+    help: 'bug-reports',
+    title: msg('Bug Reports'),
+    description: msg(
+      'Signed-in users can report a bug from the user menu. The report becomes a public GitHub issue in their own name, after they check it and sign in with GitHub.',
+    ),
+    fields: [
+      {
+        key: 'enabled',
+        label: msg('Allow Bug Reports'),
+        type: 'bool',
+        hint: msg('Shows Report a Bug in the user menu. Off hides it and refuses reports.'),
+      },
+      {
+        key: 'repository',
+        label: msg('Repository'),
+        placeholder: 'nielsbosma/OpenSign',
+        hint: msg(
+          'The GitHub repository, as owner/name, that receives the issues. The OpenDeploy Bug Reports app must be installed there.',
+        ),
+      },
+      {
+        key: 'relayUrl',
+        label: msg('Relay Address'),
+        placeholder: 'https://sliplane.opendeploy.cloud',
+        hint: msg('The service that shows the report again, signs the user in with GitHub and opens the issue. https only.'),
+      },
+    ],
+  },
   updates: {
     title: msg('Updates'),
     description: msg('How OpenSign finds and installs new releases.'),
