@@ -35,7 +35,7 @@ sha1 = "0.10"
 sha2 = { version = "0.10", features = ["oid"] }
 signature = { version = "2", features = ["std"] }
 signature-ct = { package = "signature", version = "3" }
-spki = { version = "0.8", features = ["std"] }
+spki = { version = "0.7", features = ["std"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 x509-cert = { version = "0.2", features = ["builder", "std"] }
