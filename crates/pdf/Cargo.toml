@@ -38,7 +38,7 @@ signature-ct = { package = "signature", version = "3" }
 spki = { version = "0.7", features = ["std"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-x509-cert = { version = "0.2", features = ["builder", "std"] }
+x509-cert = { version = "0.3", features = ["builder", "std"] }
 x509-ocsp = { version = "0.2.1", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
