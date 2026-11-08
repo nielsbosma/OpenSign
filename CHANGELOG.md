@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-11-08
+
 ### Fixed
 
 - The bug icon now stays in reach over a dialog that was opened further down a long page. Before, it scrolled away with the page and could not be clicked until the dialog was closed.
