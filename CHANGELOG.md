@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Changed
+
+- The Check Your Report step of Report a Bug is wider on large screens, with the screenshot beside the text instead of above it.
+
 ## [0.1.9] - 2026-11-07
 
 ### Added

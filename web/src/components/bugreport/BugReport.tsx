@@ -617,7 +617,12 @@ function Review({ draft, onBack, onClose }: { draft: Draft; onBack: () => void; 
       aria-modal="true"
       aria-label={t('Check Your Report')}
     >
-      <div className="mx-auto my-6 grid w-full max-w-2xl gap-5 rounded-xl border bg-popover p-5 text-popover-foreground shadow-2xl">
+      <div
+        className={cn(
+          'mx-auto my-6 grid w-full gap-5 rounded-xl border bg-popover p-5 text-popover-foreground shadow-2xl',
+          sent ? 'max-w-2xl' : 'max-w-6xl',
+        )}
+      >
         {sent ? (
           <div className="grid gap-4">
             <h2 className="text-lg font-semibold">{t('Finish in the New Window')}</h2>
@@ -646,139 +651,143 @@ function Review({ draft, onBack, onClose }: { draft: Draft; onBack: () => void; 
               </p>
             </div>
 
-            {shot ? (
-              <figure className="grid gap-2">
-                <img src={shot.url} alt={t('The screenshot that will be published')} className="w-full rounded-md border" />
-                <div className="flex justify-end">
-                  <Button variant="outline" size="sm" onClick={() => setShot(null)}>
-                    {t('Leave Out the Screenshot')}
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
+              {shot ? (
+                <figure className="grid gap-2 lg:sticky lg:top-4">
+                  <img src={shot.url} alt={t('The screenshot that will be published')} className="w-full rounded-md border" />
+                  <div className="flex justify-end">
+                    <Button variant="outline" size="sm" onClick={() => setShot(null)}>
+                      {t('Leave Out the Screenshot')}
+                    </Button>
+                  </div>
+                </figure>
+              ) : (
+                <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">{t('No Screenshot')}</div>
+              )}
+
+              <div className="grid gap-5">
+                <div className="grid gap-2">
+                  <Input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder={t('Title (optional)')}
+                    maxLength={120}
+                    aria-label={t('Title')}
+                  />
+                  <Textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={4}
+                    maxLength={10_000}
+                    aria-label={t('Description')}
+                  />
+                </div>
+
+                {notes.length > 0 && (
+                  <section className="grid gap-2">
+                    <h3 className="text-sm font-medium">{t('Comments on the Page')}</h3>
+                    <ol className="grid gap-1.5">
+                      {notes.map((n, i) => (
+                        <li key={n.id} className="flex items-center gap-2">
+                          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[10px] font-semibold text-white">
+                            {i + 1}
+                          </span>
+                          <Input
+                            value={n.text}
+                            maxLength={500}
+                            onChange={(e) => setNotes((list) => list.map((x) => (x.id === n.id ? { ...x, text: e.target.value } : x)))}
+                            aria-label={t('Comment {number}', { number: i + 1 })}
+                          />
+                          <Input
+                            value={n.label}
+                            maxLength={120}
+                            className="w-40 font-mono text-xs"
+                            onChange={(e) => setNotes((list) => list.map((x) => (x.id === n.id ? { ...x, label: e.target.value } : x)))}
+                            aria-label={t('Element')}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => setNotes((list) => list.filter((x) => x.id !== n.id))}
+                            aria-label={t('Remove comment {number}', { number: i + 1 })}
+                          >
+                            <X />
+                          </Button>
+                        </li>
+                      ))}
+                    </ol>
+                  </section>
+                )}
+
+                <section className="grid gap-2">
+                  <h3 className="text-sm font-medium">{t('Technical Details')}</h3>
+                  <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-sm">
+                    <dt className="text-muted-foreground">OpenSign</dt>
+                    <dd className="font-mono text-xs leading-5">{user?.version}</dd>
+                    <dt className="text-muted-foreground">{t('Page')}</dt>
+                    <dd className="font-mono text-xs leading-5">{draft.route}</dd>
+                    <dt className="text-muted-foreground">{t('Browser')}</dt>
+                    <dd>{browser}</dd>
+                    <dt className="text-muted-foreground">{t('Window Size')}</dt>
+                    <dd className="tabular-nums">
+                      {viewport.width}×{viewport.height} @{viewport.dpr}x
+                    </dd>
+                    <dt className="text-muted-foreground">{t('Language')}</dt>
+                    <dd>{language}</dd>
+                  </dl>
+                  {(Object.keys(GROUPS) as Line['group'][]).map((group) => {
+                    const items = lines.filter((l) => l.group === group);
+                    if (!items.length) return null;
+                    return (
+                      <div key={group} className="grid gap-1">
+                        <h4 className="text-xs font-medium text-muted-foreground">{t(GROUPS[group])}</h4>
+                        {items.map((l) => (
+                          <div key={l.id} className="flex items-center gap-2">
+                            <Input
+                              value={l.text}
+                              maxLength={500}
+                              className="font-mono text-xs"
+                              onChange={(e) => setLines((list) => list.map((x) => (x.id === l.id ? { ...x, text: e.target.value } : x)))}
+                              aria-label={t(GROUPS[group])}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => setLines((list) => list.filter((x) => x.id !== l.id))}
+                              aria-label={t('Remove Line')}
+                            >
+                              <X />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </section>
+
+                <section className="grid gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
+                  <h3 className="font-medium">{t('Your report will be public')}</h3>
+                  <label className="flex items-start gap-2.5 text-sm">
+                    <Checkbox className="mt-0.5" checked={consent} onCheckedChange={(v) => setConsent(v === true)} />
+                    <span>
+                      {t(
+                        'I understand that this report and its screenshot will be published on GitHub, where anyone can see them, and that copies may stay visible even after they are deleted. I have checked that nothing private is on screen: no names, email addresses, document contents or other personal or confidential information.',
+                      )}
+                    </span>
+                  </label>
+                </section>
+
+                {problem && <p className="text-sm text-destructive">{problem}</p>}
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" onClick={onBack} disabled={sending}>
+                    {t('Back')}
+                  </Button>
+                  <Button className="ms-auto" onClick={send} disabled={!consent || !description.trim() || sending}>
+                    {sending && <Loader2 className="animate-spin" />}
+                    {t('Continue on GitHub')}
                   </Button>
                 </div>
-              </figure>
-            ) : (
-              <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">{t('No Screenshot')}</div>
-            )}
-
-            <div className="grid gap-2">
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={t('Title (optional)')}
-                maxLength={120}
-                aria-label={t('Title')}
-              />
-              <Textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={4}
-                maxLength={10_000}
-                aria-label={t('Description')}
-              />
-            </div>
-
-            {notes.length > 0 && (
-              <section className="grid gap-2">
-                <h3 className="text-sm font-medium">{t('Comments on the Page')}</h3>
-                <ol className="grid gap-1.5">
-                  {notes.map((n, i) => (
-                    <li key={n.id} className="flex items-center gap-2">
-                      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[10px] font-semibold text-white">
-                        {i + 1}
-                      </span>
-                      <Input
-                        value={n.text}
-                        maxLength={500}
-                        onChange={(e) => setNotes((list) => list.map((x) => (x.id === n.id ? { ...x, text: e.target.value } : x)))}
-                        aria-label={t('Comment {number}', { number: i + 1 })}
-                      />
-                      <Input
-                        value={n.label}
-                        maxLength={120}
-                        className="w-40 font-mono text-xs"
-                        onChange={(e) => setNotes((list) => list.map((x) => (x.id === n.id ? { ...x, label: e.target.value } : x)))}
-                        aria-label={t('Element')}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setNotes((list) => list.filter((x) => x.id !== n.id))}
-                        aria-label={t('Remove comment {number}', { number: i + 1 })}
-                      >
-                        <X />
-                      </Button>
-                    </li>
-                  ))}
-                </ol>
-              </section>
-            )}
-
-            <section className="grid gap-2">
-              <h3 className="text-sm font-medium">{t('Technical Details')}</h3>
-              <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-sm">
-                <dt className="text-muted-foreground">OpenSign</dt>
-                <dd className="font-mono text-xs leading-5">{user?.version}</dd>
-                <dt className="text-muted-foreground">{t('Page')}</dt>
-                <dd className="font-mono text-xs leading-5">{draft.route}</dd>
-                <dt className="text-muted-foreground">{t('Browser')}</dt>
-                <dd>{browser}</dd>
-                <dt className="text-muted-foreground">{t('Window Size')}</dt>
-                <dd className="tabular-nums">
-                  {viewport.width}×{viewport.height} @{viewport.dpr}x
-                </dd>
-                <dt className="text-muted-foreground">{t('Language')}</dt>
-                <dd>{language}</dd>
-              </dl>
-              {(Object.keys(GROUPS) as Line['group'][]).map((group) => {
-                const items = lines.filter((l) => l.group === group);
-                if (!items.length) return null;
-                return (
-                  <div key={group} className="grid gap-1">
-                    <h4 className="text-xs font-medium text-muted-foreground">{t(GROUPS[group])}</h4>
-                    {items.map((l) => (
-                      <div key={l.id} className="flex items-center gap-2">
-                        <Input
-                          value={l.text}
-                          maxLength={500}
-                          className="font-mono text-xs"
-                          onChange={(e) => setLines((list) => list.map((x) => (x.id === l.id ? { ...x, text: e.target.value } : x)))}
-                          aria-label={t(GROUPS[group])}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setLines((list) => list.filter((x) => x.id !== l.id))}
-                          aria-label={t('Remove Line')}
-                        >
-                          <X />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-            </section>
-
-            <section className="grid gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
-              <h3 className="font-medium">{t('Your report will be public')}</h3>
-              <label className="flex items-start gap-2.5 text-sm">
-                <Checkbox className="mt-0.5" checked={consent} onCheckedChange={(v) => setConsent(v === true)} />
-                <span>
-                  {t(
-                    'I understand that this report and its screenshot will be published on GitHub, where anyone can see them, and that copies may stay visible even after they are deleted. I have checked that nothing private is on screen: no names, email addresses, document contents or other personal or confidential information.',
-                  )}
-                </span>
-              </label>
-            </section>
-
-            {problem && <p className="text-sm text-destructive">{problem}</p>}
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" onClick={onBack} disabled={sending}>
-                {t('Back')}
-              </Button>
-              <Button className="ms-auto" onClick={send} disabled={!consent || !description.trim() || sending}>
-                {sending && <Loader2 className="animate-spin" />}
-                {t('Continue on GitHub')}
-              </Button>
+              </div>
             </div>
           </>
         )}
