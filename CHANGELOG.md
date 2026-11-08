@@ -4,6 +4,14 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Changed
+
+- Report a Bug moved from the user menu to a bug icon in the top corner of the page. It stays clickable while a dialog is open, so a problem inside a dialog can be reported with the dialog in the screenshot.
+
+### Fixed
+
+- The comment box in Report a Bug no longer spills its text field and buttons outside the box when the marked element has a long label.
+
 ## [0.1.10] - 2026-11-08
 
 ### Changed

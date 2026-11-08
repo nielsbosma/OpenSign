@@ -1689,7 +1689,7 @@
   "Bug Reports": "ত্রুটির রিপোর্ট",
   "Signed-in users can report a bug from the user menu. The report becomes a public GitHub issue in their own name, after they check it and sign in with GitHub.": "সাইন ইন করা ব্যবহারকারীরা ব্যবহারকারী মেনু থেকে ত্রুটি জানাতে পারেন। তাঁরা রিপোর্টটি যাচাই করে GitHub দিয়ে সাইন ইন করার পর এটি তাঁদের নিজের নামে একটি সর্বজনীন GitHub issue হয়ে যায়।",
   "Allow Bug Reports": "ত্রুটির রিপোর্টের অনুমতি দিন",
-  "Shows Report a Bug in the user menu. Off hides it and refuses reports.": "ব্যবহারকারী মেনুতে “ত্রুটি জানান” দেখায়। বন্ধ থাকলে এটি লুকানো থাকে এবং রিপোর্ট প্রত্যাখ্যান করা হয়।",
+  "Shows the Report a Bug button in the top bar. Off hides it and refuses reports.": "উপরের বারে “ত্রুটি জানান” বোতাম দেখায়। বন্ধ থাকলে এটি লুকানো থাকে এবং রিপোর্ট প্রত্যাখ্যান করা হয়।",
   "Repository": "রিপোজিটরি",
   "The GitHub repository, as owner/name, that receives the issues. The OpenDeploy Bug Reports app must be installed there.": "যে GitHub রিপোজিটরি, owner/name আকারে, issue গ্রহণ করে। সেখানে OpenDeploy Bug Reports অ্যাপটি ইনস্টল করা থাকতে হবে।",
   "Relay Address": "রিলে ঠিকানা",

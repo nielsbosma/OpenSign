@@ -4,7 +4,7 @@ Encontrou algo que não funciona? Relate de dentro do OpenSign. O seu relato vir
 
 ## Como relatar
 
-1. Abra o menu abaixo do seu nome, na parte de baixo da barra lateral, e escolha **Relatar um erro**.
+1. Clique no ícone de inseto, **Relatar um erro**, no canto superior da página, ao lado do assistente. Ele continua clicável com uma caixa de diálogo aberta, então você também pode relatar um problema dentro dela.
 2. Um painel se abre na parte de baixo da página. Escolha uma ferramenta:
    - **Comentário**: clique em um elemento, diga o que há de errado com ele e pressione Enter. Ele ganha uma caixa numerada.
    - **Ocultar**: arraste sobre qualquer coisa privada para cobri-la de preto.

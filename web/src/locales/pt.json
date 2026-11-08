@@ -1689,7 +1689,7 @@
   "Bug Reports": "Relatos de erros",
   "Signed-in users can report a bug from the user menu. The report becomes a public GitHub issue in their own name, after they check it and sign in with GitHub.": "Usuários conectados podem relatar um erro pelo menu do usuário. O relato se torna uma issue pública no GitHub em nome deles, depois que eles o conferem e entram com o GitHub.",
   "Allow Bug Reports": "Permitir relatos de erros",
-  "Shows Report a Bug in the user menu. Off hides it and refuses reports.": "Mostra Relatar um erro no menu do usuário. Desativado, oculta a opção e recusa relatos.",
+  "Shows the Report a Bug button in the top bar. Off hides it and refuses reports.": "Mostra o botão Relatar um erro na barra superior. Desativado, oculta o botão e recusa relatos.",
   "Repository": "Repositório",
   "The GitHub repository, as owner/name, that receives the issues. The OpenDeploy Bug Reports app must be installed there.": "O repositório do GitHub, como owner/name, que recebe as issues. O app OpenDeploy Bug Reports precisa estar instalado nele.",
   "Relay Address": "Endereço de retransmissão",

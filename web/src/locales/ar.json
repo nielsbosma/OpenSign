@@ -1689,7 +1689,7 @@
   "Bug Reports": "بلاغات الأخطاء",
   "Signed-in users can report a bug from the user menu. The report becomes a public GitHub issue in their own name, after they check it and sign in with GitHub.": "يمكن للمستخدمين الذين سجّلوا الدخول الإبلاغ عن خطأ من قائمة المستخدم. يصبح البلاغ مشكلة (issue) علنية على GitHub باسمهم، بعد أن يتحققوا منه ويسجّلوا الدخول باستخدام GitHub.",
   "Allow Bug Reports": "السماح ببلاغات الأخطاء",
-  "Shows Report a Bug in the user menu. Off hides it and refuses reports.": "يعرض «الإبلاغ عن خطأ» في قائمة المستخدم. عند إيقافه يُخفى ويُرفض أي بلاغ.",
+  "Shows the Report a Bug button in the top bar. Off hides it and refuses reports.": "يعرض زر «الإبلاغ عن خطأ» في الشريط العلوي. عند إيقافه يُخفى الزر وتُرفض البلاغات.",
   "Repository": "المستودع",
   "The GitHub repository, as owner/name, that receives the issues. The OpenDeploy Bug Reports app must be installed there.": "مستودع GitHub، بصيغة owner/name، الذي يستقبل البلاغات. يجب تثبيت تطبيق OpenDeploy Bug Reports فيه.",
   "Relay Address": "عنوان الترحيل",

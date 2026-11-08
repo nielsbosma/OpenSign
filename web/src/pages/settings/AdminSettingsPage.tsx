@@ -181,7 +181,7 @@ const GROUPS: Record<Group, { title: string; description: string; help?: string;
         key: 'enabled',
         label: msg('Allow Bug Reports'),
         type: 'bool',
-        hint: msg('Shows Report a Bug in the user menu. Off hides it and refuses reports.'),
+        hint: msg('Shows the Report a Bug button in the top bar. Off hides it and refuses reports.'),
       },
       {
         key: 'repository',

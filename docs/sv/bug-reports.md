@@ -4,7 +4,7 @@ Hittat något som inte fungerar? Rapportera det inifrån OpenSign. Din rapport b
 
 ## Så rapporterar du
 
-1. Öppna menyn under ditt namn, längst ned i sidofältet, och välj **Rapportera ett fel**.
+1. Klicka på buggikonen, **Rapportera ett fel**, i det övre hörnet av sidan, bredvid assistenten. Den går att klicka på även när en dialogruta är öppen, så du kan rapportera ett fel inne i dialogrutan också.
 2. En panel öppnas längst ned på sidan. Välj ett verktyg:
    - **Kommentar**: klicka på ett element, skriv vad som är fel med det och tryck på Enter. Det får en numrerad ruta.
    - **Dölj**: dra över allt privat för att svärta det.
