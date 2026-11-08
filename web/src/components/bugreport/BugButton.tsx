@@ -6,6 +6,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { t } from '@/lib/i18n';
 import { useIsolatedRoot } from './isolate';
 
+/** Where the top bar's buttons sit when the page is not scrolled (top-2.5). */
+const TOP = 10;
+
 /** True while a modal (dialog, sheet, menu) has made the rest of the page unclickable. */
 function isPageBlocked(): boolean {
   return getComputedStyle(document.body).pointerEvents === 'none';
@@ -62,7 +65,8 @@ function AboveModals({ target, onClick }: { target: RefObject<HTMLButtonElement 
       size="icon"
       data-bugreport-chrome=""
       className="pointer-events-auto fixed text-muted-foreground shadow-md"
-      style={{ top: rect.top, left: rect.left, width: rect.width, height: rect.height }}
+      // The top bar scrolls with the page; when it has scrolled away, the copy stays in the top corner.
+      style={{ top: Math.max(rect.top, TOP), left: rect.left, width: rect.width, height: rect.height }}
       onClick={onClick}
       aria-label={t('Report a Bug')}
       title={t('Report a Bug')}
