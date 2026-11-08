@@ -518,7 +518,7 @@ function NoteEditor({ number, note, rect, onSave }: { number: number; note: Note
   return (
     <div
       {...chrome}
-      className="pointer-events-auto fixed grid gap-2 rounded-lg border bg-popover p-2.5 text-popover-foreground shadow-xl"
+      className="pointer-events-auto fixed grid grid-cols-1 gap-2 rounded-lg border bg-popover p-2.5 text-popover-foreground shadow-xl"
       style={{ top, left, width }}
     >
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
