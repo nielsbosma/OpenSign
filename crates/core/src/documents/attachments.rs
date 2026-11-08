@@ -274,7 +274,7 @@ fn decode_rgba(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
             return Err(bad_request("The image is too large"));
         }
         let mut reader = decoder.read_info().map_err(|_| unreadable())?;
-        let mut buf = vec![0; reader.output_buffer_size()];
+        let mut buf = vec![0; reader.output_buffer_size().ok_or_else(unreadable)?];
         let frame = reader.next_frame(&mut buf).map_err(|_| unreadable())?;
         let data = &buf[..frame.buffer_size()];
         let rgba = match frame.color_type {

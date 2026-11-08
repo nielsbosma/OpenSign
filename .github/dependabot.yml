@@ -12,9 +12,12 @@ updates:
         patterns: ["*"]
         update-types: [minor, patch]
     ignore:
-      # x509-cert 0.2 is built on spki 0.7; spki moves together with x509-cert 0.3.
+      # The PDF crate's x509-cert 0.2 and cms 0.2 are built on spki 0.7; they move together once cms 0.3 is stable.
       - dependency-name: spki
         versions: [">=0.8"]
+      # 0.3 and later need cms 0.3 and pkcs12 0.2, still pre-releases. Move with the PDF crate's cms stack.
+      - dependency-name: p12-keystore
+        versions: [">=0.3"]
 
   - package-ecosystem: npm
     directory: /
