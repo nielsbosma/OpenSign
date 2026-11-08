@@ -1689,7 +1689,7 @@
   "Bug Reports": "Informes de errores",
   "Signed-in users can report a bug from the user menu. The report becomes a public GitHub issue in their own name, after they check it and sign in with GitHub.": "Los usuarios con sesión iniciada pueden informar de un error desde el menú de usuario. El informe se convierte en una incidencia pública de GitHub a su nombre, después de que lo revisen e inicien sesión con GitHub.",
   "Allow Bug Reports": "Permitir informes de errores",
-  "Shows Report a Bug in the user menu. Off hides it and refuses reports.": "Muestra Informar de un error en el menú de usuario. Si está desactivado, lo oculta y rechaza los informes.",
+  "Shows the Report a Bug button in the top bar. Off hides it and refuses reports.": "Muestra el botón Informar de un error en la barra superior. Si está desactivado, lo oculta y rechaza los informes.",
   "Repository": "Repositorio",
   "The GitHub repository, as owner/name, that receives the issues. The OpenDeploy Bug Reports app must be installed there.": "El repositorio de GitHub, como owner/name, que recibe las incidencias. La aplicación OpenDeploy Bug Reports debe estar instalada en él.",
   "Relay Address": "Dirección del relé",

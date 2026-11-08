@@ -4,7 +4,7 @@ Found something that does not work? Report it from inside OpenSign. Your report 
 
 ## How to report
 
-1. Open the menu under your name, at the bottom of the sidebar, and choose **Report a Bug**.
+1. Click the bug icon, **Report a Bug**, in the top corner of the page, beside the assistant. It stays clickable while a dialog is open, so you can report a problem inside the dialog too.
 2. A panel opens at the bottom of the page. Pick a tool:
    - **Comment**: click an element, say what is wrong with it, and press Enter. It gets a numbered box.
    - **Hide**: drag over anything private to black it out.

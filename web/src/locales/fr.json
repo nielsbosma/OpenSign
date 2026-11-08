@@ -1689,7 +1689,7 @@
   "Bug Reports": "Rapports de bugs",
   "Signed-in users can report a bug from the user menu. The report becomes a public GitHub issue in their own name, after they check it and sign in with GitHub.": "Les utilisateurs connectés peuvent signaler un bug depuis le menu utilisateur. Le rapport devient un ticket GitHub public à leur nom, après qu’ils l’ont vérifié et se sont connectés avec GitHub.",
   "Allow Bug Reports": "Autoriser les rapports de bugs",
-  "Shows Report a Bug in the user menu. Off hides it and refuses reports.": "Affiche Signaler un bug dans le menu utilisateur. Désactivé, l’entrée est masquée et les rapports sont refusés.",
+  "Shows the Report a Bug button in the top bar. Off hides it and refuses reports.": "Affiche le bouton Signaler un bug dans la barre du haut. Désactivé, le bouton est masqué et les rapports sont refusés.",
   "Repository": "Dépôt",
   "The GitHub repository, as owner/name, that receives the issues. The OpenDeploy Bug Reports app must be installed there.": "Le dépôt GitHub, au format owner/name, qui reçoit les tickets. L’application OpenDeploy Bug Reports doit y être installée.",
   "Relay Address": "Adresse du relais",

@@ -4,7 +4,7 @@
 
 ## Cómo informar
 
-1. Abra el menú bajo su nombre, al pie de la barra lateral, y elija **Informar de un error**.
+1. Haga clic en el icono del insecto, **Informar de un error**, en la esquina superior de la página, junto al asistente. Sigue funcionando cuando hay un cuadro de diálogo abierto, así que también puede informar de un problema dentro del cuadro de diálogo.
 2. Se abre un panel en la parte inferior de la página. Elija una herramienta:
    - **Comentario**: haga clic en un elemento, diga qué tiene de malo y pulse Intro. Recibe un recuadro numerado.
    - **Ocultar**: arrastre sobre cualquier dato privado para taparlo en negro.

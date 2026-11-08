@@ -3,7 +3,6 @@ import {
   ArrowUpCircle,
   BookOpen,
   Braces,
-  Bug,
   FileStack,
   FileText,
   LogOut,
@@ -19,6 +18,7 @@ import {
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { AssistantPanel } from '@/components/AssistantPanel';
+import { BugButton } from '@/components/bugreport/BugButton';
 import { BrandLogo, useBranding } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import {
@@ -47,9 +47,8 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
 // Loaded only when someone starts a report, so the capture code never reaches public pages.
 const BugReport = lazy(() => import('@/components/bugreport/BugReport'));
 
-function UserMenu({ onReport }: { onReport: () => void }) {
+function UserMenu() {
   const { user } = useSession();
-  const bugReports = useApi('bugreports.status', undefined, { staleTime: 5 * 60_000 });
   const { theme, toggle } = useTheme();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -88,11 +87,6 @@ function UserMenu({ onReport }: { onReport: () => void }) {
             <Braces /> {t('API Explorer')}
           </a>
         </DropdownMenuItem>
-        {bugReports.data?.enabled && (
-          <DropdownMenuItem onSelect={onReport}>
-            <Bug /> {t('Report a Bug')}
-          </DropdownMenuItem>
-        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={signOut}>
           <LogOut /> {t('Sign Out')}
@@ -112,7 +106,7 @@ function storedCollapsed() {
   }
 }
 
-function Sidebar({ onNavigate, onClose, onReport }: { onNavigate?: () => void; onClose: () => void; onReport: () => void }) {
+function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onClose: () => void }) {
   const { user, can } = useSession();
   const version = useApi('system.version', { refresh: false }, { enabled: can('settings.manage'), staleTime: 60 * 60_000 });
   const branding = useBranding();
@@ -151,7 +145,7 @@ function Sidebar({ onNavigate, onClose, onReport }: { onNavigate?: () => void; o
             <ArrowUpCircle className="size-4 text-primary" /> {t('Update to {version}', { version: version.data.latest?.version ?? '' })}
           </NavLink>
         )}
-        <UserMenu onReport={onReport} />
+        <UserMenu />
       </div>
     </div>
   );
@@ -173,8 +167,11 @@ export function AppShell() {
   const ai = useApi('ai.status', undefined, { staleTime: 5 * 60_000 });
   const assistant = !!ai.data?.configured && ai.data.canUse;
   const rtl = isRtl(useLanguage().language);
+  const bugReports = useApi('bugreports.status', undefined, { staleTime: 5 * 60_000 });
   const [reporting, setReporting] = useState(false);
   useEffect(installDiagnostics, []);
+  const canReport = !!bugReports.data?.enabled;
+  const showAssistant = assistant && !chatOpen;
   const report = () => {
     setDrawerOpen(false);
     setReporting(true);
@@ -185,14 +182,14 @@ export function AppShell() {
       {docked ? (
         showSidebar && (
           <aside className="w-60 shrink-0 border-e border-sidebar-border">
-            <Sidebar onClose={() => setSidebar(true)} onReport={report} />
+            <Sidebar onClose={() => setSidebar(true)} />
           </aside>
         )
       ) : (
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
           <SheetContent side={rtl ? 'right' : 'left'} className="w-72 p-0 [&>button]:hidden">
             <SheetTitle className="sr-only">{t('Navigation')}</SheetTitle>
-            <Sidebar onNavigate={() => setDrawerOpen(false)} onClose={() => setDrawerOpen(false)} onReport={report} />
+            <Sidebar onNavigate={() => setDrawerOpen(false)} onClose={() => setDrawerOpen(false)} />
           </SheetContent>
         </Sheet>
       )}
@@ -211,27 +208,31 @@ export function AppShell() {
             </Button>
           </div>
         )}
-        {assistant && !chatOpen && (
-          <div className="absolute end-3 top-2.5 z-10">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setChatOpen(true)}
-                  aria-label={t('Assistant')}
-                  className="text-muted-foreground"
-                >
-                  <Sparkles />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t('Assistant')}</TooltipContent>
-            </Tooltip>
+        {(canReport || showAssistant) && (
+          <div className="absolute end-3 top-2.5 z-10 flex items-center gap-1">
+            {canReport && <BugButton active={reporting} onClick={report} />}
+            {showAssistant && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setChatOpen(true)}
+                    aria-label={t('Assistant')}
+                    className="text-muted-foreground"
+                  >
+                    <Sparkles />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t('Assistant')}</TooltipContent>
+              </Tooltip>
+            )}
           </div>
         )}
         <div
           className={cn(
-            'mx-auto w-full max-w-6xl pt-6 pb-10 lg:pt-10 pe-14 sm:pe-16',
+            'mx-auto w-full max-w-6xl pt-6 pb-10 lg:pt-10',
+            canReport && showAssistant ? 'pe-24 sm:pe-[6.5rem]' : 'pe-14 sm:pe-16',
             showSidebar ? 'ps-4 sm:ps-6 lg:ps-8' : 'ps-14 sm:ps-16',
           )}
         >

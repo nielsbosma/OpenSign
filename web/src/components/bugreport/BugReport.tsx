@@ -12,33 +12,10 @@ import { diagnostics } from '@/lib/diagnostics';
 import { msg, t, useLanguage } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
+import { useIsolatedRoot } from './isolate';
 import { type Box, browserName, clip, isPrivate, openDialogTitles, privateBoxes, routePattern, scrub } from './report';
 
-/*
- * The report tools live in their own element at the end of <body>, above everything, and stop their
- * events there. Radix dialogs and menus listen on `document` to close on outside clicks, trap focus
- * and lock scrolling; with the events stopped at this root they never notice, so the tools work on
- * top of an open dialog.
- */
 const ROOT_ID = 'opensign-bugreport-root';
-const ISOLATED_EVENTS = [
-  'pointerdown',
-  'pointerup',
-  'mousedown',
-  'mouseup',
-  'click',
-  'dblclick',
-  'contextmenu',
-  'touchstart',
-  'touchend',
-  'touchmove',
-  'wheel',
-  'focusin',
-  'keydown',
-  'keyup',
-  'keypress',
-  'input',
-] as const;
 /** Left out of the screenshot. */
 const CHROME = 'data-bugreport-chrome';
 const chrome = { [CHROME]: '' };
@@ -49,40 +26,6 @@ type Mode = 'comment' | 'hide' | 'paused';
 type Note = { id: number; el: Element; text: string; label: string; tag: string };
 type Shot = { type: 'image/png' | 'image/jpeg'; data: string; url: string };
 type Line = { id: number; group: 'dialogs' | 'console' | 'requests'; text: string };
-
-function useRoot(): HTMLElement | null {
-  const [root, setRoot] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    let el = document.getElementById(ROOT_ID);
-    if (!el) {
-      el = document.createElement('div');
-      el.id = ROOT_ID;
-      Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483000', pointerEvents: 'none' });
-      document.body.appendChild(el);
-    }
-    const root = el;
-    const stop = (e: Event) => e.stopPropagation();
-    for (const type of ISOLATED_EVENTS) root.addEventListener(type, stop);
-    // A focus trap pulls focus back when it leaves the dialog; that focusout starts inside the dialog, so it is caught on the way down.
-    const keepFocus = (e: FocusEvent) => {
-      if (e.relatedTarget instanceof Node && root.contains(e.relatedTarget)) e.stopImmediatePropagation();
-    };
-    window.addEventListener('focusout', keepFocus, true);
-    // Modals hide everything else from screen readers; the report tools stay reachable.
-    const unhide = new MutationObserver(() => {
-      if (root.hasAttribute('aria-hidden')) root.removeAttribute('aria-hidden');
-    });
-    unhide.observe(root, { attributes: true, attributeFilter: ['aria-hidden'] });
-    setRoot(root);
-    return () => {
-      for (const type of ISOLATED_EVENTS) root.removeEventListener(type, stop);
-      window.removeEventListener('focusout', keepFocus, true);
-      unhide.disconnect();
-      root.remove();
-    };
-  }, []);
-  return root;
-}
 
 const INTERACTIVE = 'button, a[href], [role="button"], [role="menuitem"], [role="tab"], [role="option"], input, select, textarea, label';
 
@@ -181,7 +124,7 @@ type Draft = {
 
 /** Report a Bug: mark the page, review exactly what is sent, then finish on the relay in a new window. */
 export default function BugReport({ onClose }: { onClose: () => void }) {
-  const root = useRoot();
+  const root = useIsolatedRoot(ROOT_ID);
   const [draft, setDraft] = useState<Draft | null>(null);
   if (!root) return null;
   // The marking stays mounted under the review, so Back returns to the same comments and boxes.
@@ -518,7 +461,7 @@ function NoteEditor({ number, note, rect, onSave }: { number: number; note: Note
   return (
     <div
       {...chrome}
-      className="pointer-events-auto fixed grid gap-2 rounded-lg border bg-popover p-2.5 text-popover-foreground shadow-xl"
+      className="pointer-events-auto fixed grid grid-cols-1 gap-2 rounded-lg border bg-popover p-2.5 text-popover-foreground shadow-xl"
       style={{ top, left, width }}
     >
       <div className="flex items-center gap-2 text-xs text-muted-foreground">

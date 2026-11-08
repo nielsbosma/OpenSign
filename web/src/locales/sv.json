@@ -1689,7 +1689,7 @@
   "Bug Reports": "Felrapporter",
   "Signed-in users can report a bug from the user menu. The report becomes a public GitHub issue in their own name, after they check it and sign in with GitHub.": "Inloggade användare kan rapportera ett fel från användarmenyn. Rapporten blir ett offentligt GitHub-ärende i deras eget namn, efter att de kontrollerat den och loggat in med GitHub.",
   "Allow Bug Reports": "Tillåt felrapporter",
-  "Shows Report a Bug in the user menu. Off hides it and refuses reports.": "Visar Rapportera ett fel i användarmenyn. Av döljer den och avvisar rapporter.",
+  "Shows the Report a Bug button in the top bar. Off hides it and refuses reports.": "Visar knappen Rapportera ett fel i fältet högst upp. Av döljer den och avvisar rapporter.",
   "Repository": "Repository",
   "The GitHub repository, as owner/name, that receives the issues. The OpenDeploy Bug Reports app must be installed there.": "GitHub-repositoryt, som owner/name, som tar emot ärendena. Appen OpenDeploy Bug Reports måste vara installerad där.",
   "Relay Address": "Reläadress",

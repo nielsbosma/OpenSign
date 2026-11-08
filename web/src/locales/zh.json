@@ -1689,7 +1689,7 @@
   "Bug Reports": "错误报告",
   "Signed-in users can report a bug from the user menu. The report becomes a public GitHub issue in their own name, after they check it and sign in with GitHub.": "已登录的用户可以从用户菜单报告问题。用户检查报告并使用 GitHub 登录后，报告将以其本人名义成为公开的 GitHub issue。",
   "Allow Bug Reports": "允许错误报告",
-  "Shows Report a Bug in the user menu. Off hides it and refuses reports.": "在用户菜单中显示“报告问题”。关闭后将隐藏该入口并拒绝报告。",
+  "Shows the Report a Bug button in the top bar. Off hides it and refuses reports.": "在顶部栏显示“报告问题”按钮。关闭后将隐藏该按钮并拒绝报告。",
   "Repository": "仓库",
   "The GitHub repository, as owner/name, that receives the issues. The OpenDeploy Bug Reports app must be installed there.": "接收 issue 的 GitHub 仓库，格式为 owner/name。必须在该仓库中安装 OpenDeploy Bug Reports 应用。",
   "Relay Address": "中继地址",

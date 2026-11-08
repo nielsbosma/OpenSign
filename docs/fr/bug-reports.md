@@ -4,7 +4,7 @@ Vous avez trouvé quelque chose qui ne fonctionne pas ? Signalez-le depuis OpenS
 
 ## Comment signaler
 
-1. Ouvrez le menu sous votre nom, en bas de la barre latérale, et choisissez **Signaler un bug**.
+1. Cliquez sur l’icône d’insecte, **Signaler un bug**, dans le coin supérieur de la page, à côté de l’assistant. Elle reste cliquable quand une boîte de dialogue est ouverte : vous pouvez donc aussi signaler un problème dans la boîte de dialogue elle-même.
 2. Un panneau s’ouvre en bas de la page. Choisissez un outil :
    - **Commentaire** : cliquez sur un élément, dites ce qui ne va pas et appuyez sur Entrée. Il reçoit un cadre numéroté.
    - **Masquer** : faites glisser sur tout ce qui est privé pour le noircir.

@@ -1689,7 +1689,7 @@
   "Bug Reports": "Отчёты об ошибках",
   "Signed-in users can report a bug from the user menu. The report becomes a public GitHub issue in their own name, after they check it and sign in with GitHub.": "Вошедшие пользователи могут сообщить об ошибке из меню пользователя. После проверки и входа через GitHub отчёт становится публичным issue на GitHub от их имени.",
   "Allow Bug Reports": "Разрешить отчёты об ошибках",
-  "Shows Report a Bug in the user menu. Off hides it and refuses reports.": "Показывает пункт «Сообщить об ошибке» в меню пользователя. Если выключено, пункт скрыт, а отчёты отклоняются.",
+  "Shows the Report a Bug button in the top bar. Off hides it and refuses reports.": "Показывает кнопку «Сообщить об ошибке» на верхней панели. Если выключено, кнопка скрыта, а отчёты отклоняются.",
   "Repository": "Репозиторий",
   "The GitHub repository, as owner/name, that receives the issues. The OpenDeploy Bug Reports app must be installed there.": "Репозиторий GitHub в формате owner/name, в который поступают issues. В нём должно быть установлено приложение OpenDeploy Bug Reports.",
   "Relay Address": "Адрес ретранслятора",
