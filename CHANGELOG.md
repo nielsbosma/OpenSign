@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-11-08
+
 ### Changed
 
 - Report a Bug moved from the user menu to a bug icon in the top corner of the page. It stays clickable while a dialog is open, so a problem inside a dialog can be reported with the dialog in the screenshot.
