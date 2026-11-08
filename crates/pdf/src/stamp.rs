@@ -166,7 +166,7 @@ pub fn check_signature_image(png_bytes: &[u8]) -> Result<()> {
 
 /// Decodes a PNG (limited size) into an RGB image XObject with an alpha mask.
 pub fn png_image(doc: &mut Document, png_bytes: &[u8]) -> Result<ObjectId> {
-    let mut decoder = png::Decoder::new(png_bytes);
+    let mut decoder = png::Decoder::new(std::io::Cursor::new(png_bytes));
     decoder.set_transformations(png::Transformations::normalize_to_color8());
     decoder.set_limits(png::Limits { bytes: 16 * 1024 * 1024 });
     let mut reader = decoder.read_info().map_err(|e| PdfError::Rejected(format!("The signature image is not a valid PNG: {e}")))?;
@@ -174,7 +174,8 @@ pub fn png_image(doc: &mut Document, png_bytes: &[u8]) -> Result<ObjectId> {
     if width == 0 || height == 0 || width > 4000 || height > 2000 {
         return Err(PdfError::Rejected("The signature image is too large".into()));
     }
-    let mut buffer = vec![0; reader.output_buffer_size()];
+    let size = reader.output_buffer_size().ok_or_else(|| PdfError::Rejected("The signature image is too large".into()))?;
+    let mut buffer = vec![0; size];
     let frame = reader.next_frame(&mut buffer).map_err(|e| PdfError::Rejected(format!("The signature image is not a valid PNG: {e}")))?;
     let data = &buffer[..frame.buffer_size()];
     let (mut rgb, mut alpha) = (Vec::with_capacity((width * height * 3) as usize), Vec::with_capacity((width * height) as usize));

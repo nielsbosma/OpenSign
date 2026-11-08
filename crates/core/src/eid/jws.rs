@@ -36,7 +36,7 @@ pub struct Key {
 impl Key {
     pub fn from_certificate_pem(pem: &str) -> Result<Self, JwsError> {
         let cert = Certificate::from_pem(pem.trim().as_bytes()).map_err(|e| JwsError::Key(e.to_string()))?;
-        let spki = cert.tbs_certificate.subject_public_key_info.to_der().map_err(|e| JwsError::Key(e.to_string()))?;
+        let spki = cert.tbs_certificate().subject_public_key_info().to_der().map_err(|e| JwsError::Key(e.to_string()))?;
         let key = RsaPublicKey::from_public_key_der(&spki).map_err(|e| JwsError::Key(e.to_string()))?;
         Ok(Self { kid: None, key })
     }
