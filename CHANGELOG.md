@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-11-10
+
 ### Added
 
 - The last page of first-run setup says that OpenSign is in beta and asks for feedback through the bug icon at the top of the page.
