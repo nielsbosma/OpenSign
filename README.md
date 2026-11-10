@@ -23,6 +23,8 @@ Send a PDF or Word document, collect signatures with email, SMS or BankID, and g
 
 </div>
 
+> **OpenSign is in beta.** It signs and seals documents end to end, but expect rough edges. Found one? Press the bug icon at the top of any page in the app, or [open an issue](https://github.com/nielsbosma/OpenSign/issues). We promise to be fast.
+
 ## Why OpenSign
 
 Hosted e-signature services charge per user or per envelope, keep your contracts on their servers, and lock your integrations to their API. OpenSign is one container you deploy next to your own database and bucket:
@@ -127,7 +129,8 @@ A REST API with OpenAPI and a built-in API Explorer that sends live requests and
 - **Teams and roles**: admin, manager, sender, auditor and viewer, with passkeys or an authenticator app for two-factor sign-in.
 - **Optional AI**: an assistant over your own tools and a review of a document before you send it, with the provider and model of your choice. Signers can also share a read-only link with their own AI.
 - **Light and dark**, on every screen.
-- **Painless updates**: Settings shows when a release is out, Sliplane installs the update in one click, and migrations apply safely on start.
+- **Report a Bug**: the bug icon at the top of every page turns what you saw into a public GitHub issue in your name, with a screenshot you can mark up and black out first. See [Reporting a bug](docs/bug-reports.md).
+- **Painless updates**: Settings shows when a release is out. On Sliplane, **Update Now** opens the deployer, you confirm, and it moves the install to the new version. Migrations apply safely on start.
 
 ## Deploy in five minutes
 
