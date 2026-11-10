@@ -26,6 +26,8 @@ Depois que o primeiro admin existe, o código de configuração deixa de funcion
 
 O OpenSign envia por e-mail convites de assinatura, lembretes, avisos de que um documento foi interrompido, os documentos selados, convites de usuários e redefinições de senha. A configuração pede um provedor de e-mail funcional, o Resend ou o seu próprio servidor SMTP, e envia uma mensagem de teste. A configuração só termina quando o provedor a aceita, e os documentos não podem ser enviados por e-mail antes disso.
 
+A última página confirma que o e-mail de teste foi enviado. Ela também avisa que o OpenSign está em beta: conte o que funciona e o que não funciona pelo ícone de inseto, **Relatar um erro**, no topo da página. Veja [Relatar um erro](bug-reports.md).
+
 ### Resend
 
 O [Resend](https://resend.com) é o provedor padrão.

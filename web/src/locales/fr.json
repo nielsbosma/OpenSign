@@ -1693,5 +1693,7 @@
   "Repository": "Dépôt",
   "The GitHub repository, as owner/name, that receives the issues. The OpenDeploy Bug Reports app must be installed there.": "Le dépôt GitHub, au format owner/name, qui reçoit les tickets. L’application OpenDeploy Bug Reports doit y être installée.",
   "Relay Address": "Adresse du relais",
-  "The service that shows the report again, signs the user in with GitHub and opens the issue. https only.": "Le service qui affiche à nouveau le rapport, connecte l’utilisateur avec GitHub et crée le ticket. https uniquement."
+  "The service that shows the report again, signs the user in with GitHub and opens the issue. https only.": "Le service qui affiche à nouveau le rapport, connecte l’utilisateur avec GitHub et crée le ticket. https uniquement.",
+  "OpenSign Is in Beta": "OpenSign est en bêta",
+  "Tell us what works and what doesn’t with the {icon} bug icon at the top of the page. We promise to be fast.": "Dites-nous ce qui marche et ce qui ne marche pas avec l’{icon} icône d’insecte en haut de la page. Nous promettons d’être rapides."
 }

@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, ShieldCheck } from 'lucide-react';
+import { Bug, Check, ShieldCheck } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { Field, Spinner } from '@/components/common';
@@ -243,6 +243,18 @@ function EmailStep() {
   if (done) {
     return (
       <AuthLayout title={t('Email Works')} description={t('A test email is on its way to you. OpenSign is ready.')} wide>
+        <div className="mb-6 rounded-md border bg-muted/40 p-4 text-sm">
+          <p className="font-medium text-foreground">{t('OpenSign Is in Beta')}</p>
+          <p className="mt-1 leading-relaxed text-muted-foreground">
+            {tx('Tell us what works and what doesn’t with the {icon} bug icon at the top of the page. We promise to be fast.', {
+              icon: (
+                <span className="mx-0.5 inline-flex size-6 items-center justify-center rounded-md border bg-background align-middle text-muted-foreground">
+                  <Bug className="size-3.5" aria-hidden />
+                </span>
+              ),
+            })}
+          </p>
+        </div>
         <Button className="w-full" onClick={() => navigate('/documents', { replace: true })}>
           {t('Go to Documents')}
         </Button>

@@ -26,6 +26,8 @@ Once the first admin exists, the setup code stops working for good. Everyone els
 
 OpenSign sends signing invitations, reminders, notices when a document is stopped, the sealed documents, user invitations and password resets by email. Setup asks for a working email provider, Resend or your own SMTP server, and sends you a test message. Setup only finishes once the provider accepts it, and documents cannot go out by email before that.
 
+The last page confirms that the test email went out. It also says that OpenSign is in beta: tell us what works and what doesn't with the bug icon, **Report a Bug**, at the top of the page. See [Reporting a bug](bug-reports.md).
+
 ### Resend
 
 [Resend](https://resend.com) is the default provider.

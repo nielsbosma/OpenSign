@@ -26,6 +26,8 @@ No admin yet. Open https://sign.example.com and enter the setup code …
 
 OpenSign 通过邮件发送签署邀请、提醒、文档被停止的通知、封印后的文档、用户邀请和密码重置。设置过程会要求你配置一个可用的邮件提供商，Resend 或你自己的 SMTP 服务器，并给你发一封测试邮件。只有提供商接受测试邮件后设置才会完成，在此之前文档无法通过邮件发出。
 
+最后一页确认测试邮件已发出，并说明 OpenSign 处于测试阶段：用页面顶部的虫子图标 **报告问题** 告诉我们哪些好用、哪些不好用。参见 [报告问题](bug-reports.md)。
+
 ### Resend
 
 [Resend](https://resend.com) 是默认的提供商。

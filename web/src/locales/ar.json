@@ -1693,5 +1693,7 @@
   "Repository": "المستودع",
   "The GitHub repository, as owner/name, that receives the issues. The OpenDeploy Bug Reports app must be installed there.": "مستودع GitHub، بصيغة owner/name، الذي يستقبل البلاغات. يجب تثبيت تطبيق OpenDeploy Bug Reports فيه.",
   "Relay Address": "عنوان الترحيل",
-  "The service that shows the report again, signs the user in with GitHub and opens the issue. https only.": "الخدمة التي تعرض البلاغ مرة أخرى، وتسجّل دخول المستخدم باستخدام GitHub، وتفتح المشكلة. https فقط."
+  "The service that shows the report again, signs the user in with GitHub and opens the issue. https only.": "الخدمة التي تعرض البلاغ مرة أخرى، وتسجّل دخول المستخدم باستخدام GitHub، وتفتح المشكلة. https فقط.",
+  "OpenSign Is in Beta": "OpenSign في مرحلة تجريبية",
+  "Tell us what works and what doesn’t with the {icon} bug icon at the top of the page. We promise to be fast.": "أخبرنا بما يعمل وما لا يعمل عبر {icon} أيقونة الحشرة أعلى الصفحة. نعدك بأن نكون سريعين."
 }

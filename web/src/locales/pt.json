@@ -1693,5 +1693,7 @@
   "Repository": "Repositório",
   "The GitHub repository, as owner/name, that receives the issues. The OpenDeploy Bug Reports app must be installed there.": "O repositório do GitHub, como owner/name, que recebe as issues. O app OpenDeploy Bug Reports precisa estar instalado nele.",
   "Relay Address": "Endereço de retransmissão",
-  "The service that shows the report again, signs the user in with GitHub and opens the issue. https only.": "O serviço que mostra o relatório novamente, conecta o usuário com o GitHub e abre a issue. Somente https."
+  "The service that shows the report again, signs the user in with GitHub and opens the issue. https only.": "O serviço que mostra o relatório novamente, conecta o usuário com o GitHub e abre a issue. Somente https.",
+  "OpenSign Is in Beta": "O OpenSign está em beta",
+  "Tell us what works and what doesn’t with the {icon} bug icon at the top of the page. We promise to be fast.": "Conte o que funciona e o que não funciona pelo {icon} ícone de inseto no topo da página. Prometemos ser rápidos."
 }

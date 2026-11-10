@@ -1693,5 +1693,7 @@
   "Repository": "रिपॉज़िटरी",
   "The GitHub repository, as owner/name, that receives the issues. The OpenDeploy Bug Reports app must be installed there.": "वह GitHub रिपॉज़िटरी, owner/name के रूप में, जिसमें issues आते हैं। वहाँ OpenDeploy Bug Reports ऐप इंस्टॉल होना चाहिए।",
   "Relay Address": "रिले पता",
-  "The service that shows the report again, signs the user in with GitHub and opens the issue. https only.": "वह सेवा जो रिपोर्ट को फिर से दिखाती है, उपयोगकर्ता को GitHub से साइन इन कराती है और issue खोलती है। केवल https।"
+  "The service that shows the report again, signs the user in with GitHub and opens the issue. https only.": "वह सेवा जो रिपोर्ट को फिर से दिखाती है, उपयोगकर्ता को GitHub से साइन इन कराती है और issue खोलती है। केवल https।",
+  "OpenSign Is in Beta": "OpenSign बीटा में है",
+  "Tell us what works and what doesn’t with the {icon} bug icon at the top of the page. We promise to be fast.": "पेज के ऊपर {icon} बग आइकन से हमें बताएँ कि क्या ठीक चलता है और क्या नहीं। हम वादा करते हैं कि जल्दी जवाब देंगे।"
 }
