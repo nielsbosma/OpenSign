@@ -26,6 +26,8 @@ Dès que le premier admin existe, le code de configuration cesse définitivement
 
 OpenSign envoie par e-mail les invitations à signer, les relances, les avis d’arrêt d’un document, les documents scellés, les invitations d’utilisateurs et les réinitialisations de mot de passe. La configuration demande un fournisseur d’e-mail fonctionnel, Resend ou votre propre serveur SMTP, et vous envoie un message de test. La configuration ne se termine que lorsque le fournisseur l’accepte, et aucun document ne peut partir par e-mail avant cela.
 
+La dernière page confirme que l’e-mail de test est parti. Elle indique aussi qu’OpenSign est en bêta : dites-nous ce qui marche et ce qui ne marche pas avec l’icône d’insecte, **Signaler un bug**, en haut de la page. Voir [Signaler un bug](bug-reports.md).
+
 ### Resend
 
 [Resend](https://resend.com) est le fournisseur par défaut.

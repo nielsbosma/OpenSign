@@ -1693,5 +1693,7 @@
   "Repository": "Repository",
   "The GitHub repository, as owner/name, that receives the issues. The OpenDeploy Bug Reports app must be installed there.": "GitHub-repositoryt, som owner/name, som tar emot ärendena. Appen OpenDeploy Bug Reports måste vara installerad där.",
   "Relay Address": "Reläadress",
-  "The service that shows the report again, signs the user in with GitHub and opens the issue. https only.": "Tjänsten som visar rapporten igen, loggar in användaren med GitHub och skapar ärendet. Bara https."
+  "The service that shows the report again, signs the user in with GitHub and opens the issue. https only.": "Tjänsten som visar rapporten igen, loggar in användaren med GitHub och skapar ärendet. Bara https.",
+  "OpenSign Is in Beta": "OpenSign är i beta",
+  "Tell us what works and what doesn’t with the {icon} bug icon at the top of the page. We promise to be fast.": "Berätta vad som fungerar och vad som inte gör det med {icon} buggikonen högst upp på sidan. Vi lovar att vara snabba."
 }

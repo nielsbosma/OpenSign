@@ -1693,5 +1693,7 @@
   "Repository": "রিপোজিটরি",
   "The GitHub repository, as owner/name, that receives the issues. The OpenDeploy Bug Reports app must be installed there.": "যে GitHub রিপোজিটরি, owner/name আকারে, issue গ্রহণ করে। সেখানে OpenDeploy Bug Reports অ্যাপটি ইনস্টল করা থাকতে হবে।",
   "Relay Address": "রিলে ঠিকানা",
-  "The service that shows the report again, signs the user in with GitHub and opens the issue. https only.": "যে পরিষেবা রিপোর্টটি আবার দেখায়, ব্যবহারকারীকে GitHub দিয়ে সাইন ইন করায় এবং issue খোলে। শুধু https।"
+  "The service that shows the report again, signs the user in with GitHub and opens the issue. https only.": "যে পরিষেবা রিপোর্টটি আবার দেখায়, ব্যবহারকারীকে GitHub দিয়ে সাইন ইন করায় এবং issue খোলে। শুধু https।",
+  "OpenSign Is in Beta": "OpenSign বেটা পর্যায়ে আছে",
+  "Tell us what works and what doesn’t with the {icon} bug icon at the top of the page. We promise to be fast.": "পেজের উপরের {icon} পোকার আইকন দিয়ে আমাদের জানান কী ঠিকমতো চলছে আর কী চলছে না। আমরা কথা দিচ্ছি দ্রুত সাড়া দেব।"
 }

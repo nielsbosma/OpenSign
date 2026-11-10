@@ -26,6 +26,8 @@ När den första administratören finns slutar inställningskoden att fungera f�
 
 OpenSign skickar signeringsinbjudningar, påminnelser, meddelanden när ett dokument har stoppats, de förseglade dokumenten, användarinbjudningar och lösenordsåterställningar med e-post. Inställningen kräver en fungerande e-postleverantör, Resend eller din egen SMTP-server, och skickar ett testmeddelande till dig. Inställningen blir klar först när leverantören har godtagit det, och dokument kan inte skickas med e-post före dess.
 
+Den sista sidan bekräftar att testmejlet har skickats. Den berättar också att OpenSign är i beta: berätta vad som fungerar och vad som inte gör det med buggikonen, **Rapportera ett fel**, högst upp på sidan. Se [Rapportera ett fel](bug-reports.md).
+
 ### Resend
 
 [Resend](https://resend.com) är standardleverantören.

@@ -26,6 +26,8 @@ Una vez que existe el primer administrador, el código de configuración deja de
 
 OpenSign envía por correo electrónico las invitaciones a firmar, los recordatorios, los avisos de que un documento se ha detenido, los documentos sellados, las invitaciones de usuario y los restablecimientos de contraseña. La configuración pide un proveedor de correo que funcione, Resend o su propio servidor SMTP, y le envía un mensaje de prueba. La configuración solo termina cuando el proveedor lo acepta, y antes de eso no se pueden enviar documentos por correo electrónico.
 
+La última página confirma que el correo de prueba se ha enviado. También indica que OpenSign está en beta: cuéntenos qué funciona y qué no con el icono del insecto, **Informar de un error**, en la parte superior de la página. Consulte [Informar de un error](bug-reports.md).
+
 ### Resend
 
 [Resend](https://resend.com) es el proveedor por defecto.
