@@ -19,7 +19,7 @@ der = { version = "0.7", features = ["std", "derive", "oid"] }
 ecdsa = { version = "0.16", features = ["der", "signing", "verifying"] }
 flate2 = "1"
 hex = { workspace = true }
-lopdf = { version = "0.46", default-features = false }
+lopdf = { version = "0.47", default-features = false }
 p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
 p256-ct = { package = "p256", version = "0.14", features = ["ecdsa", "pkcs8"] }
 p384 = { version = "0.14", features = ["ecdsa"] }
