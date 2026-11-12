@@ -22,9 +22,9 @@
     "stack:fresh": "docker compose --profile prod down -v && docker compose --profile prod up -d --build --wait"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.6.5",
+    "@biomejs/biome": "^2.6.6",
     "@types/node": "^24.19.2",
-    "concurrently": "^10.0.6",
+    "concurrently": "^10.0.7",
     "typescript": "^7.0.2"
   }
 }
