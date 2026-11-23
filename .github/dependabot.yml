@@ -42,6 +42,9 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: docker
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     directory: /
     schedule:
       interval: weekly
