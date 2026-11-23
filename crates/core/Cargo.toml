@@ -49,7 +49,7 @@ ciborium = "0.2.2"
 ed25519-dalek = "3"
 p256 = { version = "0.13", features = ["ecdsa"] }
 rust_xlsxwriter = { version = "0.102.0", default-features = false }
-md-5 = "0.10"
+md-5 = "0.11"
 calamine = { version = "0.38.0", features = ["chrono"] }
 
 [features]
