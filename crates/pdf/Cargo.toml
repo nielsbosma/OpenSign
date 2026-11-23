@@ -42,4 +42,4 @@ x509-cert = { version = "0.2", features = ["builder", "std"] }
 x509-ocsp = { version = "0.2.1", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
-rlimit = "0.10"
+rlimit = "0.11"
