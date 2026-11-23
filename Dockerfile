@@ -16,7 +16,7 @@ COPY web web
 COPY docs docs
 RUN pnpm --filter @opensign/web build
 
-FROM rust:1.99-slim@sha256:f6c4a35d21dbb3c89d7a8d056c193e94fc09037f2b58dd858b09c39a47dd02d7 AS server
+FROM rust:1.100-slim@sha256:6f14b2b4b278ec0d50aa1d69541c304ce0f95e0f6268487aa9924af1c2e9aebe AS server
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
