@@ -13,7 +13,7 @@ workspace = true
 [dependencies]
 base64 = { workspace = true }
 chrono = { workspace = true }
-const-oid = { version = "0.9", features = ["db"] }
+const-oid = { version = "0.10", features = ["db"] }
 cms = { version = "0.2", features = ["std"] }
 der = { version = "0.7", features = ["std", "derive", "oid"] }
 ecdsa = { version = "0.16", features = ["der", "signing", "verifying"] }
