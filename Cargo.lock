@@ -2308,7 +2308,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
  "calamine",
  "chrono",
@@ -2357,7 +2357,7 @@ version = "0.1.14"
 dependencies = [
  "aes-gcm",
  "argon2",
- "base64 0.22.1",
+ "base64 0.23.1",
  "hex",
  "hkdf 0.13.0",
  "hmac 0.13.0",
@@ -2388,7 +2388,7 @@ dependencies = [
 name = "opensign-pdf"
 version = "0.1.14"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "chrono",
  "cms",
  "const-oid 0.9.6",
@@ -2424,7 +2424,7 @@ version = "0.1.14"
 dependencies = [
  "anyhow",
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
  "chrono",
  "http-body-util",
