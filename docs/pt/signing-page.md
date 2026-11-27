@@ -6,6 +6,8 @@
 
 O convite chega por e-mail ou SMS, ou diretamente de você. Ele cita a sua organização e a pessoa que enviou o documento, e informa até quando o link funciona.
 
+Quando uma integração envia documentos em nome de outra pessoa, pode indicar essa pessoa e o cargo dela (`senderName` e `senderTitle` na API). Um documento enviado com uma chave de API cujo usuário tem o nome da sua organização cita só a organização, então o convite nunca diz "Acme, de Acme".
+
 Se a parte precisa se identificar para ver o documento, ela faz isso primeiro: com um código por SMS, BankID, Freja ou outro eID. Veja [Identificação](identification.md). Caso contrário, o documento abre imediatamente.
 
 Um link incompleto, revogado, expirado ou que pertence a um documento que não está mais pendente mostra uma mensagem clara em vez do documento.
@@ -21,6 +23,8 @@ A página mostra:
 A parte preenche os seus campos: texto, números, listas suspensas, listas de múltipla escolha, grupos de botões de opção, caixas de seleção, números de telefone, datas de um seletor de data, imagens e arquivos que ela envia diretamente na página, iniciais e assinaturas. Cada campo é verificado enquanto ela digita, com erros no seu idioma ou o [texto de erro que você escreveu](documents.md#checks-and-error-texts), e ela só pode assinar quando todos os campos passarem. Os campos de nome, e-mail e empresa são preenchidos com os dados dela. Se você pediu [anexos](attachments.md), ela os envia aqui. Se você pediu uma [foto da webcam](identification.md#webcam-photo), ela a tira aqui.
 
 Em um documento que é assinado em ordem, uma parte que abre o link cedo demais vê "Outras pessoas assinam antes de você. Enviaremos um e-mail quando for a sua vez."
+
+Depois que outros assinaram ou aprovaram, a página os lista em **Já assinado**, com quando e como se identificaram, para que uma parte veja, por exemplo, que sua organização assinou antes dela.
 
 ## Assinar
 

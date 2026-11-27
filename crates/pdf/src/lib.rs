@@ -28,7 +28,7 @@ mod tests;
 
 pub use cert::{SealIdentity, generate_seal_identity};
 pub use detect::{DetectedField, PageText, TextLine};
-pub use evidence::{EvidenceAttachment, EvidenceEvent, EvidenceParty, EvidenceReport, append_evidence};
+pub use evidence::{EvidenceAttachment, EvidenceEvent, EvidenceLabels, EvidenceParty, EvidenceReport, append_evidence};
 pub use form::{FormField, FormKind};
 pub use geometry::PageBox;
 pub use hidden::HiddenText;

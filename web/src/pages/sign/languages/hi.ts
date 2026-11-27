@@ -2,7 +2,7 @@ import type { Texts } from '../texts';
 
 export const hi: Texts = {
   secureConnection: 'सुरक्षित कनेक्शन',
-  from: (sender, org) => `${sender ? `${sender}, ` : ''}${org} की ओर से`,
+  from: (sender, title, org) => `${sender ? `${sender}${title ? ` (${title})` : ''}, ` : ''}${org} की ओर से`,
   linkIncomplete: 'यह लिंक अधूरा है',
   linkBroken: 'यह लिंक काम नहीं कर रहा है',
   youDeclined: 'आपने मना कर दिया',
@@ -172,5 +172,9 @@ export const hi: Texts = {
   shareOpen: (sign) => (sign ? 'पुष्टि करें और हस्ताक्षर करें' : 'पुष्टि करें और स्वीकृत करें'),
   shareOtherEmail: 'दूसरा ईमेल इस्तेमाल करें',
   shareReady: 'आपका दस्तावेज़ तैयार है',
+  alreadySigned: 'पहले से हस्ताक्षरित',
+  signedOn: (date) => `${date} को हस्ताक्षर किए`,
+  approvedOn: (date) => `${date} को स्वीकृत किया`,
+  you: 'आप',
   methods: { sms_pin: 'SMS कोड', se_bankid: 'BankID', freja: 'Freja eID', broker: 'ई-आईडी' },
 };

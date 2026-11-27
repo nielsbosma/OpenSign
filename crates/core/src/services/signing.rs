@@ -165,8 +165,25 @@ pub struct SignerDocument {
     pub brand_color: String,
     /// The organisation's logo, relative to the app.
     pub logo_url: Option<String>,
+    /// The person who sent it; none when it was sent in the organisation's name only.
     pub sender: Option<String>,
+    /// The sender's job title, when the sender gave one.
+    pub sender_title: Option<String>,
     pub language: String,
+}
+
+/// A signature or approval the document already carries.
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SignedParty {
+    pub name: String,
+    pub company: Option<String>,
+    pub role: String,
+    pub signed_at: DateTime<Utc>,
+    /// How they identified when they signed: `standard` (the link alone), `sms_pin`, `se_bankid`, `freja` or `broker`.
+    pub method: String,
+    /// This is the party viewing the page.
+    pub you: bool,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -205,6 +222,8 @@ pub struct SignerView {
     pub review: Option<super::review::ReviewLinkState>,
     /// Set for a link the sender hands over while embedded signing is on.
     pub embed: Option<EmbedView>,
+    /// Who has signed or approved so far, in the order they did; empty until the party has identified.
+    pub signatures: Vec<SignedParty>,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -240,7 +259,9 @@ pub(crate) async fn signer_view(
     };
     let in_person = party.delivery == Delivery::InPerson.as_str();
     let is_sender = in_person && owner.as_ref().is_some_and(|(_, email)| party.email.as_deref() == Some(email.as_str()));
-    let sender = owner.map(|(name, _)| name);
+    let organisation = if org.name.is_empty() { "OpenSign".to_string() } else { org.name.clone() };
+    let sender = crate::documents::sender(conn, document, &organisation).await?;
+    let signatures = if locked { Vec::new() } else { signed_parties(conn, document, party).await? };
     Ok(SignerView {
         document: SignerDocument {
             id: document.id,
@@ -248,10 +269,11 @@ pub(crate) async fn signer_view(
             message: (!locked).then(|| document.message.clone()),
             status: document.status.clone(),
             page_count: (!locked).then_some(document.page_count).flatten(),
-            organisation: if org.name.is_empty() { "OpenSign".into() } else { org.name.clone() },
+            organisation,
             brand_color: org.brand_color.clone(),
             logo_url: super::branding::logo_path(&org),
-            sender,
+            sender_title: sender.as_ref().and_then(|s| s.title.clone()),
+            sender: sender.map(|s| s.name),
             language: party.lang(document).code().to_string(),
         },
         party: SignerParty {
@@ -280,7 +302,35 @@ pub(crate) async fn signer_view(
         attachments: if locked { Vec::new() } else { attachments::for_party(conn, party.id).await? },
         review: None,
         embed: None,
+        signatures,
     })
+}
+
+async fn signed_parties(conn: &mut PgConnection, document: &DocumentRow, viewer: &PartyRow) -> Result<Vec<SignedParty>> {
+    let mut signed: Vec<SignedParty> = crate::documents::parties(conn, document.id)
+        .await?
+        .into_iter()
+        .filter_map(|p| {
+            let signed_at = p.signed_at?;
+            Some(SignedParty {
+                method: p
+                    .evidence
+                    .as_ref()
+                    .and_then(|e| e["auth"].as_str())
+                    .and_then(AuthMethod::parse)
+                    .unwrap_or(p.auth_to_sign())
+                    .as_str()
+                    .to_string(),
+                name: p.name.clone(),
+                company: p.company.clone().filter(|c| !c.trim().is_empty()),
+                role: p.role.clone(),
+                signed_at,
+                you: p.id == viewer.id,
+            })
+        })
+        .collect();
+    signed.sort_by_key(|p| p.signed_at);
+    Ok(signed)
 }
 
 pub struct Open;

@@ -2,7 +2,7 @@ import type { Texts } from '../texts';
 
 export const sv: Texts = {
   secureConnection: 'Säker anslutning',
-  from: (sender, org) => `Från ${sender ? `${sender}, ` : ''}${org}`,
+  from: (sender, title, org) => `Från ${sender ? `${sender}${title ? ` (${title})` : ''}, ` : ''}${org}`,
   linkIncomplete: 'Länken är ofullständig',
   linkBroken: 'Länken fungerar inte',
   youDeclined: 'Du har avböjt',
@@ -175,5 +175,9 @@ export const sv: Texts = {
   shareOpen: (sign) => (sign ? 'Bekräfta och signera' : 'Bekräfta och godkänn'),
   shareOtherEmail: 'Använd en annan e-postadress',
   shareReady: 'Ditt dokument är klart',
+  alreadySigned: 'Redan signerat',
+  signedOn: (date) => `Signerade ${date}`,
+  approvedOn: (date) => `Godkände ${date}`,
+  you: 'Du',
   methods: { sms_pin: 'SMS-kod', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-legitimation' },
 };

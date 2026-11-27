@@ -76,6 +76,11 @@ fn clean_text(value: &str, what: &str, max: usize) -> Result<String> {
     Ok(value.to_string())
 }
 
+/// A sender's name or title: one line, or none when empty.
+fn sender_text(value: Option<&str>, what: &str) -> Result<Option<String>> {
+    Ok(value.map(|v| clean_text(v, what, 200)).transpose()?.map(|v| v.replace(['\n', '\t'], " ")).filter(|v| !v.is_empty()))
+}
+
 fn title(value: &str) -> Result<String> {
     let title = clean_text(value, "The title", 200)?.replace(['\n', '\t'], " ");
     if title.is_empty() {
@@ -268,6 +273,11 @@ pub struct CreateInput {
     pub metadata: Option<Value>,
     /// Put it in this folder: a document folder for documents, a template folder for templates.
     pub folder_id: Option<Uuid>,
+    /// The person the document is sent in the name of, named in invitations and on the signing page.
+    /// Set it when an integration sends for someone else; without it, the owner of the API key is named.
+    pub sender_name: Option<String>,
+    /// That person's job title, shown after their name, e.g. "HR Manager".
+    pub sender_title: Option<String>,
 }
 
 pub fn language(value: Option<&str>) -> Result<String> {
@@ -361,8 +371,8 @@ pub(crate) async fn create(
         (None, None) => String::new(),
     };
     sqlx::query(
-            "insert into documents (id, title, is_template, template_id, owner_id, message, language, sequential, reminder_days, external_id, metadata, review_links, folder_id, template_version)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
+            "insert into documents (id, title, is_template, template_id, owner_id, message, language, sequential, reminder_days, external_id, metadata, review_links, folder_id, template_version, sender_name, sender_title)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)",
         )
         .bind(id)
         .bind(title(&input.title)?)
@@ -381,6 +391,8 @@ pub(crate) async fn create(
         .bind(template.as_ref().is_none_or(|t| t.review_links))
         .bind(input.folder_id)
         .bind(version.as_ref().map(|(number, _)| *number))
+        .bind(sender_text(input.sender_name.as_deref(), "The sender's name")?)
+        .bind(sender_text(input.sender_title.as_deref(), "The sender's title")?)
         .execute(&mut *conn)
         .await?;
     let share_link = match origin {
@@ -920,6 +932,10 @@ pub struct UpdateInput {
     /// Your own reference; "" removes it.
     pub external_id: Option<String>,
     pub metadata: Option<Value>,
+    /// The person the document is sent in the name of; "" removes it, so the owner is named again.
+    pub sender_name: Option<String>,
+    /// That person's job title; "" removes it.
+    pub sender_title: Option<String>,
 }
 
 pub struct Update;
@@ -930,7 +946,7 @@ impl Service for Update {
     type Output = DocumentView;
     const META: Meta = Meta::mutation(
         "documents.update",
-        "Change a draft's title, message, language, signing order, expiry, reminders, external id or metadata.",
+        "Change a draft's title, message, language, signing order, expiry, reminders, external id, metadata or the sender it is sent in the name of.",
         Access::Permission(Permission::DocumentsCreate),
     )
     .tool();
@@ -949,7 +965,9 @@ impl Service for Update {
         sqlx::query(
             "update documents set title = coalesce($2, title), message = coalesce($3, message), language = coalesce($4, language),
                 sequential = coalesce($5, sequential), expires_at = coalesce($6, expires_at), reminder_days = coalesce($7, reminder_days),
-                external_id = case when $8::text is null then external_id else nullif($8, '') end, metadata = coalesce($9, metadata), updated_at = now() where id = $1",
+                external_id = case when $8::text is null then external_id else nullif($8, '') end, metadata = coalesce($9, metadata),
+                sender_name = case when $10::text is null then sender_name else nullif($10, '') end,
+                sender_title = case when $11::text is null then sender_title else nullif($11, '') end, updated_at = now() where id = $1",
         )
         .bind(document.id)
         .bind(input.title.as_deref().map(title).transpose()?)
@@ -960,6 +978,8 @@ impl Service for Update {
         .bind(input.reminder_days)
         .bind(input.external_id.as_deref().map(|e| clean_text(e, "The external id", 200)).transpose()?)
         .bind(input.metadata.map(|m| metadata(Some(m))).transpose()?)
+        .bind(input.sender_name.as_deref().map(|v| sender_text(Some(v), "The sender's name").map(Option::unwrap_or_default)).transpose()?)
+        .bind(input.sender_title.as_deref().map(|v| sender_text(Some(v), "The sender's title").map(Option::unwrap_or_default)).transpose()?)
         .execute(&mut *conn)
         .await?;
         audit(ctx, conn, Entry::new("document.updated", "document", document.id)).await?;
@@ -2283,6 +2303,8 @@ pub struct VerifiedDocument {
     pub id: Uuid,
     pub title: String,
     pub completed_at: Option<DateTime<Utc>>,
+    /// The document's language, which the verification page switches to.
+    pub language: String,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -2344,13 +2366,13 @@ pub async fn compare_with_seals(
     }
     // A matching hash alone would also vouch for a stored file whose seal no longer holds.
     let document = if signatures.iter().any(|s| s.trusted) {
-        sqlx::query_as::<_, (Uuid, String, Option<DateTime<Utc>>)>(
-            "select id, title, completed_at from documents where sealed_sha256 = $1 and status = 'completed'",
+        sqlx::query_as::<_, (Uuid, String, Option<DateTime<Utc>>, String)>(
+            "select id, title, completed_at, language from documents where sealed_sha256 = $1 and status = 'completed'",
         )
         .bind(&sha256)
         .fetch_optional(&mut *conn)
         .await?
-        .map(|(id, title, completed_at)| VerifiedDocument { id, title, completed_at })
+        .map(|(id, title, completed_at, language)| VerifiedDocument { id, title, completed_at, language })
     } else {
         None
     };

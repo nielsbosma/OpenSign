@@ -16,6 +16,12 @@ pub struct EvidenceParty {
     pub ip: Option<String>,
     /// e.g. "Swedish BankID, personal number 19xxxxxx-1234".
     pub identity: Option<String>,
+    /// `role` and `authentication` as the page shows them, in the document's language. The
+    /// attached evidence.json keeps the English values, which tools read.
+    #[serde(skip)]
+    pub shown_role: String,
+    #[serde(skip)]
+    pub shown_authentication: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -23,6 +29,84 @@ pub struct EvidenceParty {
 pub struct EvidenceEvent {
     pub at: String,
     pub text: String,
+    /// `text` in the document's language, for the page.
+    #[serde(skip)]
+    pub shown: String,
+}
+
+/// The page's own wording. `{name}` placeholders are filled in.
+#[derive(Debug, Clone, Copy)]
+pub struct EvidenceLabels {
+    pub heading: &'static str,
+    /// `{id}`, `{at}`
+    pub document: &'static str,
+    /// `{url}`
+    pub verify_at: &'static str,
+    pub parties: &'static str,
+    /// `{method}`
+    pub identified_by: &'static str,
+    /// `{at}`
+    pub signed: &'static str,
+    /// `{at}`, `{ip}`
+    pub signed_from: &'static str,
+    pub attachments: &'static str,
+    /// `{name}`, `{party}`, `{file}`
+    pub attachment: &'static str,
+    pub attachments_note: &'static str,
+    pub events: &'static str,
+    pub integrity: &'static str,
+    /// `{hash}`
+    pub original_sha256: &'static str,
+    /// `{hash}`
+    pub signed_sha256: &'static str,
+    /// `{hash}`
+    pub audit_head: &'static str,
+    pub seal_note: &'static str,
+    /// `{page}`, `{total}`
+    pub footer: &'static str,
+}
+
+impl EvidenceLabels {
+    pub const EN: EvidenceLabels = EvidenceLabels {
+        heading: "Verification",
+        document: "Document {id} · completed {at}",
+        verify_at: "Verify this document at {url}",
+        parties: "Parties",
+        identified_by: "Identified by: {method}",
+        signed: "Signed {at}",
+        signed_from: "Signed {at} from {ip}",
+        attachments: "Attachments",
+        attachment: "{name} from {party}: {file}",
+        attachments_note: "The files are embedded in this PDF. Open the attachments pane of your PDF reader to see them.",
+        events: "Events",
+        integrity: "Integrity",
+        original_sha256: "SHA-256 of the original document: {hash}",
+        signed_sha256: "SHA-256 of the signed content before this page: {hash}",
+        audit_head: "Audit log chain head: {hash}",
+        seal_note: "This file is sealed with an electronic seal (PAdES), with a time stamp when the time stamp authority answered. Any change to it after sealing invalidates the seal. The full evidence is attached as evidence.json.",
+        footer: "OpenSign verification · page {page} of {total}",
+    };
+}
+
+fn fill(template: &str, values: &[(&str, &str)]) -> String {
+    let mut out = String::with_capacity(template.len());
+    let mut rest = template;
+    while let Some(start) = rest.find('{') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        match after.find('}').map(|end| (&after[..end], end)) {
+            Some((key, end)) if values.iter().any(|(k, _)| *k == key) => {
+                out.push_str(values.iter().find(|(k, _)| *k == key).map(|(_, v)| *v).unwrap_or_default());
+                rest = &after[end + 1..];
+            }
+            _ => {
+                out.push('{');
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// A file a party uploaded while signing. It is listed in the evidence and embedded in the PDF.
@@ -53,6 +137,9 @@ pub struct EvidenceReport {
     pub events: Vec<EvidenceEvent>,
     pub attachments: Vec<EvidenceAttachment>,
     pub audit_head: Option<String>,
+    /// The page's wording, in the document's language.
+    #[serde(skip)]
+    pub labels: EvidenceLabels,
     /// The organisation's logo as PNG, drawn at the top of the first page.
     #[serde(skip)]
     pub logo_png: Option<Vec<u8>>,
@@ -165,25 +252,26 @@ pub fn append_evidence(pdf: &[u8], report: &EvidenceReport) -> Result<Vec<u8>> {
         w.gap(10.0);
         images.push((b"Logo".to_vec(), id));
     }
-    w.text(FONT_BOLD, 16.0, 0.0, "Verification", 0.1);
+    let l = &report.labels;
+    w.text(FONT_BOLD, 16.0, 0.0, l.heading, 0.1);
     w.gap(4.0);
     w.text(FONT, 9.5, 0.0, &format!("{} · {}", report.title, report.organisation), 0.35);
-    w.text(FONT, 9.5, 0.0, &format!("Document {} · completed {}", report.document_id, report.completed_at), 0.35);
+    w.text(FONT, 9.5, 0.0, &fill(l.document, &[("id", &report.document_id), ("at", &report.completed_at)]), 0.35);
     w.gap(6.0);
     let qr_size = 84.0;
     let qr_ops = qr(&report.verify_url, A4.0 - MARGIN - qr_size, A4.1 - MARGIN - qr_size, qr_size);
     w.page().extend(qr_ops);
-    w.text(FONT, 8.5, 0.0, &format!("Verify this document at {}", report.verify_url), 0.35);
+    w.text(FONT, 8.5, 0.0, &fill(l.verify_at, &[("url", &report.verify_url)]), 0.35);
     w.rule();
 
-    w.text(FONT_BOLD, 11.0, 0.0, "Parties", 0.1);
+    w.text(FONT_BOLD, 11.0, 0.0, l.parties, 0.1);
     for party in &report.parties {
         w.gap(4.0);
-        w.text(FONT_BOLD, 10.0, 0.0, &format!("{} ({})", party.name, party.role), 0.1);
+        w.text(FONT_BOLD, 10.0, 0.0, &format!("{} ({})", party.name, party.shown_role), 0.1);
         if let Some(email) = &party.email {
             w.text(FONT, 9.0, 12.0, email, 0.3);
         }
-        w.text(FONT, 9.0, 12.0, &format!("Identified by: {}", party.authentication), 0.3);
+        w.text(FONT, 9.0, 12.0, &fill(l.identified_by, &[("method", &party.shown_authentication)]), 0.3);
         if let Some(identity) = &party.identity {
             w.text(FONT, 9.0, 12.0, identity, 0.3);
         }
@@ -192,45 +280,48 @@ pub fn append_evidence(pdf: &[u8], report: &EvidenceReport) -> Result<Vec<u8>> {
                 FONT,
                 9.0,
                 12.0,
-                &format!("Signed {at}{}", party.ip.as_deref().map(|ip| format!(" from {ip}")).unwrap_or_default()),
+                &match party.ip.as_deref() {
+                    Some(ip) => fill(l.signed_from, &[("at", at), ("ip", ip)]),
+                    None => fill(l.signed, &[("at", at)]),
+                },
                 0.3,
             );
         }
     }
     if !report.attachments.is_empty() {
         w.rule();
-        w.text(FONT_BOLD, 11.0, 0.0, "Attachments", 0.1);
+        w.text(FONT_BOLD, 11.0, 0.0, l.attachments, 0.1);
         for a in &report.attachments {
             w.gap(2.0);
-            w.text(FONT, 9.0, 0.0, &format!("{} from {}: {}", a.name, a.party, a.file_name), 0.1);
+            w.text(FONT, 9.0, 0.0, &fill(l.attachment, &[("name", &a.name), ("party", &a.party), ("file", &a.file_name)]), 0.1);
             w.text(FONT, 8.0, 12.0, &format!("SHA-256 {}", a.sha256), 0.35);
         }
-        w.text(FONT, 8.5, 0.0, "The files are embedded in this PDF. Open the attachments pane of your PDF reader to see them.", 0.35);
+        w.text(FONT, 8.5, 0.0, l.attachments_note, 0.35);
     }
     w.rule();
-    w.text(FONT_BOLD, 11.0, 0.0, "Events", 0.1);
+    w.text(FONT_BOLD, 11.0, 0.0, l.events, 0.1);
     for event in &report.events {
-        w.text(FONT, 8.5, 0.0, &format!("{}  {}", event.at, event.text), 0.25);
+        w.text(FONT, 8.5, 0.0, &format!("{}  {}", event.at, event.shown), 0.25);
     }
     w.rule();
-    w.text(FONT_BOLD, 11.0, 0.0, "Integrity", 0.1);
-    w.text(FONT, 8.5, 0.0, &format!("SHA-256 of the original document: {}", report.original_sha256), 0.25);
-    w.text(FONT, 8.5, 0.0, &format!("SHA-256 of the signed content before this page: {}", report.signed_sha256), 0.25);
+    w.text(FONT_BOLD, 11.0, 0.0, l.integrity, 0.1);
+    w.text(FONT, 8.5, 0.0, &fill(l.original_sha256, &[("hash", &report.original_sha256)]), 0.25);
+    w.text(FONT, 8.5, 0.0, &fill(l.signed_sha256, &[("hash", &report.signed_sha256)]), 0.25);
     if let Some(head) = &report.audit_head {
-        w.text(FONT, 8.5, 0.0, &format!("Audit log chain head: {head}"), 0.25);
+        w.text(FONT, 8.5, 0.0, &fill(l.audit_head, &[("hash", head)]), 0.25);
     }
-    w.text(
-        FONT,
-        8.5,
-        0.0,
-        "This file is sealed with an electronic seal (PAdES), with a time stamp when the time stamp authority answered. Any change to it after sealing invalidates the seal. The full evidence is attached as evidence.json.",
-        0.25,
-    );
+    w.text(FONT, 8.5, 0.0, l.seal_note, 0.25);
 
     let pages_root = doc.catalog()?.get(b"Pages")?.as_reference()?;
     let total = w.pages.len();
     for (i, mut content) in w.pages.into_iter().enumerate() {
-        content.extend(text_op(FONT, 7.5, MARGIN, MARGIN - 20.0, &format!("OpenSign verification · page {} of {total}", i + 1)));
+        content.extend(text_op(
+            FONT,
+            7.5,
+            MARGIN,
+            MARGIN - 20.0,
+            &fill(report.labels.footer, &[("page", &(i + 1).to_string()), ("total", &total.to_string())]),
+        ));
         let page_id = doc.add_object(dictionary! {
             "Type" => "Page",
             "Parent" => Object::Reference(pages_root),
@@ -307,5 +398,14 @@ mod tests {
         let lines = wrap(&format!("short words then {}", "x".repeat(300)), 9.0, 200.0);
         assert!(lines.len() > 2);
         assert!(lines.iter().all(|l| text_width(l, 9.0) <= 230.0));
+    }
+}
+
+#[cfg(test)]
+mod fill_tests {
+    #[test]
+    fn fills_known_placeholders_only() {
+        assert_eq!(super::fill("Signed {at} from {ip}", &[("at", "noon"), ("ip", "{at}")]), "Signed noon from {at}");
+        assert_eq!(super::fill("{unknown} and {", &[("at", "x")]), "{unknown} and {");
     }
 }

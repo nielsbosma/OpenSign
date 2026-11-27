@@ -2,7 +2,7 @@ import type { Texts } from '../texts';
 
 export const bn: Texts = {
   secureConnection: 'নিরাপদ সংযোগ',
-  from: (sender, org) => `${sender ? `${sender}, ` : ''}${org}-এর পক্ষ থেকে`,
+  from: (sender, title, org) => `${sender ? `${sender}${title ? ` (${title})` : ''}, ` : ''}${org}-এর পক্ষ থেকে`,
   linkIncomplete: 'এই লিংকটি অসম্পূর্ণ',
   linkBroken: 'এই লিংকটি কাজ করছে না',
   youDeclined: 'আপনি প্রত্যাখ্যান করেছেন',
@@ -170,5 +170,9 @@ export const bn: Texts = {
   shareOpen: (sign) => (sign ? 'নিশ্চিত করে স্বাক্ষর করুন' : 'নিশ্চিত করে অনুমোদন করুন'),
   shareOtherEmail: 'অন্য ইমেল ব্যবহার করুন',
   shareReady: 'আপনার নথি প্রস্তুত',
+  alreadySigned: 'ইতিমধ্যে স্বাক্ষরিত',
+  signedOn: (date) => `${date}-এ স্বাক্ষর করেছেন`,
+  approvedOn: (date) => `${date}-এ অনুমোদন করেছেন`,
+  you: 'আপনি',
   methods: { sms_pin: 'SMS কোড', se_bankid: 'BankID', freja: 'Freja eID', broker: 'ই-আইডি' },
 };

@@ -15,6 +15,8 @@ When the last party has signed, OpenSign turns the document into one sealed PDF.
 4. **The seal**: a PAdES signature over the whole file in your organisation's name, with an RFC 3161 time stamp.
 5. **Long-term validation data** and an archive time stamp (see below).
 
+The evidence pages, and the identification shown under each signature, are in the document's language when it is English or Swedish, and in English otherwise, since the standard PDF fonts cover Latin script only. The JSON evidence is always in English.
+
 ## PAdES B-LTA
 
 The seal follows PAdES Baseline B-LTA, the European standard level for documents that must stay verifiable for a long time:

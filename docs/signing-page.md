@@ -6,6 +6,8 @@ This is what the people you send documents to see. They need no account and no a
 
 The invitation comes by email or SMS, or from you directly. It names your organisation and the person who sent the document, and says until when the link works.
 
+When an integration sends documents for someone else, it can name that person and their title (`senderName` and `senderTitle` in the API). A document sent with an API key whose user is named like your organisation names the organisation alone, so the invitation never reads "Acme at Acme".
+
 If the party must identify to view the document, they do that first: with an SMS code, BankID, Freja or another eID. See [Identification](identification.md). Otherwise the document opens straight away.
 
 A link that is incomplete, revoked, expired, or belongs to a document that is no longer pending shows a clear message instead of the document.
@@ -21,6 +23,8 @@ The page shows:
 The party fills in their fields: text, numbers, dropdowns, multi-select lists, radio groups, checkboxes, phone numbers, dates from a date picker, images and files they upload in place, initials and signatures. Each field is checked as they type, with errors in their language or the [error text you wrote](documents.md#checks-and-error-texts), and they cannot sign until every field passes. Name, email and company fields are filled in from their details. If you asked for [attachments](attachments.md), they upload them here. If you asked for a [webcam photo](identification.md#webcam-photo), they take it here.
 
 In a document that signs in order, a party who opens their link early sees "Others sign before you. We will email you when it is your turn."
+
+Once others have signed or approved, the page lists them under **Already Signed**, with when and how they identified, so a party sees for example that your organisation has signed before them.
 
 ## Signing
 

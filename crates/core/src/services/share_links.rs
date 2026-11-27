@@ -618,6 +618,8 @@ async fn start_document(ctx: &Ctx, conn: &mut PgConnection, slug: &str, request:
             external_id: None,
             metadata: Some(json!({ "shareLink": link.id })),
             folder_id: None,
+            sender_name: None,
+            sender_title: None,
         },
         Origin::ShareLink(link.id),
     )

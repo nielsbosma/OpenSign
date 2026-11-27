@@ -57,7 +57,7 @@ pub async fn notify_party(ctx: &Ctx, conn: &mut PgConnection, party_id: Uuid, re
         party.link_expires_at = Some(expires);
     }
     let org: OrgSettings = settings(ctx, conn).await?;
-    let sender = owner(conn, &document).await?.map(|(name, _)| name).unwrap_or_else(|| org_name(&org).to_string());
+    let sender = super::sender(conn, &document, org_name(&org)).await?.map(|s| s.display());
     let url = signer_url(ctx, ctx.keys(), &party);
     let approve = party.role() == PartyRole::Approver;
     let lang = party.lang(&document);
@@ -67,7 +67,7 @@ pub async fn notify_party(ctx: &Ctx, conn: &mut PgConnection, party_id: Uuid, re
                 .email
                 .clone()
                 .ok_or_else(|| AppError::internal(anyhow::anyhow!("party {} has email delivery without an email", party.id)))?;
-            let mut paragraphs = vec![lang.invitation(&sender, org_name(&org), &document.title, approve)];
+            let mut paragraphs = vec![lang.invitation(sender.as_deref(), org_name(&org), &document.title, approve)];
             if !document.message.trim().is_empty() {
                 paragraphs.push(document.message.trim().to_string());
             }
@@ -82,7 +82,7 @@ pub async fn notify_party(ctx: &Ctx, conn: &mut PgConnection, party_id: Uuid, re
                 &Message {
                     to,
                     to_name: Some(party.name.clone()),
-                    subject: lang.invitation_subject(reminder, &sender, &document.title, approve),
+                    subject: lang.invitation_subject(reminder, sender.as_deref().unwrap_or(org_name(&org)), &document.title, approve),
                     paragraphs,
                     button: Some((lang.open_button(approve).into(), url)),
                     footer: Some(lang.personal_link().into()),
@@ -98,7 +98,7 @@ pub async fn notify_party(ctx: &Ctx, conn: &mut PgConnection, party_id: Uuid, re
                 .clone()
                 .ok_or_else(|| AppError::internal(anyhow::anyhow!("party {} has SMS delivery without a phone", party.id)))?;
             let sms: SmsSettings = settings(ctx, conn).await?;
-            let text = lang.invitation_sms(org_name(&org), &sender, &document.title, approve, &url);
+            let text = lang.invitation_sms(org_name(&org), sender.as_deref(), &document.title, approve, &url);
             let share_link = document.metadata["shareLink"].as_str().and_then(|s| Uuid::parse_str(s).ok());
             crate::sms::reserve(conn, &sms, &phone, share_link, ctx.now).await?;
             crate::sms::send(&ctx.app, &sms, &phone, &text).await?;

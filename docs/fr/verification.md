@@ -6,6 +6,8 @@ Toute personne qui détient un PDF signé peut vérifier qu’il est authentique
 
 Ouvrez `https://<your-install>/verify` (aussi accessible via **Vérifier un document** dans la barre latérale de l’application, et imprimé sur les pages de preuve de chaque document scellé) et déposez le PDF.
 
+La page s'affiche dans la langue du document. Le lien des pages de preuve l'indique, et la page passe à cette langue dès qu'elle reconnaît le fichier.
+
 Le fichier est contrôlé sur le serveur et n’est pas conservé. La page répond à deux questions :
 
 1. **Cette installation a-t-elle scellé exactement ce fichier ?** « Scellé par cet OpenSign », avec le titre du document et son heure d’achèvement, signifie que le SHA-256 du fichier correspond à un document que ce serveur a scellé et que son cachet tient, réalisé avec l’un des certificats de cachet de ce serveur. « Ce n’est pas un document scellé par ce serveur » signifie qu’il a été modifié après le scellement, ou qu’il vient d’ailleurs.

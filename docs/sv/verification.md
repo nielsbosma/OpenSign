@@ -6,6 +6,8 @@ Vem som helst som har en signerad PDF kan kontrollera att den är äkta och ofö
 
 Öppna `https://<your-install>/verify` (länkas också som **Verifiera ett dokument** i appens sidofält, och är utskriven på bevissidorna i varje förseglat dokument) och släpp PDF:en.
 
+Sidan visas på dokumentets språk. Länken på bevissidorna anger språket, och sidan byter till det när den känner igen filen.
+
 Filen kontrolleras på servern och lagras inte. Sidan svarar på två frågor:
 
 1. **Förseglade den här installationen exakt den här filen?** "Förseglat av denna OpenSign" med dokumentets titel och klartid betyder att filens SHA-256 stämmer med ett dokument som den här servern förseglade och att dess sigill håller, gjort med ett av den här serverns sigillcertifikat. "Inte ett dokument som den här servern har förseglat" betyder att den ändrades efter förseglingen, eller att den kommer från någon annanstans.

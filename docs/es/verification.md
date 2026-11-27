@@ -6,6 +6,8 @@ Cualquiera que tenga un PDF firmado puede comprobar que es auténtico y que no h
 
 Abra `https://<your-install>/verify` (también enlazada como **Verificar un documento** en la barra lateral de la aplicación, e impresa en las páginas de evidencias de cada documento sellado) y suelte el PDF.
 
+La página usa el idioma del documento. El enlace de las páginas de evidencia lo incluye, y la página cambia a él al reconocer el archivo.
+
 El archivo se comprueba en el servidor y no se guarda. La página responde a dos preguntas:
 
 1. **¿Selló esta instalación exactamente este archivo?** «Sellado por este OpenSign» con el título del documento y la hora de finalización significa que el SHA-256 del archivo coincide con un documento que este servidor selló y que su sello se mantiene, hecho con uno de los certificados de sello de este servidor. «No es un documento sellado por este servidor» significa que se modificó después del sellado o que procede de otro lugar.

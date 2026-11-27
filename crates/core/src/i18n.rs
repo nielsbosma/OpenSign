@@ -45,12 +45,16 @@ struct Texts {
     subject_approve: &'static str,
     invitation_sign: &'static str,
     invitation_approve: &'static str,
+    invitation_sign_org: &'static str,
+    invitation_approve_org: &'static str,
     link_until: &'static str,
     open_sign: &'static str,
     open_approve: &'static str,
     personal_link: &'static str,
     sms_sign: &'static str,
     sms_approve: &'static str,
+    sms_sign_org: &'static str,
+    sms_approve_org: &'static str,
     code_sms: &'static str,
     completed_subject: &'static str,
     completed: &'static str,
@@ -72,12 +76,16 @@ const EN: Texts = Texts {
     subject_approve: "{sender} sent you {title} to approve",
     invitation_sign: "{sender} at {org} sent you {title} to sign.",
     invitation_approve: "{sender} at {org} sent you {title} to approve.",
+    invitation_sign_org: "{org} sent you {title} to sign.",
+    invitation_approve_org: "{org} sent you {title} to approve.",
     link_until: "The link works until {date}.",
     open_sign: "Review and Sign",
     open_approve: "Review and Approve",
     personal_link: "This link is personal. Do not forward this email.",
     sms_sign: "{org}: {sender} asks you to sign {title}: {url}",
     sms_approve: "{org}: {sender} asks you to approve {title}: {url}",
+    sms_sign_org: "{org} asks you to sign {title}: {url}",
+    sms_approve_org: "{org} asks you to approve {title}: {url}",
     code_sms: "{code} is your code for {title} from {org}. Never share it.",
     completed_subject: "Signed: {title}",
     completed: "{title} is signed by everyone.",
@@ -99,12 +107,16 @@ const ZH: Texts = Texts {
     subject_approve: "{sender} 向您发送了 {title}，请审批",
     invitation_sign: "{org} 的 {sender} 向您发送了 {title}，请签署。",
     invitation_approve: "{org} 的 {sender} 向您发送了 {title}，请审批。",
+    invitation_sign_org: "{org} 向您发送了 {title}，请签署。",
+    invitation_approve_org: "{org} 向您发送了 {title}，请审批。",
     link_until: "此链接有效期至 {date}。",
     open_sign: "查看并签署",
     open_approve: "查看并审批",
     personal_link: "此链接仅供您本人使用，请勿转发此邮件。",
     sms_sign: "{org}：{sender} 请您签署 {title}：{url}",
     sms_approve: "{org}：{sender} 请您审批 {title}：{url}",
+    sms_sign_org: "{org} 请您签署 {title}：{url}",
+    sms_approve_org: "{org} 请您审批 {title}：{url}",
     code_sms: "{code} 是您签署 {org} 的 {title} 的验证码。切勿告诉任何人。",
     completed_subject: "已签署：{title}",
     completed: "{title} 已由所有人签署。",
@@ -126,12 +138,16 @@ const HI: Texts = Texts {
     subject_approve: "{sender} ने आपको स्वीकृति के लिए {title} भेजा है",
     invitation_sign: "{org} के {sender} ने आपको हस्ताक्षर के लिए {title} भेजा है।",
     invitation_approve: "{org} के {sender} ने आपको स्वीकृति के लिए {title} भेजा है।",
+    invitation_sign_org: "{org} ने आपको हस्ताक्षर के लिए {title} भेजा है।",
+    invitation_approve_org: "{org} ने आपको स्वीकृति के लिए {title} भेजा है।",
     link_until: "यह लिंक {date} तक काम करेगा।",
     open_sign: "देखें और हस्ताक्षर करें",
     open_approve: "देखें और स्वीकृत करें",
     personal_link: "यह लिंक व्यक्तिगत है। इस ईमेल को आगे न भेजें।",
     sms_sign: "{org}: {sender} आपसे {title} पर हस्ताक्षर करने का अनुरोध करते हैं: {url}",
     sms_approve: "{org}: {sender} आपसे {title} को स्वीकृत करने का अनुरोध करते हैं: {url}",
+    sms_sign_org: "{org} आपसे {title} पर हस्ताक्षर करने का अनुरोध करता है: {url}",
+    sms_approve_org: "{org} आपसे {title} को स्वीकृत करने का अनुरोध करता है: {url}",
     code_sms: "{org} के {title} के लिए आपका कोड {code} है। इसे कभी किसी के साथ साझा न करें।",
     completed_subject: "हस्ताक्षरित: {title}",
     completed: "{title} पर सभी ने हस्ताक्षर कर दिए हैं।",
@@ -153,12 +169,16 @@ const ES: Texts = Texts {
     subject_approve: "{sender} le ha enviado {title} para aprobar",
     invitation_sign: "{sender}, de {org}, le ha enviado {title} para firmar.",
     invitation_approve: "{sender}, de {org}, le ha enviado {title} para aprobar.",
+    invitation_sign_org: "{org} le ha enviado {title} para firmar.",
+    invitation_approve_org: "{org} le ha enviado {title} para aprobar.",
     link_until: "El enlace funciona hasta el {date}.",
     open_sign: "Revisar y firmar",
     open_approve: "Revisar y aprobar",
     personal_link: "Este enlace es personal. No reenvíe este correo.",
     sms_sign: "{org}: {sender} le pide que firme {title}: {url}",
     sms_approve: "{org}: {sender} le pide que apruebe {title}: {url}",
+    sms_sign_org: "{org} le pide que firme {title}: {url}",
+    sms_approve_org: "{org} le pide que apruebe {title}: {url}",
     code_sms: "{code} es su código para {title} de {org}. No lo comparta nunca.",
     completed_subject: "Firmado: {title}",
     completed: "Todos han firmado {title}.",
@@ -180,12 +200,16 @@ const FR: Texts = Texts {
     subject_approve: "{sender} vous a envoyé {title} à approuver",
     invitation_sign: "{sender} ({org}) vous a envoyé {title} à signer.",
     invitation_approve: "{sender} ({org}) vous a envoyé {title} à approuver.",
+    invitation_sign_org: "{org} vous a envoyé {title} à signer.",
+    invitation_approve_org: "{org} vous a envoyé {title} à approuver.",
     link_until: "Le lien est valable jusqu\u{2019}au {date}.",
     open_sign: "Consulter et signer",
     open_approve: "Consulter et approuver",
     personal_link: "Ce lien est personnel. Ne transférez pas cet e-mail.",
     sms_sign: "{org}\u{a0}: {sender} vous invite à signer {title}\u{a0}: {url}",
     sms_approve: "{org}\u{a0}: {sender} vous invite à approuver {title}\u{a0}: {url}",
+    sms_sign_org: "{org} vous invite à signer {title}\u{a0}: {url}",
+    sms_approve_org: "{org} vous invite à approuver {title}\u{a0}: {url}",
     code_sms: "{code} est votre code pour {title} de {org}. Ne le communiquez jamais.",
     completed_subject: "Signé\u{a0}: {title}",
     completed: "{title} a été signé par tous.",
@@ -207,12 +231,16 @@ const AR: Texts = Texts {
     subject_approve: "وصلك المستند {title} من {sender} للموافقة عليه",
     invitation_sign: "وصلك المستند {title} من {sender} في {org} لتوقيعه.",
     invitation_approve: "وصلك المستند {title} من {sender} في {org} للموافقة عليه.",
+    invitation_sign_org: "وصلك المستند {title} من {org} لتوقيعه.",
+    invitation_approve_org: "وصلك المستند {title} من {org} للموافقة عليه.",
     link_until: "يعمل الرابط حتى {date}.",
     open_sign: "مراجعة وتوقيع",
     open_approve: "مراجعة وموافقة",
     personal_link: "هذا الرابط شخصي. لا تُعِد توجيه هذه الرسالة.",
     sms_sign: "{org}: مطلوب منك توقيع {title} (المرسل: {sender}): {url}",
     sms_approve: "{org}: مطلوب منك الموافقة على {title} (المرسل: {sender}): {url}",
+    sms_sign_org: "{org}: مطلوب منك توقيع {title}: {url}",
+    sms_approve_org: "{org}: مطلوب منك الموافقة على {title}: {url}",
     code_sms: "{code} هو رمزك للمستند {title} من {org}. لا تشاركه مع أي أحد.",
     completed_subject: "تم التوقيع: {title}",
     completed: "وقّع الجميع على {title}.",
@@ -234,12 +262,16 @@ const BN: Texts = Texts {
     subject_approve: "{sender} আপনাকে অনুমোদনের জন্য {title} পাঠিয়েছেন",
     invitation_sign: "{org}-এর {sender} আপনাকে স্বাক্ষরের জন্য {title} পাঠিয়েছেন।",
     invitation_approve: "{org}-এর {sender} আপনাকে অনুমোদনের জন্য {title} পাঠিয়েছেন।",
+    invitation_sign_org: "{org} আপনাকে স্বাক্ষরের জন্য {title} পাঠিয়েছে।",
+    invitation_approve_org: "{org} আপনাকে অনুমোদনের জন্য {title} পাঠিয়েছে।",
     link_until: "লিংকটি {date} পর্যন্ত কাজ করবে।",
     open_sign: "দেখুন ও স্বাক্ষর করুন",
     open_approve: "দেখুন ও অনুমোদন করুন",
     personal_link: "এই লিংকটি ব্যক্তিগত। এই ইমেইলটি অন্য কাউকে ফরোয়ার্ড করবেন না।",
     sms_sign: "{org}: {sender} আপনাকে {title} স্বাক্ষর করতে অনুরোধ করেছেন: {url}",
     sms_approve: "{org}: {sender} আপনাকে {title} অনুমোদন করতে অনুরোধ করেছেন: {url}",
+    sms_sign_org: "{org} আপনাকে {title} স্বাক্ষর করতে অনুরোধ করেছে: {url}",
+    sms_approve_org: "{org} আপনাকে {title} অনুমোদন করতে অনুরোধ করেছে: {url}",
     code_sms: "{org}-এর {title}-এর জন্য আপনার কোড {code}। এটি কখনো কাউকে জানাবেন না।",
     completed_subject: "স্বাক্ষরিত: {title}",
     completed: "সবাই {title}-এ স্বাক্ষর করেছেন।",
@@ -261,12 +293,16 @@ const PT: Texts = Texts {
     subject_approve: "{sender} enviou {title} para você aprovar",
     invitation_sign: "{sender}, de {org}, enviou {title} para você assinar.",
     invitation_approve: "{sender}, de {org}, enviou {title} para você aprovar.",
+    invitation_sign_org: "{org} enviou {title} para você assinar.",
+    invitation_approve_org: "{org} enviou {title} para você aprovar.",
     link_until: "O link funciona até {date}.",
     open_sign: "Revisar e assinar",
     open_approve: "Revisar e aprovar",
     personal_link: "Este link é pessoal. Não encaminhe este e-mail.",
     sms_sign: "{org}: {sender} pede que você assine {title}: {url}",
     sms_approve: "{org}: {sender} pede que você aprove {title}: {url}",
+    sms_sign_org: "{org} pede que você assine {title}: {url}",
+    sms_approve_org: "{org} pede que você aprove {title}: {url}",
     code_sms: "{code} é o seu código para {title} de {org}. Nunca o compartilhe.",
     completed_subject: "Assinado: {title}",
     completed: "{title} foi assinado por todos.",
@@ -288,12 +324,16 @@ const RU: Texts = Texts {
     subject_approve: "{title} от {sender} ждёт вашего согласования",
     invitation_sign: "{sender} ({org}) просит вас подписать документ {title}.",
     invitation_approve: "{sender} ({org}) просит вас согласовать документ {title}.",
+    invitation_sign_org: "{org} просит вас подписать документ {title}.",
+    invitation_approve_org: "{org} просит вас согласовать документ {title}.",
     link_until: "Ссылка действует до {date}.",
     open_sign: "Просмотреть и подписать",
     open_approve: "Просмотреть и согласовать",
     personal_link: "Это персональная ссылка. Не пересылайте это письмо.",
     sms_sign: "{org}: {sender} просит вас подписать {title}: {url}",
     sms_approve: "{org}: {sender} просит вас согласовать {title}: {url}",
+    sms_sign_org: "{org} просит вас подписать {title}: {url}",
+    sms_approve_org: "{org} просит вас согласовать {title}: {url}",
     code_sms: "{code} — ваш код для документа {title} от {org}. Никому его не сообщайте.",
     completed_subject: "Подписано: {title}",
     completed: "Документ {title} подписан всеми сторонами.",
@@ -315,12 +355,16 @@ const UR: Texts = Texts {
     subject_approve: "{sender} نے آپ کو منظوری کے لیے {title} بھیجا ہے",
     invitation_sign: "{org} کے {sender} نے آپ کو دستخط کے لیے {title} بھیجا ہے۔",
     invitation_approve: "{org} کے {sender} نے آپ کو منظوری کے لیے {title} بھیجا ہے۔",
+    invitation_sign_org: "{org} نے آپ کو دستخط کے لیے {title} بھیجا ہے۔",
+    invitation_approve_org: "{org} نے آپ کو منظوری کے لیے {title} بھیجا ہے۔",
     link_until: "یہ لنک {date} تک کام کرے گا۔",
     open_sign: "دیکھیں اور دستخط کریں",
     open_approve: "دیکھیں اور منظور کریں",
     personal_link: "یہ لنک ذاتی ہے۔ یہ ای میل کسی اور کو نہ بھیجیں۔",
     sms_sign: "{org}: {sender} آپ سے {title} پر دستخط کی درخواست کرتے ہیں: {url}",
     sms_approve: "{org}: {sender} آپ سے {title} کی منظوری کی درخواست کرتے ہیں: {url}",
+    sms_sign_org: "{org} آپ سے {title} پر دستخط کی درخواست کرتا ہے: {url}",
+    sms_approve_org: "{org} آپ سے {title} کی منظوری کی درخواست کرتا ہے: {url}",
     code_sms: "{org} کی جانب سے {title} کے لیے آپ کا کوڈ {code} ہے۔ اسے کبھی کسی کو نہ بتائیں۔",
     completed_subject: "دستخط شدہ: {title}",
     completed: "سب نے {title} پر دستخط کر دیے ہیں۔",
@@ -342,12 +386,16 @@ const SV: Texts = Texts {
     subject_approve: "{sender} har skickat {title} till dig för godkännande",
     invitation_sign: "{sender} på {org} har skickat {title} till dig för signering.",
     invitation_approve: "{sender} på {org} har skickat {title} till dig för godkännande.",
+    invitation_sign_org: "{org} har skickat {title} till dig för signering.",
+    invitation_approve_org: "{org} har skickat {title} till dig för godkännande.",
     link_until: "Länken fungerar till och med {date}.",
     open_sign: "Granska och signera",
     open_approve: "Granska och godkänn",
     personal_link: "Länken är personlig. Vidarebefordra inte det här mejlet.",
     sms_sign: "{org}: {sender} ber dig signera {title}: {url}",
     sms_approve: "{org}: {sender} ber dig godkänna {title}: {url}",
+    sms_sign_org: "{org} ber dig signera {title}: {url}",
+    sms_approve_org: "{org} ber dig godkänna {title}: {url}",
     code_sms: "{code} är din kod för {title} från {org}. Dela den aldrig.",
     completed_subject: "Signerat: {title}",
     completed: "{title} är signerat av alla.",
@@ -452,9 +500,16 @@ impl Lang {
         if reminder { fill(t.reminder, &[("subject", &subject)]) } else { subject }
     }
 
-    pub fn invitation(self, sender: &str, org: &str, title: &str, approve: bool) -> String {
+    /// The invitation's first line. Without a sender it names the organisation alone.
+    pub fn invitation(self, sender: Option<&str>, org: &str, title: &str, approve: bool) -> String {
         let t = self.texts();
-        fill(if approve { t.invitation_approve } else { t.invitation_sign }, &[("sender", sender), ("org", org), ("title", &self.q(title))])
+        let text = match (sender, approve) {
+            (Some(_), false) => t.invitation_sign,
+            (Some(_), true) => t.invitation_approve,
+            (None, false) => t.invitation_sign_org,
+            (None, true) => t.invitation_approve_org,
+        };
+        fill(text, &[("sender", sender.unwrap_or_default()), ("org", org), ("title", &self.q(title))])
     }
 
     pub fn link_until(self, expires: DateTime<Utc>) -> String {
@@ -469,9 +524,15 @@ impl Lang {
         self.texts().personal_link
     }
 
-    pub fn invitation_sms(self, org: &str, sender: &str, title: &str, approve: bool, url: &str) -> String {
+    pub fn invitation_sms(self, org: &str, sender: Option<&str>, title: &str, approve: bool, url: &str) -> String {
         let t = self.texts();
-        fill(if approve { t.sms_approve } else { t.sms_sign }, &[("org", org), ("sender", sender), ("title", &self.q(title)), ("url", url)])
+        let text = match (sender, approve) {
+            (Some(_), false) => t.sms_sign,
+            (Some(_), true) => t.sms_approve,
+            (None, false) => t.sms_sign_org,
+            (None, true) => t.sms_approve_org,
+        };
+        fill(text, &[("org", org), ("sender", sender.unwrap_or_default()), ("title", &self.q(title)), ("url", url)])
     }
 
     pub fn code_sms(self, code: &str, title: &str, org: &str) -> String {
@@ -555,7 +616,7 @@ mod tests {
 
     #[test]
     fn placeholders_in_values_are_not_expanded() {
-        let sms = Lang::En.invitation_sms("Acme", "{url}", "{code}", false, "https://x");
+        let sms = Lang::En.invitation_sms("Acme", Some("{url}"), "{code}", false, "https://x");
         assert_eq!(sms, "Acme: {url} asks you to sign \u{201c}{code}\u{201d}: https://x");
     }
 
@@ -566,11 +627,15 @@ mod tests {
             let texts = [
                 lang.invitation_subject(true, "S", "T", false),
                 lang.invitation_subject(false, "S", "T", true),
-                lang.invitation("S", "O", "T", false),
-                lang.invitation("S", "O", "T", true),
+                lang.invitation(Some("S"), "O", "T", false),
+                lang.invitation(Some("S"), "O", "T", true),
+                lang.invitation(None, "O", "T", false),
+                lang.invitation(None, "O", "T", true),
                 lang.link_until(at),
-                lang.invitation_sms("O", "S", "T", false, "U"),
-                lang.invitation_sms("O", "S", "T", true, "U"),
+                lang.invitation_sms("O", Some("S"), "T", false, "U"),
+                lang.invitation_sms("O", Some("S"), "T", true, "U"),
+                lang.invitation_sms("O", None, "T", false, "U"),
+                lang.invitation_sms("O", None, "T", true, "U"),
                 lang.code_sms("123456", "T", "O"),
                 lang.completed_subject("T"),
                 lang.completed("T"),
@@ -584,5 +649,19 @@ mod tests {
                 assert!(!text.contains('{') && !text.contains('}'), "{lang:?}: {text}");
             }
         }
+    }
+
+    #[test]
+    fn without_a_sender_the_organisation_is_named_once() {
+        for &lang in Lang::ALL {
+            for approve in [false, true] {
+                for text in [lang.invitation(None, "Acme", "T", approve), lang.invitation_sms("Acme", None, "T", approve, "U")] {
+                    assert_eq!(text.matches("Acme").count(), 1, "{lang:?}: {text}");
+                }
+                let named = lang.invitation(Some("Anna Berg (HR)"), "Acme", "T", approve);
+                assert!(named.contains("Anna Berg (HR)") && named.contains("Acme"), "{lang:?}: {named}");
+            }
+        }
+        assert_eq!(Lang::Sv.invitation(None, "Acme", "Avtal", false), "Acme har skickat \u{201c}Avtal\u{201d} till dig för signering.");
     }
 }

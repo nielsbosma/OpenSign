@@ -1,6 +1,7 @@
 //! Documents, their parties and fields: shared types, who may see what, and signer links.
 
 pub mod attachments;
+pub mod evidence_text;
 pub mod export;
 pub mod logic;
 pub mod ltv;
@@ -134,7 +135,7 @@ pub mod status {
 
 pub const DOCUMENT_COLUMNS: &str = "id, title, status, is_template, template_id, owner_id, message, language, sequential, expires_at, reminder_days, \
      source_file_id, sealed_file_id, original_sha256, sealed_sha256, page_count, external_id, metadata, sent_at, completed_at, canceled_at, created_at, updated_at, \
-     legal_hold, legal_hold_reason, legal_hold_at, review_links, folder_id, archived_at, template_version";
+     legal_hold, legal_hold_reason, legal_hold_at, review_links, folder_id, archived_at, template_version, sender_name, sender_title";
 
 #[derive(Debug, Clone, Serialize, JsonSchema, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -177,6 +178,10 @@ pub struct DocumentRow {
     pub archived_at: Option<DateTime<Utc>>,
     /// The version of the template this document was made from.
     pub template_version: Option<i32>,
+    /// The person invitations name as the sender, instead of the owner.
+    pub sender_name: Option<String>,
+    /// That person's title, shown after their name.
+    pub sender_title: Option<String>,
 }
 
 pub const PARTY_COLUMNS: &str = "id, document_id, role, name, email, phone, personal_number, company, sign_order, delivery, auth_to_view, auth_to_sign, \
@@ -511,6 +516,45 @@ pub async fn files(conn: &mut PgConnection, document_id: Uuid) -> Result<Vec<Fil
     .await?)
 }
 
+/// The person invitations and the signing page name as the sender.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Sender {
+    pub name: String,
+    pub title: Option<String>,
+}
+
+impl Sender {
+    /// The name, with the title in brackets when there is one.
+    pub fn display(&self) -> String {
+        match &self.title {
+            Some(title) => format!("{} ({title})", self.name),
+            None => self.name.clone(),
+        }
+    }
+}
+
+/// The person the document was sent in the name of, else its owner. None when that name is only
+/// the organisation's own, as for an API key named after it, so texts do not read "Acme at Acme".
+pub async fn sender(conn: &mut PgConnection, document: &DocumentRow, organisation: &str) -> Result<Option<Sender>> {
+    let name = match document.sender_name.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
+        Some(name) => Some(name.to_string()),
+        None => match document.owner_id {
+            Some(id) => sqlx::query_scalar("select name from users where id = $1").bind(id).fetch_optional(&mut *conn).await?,
+            None => None,
+        },
+    };
+    let title = document.sender_title.as_deref().map(str::trim).filter(|t| !t.is_empty()).map(str::to_string);
+    Ok(sender_from(name, title, organisation))
+}
+
+fn sender_from(name: Option<String>, title: Option<String>, organisation: &str) -> Option<Sender> {
+    let name = name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty())?;
+    if title.is_none() && name.to_lowercase() == organisation.trim().to_lowercase() {
+        return None;
+    }
+    Some(Sender { name, title })
+}
+
 pub async fn view(ctx: &Ctx, conn: &mut PgConnection, document: DocumentRow) -> Result<DocumentView> {
     let owner_name: Option<String> = match document.owner_id {
         Some(id) => sqlx::query_scalar("select name from users where id = $1").bind(id).fetch_optional(&mut *conn).await?,
@@ -672,5 +716,27 @@ mod tests {
         for k in FieldKind::ALL {
             assert_eq!(serde_json::to_value(k).ok(), Some(Value::String(k.as_str().into())));
         }
+    }
+}
+
+#[cfg(test)]
+mod sender_tests {
+    use super::{Sender, sender_from};
+
+    #[test]
+    fn a_sender_named_like_the_organisation_is_left_out() {
+        assert_eq!(sender_from(Some("Acme".into()), None, "Acme"), None);
+        assert_eq!(sender_from(Some(" acme ".into()), None, "Acme"), None);
+        assert_eq!(sender_from(None, None, "Acme"), None);
+        assert_eq!(sender_from(Some(" ".into()), Some("CEO".into()), "Acme"), None);
+    }
+
+    #[test]
+    fn a_person_is_named_with_their_title() {
+        let anna = sender_from(Some("Anna Berg".into()), Some("HR Manager".into()), "Acme").expect("a person");
+        assert_eq!(anna.display(), "Anna Berg (HR Manager)");
+        let plain = sender_from(Some("Anna Berg".into()), None, "Acme").expect("a person");
+        assert_eq!(plain, Sender { name: "Anna Berg".into(), title: None });
+        assert_eq!(plain.display(), "Anna Berg");
     }
 }

@@ -13,7 +13,8 @@ import { zh } from './languages/zh';
 /** Everything a signer reads, in their language. The rest of the app is English. */
 const en = {
   secureConnection: 'Secure connection',
-  from: (sender: string | null | undefined, org: string) => `From ${sender ? `${sender}, ` : ''}${org}`,
+  from: (sender: string | null | undefined, title: string | null | undefined, org: string) =>
+    `From ${sender ? `${sender}${title ? ` (${title})` : ''}, ` : ''}${org}`,
   linkIncomplete: 'This link is incomplete',
   linkBroken: 'This link does not work',
   youDeclined: 'You declined',
@@ -185,6 +186,10 @@ const en = {
   shareOpen: (sign: boolean): string => (sign ? 'Confirm and Sign' : 'Confirm and Approve'),
   shareOtherEmail: 'Use Another Email',
   shareReady: 'Your document is ready',
+  alreadySigned: 'Already Signed',
+  signedOn: (date: string) => `Signed ${date}`,
+  approvedOn: (date: string) => `Approved ${date}`,
+  you: 'You',
   methods: { sms_pin: 'SMS code', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-ID' } as Record<string, string>,
 };
 

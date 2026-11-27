@@ -130,7 +130,14 @@ export function LanguagePicker() {
   );
 }
 
-type ShellDocument = { title: string; sender?: string | null; organisation: string; logoUrl?: string | null; brandColor?: string };
+type ShellDocument = {
+  title: string;
+  sender?: string | null;
+  senderTitle?: string | null;
+  organisation: string;
+  logoUrl?: string | null;
+  brandColor?: string;
+};
 
 export function Shell({ view, doc = view?.document, children }: { view?: SignerView; doc?: ShellDocument; children: React.ReactNode }) {
   const t = useTexts();
@@ -148,7 +155,7 @@ export function Shell({ view, doc = view?.document, children }: { view?: SignerV
             <BrandLogo className="h-6" markClassName="size-6" branding={doc} />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold">{doc?.title ?? 'OpenSign'}</div>
-              {doc && <div className="truncate text-xs text-muted-foreground">{t.from(doc.sender, doc.organisation)}</div>}
+              {doc && <div className="truncate text-xs text-muted-foreground">{t.from(doc.sender, doc.senderTitle, doc.organisation)}</div>}
             </div>
             <LanguagePicker />
             <Tooltip>
@@ -684,6 +691,7 @@ function SignerScreen({
                 {view.party.role === 'viewer' ? t.roleViewer : view.party.role === 'approver' ? t.roleApprover : t.roleSigner}
               </p>
             </div>
+            <SignedSoFar view={view} />
             {preview ? (
               <>
                 {view.signAuthentication && <IdentifyPreview method={view.signAuthentication} />}
@@ -887,6 +895,38 @@ function OpenGatePreview({ method }: { method: AuthMethod }) {
     <div className="mb-4 flex items-center gap-2 rounded-lg border border-dashed bg-background p-3 text-muted-foreground">
       <ShieldCheck className="size-4 shrink-0" />
       {method === 'sms_pin' ? t.smsIntro(true) : t.eidIntro(true, t.methods[method] ?? method)}
+    </div>
+  );
+}
+
+/** The signatures and approvals the document already carries, so a party sees who has signed before them. */
+function SignedSoFar({ view }: { view: SignerView }) {
+  const t = useTexts();
+  const { code } = useContext(LanguageContext);
+  if (!view.signatures?.length) return null;
+  const when = new Intl.DateTimeFormat(code, { dateStyle: 'medium', timeStyle: 'short' });
+  return (
+    <div className="grid gap-2">
+      <h3 className="text-sm font-medium">{t.alreadySigned}</h3>
+      <ul className="grid gap-2">
+        {view.signatures.map((s) => (
+          <li key={`${s.name}-${s.signedAt}`} className="flex gap-2 text-sm">
+            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
+            <div className="min-w-0">
+              <div className="truncate font-medium">
+                {s.name}
+                {s.company ? `, ${s.company}` : ''}
+                {s.you ? ` (${t.you})` : ''}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {[(s.role === 'approver' ? t.approvedOn : t.signedOn)(when.format(new Date(s.signedAt))), t.methods[s.method]]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

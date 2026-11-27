@@ -2,7 +2,7 @@ import type { Texts } from '../texts';
 
 export const ru: Texts = {
   secureConnection: 'Защищённое соединение',
-  from: (sender, org) => `От: ${sender ? `${sender}, ` : ''}${org}`,
+  from: (sender, title, org) => `От: ${sender ? `${sender}${title ? ` (${title})` : ''}, ` : ''}${org}`,
   linkIncomplete: 'Ссылка неполная',
   linkBroken: 'Ссылка не работает',
   youDeclined: 'Вы отказались',
@@ -175,5 +175,9 @@ export const ru: Texts = {
   shareOpen: (sign) => (sign ? 'Подтвердить и подписать' : 'Подтвердить и утвердить'),
   shareOtherEmail: 'Указать другой адрес',
   shareReady: 'Ваш документ готов',
+  alreadySigned: 'Уже подписали',
+  signedOn: (date) => `Подписано ${date}`,
+  approvedOn: (date) => `Согласовано ${date}`,
+  you: 'Вы',
   methods: { sms_pin: 'SMS-код', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-ID' },
 };

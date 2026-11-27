@@ -666,6 +666,8 @@ async fn send_row(ctx: &Ctx, conn: &mut PgConnection, bulk: &BulkJob, values: &B
             external_id: mapped.get("externalId").filter(|e| !e.is_empty()).cloned(),
             metadata: Some(json!({ "bulkSend": bulk.id })),
             folder_id: None,
+            sender_name: None,
+            sender_title: None,
         },
         docs::Origin::BulkSend,
     )

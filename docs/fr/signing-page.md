@@ -6,6 +6,8 @@ C’est ce que voient les personnes à qui vous envoyez des documents. Elles n�
 
 L’invitation arrive par e-mail ou par SMS, ou directement de votre part. Elle nomme votre organisation et la personne qui a envoyé le document, et indique jusqu’à quand le lien fonctionne.
 
+Lorsqu'une intégration envoie des documents pour quelqu'un d'autre, elle peut indiquer cette personne et sa fonction (`senderName` et `senderTitle` dans l'API). Un document envoyé avec une clé d'API dont l'utilisateur porte le nom de votre organisation ne nomme que l'organisation : l'invitation ne dit donc jamais « Acme (Acme) ».
+
 Si la partie doit s’identifier pour consulter le document, elle le fait d’abord : avec un code SMS, BankID, Freja ou un autre eID. Voir [Identification](identification.md). Sinon, le document s’ouvre aussitôt.
 
 Un lien incomplet, révoqué, expiré, ou qui appartient à un document qui n’est plus en attente affiche un message clair à la place du document.
@@ -21,6 +23,8 @@ La page montre :
 La partie remplit ses champs : texte, nombres, listes déroulantes, listes à choix multiple, groupes de boutons radio, cases à cocher, numéros de téléphone, dates choisies dans un sélecteur de date, images et fichiers importés directement, initiales et signatures. Chaque champ est contrôlé pendant la saisie, avec des erreurs dans sa langue ou le [texte d’erreur que vous avez écrit](documents.md#checks-and-error-texts), et la partie ne peut pas signer tant que tous les champs ne sont pas valides. Les champs nom, e-mail et entreprise sont remplis à partir de ses informations. Si vous avez demandé des [pièces jointes](attachments.md), elle les importe ici. Si vous avez demandé une [photo webcam](identification.md#webcam-photo), elle la prend ici.
 
 Dans un document qui se signe dans l’ordre, une partie qui ouvre son lien trop tôt voit « D’autres personnes signent avant vous. Nous vous enverrons un e-mail quand ce sera votre tour. »
+
+Lorsque d'autres ont déjà signé ou approuvé, la page les liste sous **Déjà signé**, avec la date et le moyen d'identification, pour qu'une partie voie par exemple que votre organisation a signé avant elle.
 
 ## Signer
 
