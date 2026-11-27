@@ -15,6 +15,8 @@ Cuando firma la última parte, OpenSign convierte el documento en un único PDF 
 4. **El sello**: una firma PAdES sobre todo el archivo a nombre de su organización, con un sello de tiempo RFC 3161.
 5. **Datos de validación a largo plazo** y un sello de tiempo de archivo (véase más abajo).
 
+Las páginas de evidencia, y la identificación que aparece bajo cada firma, están en el idioma del documento cuando es inglés o sueco, y en inglés en los demás casos, porque las fuentes estándar de PDF solo cubren la escritura latina. La evidencia JSON siempre está en inglés.
+
 ## PAdES B-LTA
 
 El sello sigue PAdES Baseline B-LTA, el nivel del estándar europeo para documentos que deben seguir siendo verificables durante mucho tiempo:

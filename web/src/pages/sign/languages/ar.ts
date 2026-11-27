@@ -2,7 +2,7 @@ import type { Texts } from '../texts';
 
 export const ar: Texts = {
   secureConnection: 'اتصال آمن',
-  from: (sender, org) => `من ${sender ? `${sender}، ` : ''}${org}`,
+  from: (sender, title, org) => `من ${sender ? `${sender}${title ? ` (${title})` : ''}، ` : ''}${org}`,
   linkIncomplete: 'هذا الرابط غير مكتمل',
   linkBroken: 'هذا الرابط لا يعمل',
   youDeclined: 'لقد رفضت',
@@ -169,5 +169,9 @@ export const ar: Texts = {
   shareOpen: (sign) => (sign ? 'تأكيد وتوقيع' : 'تأكيد وموافقة'),
   shareOtherEmail: 'استخدام بريد إلكتروني آخر',
   shareReady: 'مستندك جاهز',
+  alreadySigned: 'تم التوقيع بالفعل',
+  signedOn: (date) => `وقّع في ${date}`,
+  approvedOn: (date) => `وافق في ${date}`,
+  you: 'أنت',
   methods: { sms_pin: 'رمز الرسائل النصية', se_bankid: 'BankID', freja: 'Freja eID', broker: 'الهوية الإلكترونية' },
 };

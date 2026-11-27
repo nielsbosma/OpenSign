@@ -15,6 +15,8 @@ När den sista parten har signerat gör OpenSign om dokumentet till en försegla
 4. **Sigillet**: en PAdES-signatur över hela filen i din organisations namn, med en RFC 3161-tidsstämpel.
 5. **Data för långtidsvalidering** och en arkivtidsstämpel (se nedan).
 
+Bevissidorna, och identifieringen under varje signatur, är på dokumentets språk när det är engelska eller svenska, annars på engelska, eftersom PDF:ens standardteckensnitt bara täcker latinska tecken. JSON-bevisen är alltid på engelska.
+
 ## PAdES B-LTA
 
 Sigillet följer PAdES Baseline B-LTA, den europeiska standardnivån för dokument som måste förbli verifierbara under lång tid:

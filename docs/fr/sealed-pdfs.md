@@ -15,6 +15,8 @@ Quand la dernière partie a signé, OpenSign transforme le document en un seul P
 4. **Le cachet** : une signature PAdES sur l’ensemble du fichier au nom de votre organisation, avec un horodatage RFC 3161.
 5. **Des données de validation à long terme** et un horodatage d’archivage (voir ci-dessous).
 
+Les pages de preuve, et l'identification indiquée sous chaque signature, sont dans la langue du document lorsqu'il est en anglais ou en suédois, et en anglais sinon, car les polices PDF standard ne couvrent que l'alphabet latin. La preuve JSON est toujours en anglais.
+
 ## PAdES B-LTA
 
 Le cachet suit PAdES Baseline B-LTA, le niveau de la norme européenne pour les documents qui doivent rester vérifiables longtemps :

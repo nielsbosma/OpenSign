@@ -6,6 +6,8 @@ Anyone holding a signed PDF can check that it is genuine and unchanged. No accou
 
 Open `https://<your-install>/verify` (also linked as **Verify a Document** in the app's sidebar, and printed on every sealed document's evidence pages) and drop the PDF.
 
+The page speaks the document's language. The link on the evidence pages carries it, and the page switches to it once it recognises the file.
+
 The file is checked on the server and not stored. The page answers two questions:
 
 1. **Did this install seal exactly this file?** "Sealed by this OpenSign" with the document's title and completion time means the file's SHA-256 matches a document this server sealed and its seal holds, made with one of this server's seal certificates. "Not a document this server sealed" means it was changed after sealing, or it comes from somewhere else.

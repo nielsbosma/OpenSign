@@ -6,6 +6,8 @@ Qualquer pessoa que tenha um PDF assinado pode conferir se ele é genuíno e nã
 
 Abra `https://<your-install>/verify` (também com link como **Verificar um documento** na barra lateral do aplicativo e impresso nas páginas de evidência de todo documento selado) e solte o PDF.
 
+A página usa o idioma do documento. O link nas páginas de evidência o inclui, e a página muda para ele quando reconhece o arquivo.
+
 O arquivo é verificado no servidor e não é armazenado. A página responde a duas perguntas:
 
 1. **Esta instalação selou exatamente este arquivo?** "Selado por este OpenSign", com o título do documento e o horário de conclusão, significa que o SHA-256 do arquivo corresponde a um documento que este servidor selou e que o seu selo é válido, feito com um dos certificados de selo deste servidor. "Não é um documento selado por este servidor" significa que ele foi alterado depois de selado ou vem de outro lugar.

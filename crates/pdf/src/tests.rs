@@ -147,9 +147,15 @@ fn report() -> EvidenceReport {
             signed_at: Some("2026-10-28 11:59 UTC".into()),
             ip: Some("192.0.2.1".into()),
             identity: None,
+            shown_role: "Undertecknare".into(),
+            shown_authentication: "E-postlänk".into(),
         }],
         events: (0..80)
-            .map(|i| EvidenceEvent { at: format!("2026-10-28 11:{:02} UTC", i % 60), text: format!("Event number {i}") })
+            .map(|i| EvidenceEvent {
+                at: format!("2026-10-28 11:{:02} UTC", i % 60),
+                text: format!("Event number {i}"),
+                shown: format!("Händelse nummer {i}"),
+            })
             .collect(),
         attachments: vec![EvidenceAttachment {
             party: "Anna Ångström".into(),
@@ -160,6 +166,7 @@ fn report() -> EvidenceReport {
             content: b"png bytes".to_vec(),
         }],
         audit_head: Some("ef".repeat(32)),
+        labels: EvidenceLabels::EN,
         logo_png: None,
     }
 }
@@ -246,4 +253,22 @@ fn merges_documents_in_order() {
     let second = doc.get_pages()[&2];
     let content = doc.get_page_content(second);
     assert!(content.windows(6).any(|w| w == b"Second"));
+}
+
+#[test]
+fn evidence_json_keeps_the_english_values_the_page_translates() {
+    let input = sanitize(&sample_pdf(false), Limits::default()).unwrap().pdf;
+    let out = append_evidence(&input, &report()).unwrap();
+    let doc = Document::load_mem(&out).unwrap();
+    let json = doc
+        .objects
+        .values()
+        .filter_map(|o| o.as_stream().ok())
+        .filter(|s| s.dict.get(b"Type").ok().and_then(|t| t.as_name().ok()) == Some(b"EmbeddedFile"))
+        .filter_map(|s| s.decompressed_content().ok().or_else(|| Some(s.content.clone())))
+        .find_map(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .expect("evidence.json is embedded");
+    assert_eq!(json["parties"][0]["role"], "Signer");
+    assert_eq!(json["events"][0]["text"], "Event number 0");
+    assert!(json["parties"][0].get("shownRole").is_none() && json.get("labels").is_none());
 }

@@ -2,7 +2,7 @@ import type { Texts } from '../texts';
 
 export const zh: Texts = {
   secureConnection: '安全连接',
-  from: (sender, org) => `来自 ${sender ? `${sender}，` : ''}${org}`,
+  from: (sender, title, org) => `来自 ${sender ? `${sender}${title ? ` (${title})` : ''}，` : ''}${org}`,
   linkIncomplete: '此链接不完整',
   linkBroken: '此链接无效',
   youDeclined: '您已拒绝',
@@ -168,5 +168,9 @@ export const zh: Texts = {
   shareOpen: (sign) => (sign ? '确认并签署' : '确认并审批'),
   shareOtherEmail: '使用其他电子邮件',
   shareReady: '您的文件已准备就绪',
+  alreadySigned: '已签署',
+  signedOn: (date) => `签署于 ${date}`,
+  approvedOn: (date) => `审批于 ${date}`,
+  you: '您',
   methods: { sms_pin: '短信验证码', se_bankid: 'BankID', freja: 'Freja eID', broker: '电子身份' },
 };

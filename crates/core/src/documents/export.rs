@@ -420,6 +420,8 @@ mod tests {
             folder_id: None,
             archived_at: None,
             template_version: Some(3),
+            sender_name: None,
+            sender_title: None,
         }
     }
 

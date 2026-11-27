@@ -6,6 +6,8 @@ Det här är vad de du skickar dokument till ser. De behöver inget konto och in
 
 Inbjudan kommer med e-post eller SMS, eller direkt från dig. Den anger din organisation och personen som skickade dokumentet, och till vilket datum länken fungerar.
 
+När en integration skickar dokument för någon annans räkning kan den ange personen och hens titel (`senderName` och `senderTitle` i API:t). Ett dokument som skickas med en API-nyckel vars användare heter som organisationen nämner bara organisationen, så att inbjudan aldrig lyder "Acme på Acme".
+
 Om parten måste legitimera sig för att visa dokumentet gör parten det först: med en SMS-kod, BankID, Freja eller en annan e-legitimation. Se [Legitimering](identification.md). Annars öppnas dokumentet direkt.
 
 En länk som är ofullständig, återkallad, utgången eller hör till ett dokument som inte längre väntar visar ett tydligt meddelande i stället för dokumentet.
@@ -21,6 +23,8 @@ Sidan visar:
 Parten fyller i sina fält: text, tal, rullgardinsmenyer, flervalslistor, radiogrupper, kryssrutor, telefonnummer, datum från en datumväljare, bilder och filer som laddas upp direkt på sidan, initialer och underskrifter. Varje fält kontrolleras medan parten skriver, med fel på partens språk eller den [feltext du skrev](documents.md#checks-and-error-texts), och parten kan inte signera förrän varje fält klarar kontrollen. Fälten för namn, e-post och företag fylls i från partens uppgifter. Om du har bett om [bilagor](attachments.md) laddar parten upp dem här. Om du har bett om ett [webbkamerafoto](identification.md#webcam-photo) tar parten det här.
 
 I ett dokument som signeras i ordning ser en part som öppnar sin länk för tidigt "Andra signerar före dig. Vi mejlar dig när det är din tur."
+
+När andra har signerat eller godkänt listar sidan dem under **Redan signerat**, med när och hur de identifierade sig, så att en part till exempel ser att organisationen har signerat före dem.
 
 ## Signera
 

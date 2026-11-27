@@ -6,6 +6,8 @@ Esto es lo que ven las personas a las que envía documentos. No necesitan cuenta
 
 La invitación llega por correo electrónico o SMS, o directamente de usted. Nombra a su organización y a la persona que envió el documento, e indica hasta cuándo funciona el enlace.
 
+Cuando una integración envía documentos en nombre de otra persona, puede indicar esa persona y su cargo (`senderName` y `senderTitle` en la API). Un documento enviado con una clave de API cuyo usuario se llama como su organización nombra solo a la organización, así la invitación nunca dice "Acme, de Acme".
+
 Si la parte debe identificarse para ver el documento, lo hace primero: con un código SMS, BankID, Freja u otra eID. Consulte [Identificación](identification.md). En caso contrario, el documento se abre de inmediato.
 
 Un enlace que está incompleto, revocado o caducado, o que pertenece a un documento que ya no está pendiente, muestra un mensaje claro en lugar del documento.
@@ -21,6 +23,8 @@ La página muestra:
 La parte rellena sus campos: texto, números, desplegables, listas de selección múltiple, grupos de botones de opción, casillas, números de teléfono, fechas de un selector de fecha, imágenes y archivos que sube directamente, iniciales y firmas. Cada campo se comprueba mientras escribe, con errores en su idioma o el [texto de error que usted escribió](documents.md#checks-and-error-texts), y no puede firmar hasta que todos los campos pasan la comprobación. Los campos de nombre, correo electrónico y empresa se rellenan a partir de sus datos. Si pidió [adjuntos](attachments.md), los sube aquí. Si pidió una [foto de webcam](identification.md#webcam-photo), la toma aquí.
 
 En un documento que se firma en orden, una parte que abre su enlace antes de tiempo ve «Otras personas firman antes que usted. Le enviaremos un correo cuando sea su turno».
+
+Cuando otros ya han firmado o aprobado, la página los muestra en **Ya firmado**, con cuándo y cómo se identificaron, para que una parte vea, por ejemplo, que su organización firmó antes.
 
 ## Firmar
 

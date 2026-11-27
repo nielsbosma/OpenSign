@@ -1,9 +1,10 @@
 import { CheckCircle2, ShieldCheck, XCircle } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { Spinner } from '@/components/common';
 import { errorMessage, type VerifyOutput, verifyFile } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, useLanguage } from '@/lib/i18n';
 import { AuthLayout, FormError } from './auth/AuthLayout';
 
 type Signature = {
@@ -19,9 +20,30 @@ type Signature = {
   problems: string[];
 };
 
-/** Public: anyone holding a signed PDF can check that it is intact and that OpenSign sealed it. */
+// Switching the language remounts the page, so the result, and which language was already
+// applied (so a reader's own choice afterwards stands), outlive it here.
+let kept: VerifyOutput | null = null;
+let applied: string | null = null;
+
+/**
+ * Public: anyone holding a signed PDF can check that it is intact and that OpenSign sealed it.
+ * The page speaks the document's language: from `?lang=` in the link the sealed PDF carries, and
+ * from the document once a file is recognised.
+ */
 export function VerifyPage() {
-  const [result, setResult] = useState<VerifyOutput | null>(null);
+  const [result, setResultState] = useState<VerifyOutput | null>(kept);
+  const { language, setLanguage } = useLanguage();
+  const [params] = useSearchParams();
+  const wanted = result?.document?.language ?? params.get('lang');
+  useEffect(() => {
+    if (!wanted || wanted === applied) return;
+    applied = wanted;
+    if (wanted !== language) setLanguage(wanted, { remember: false });
+  }, [wanted, language, setLanguage]);
+  const setResult = (next: VerifyOutput | null) => {
+    kept = next;
+    setResultState(next);
+  };
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const check = async (file?: File) => {

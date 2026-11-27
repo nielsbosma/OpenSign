@@ -9,6 +9,10 @@ ignore = [
   # crypto-bigint 0.5 comes with p256 0.13, which only handles public keys and the x509/CMS types here.
   # The seal's private key only ever goes through p256 0.14 (crypto-bigint 0.7.6 or later); see crates/pdf/src/cert.rs.
   { id = "RUSTSEC-2026-0387", reason = "no secret arithmetic on crypto-bigint 0.5" },
+  # Unmaintained, not vulnerable: chrono sits under sqlx, lopdf, schemars and object_store, and no maintained
+  # replacement fits them yet. Revisit when the ecosystem moves.
+  { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained, with no known vulnerability and no replacement its dependents accept" },
+  { id = "RUSTSEC-2026-0542", reason = "humantime only wraps chrono for object_store; same as RUSTSEC-2026-0543" },
 ]
 
 [licenses]

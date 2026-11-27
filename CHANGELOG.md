@@ -4,6 +4,27 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-11-27
+
+### Added
+
+- Integrations can name the person a document is sent for, with `senderName` and `senderTitle` when creating or changing it. Invitations and the signing page then read, for example, "Anna Berg (HR Manager) at Acme sent you …".
+- The signing page lists who has already signed or approved, with when and how they identified, so a signer sees that the organisation has signed before them.
+
+### Changed
+
+- The verify page speaks the document's language: the link on the evidence pages carries it, and the page switches to it once it recognises the file.
+- The evidence pages of a sealed PDF, and the identification under each signature, are in Swedish for Swedish documents. evidence.json stays in English.
+
+### Fixed
+
+- An invitation sent with an API key whose user is named like the organisation no longer reads "Acme at Acme"; it names the organisation once.
+- The server builds again: `der` is back on 0.7, which the PDF crate's `cms` 0.2 needs.
+
+### Security
+
+- lettre 0.11.24 fixes several SMTP advisories (STARTTLS reply injection, dot-stuffing, panics on odd server replies), and url 2.5.9 fixes a stack overflow on nested `blob:` URLs.
+
 ## [0.1.13] - 2026-11-10
 
 ### Added

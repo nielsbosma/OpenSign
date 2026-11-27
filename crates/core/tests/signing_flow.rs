@@ -1229,3 +1229,93 @@ async fn conditions_and_formulas_are_worked_out_by_the_server() {
     assert!(has(b"(25)"));
     assert!(!has(b"(should vanish)") && !has(b"(abc)"), "hidden fields are not stamped");
 }
+
+#[tokio::test]
+async fn names_the_sender_and_shows_earlier_signatures() {
+    let Some(app) = app().await else { return };
+    let api_user = user(&app, "Integration Key", Role::Sender).await;
+    let create = serde_json::json!({ "title": "Employment Agreement", "language": "sv", "sequential": true,
+        "senderName": " Anna Berg ", "senderTitle": "HR Manager" });
+    let document = call::<docs::Create>(&api_user, serde_json::from_value(create).unwrap()).await.unwrap();
+    let id = document.document.id;
+    assert_eq!(document.document.sender_name.as_deref(), Some("Anna Berg"));
+    assert_eq!(document.document.sender_title.as_deref(), Some("HR Manager"));
+    let too_long = serde_json::json!({ "id": id, "senderTitle": "x".repeat(201) });
+    assert_eq!(kind(call::<docs::Update>(&api_user, serde_json::from_value(too_long).unwrap()).await), ErrorKind::BadRequest);
+
+    call::<docs::Upload>(
+        &api_user,
+        docs::UploadInput { document_id: id, name: "a.pdf".into(), content_base64: B64.encode(sample_pdf(1)), ..Default::default() },
+    )
+    .await
+    .unwrap();
+    let mut company = party("Carl", PartyRole::Signer, Delivery::Link, AuthMethod::Standard);
+    company.company = Some("Acme AB".into());
+    company.sign_order = Some(1);
+    let mut employee = party("Eva", PartyRole::Signer, Delivery::Link, AuthMethod::Standard);
+    employee.sign_order = Some(2);
+    let saved =
+        call::<docs::SetParties>(&api_user, docs::SetPartiesInput { document_id: id, parties: vec![company, employee] }).await.unwrap();
+    let mut fields = Vec::new();
+    for (i, p) in saved.iter().enumerate() {
+        fields.push(field(Some(p.id), FieldKind::Signature, 0, 0.2 + 0.2 * i as f64));
+    }
+    call::<docs::SetFields>(&api_user, docs::SetFieldsInput { document_id: id, fields }).await.unwrap();
+    call::<docs::Send>(&api_user, docs::SendInput { id, expires_at: None }).await.unwrap();
+
+    let tokens: Vec<String> = {
+        let mut conn = app.db.acquire().await.unwrap();
+        let all = parties(&mut conn, id).await.unwrap();
+        all.iter().map(|p| signer_token(&app.keys, p)).collect()
+    };
+    let signer = signer_ctx(&app);
+    let open = |token: &String| signing::OpenInput { token: token.clone(), session: None, redirect_url: None };
+    let first = call::<signing::Open>(&signer, open(&tokens[0])).await.unwrap();
+    assert_eq!(first.document.sender.as_deref(), Some("Anna Berg"), "the named sender, not the API key's user");
+    assert_eq!(first.document.sender_title.as_deref(), Some("HR Manager"));
+    assert!(first.signatures.is_empty());
+    call::<signing::Sign>(
+        &signer,
+        signing::SignInput {
+            token: tokens[0].clone(),
+            session: None,
+            values: vec![],
+            signature: Some(SignatureInput { typed_name: Some("Carl".into()), image_png_base64: None }),
+            consent: true,
+        },
+    )
+    .await
+    .unwrap();
+
+    let second = call::<signing::Open>(&signer, open(&tokens[1])).await.unwrap();
+    assert_eq!(second.signatures.len(), 1, "Eva sees that the company has signed");
+    let signed = &second.signatures[0];
+    assert_eq!((signed.name.as_str(), signed.company.as_deref(), signed.you), ("Carl", Some("Acme AB"), false));
+    assert_eq!(signed.method, "standard");
+    let again = call::<signing::Open>(&signer, open(&tokens[0])).await.unwrap();
+    assert!(again.signatures.iter().any(|s| s.you), "a party's own signature is marked as theirs");
+
+    let cleared = serde_json::json!({ "id": id, "senderName": "" });
+    assert_eq!(kind(call::<docs::Update>(&api_user, serde_json::from_value(cleared).unwrap()).await), ErrorKind::Conflict, "sent");
+
+    let done = call::<signing::Sign>(
+        &signer,
+        signing::SignInput {
+            token: tokens[1].clone(),
+            session: None,
+            values: vec![],
+            signature: Some(SignatureInput { typed_name: Some("Eva".into()), image_png_base64: None }),
+            consent: true,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(done.completed);
+    worker::drain(&app).await.unwrap();
+    let status: String = sqlx::query_scalar("select status from documents where id = $1").bind(id).fetch_one(&app.db).await.unwrap();
+    assert_eq!(status, "completed", "a Swedish document seals with its Swedish verification page");
+    let sealed = call::<docs::Download>(&api_user, docs::DownloadInput { id, version: Some(Version::Signed) }).await.unwrap();
+    if let Ok(path) = std::env::var("SEALED_SV_PDF_OUT") {
+        std::fs::write(path, B64.decode(sealed.content_base64).unwrap()).unwrap();
+    }
+}

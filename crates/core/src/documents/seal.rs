@@ -10,10 +10,11 @@ use sha2::{Digest, Sha256};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
-use super::{AuthMethod, DOCUMENT_COLUMNS, DocumentRow, FieldKind, PartyRow, fields, notify, parties, status};
+use super::{AuthMethod, DOCUMENT_COLUMNS, DocumentRow, FieldKind, PartyRow, evidence_text, fields, notify, parties, status};
 use crate::audit::{Entry, audit};
 use crate::context::Ctx;
 use crate::error::{AppError, ErrorKind, Result};
+use crate::i18n::Lang;
 use crate::jobs::enqueue;
 use crate::services::settings;
 use crate::settings::{OrgSettings, SigningSettings};
@@ -111,13 +112,11 @@ fn initials(name: &str) -> String {
     name.split_whitespace().filter_map(|w| w.chars().next()).flat_map(char::to_uppercase).take(3).collect()
 }
 
-fn auth_label(party: &PartyRow) -> String {
+fn auth_label(party: &PartyRow, lang: Lang) -> String {
     let evidence = party.evidence.as_ref();
     let method = evidence.and_then(|e| e["auth"].as_str()).and_then(AuthMethod::parse).unwrap_or(party.auth_to_sign());
-    if method == AuthMethod::Standard && evidence.is_some_and(|e| e["account"].is_string()) {
-        return "Signed-in OpenSign account".into();
-    }
-    method.label().to_string()
+    let account = method == AuthMethod::Standard && evidence.is_some_and(|e| e["account"].is_string());
+    evidence_text::method(lang, method, account).to_string()
 }
 
 fn fmt_time(t: Option<DateTime<Utc>>) -> String {
@@ -145,7 +144,7 @@ async fn build_stamps(ctx: &Ctx, conn: &mut PgConnection, document: &DocumentRow
                 let caption = format!(
                     "{} \u{b7} {}",
                     p.signed_at.map(|t| t.format("%Y-%m-%d %H:%M UTC").to_string()).unwrap_or_default(),
-                    auth_label(p)
+                    auth_label(p, evidence_text::page_lang(&document.language))
                 );
                 StampContent::Signature { png, name, caption }
             }
@@ -171,7 +170,7 @@ async fn build_stamps(ctx: &Ctx, conn: &mut PgConnection, document: &DocumentRow
     Ok(stamps)
 }
 
-async fn evidence_events(conn: &mut PgConnection, document_id: Uuid) -> Result<Vec<EvidenceEvent>> {
+async fn evidence_events(conn: &mut PgConnection, document_id: Uuid, lang: Lang) -> Result<Vec<EvidenceEvent>> {
     let rows: Vec<(DateTime<Utc>, String, String, Value)> = sqlx::query_as(
         "select occurred_at, action, actor_label, metadata from audit_log where entity_type = 'document' and entity_id = $1 order by id",
     )
@@ -181,42 +180,9 @@ async fn evidence_events(conn: &mut PgConnection, document_id: Uuid) -> Result<V
     Ok(rows
         .into_iter()
         .filter_map(|(at, action, actor, metadata)| {
-            let name = metadata["name"].as_str().unwrap_or(&actor).to_string();
-            let ip = metadata["ip"].as_str().map(|ip| format!(" from {ip}")).unwrap_or_default();
-            let text = match action.as_str() {
-                "document.created" => format!("Created by {actor}"),
-                "document.sent" => format!("Sent for signing by {actor}"),
-                "party.notified" => format!("Invitation sent to {name} by {}", metadata["channel"].as_str().unwrap_or("email")),
-                "party.reminded" => format!("Reminder sent to {name}"),
-                "party.viewed" => format!("Opened by {name}{ip}"),
-                "party.in_person_started" => format!("In-person signing for {name} started by {actor} on their device"),
-                "party.link_issued" => format!("Signing link for {name} handed out by {actor}"),
-                "party.authenticated" => format!(
-                    "{name} identified with {}",
-                    metadata["method"].as_str().and_then(AuthMethod::parse).map(AuthMethod::label).unwrap_or("a code")
-                ),
-                "party.signed" => format!("Signed by {name}{ip}"),
-                "party.approved" => format!("Approved by {name}{ip}"),
-                "party.photo_taken" => {
-                    format!("{name} took a webcam photo (SHA-256 {})", metadata["sha256"].as_str().unwrap_or(""))
-                }
-                "party.field_file_uploaded" => {
-                    format!(
-                        "{name} uploaded {} to \u{201c}{}\u{201d}",
-                        metadata["file"].as_str().unwrap_or("a file"),
-                        metadata["label"].as_str().filter(|l| !l.is_empty()).unwrap_or("a field")
-                    )
-                }
-                "party.attachment_uploaded" => {
-                    format!(
-                        "{name} uploaded {} ({})",
-                        metadata["attachment"].as_str().unwrap_or("a file"),
-                        metadata["file"].as_str().unwrap_or("")
-                    )
-                }
-                _ => return None,
-            };
-            Some(EvidenceEvent { at: fmt_time(Some(at)), text })
+            let text = evidence_text::event(Lang::En, &action, &actor, &metadata)?;
+            let shown = evidence_text::event(lang, &action, &actor, &metadata).unwrap_or_else(|| text.clone());
+            Some(EvidenceEvent { at: fmt_time(Some(at)), text, shown })
         })
         .collect())
 }
@@ -281,6 +247,7 @@ pub async fn seal_document(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid
     let signing: SigningSettings = settings(ctx, conn).await?;
     let audit_head: Option<String> =
         sqlx::query_scalar("select encode(hash, 'hex') from audit_log order by id desc limit 1").fetch_optional(&mut *conn).await?;
+    let lang = evidence_text::page_lang(&document.language);
     let report = EvidenceReport {
         document_id: document.id.to_string(),
         title: document.title.clone(),
@@ -288,26 +255,25 @@ pub async fn seal_document(ctx: &Ctx, conn: &mut PgConnection, document_id: Uuid
         original_sha256: document.original_sha256.clone().unwrap_or_default(),
         signed_sha256: sha256_hex(&stamped),
         completed_at: fmt_time(Some(ctx.now)),
-        verify_url: format!("{}/verify", ctx.app.public_url()),
+        verify_url: format!("{}/verify?lang={}", ctx.app.public_url(), Lang::of(&document.language).code()),
         parties: parties
             .iter()
             .map(|p| EvidenceParty {
                 name: p.name.clone(),
                 email: p.email.clone(),
-                role: match p.role() {
-                    super::PartyRole::Signer => "Signer".into(),
-                    super::PartyRole::Approver => "Approver".into(),
-                    super::PartyRole::Viewer => "Receives a copy".into(),
-                },
-                authentication: auth_label(p),
+                role: evidence_text::role(Lang::En, p.role()).into(),
+                authentication: auth_label(p, Lang::En),
+                shown_role: evidence_text::role(lang, p.role()).into(),
+                shown_authentication: auth_label(p, lang),
                 signed_at: p.signed_at.map(|t| fmt_time(Some(t))),
                 ip: p.evidence.as_ref().and_then(|e| e["ip"].as_str()).map(str::to_string),
                 identity: super::open_identity(ctx.keys(), p).map(|i| super::mask_identity(&i)),
             })
             .collect(),
-        events: evidence_events(conn, document.id).await?,
+        events: evidence_events(conn, document.id, lang).await?,
         attachments: evidence_attachments(ctx, conn, &document, &parties).await?,
         audit_head,
+        labels: evidence_text::labels(lang),
         logo_png: crate::services::branding::logo_png(ctx, conn).await,
     };
     let identity = active_identity(ctx, conn).await?;

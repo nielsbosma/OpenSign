@@ -15,6 +15,8 @@ Quando a última parte assina, o OpenSign transforma o documento em um único PD
 4. **O selo**: uma assinatura PAdES sobre o arquivo inteiro em nome da sua organização, com um carimbo de tempo RFC 3161.
 5. **Dados de validação de longo prazo** e um carimbo de tempo de arquivamento (veja abaixo).
 
+As páginas de evidência, e a identificação mostrada sob cada assinatura, ficam no idioma do documento quando ele é inglês ou sueco, e em inglês nos demais casos, porque as fontes padrão de PDF cobrem só a escrita latina. A evidência JSON é sempre em inglês.
+
 ## PAdES B-LTA
 
 O selo segue o PAdES Baseline B-LTA, o nível do padrão europeu para documentos que precisam permanecer verificáveis por muito tempo:

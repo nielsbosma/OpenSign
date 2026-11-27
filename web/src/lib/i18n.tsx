@@ -95,7 +95,7 @@ function initial() {
   return 'en';
 }
 
-const I18nContext = createContext<{ language: string; setLanguage: (code: string) => void }>({
+const I18nContext = createContext<{ language: string; setLanguage: (code: string, options?: { remember?: boolean }) => void }>({
   language: 'en',
   setLanguage: () => {},
 });
@@ -122,11 +122,14 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     };
   }, [language]);
 
-  const setLanguage = useCallback((code: string) => {
+  /** `remember: false` switches for this visit only, e.g. to the language of a document being verified. */
+  const setLanguage = useCallback((code: string, options?: { remember?: boolean }) => {
     const next = supported(code) ?? 'en';
-    try {
-      localStorage.setItem(STORAGE_KEY, next);
-    } catch {}
+    if (options?.remember !== false) {
+      try {
+        localStorage.setItem(STORAGE_KEY, next);
+      } catch {}
+    }
     setLanguageState(next);
   }, []);
 

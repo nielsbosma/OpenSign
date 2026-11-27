@@ -2,7 +2,7 @@ import type { Texts } from '../texts';
 
 export const pt: Texts = {
   secureConnection: 'Conexão segura',
-  from: (sender, org) => `De ${sender ? `${sender}, ` : ''}${org}`,
+  from: (sender, title, org) => `De ${sender ? `${sender}${title ? ` (${title})` : ''}, ` : ''}${org}`,
   linkIncomplete: 'Este link está incompleto',
   linkBroken: 'Este link não funciona',
   youDeclined: 'Você recusou',
@@ -176,5 +176,9 @@ export const pt: Texts = {
   shareOpen: (sign) => (sign ? 'Confirmar e assinar' : 'Confirmar e aprovar'),
   shareOtherEmail: 'Usar outro e-mail',
   shareReady: 'Seu documento está pronto',
+  alreadySigned: 'Já assinado',
+  signedOn: (date) => `Assinou em ${date}`,
+  approvedOn: (date) => `Aprovou em ${date}`,
+  you: 'Você',
   methods: { sms_pin: 'o código SMS', se_bankid: 'BankID', freja: 'Freja eID', broker: 'e-ID' },
 };

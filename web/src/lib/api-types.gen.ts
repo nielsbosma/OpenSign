@@ -1188,6 +1188,10 @@ export type DocumentView = {
   sealedSha256?: string | null;
   /** Whether the seal carries a time stamp from the time stamp authority; unset until sealed. */
   sealedWithTimestamp?: boolean | null;
+  /** The person invitations name as the sender, instead of the owner. */
+  senderName?: string | null;
+  /** That person's title, shown after their name. */
+  senderTitle?: string | null;
   sentAt?: string | null;
   sequential: boolean;
   status: string;
@@ -1252,6 +1256,10 @@ export type DocumentsCreateInput = {
   language?: string | null;
   message?: string | null;
   metadata?: unknown;
+  /** The person the document is sent in the name of, named in invitations and on the signing page. Set it when an integration sends for someone else; without it, the owner of the API key is named. */
+  senderName?: string | null;
+  /** That person's job title, shown after their name, e.g. "HR Manager". */
+  senderTitle?: string | null;
   sequential?: boolean | null;
   /** Copy files, parties and fields from this template. */
   templateId?: string | null;
@@ -1767,6 +1775,18 @@ export type ReviewLinkState = {
   available: boolean;
 };
 
+/** A signature or approval the document already carries. */
+export type SignedParty = {
+  company?: string | null;
+  /** How they identified when they signed: `standard` (the link alone), `sms_pin`, `se_bankid`, `freja` or `broker`. */
+  method: string;
+  name: string;
+  role: string;
+  signedAt: string;
+  /** This is the party viewing the page. */
+  you: boolean;
+};
+
 export type SignerDocument = {
   brandColor: string;
   id: string;
@@ -1776,7 +1796,10 @@ export type SignerDocument = {
   message?: string | null;
   organisation: string;
   pageCount?: number | null;
+  /** The person who sent it; none when it was sent in the organisation's name only. */
   sender?: string | null;
+  /** The sender's job title, when the sender gave one. */
+  senderTitle?: string | null;
   status: string;
   title: string;
 };
@@ -1813,6 +1836,8 @@ export type SignerView = {
   review?: ReviewLinkState | null;
   /** Set when the party must identify before signing. */
   signAuthentication?: AuthMethod | null;
+  /** Who has signed or approved so far, in the order they did; empty until the party has identified. */
+  signatures: Array<SignedParty>;
   yourTurn: boolean;
 };
 
@@ -1835,6 +1860,10 @@ export type DocumentsUpdateInput = {
   metadata?: unknown;
   /** Remind parties who have not signed every this many days; 0 turns reminders off. */
   reminderDays?: number | null;
+  /** The person the document is sent in the name of; "" removes it, so the owner is named again. */
+  senderName?: string | null;
+  /** That person's job title; "" removes it. */
+  senderTitle?: string | null;
   /** Parties sign one sign-order group at a time. */
   sequential?: boolean | null;
   title?: string | null;
@@ -1898,6 +1927,8 @@ export type DocumentsVerifyInput = {
 export type VerifiedDocument = {
   completedAt?: string | null;
   id: string;
+  /** The document's language, which the verification page switches to. */
+  language: string;
   title: string;
 };
 

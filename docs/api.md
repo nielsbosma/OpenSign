@@ -149,10 +149,10 @@ Send answers `{ "document": {…}, "links": [{ "partyId", "name", "url" }] }`. T
 | Method | Path | |
 | --- | --- | --- |
 | GET | `/documents` | List. Query: `status`, `search` (title or exact external id), `templates`, `folderId`, `archived`, `limit`, `offset`. Archived ones are listed only with `archived=true` |
-| POST | `/documents` | Create a draft or template. Body: `title`, `message`, `language`, `templateId`, `isTemplate`, `sequential`, `externalId`, `metadata`, `folderId`. A document made from a template has `templateId` and `templateVersion`; `isTemplate` with `templateId` duplicates a template |
+| POST | `/documents` | Create a draft or template. Body: `title`, `message`, `language`, `templateId`, `isTemplate`, `sequential`, `externalId`, `metadata`, `folderId`, `senderName`, `senderTitle` (the person invitations name as the sender, when you send for someone else). A document made from a template has `templateId` and `templateVersion`; `isTemplate` with `templateId` duplicates a template |
 | GET | `/templates` | List templates |
 | GET | `/documents/{id}` | One document with files, parties and fields |
-| PATCH | `/documents/{id}` | Change `title`, `message`, `language`, `sequential`, `expiresAt`, `reminderDays` (0 turns reminders off), `externalId`, `metadata` |
+| PATCH | `/documents/{id}` | Change `title`, `message`, `language`, `sequential`, `expiresAt`, `reminderDays` (0 turns reminders off), `externalId`, `metadata`, `senderName`, `senderTitle` ("" removes them) |
 | DELETE | `/documents/{id}` | Delete a document or template that is not pending, with its files |
 | POST | `/documents/{id}/files` | Upload one file as multipart `file`: PDF, .docx, .doc, .odt or .rtf. [Text tags and form fields](text-tags.md) become fields unless `textTags` or `formFields` is `false` |
 | DELETE | `/documents/{documentId}/files/{fileId}` | Remove a file from a draft |
